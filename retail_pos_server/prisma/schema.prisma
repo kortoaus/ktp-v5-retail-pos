@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum BarcodeType {
+  RAW
+  GTIN
+  PLU
+  UPC
+  EAN
+}
+
+// Cloud Sync Data Start
+
+model Category {
+  id        Int            @id
+  name_en   String
+  name_ko   String
+  parentId  Int?
+  index     Int            @default(999)
+  level     Int            @default(1)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  archived  Boolean        @default(false)
+  companyId Int
+  parent    Category?      @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Category[]     @relation("CategoryToCategory")
+  items     ItemCategory[]
+
+  @@index([companyId, parentId])
+}
+
+model Brand {
+  id        Int      @id
+  name_en   String
+  name_ko   String
+  archived  Boolean  @default(false)
+  companyId Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  itemCount Int      @default(0)
+  items     Item[]
+
+  @@index([companyId])
+}
+
+model Item {
+  // Ids
+  id           Int     @id
+  companyId    Int
+  // Base Data
+  name_en      String
+  name_ko      String
+  name_invoice String?
+  barcode      String
+  code         String?
+  thumb        String?
+  barcodeGTIN  String? //normalized GTIN barcode
+  barcodePLU   String? //normalized PLU barcode
+  barcodeType  String  @default("RAW") // detected barcode type
+  uom          String  @default("ea")
+  defaultRFD   ItemRFD @default(D)
+
+  // Filters
+  isScale  Boolean @default(false)
+  isBundle Boolean @default(false)
+  useBatch Boolean @default(false)
+  archived Boolean @default(false)
+
+  // Bundle Data
+  bundleQty Int    @default(1)
+  parentId  Int?
+  parent    Item?  @relation("ItemToItem", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Item[] @relation("ItemToItem")
+
+  // Brand
+  brandId Int?
+  brand   Brand? @relation(fields: [brandId], references: [id])
+
+  // Categories
+  categoryIds   Int[]          @default([])
+  categoryMarks String[]       @default([])
+  categories    ItemCategory[]
+
+  // Prices
+  taxable          Boolean @default(false)
+  wholesaleTaxable Boolean @default(false)
+  // prices           ItemPrice[]
+  // markup           Float   @default(1)
+  // wholesaleMarkup  Float   @default(1)
+
+  // Scale & Label Data
+  scaleData ItemScaleData?
+
+  // Misc
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isTemporary Boolean  @default(false)
+
+  @@index([companyId])
+  @@index([companyId, name_en])
+  @@index([companyId, name_ko])
+  @@index([companyId, brandId])
+}
+
+model ItemScaleData {
+  itemId            Int     @id
+  fixedWeightString String?
+  usedBy            Int     @default(1)
+  isFixedWeight     Boolean @default(false)
+  ingredients       String?
+  item              Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+}
+
+model ItemCategory {
+  itemId     Int
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id])
+  item       Item     @relation(fields: [itemId], references: [id])
+
+  @@id([itemId, categoryId])
+}
+
+enum ItemRFD {
+  R
+  F
+  D
+}
+
+model Price {
+  id        Int      @id
+  companyId Int
+  itemId    Int
+  priceType String
+  prices    Float[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  archived  Boolean  @default(false)
+  markup    Float    @default(1)
+
+  @@index([itemId])
+}
+
+model PromoPrice {
+  id        Int      @id
+  companyId Int
+  itemId    Int
+  priceType String
+  prices    Float[]
+  validFrom DateTime
+  validTo   DateTime
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([itemId])
+}
+
+// Cloud Sync Data End
+
+// Local Data Start
+model Staff {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  scopes    String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Terminal {
+  id        Int      @id @default(autoincrement())
+  name      String
+  ipAddress String
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Local Data End

@@ -1,0 +1,34 @@
+services:
+  retail_pos_local_postgres:
+      image: postgres:17-alpine
+      container_name: retail_pos_local_postgres
+      ports:
+        - "5438:5432"
+      environment:
+        POSTGRES_USER: ktpv5
+        POSTGRES_PASSWORD: 510935
+        POSTGRES_DB: retail_pos_local_dev
+      volumes:
+        - ./db/data:/var/lib/postgresql/data
+      restart: unless-stopped
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U ktpv5 -d retail_pos_local_dev"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+
+  # app:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "2200:2200"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - PORT=2200
+  #   volumes:
+  #     - ./imgs:/app/imgs
+  #   restart: unless-stopped
+
+  
