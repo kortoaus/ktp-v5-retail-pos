@@ -181,7 +181,12 @@ Recalculate `unit_price_effective`, `total`, `tax_amount`, `subtotal` whenever:
   - Recalculate `unit_price_discounted` from `line.promoPrice?.prices[level]` (null if absent/zero).
   - Recalculate `total`, `tax_amount`, `subtotal`.
 - `unit_price_adjusted` is NOT affected (it's a manual override).
-- **[TODO — PREPACKED]**: `recalculateAllLines` currently overwrites `unit_price_original` for ALL lines including prepacked. This destroys the barcode-embedded price. Possible fix: derive the member-level price from the ratio (`prepackedPrice / defaultPrice * newLevelPrice`), but this may not be traceable for auditing. **Pending team decision.** For now, prepacked lines are overwritten — acceptable because prepacked price is the barcode price and member level changes are rare mid-transaction.
+- **Prepacked/weight-prepacked lines**: `barcode_price` (persisted on the line at creation) is used to reverse-calculate the implicit qty/weight ratio, then apply to the new level's price:
+  - `new_unit_price_original = barcode_price / prices[0] * prices[newLevel]`
+  - For prepacked: ratio ≈ 1, so result ≈ `prices[newLevel]`
+  - For weight-prepacked: ratio = weight in kg, so result = `prices[newLevel] * kg`
+  - If `prices[0]` is 0 (edge case), keeps `barcode_price` unchanged.
+  - `unit_price_discounted` stays `null` for prepacked types.
 - Lines carry `price` and `promoPrice` objects via `SaleLineItem` inheritance, so the original data is always available.
 
 ---

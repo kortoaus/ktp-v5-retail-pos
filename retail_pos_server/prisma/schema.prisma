@@ -150,6 +150,8 @@ model PromoPrice {
   id        Int      @id
   companyId Int
   itemId    Int
+  name_en   String   @default("Promo Price")
+  name_ko   String   @default("프로모션 가격")
   priceType String
   prices    Float[]
   validFrom DateTime

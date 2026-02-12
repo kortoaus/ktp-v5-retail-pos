@@ -1,4 +1,5 @@
 import {
+  BarcodeFormat,
   LabelBuilder,
   type LabelLanguage,
   type LabelOutput,
@@ -9,7 +10,7 @@ interface PriceTagData {
   name_en: string;
   price: string;
   barcode: string;
-  barcodeFormat: "GTIN" | "RAW";
+  barcodeFormat: BarcodeFormat;
 }
 
 function splitLines(text: string, maxChars: number): string[] {
@@ -53,7 +54,9 @@ export function buildPriceTag60x30(
     y += lineHeight;
   }
 
-  builder.barcode(190, 20, barcode, 30, true, barcodeFormat);
+  const barcodeOffset = barcodeFormat === "EAN13" ? 230 : 190;
+
+  builder.barcode(barcodeOffset, 20, barcode, 30, true, barcodeFormat);
 
   return builder.build(language);
 }

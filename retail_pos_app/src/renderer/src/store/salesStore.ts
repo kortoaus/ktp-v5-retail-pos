@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { SaleLineItem, SaleLineType } from "../types/sales";
 import { Decimal } from "decimal.js";
-import { MONEY_DP } from "../libs/constants";
+import { MONEY_DP, QTY_DP } from "../libs/constants";
 
 interface Cart {
   lines: SaleLineType[];
@@ -13,16 +13,21 @@ function createEmptyCart(): Cart {
   return { lines: [] };
 }
 
-function resolveOriginalPrice(item: SaleLineItem, memberLevel: number): number {
-  return item.price?.prices[memberLevel] ?? 0;
+function resolveOriginalPrice(item: SaleLineItem): number {
+  return item.price?.prices[0] ?? 0;
 }
 
 function resolveDiscountedPrice(
   item: SaleLineItem,
   memberLevel: number,
 ): number | null {
-  const p = item.promoPrice?.prices[memberLevel];
-  return p ? p : null;
+  const original = item.price?.prices[0] ?? 0;
+  const levelPrice = item.price?.prices[memberLevel] ?? 0;
+  const promoPrice = item.promoPrice?.prices[memberLevel] ?? 0;
+
+  const candidates = [levelPrice, promoPrice].filter((p) => p > 0 && p < original);
+  if (candidates.length === 0) return null;
+  return Math.min(...candidates);
 }
 
 function recalculateLine(line: SaleLineType): SaleLineType {
@@ -50,21 +55,42 @@ function reindexLines(lines: SaleLineType[]): SaleLineType[] {
   );
 }
 
+export interface AddLineOptions {
+  prepackedPrice?: number;
+  qty?: number;
+  measured_weight?: number;
+}
+
 function buildNewLine(
   item: SaleLineItem,
   memberLevel: number,
   index: number,
-  prepackedPrice?: number,
+  options?: AddLineOptions,
 ): SaleLineType {
-  const unit_price_original =
-    item.type === "prepacked" && prepackedPrice
-      ? prepackedPrice
-      : resolveOriginalPrice(item, memberLevel);
-  const unit_price_discounted =
-    item.type === "prepacked"
-      ? null
-      : resolveDiscountedPrice(item, memberLevel);
-  const unit_price_adjusted = null;
+  const prepackedPrice = options?.prepackedPrice;
+  const isPrepacked = item.type === "prepacked" || item.type === "weight-prepacked";
+  const defaultPrice = item.price?.prices[0] ?? 0;
+  const isSupplierPrepacked = isPrepacked && defaultPrice <= 0;
+
+  let unit_price_original: number;
+  let unit_price_discounted: number | null;
+  let qty: number;
+
+  if (isPrepacked && prepackedPrice != null) {
+    if (isSupplierPrepacked) {
+      unit_price_original = prepackedPrice;
+      unit_price_discounted = null;
+      qty = 1;
+    } else {
+      unit_price_original = defaultPrice;
+      unit_price_discounted = resolveDiscountedPrice(item, memberLevel);
+      qty = new Decimal(prepackedPrice).div(defaultPrice).toDecimalPlaces(QTY_DP).toNumber();
+    }
+  } else {
+    unit_price_original = resolveOriginalPrice(item);
+    unit_price_discounted = resolveDiscountedPrice(item, memberLevel);
+    qty = options?.qty ?? 1;
+  }
 
   const line: SaleLineType = {
     ...item,
@@ -72,12 +98,13 @@ function buildNewLine(
     index,
     original_receipt_id: null,
     original_receipt_line_id: null,
-    unit_price_adjusted,
+    barcode_price: isPrepacked && prepackedPrice != null ? prepackedPrice : null,
+    unit_price_adjusted: null,
     unit_price_discounted,
     unit_price_original,
     unit_price_effective: 0,
-    qty: 1,
-    measured_weight: null,
+    qty,
+    measured_weight: options?.measured_weight ?? null,
     total: 0,
     tax_amount: 0,
     subtotal: 0,
@@ -92,7 +119,7 @@ function findMergeTarget(
   item: SaleLineItem,
   memberLevel: number,
 ): number {
-  const unit_price_original = resolveOriginalPrice(item, memberLevel);
+  const unit_price_original = resolveOriginalPrice(item);
   const unit_price_discounted = resolveDiscountedPrice(item, memberLevel);
 
   return lines.findIndex(
@@ -108,14 +135,15 @@ function findMergeTarget(
 function recalculateAllLines(carts: Cart[], memberLevel: number): Cart[] {
   return carts.map((cart) => ({
     lines: cart.lines.map((line) => {
-      const unit_price_original = line.price?.prices[memberLevel] ?? 0;
-      const promoVal = line.promoPrice?.prices[memberLevel];
-      const unit_price_discounted = promoVal ? promoVal : null;
-      return recalculateLine({
-        ...line,
-        unit_price_original,
-        unit_price_discounted,
-      });
+      const isPrepacked = line.type === "prepacked" || line.type === "weight-prepacked";
+      const defaultPrice = line.price?.prices[0] ?? 0;
+
+      if (isPrepacked && line.barcode_price != null && defaultPrice <= 0) {
+        return line;
+      }
+
+      const unit_price_discounted = resolveDiscountedPrice(line, memberLevel);
+      return recalculateLine({ ...line, unit_price_discounted });
     }),
   }));
 }
@@ -125,7 +153,7 @@ interface SalesState {
   carts: Cart[];
   memberLevel: number;
 
-  addLine: (item: SaleLineItem, prepackedPrice?: number) => void;
+  addLine: (item: SaleLineItem, options?: AddLineOptions) => void;
   removeLine: (lineKey: string) => void;
   changeLineQty: (lineKey: string, qty: number) => void;
   injectLinePrice: (lineKey: string, price: number) => void;
@@ -139,7 +167,7 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
   carts: Array.from({ length: CART_COUNT }, createEmptyCart),
   memberLevel: 0,
 
-  addLine: (item, prepackedPrice) => {
+  addLine: (item, options) => {
     if (item.type === "invalid") return;
 
     const { activeCartIndex, carts, memberLevel } = get();
@@ -162,12 +190,7 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
       }
     }
 
-    const newLine = buildNewLine(
-      item,
-      memberLevel,
-      lines.length,
-      prepackedPrice,
-    );
+    const newLine = buildNewLine(item, memberLevel, lines.length, options);
     lines.push(newLine);
 
     const updatedCarts = [...carts];

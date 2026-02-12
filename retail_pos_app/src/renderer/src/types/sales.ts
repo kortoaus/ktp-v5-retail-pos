@@ -1,6 +1,5 @@
+import { ItemTypes } from "../libs/item-utils";
 import { Price, PromoPrice } from "./models";
-
-export type ItemTypes = "invalid" | "prepacked" | "weight" | "normal";
 
 export interface SaleLineItem {
   type: ItemTypes;
@@ -24,6 +23,7 @@ export interface SaleLineType extends SaleLineItem {
   original_receipt_line_id: number | null;
   lineKey: string;
   index: number;
+  barcode_price: number | null; // original barcode-embedded price (prepacked/weight-prepacked only)
   unit_price_adjusted: number | null; // user injected price priority:0
   unit_price_discounted: number | null; // from promo price priority:1
   unit_price_original: number; // from price priority:2

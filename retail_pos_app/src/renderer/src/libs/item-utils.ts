@@ -1,5 +1,13 @@
 import { Item } from "../types/models";
-import { ItemTypes, SaleLineItem } from "../types/sales";
+import { SaleLineItem } from "../types/sales";
+import { embededPriceParser } from "./scan-utils";
+
+export type ItemTypes =
+  | "invalid"
+  | "prepacked"
+  | "weight"
+  | "weight-prepacked"
+  | "normal";
 
 export const itemNameParser = (item: Item) => {
   const { brand } = item;
@@ -23,7 +31,6 @@ export const getItemType = (item: Item): ItemTypes => {
 
   if (isScale) {
     if (!scaleData) return "invalid";
-
     const { isFixedWeight } = scaleData;
     return isFixedWeight ? "prepacked" : "weight";
   } else {
@@ -31,10 +38,23 @@ export const getItemType = (item: Item): ItemTypes => {
   }
 };
 
-export const generateSaleLineItem = (item: Item): SaleLineItem => {
-  const { id, price, promoPrice, taxable, uom, barcode, barcodeGTIN } = item;
+export const generateSaleLineItem = (
+  item: Item,
+  rawBarcode: string,
+): SaleLineItem => {
+  const { id, taxable, uom, barcode, barcodeGTIN } = item;
   const { name_en, name_ko } = itemNameParser(item);
-  const type = getItemType(item);
+  let type = getItemType(item);
+  let price = item.price;
+  let promoPrice = item.promoPrice;
+
+  const isCandidateEAN13 = rawBarcode.length === 12 || rawBarcode.length === 13;
+  const isCandidatePrepacked =
+    rawBarcode.startsWith("2") || rawBarcode.startsWith("02");
+
+  if (type === "weight" && isCandidateEAN13 && isCandidatePrepacked) {
+    type = "weight-prepacked";
+  }
 
   return {
     type: price === null ? "invalid" : type,

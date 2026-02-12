@@ -28,10 +28,10 @@ export async function patchItemPriceService(
       },
       archived: false,
       validFrom: {
-        gte: now,
+        lte: now,
       },
       validTo: {
-        lte: now,
+        gte: now,
       },
     },
   });

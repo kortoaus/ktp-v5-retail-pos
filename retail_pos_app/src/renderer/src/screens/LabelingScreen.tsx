@@ -4,8 +4,10 @@ import { useMemo, useState } from "react";
 import { Item } from "../types/models";
 import { useBarcodeScanner } from "../hooks/useBarcodeScanner";
 import { searchItemByBarcode } from "../service/item.service";
-import { itemNameParser } from "../libs/item-utils";
+import { getItemType, itemNameParser } from "../libs/item-utils";
 import { buildPriceTag60x30 } from "../libs/label-templates";
+import { ean13CheckDigit, fiveDigitFloat } from "../libs/barcode-utils";
+import { BarcodeFormat } from "../libs/label-builder";
 
 export default function LabelingScreen() {
   const [item, setItem] = useState<Item | null>(null);
@@ -38,9 +40,25 @@ export default function LabelingScreen() {
   const itemData = useMemo(() => {
     if (!item) return null;
     const { name_en, name_ko } = itemNameParser(item);
+    const type = getItemType(item);
+    let barcode = item.barcode;
+    let barcodeFormat = "RAW";
     const price = item.price?.prices[0] || 0;
-    const barcode = item.barcodeGTIN || item.barcode;
-    const barcodeFormat = item.barcodeGTIN ? "GTIN" : "RAW";
+
+    if (item.barcodeGTIN) {
+      barcode = item.barcodeGTIN;
+      barcodeFormat = "GTIN";
+    }
+    if (item.barcodePLU) {
+      barcode = item.barcodePLU;
+    }
+
+    if (type === "prepacked") {
+      const barcode12 = `${barcode}${fiveDigitFloat(price)}`;
+      const checkDigit = ean13CheckDigit(barcode12);
+      barcode = `${barcode12}${checkDigit}`;
+      barcodeFormat = "EAN13";
+    }
 
     return { name_en, name_ko, price, barcode, barcodeFormat };
   }, [item]);
@@ -56,7 +74,7 @@ export default function LabelingScreen() {
               name_en: itemData.name_en,
               price: `${itemData.price.toFixed(2)}`,
               barcode: itemData.barcode,
-              barcodeFormat: itemData.barcodeFormat as "GTIN" | "RAW",
+              barcodeFormat: itemData.barcodeFormat as BarcodeFormat,
             });
             printLabel(printer, label);
           }}

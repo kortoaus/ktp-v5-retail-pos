@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { parseFindManyQuery } from "../../libs/query";
-import { searchItemsService } from "./item.serch.service";
+import { searchItemsService } from "./item.search.service";
 import { getItemByBarcode } from "./item.search.barcode.service";
 
 export async function searchItemsController(req: Request, res: Response) {

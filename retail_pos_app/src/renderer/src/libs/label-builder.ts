@@ -1,3 +1,5 @@
+export type BarcodeFormat = "RAW" | "GTIN" | "EAN13";
+
 export type LabelLanguage = "zpl" | "slcs";
 
 export type LabelElement =
@@ -16,7 +18,7 @@ export type LabelElement =
       data: string;
       height: number;
       text?: boolean;
-      format: "RAW" | "GTIN";
+      format: BarcodeFormat;
     }
   | { type: "datamatrix"; x: number; y: number; data: string; size: number };
 
@@ -51,7 +53,7 @@ export class LabelBuilder {
     data: string,
     height = 100,
     text = true,
-    format: "GTIN" | "RAW" = "GTIN",
+    format: BarcodeFormat = "GTIN",
   ) {
     this.elements.push({ type: "barcode", x, y, data, height, text, format });
     return this;
@@ -78,6 +80,8 @@ export class LabelBuilder {
       } else if (el.type === "barcode") {
         if (el.format === "GTIN") {
           zpl += `^FO${el.x},${el.y}^BCN,${el.height},Y,N^FD${el.data}^FS`;
+        } else if (el.format === "EAN13") {
+          zpl += `^FO${el.x},${el.y}^BEN,${el.height},Y,N^FD${el.data}^FS`;
         } else {
           const hri = el.text ? "Y" : "N";
           zpl += `^FO${el.x},${el.y}^BY2,3,${el.height}^BCN,${el.height},${hri},N,N^FD${el.data}^FS`;
@@ -95,6 +99,13 @@ export class LabelBuilder {
     const parts: SLCSPart[] = [];
 
     const raw = (s: string) => parts.push({ type: "raw", data: s + "\r\n" });
+
+    function cleanText(text: string): string {
+      const blocklist = ["'"];
+      return text
+        .replace(new RegExp(`[${blocklist.join("")}]`, "g"), "")
+        .trim();
+    }
 
     raw("@");
     raw("CB");
@@ -116,11 +127,14 @@ export class LabelBuilder {
           type: "raw",
           data: `T${el.x},${el.y},d,${mul},${mul},0,0,N,${el.bold ? "B" : "N"},'`,
         });
-        parts.push({ type: "euc-kr", data: el.data });
+        parts.push({ type: "euc-kr", data: cleanText(el.data) });
         parts.push({ type: "raw", data: "'\r\n" });
       } else if (el.type === "barcode") {
         const hri = el.text ? 1 : 0;
-        const bType = el.format === "GTIN" ? 9 : 9;
+        let bType = el.format === "GTIN" ? 9 : 9;
+        if (el.format === "EAN13") {
+          bType = 7;
+        }
 
         raw(
           `B1${el.x},${el.y},${bType},2,6,${el.height},0,${hri},'${el.data}'`,

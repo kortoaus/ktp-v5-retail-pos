@@ -3,6 +3,7 @@ import db from "../../libs/db";
 import { HttpException, InternalServerException } from "../../libs/exceptions";
 import { FindManyQuery } from "../../libs/query";
 import { ItemInclude } from "./item.query.option";
+import { patchItemPriceService } from "./item.service";
 
 export async function searchItemsService(query: FindManyQuery) {
   const { keyword = "", page, limit } = query;
@@ -42,9 +43,11 @@ export async function searchItemsService(query: FindManyQuery) {
       orderBy: [{ barcode: "asc" }],
     });
 
+    const resultWithPrices = await patchItemPriceService(result);
+
     return {
       ok: true,
-      result,
+      result: resultWithPrices,
       paging: {
         currentPage: page,
         totalPages,
