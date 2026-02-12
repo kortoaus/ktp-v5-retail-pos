@@ -77,7 +77,7 @@ export interface ElectronAPI {
   openSerialPort: (path: string, baudRate: number) => Promise<void>
   closeSerialPort: () => Promise<void>
   sendSerialData: (data: string) => Promise<void>
-  onSerialData: (callback: (data: string) => void) => void
+  onSerialData: (callback: (data: string) => void) => () => void
 
   getConfig: () => Promise<AppConfig>
   setConfig: (config: AppConfig) => Promise<AppConfig>
@@ -88,7 +88,7 @@ export interface ElectronAPI {
   scaleDisconnect: () => Promise<void>
   scaleReadWeight: () => Promise<WeightResult>
   scaleStatus: () => Promise<{ connected: boolean }>
-  onBarcodeScan: (callback: (barcode: string) => void) => void
+  onBarcodeScan: (callback: (barcode: string) => void) => () => void
 
   printLabel: (request: LabelSendRequest) => Promise<{ ok: boolean; message: string }>
 }

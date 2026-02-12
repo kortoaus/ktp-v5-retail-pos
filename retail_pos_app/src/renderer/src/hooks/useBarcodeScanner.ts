@@ -9,7 +9,7 @@ export function useBarcodeScanner(onScan: (barcode: string) => void): void {
   onScanRef.current = onScan
 
   useEffect(() => {
-    window.electronAPI.onBarcodeScan((barcode) => {
+    const removeSerialListener = window.electronAPI.onBarcodeScan((barcode) => {
       onScanRef.current(barcode)
     })
 
@@ -53,6 +53,7 @@ export function useBarcodeScanner(onScan: (barcode: string) => void): void {
     window.addEventListener('keydown', handleKeyDown)
 
     return () => {
+      removeSerialListener()
       window.removeEventListener('keydown', handleKeyDown)
       if (clearTimer) clearTimeout(clearTimer)
     }

@@ -8,8 +8,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   closeSerialPort: (): Promise<void> => ipcRenderer.invoke('serial:close'),
   sendSerialData: (data: string): Promise<void> =>
     ipcRenderer.invoke('serial:send', data),
-  onSerialData: (callback: (data: string) => void): void => {
-    ipcRenderer.on('serial:data', (_event, data: string) => callback(data))
+  onSerialData: (callback: (data: string) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: string) => callback(data)
+    ipcRenderer.on('serial:data', handler)
+    return () => { ipcRenderer.removeListener('serial:data', handler) }
   },
 
   getConfig: (): Promise<AppConfig> => ipcRenderer.invoke('config:get'),
@@ -23,8 +25,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   scaleDisconnect: (): Promise<void> => ipcRenderer.invoke('scale:disconnect'),
   scaleReadWeight: (): Promise<WeightResult> => ipcRenderer.invoke('scale:read-weight'),
   scaleStatus: (): Promise<{ connected: boolean }> => ipcRenderer.invoke('scale:status'),
-  onBarcodeScan: (callback: (barcode: string) => void): void => {
-    ipcRenderer.on('barcode:scan', (_event, barcode: string) => callback(barcode))
+  onBarcodeScan: (callback: (barcode: string) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, barcode: string) => callback(barcode)
+    ipcRenderer.on('barcode:scan', handler)
+    return () => { ipcRenderer.removeListener('barcode:scan', handler) }
   },
 
   printLabel: (request: LabelSendRequest): Promise<{ ok: boolean; message: string }> =>
