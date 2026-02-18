@@ -159,9 +159,17 @@ npm run package:win      # or package:mac
 - [x] Sales store (4 carts, pricing engine, member levels)
 - [x] On-screen keyboard (Korean dubeolsik + English + numpad)
 - [x] Item search modal with keyboard
-- [x] Weight read modal (scale integration)
+- [x] Weight read modal (scale integration, `allowZero` prop for PLU-only labels)
 - [x] Barcode scan → item lookup → add to cart
-- [ ] SaleScreen UI polish (line list, totals, cart switching)
+- [x] SaleScreen line function modals (change qty, override price, discount $, discount %)
+- [x] Reusable `ModalContainer` component (shared backdrop + card + header)
+- [x] `cn()` utility (clsx + tailwind-merge)
+- [x] LabelingScreen full implementation (scan/search → type routing → label print)
+  - normal: GTIN barcode, original price
+  - prepacked: EAN13 with embedded price (PLU + 5-digit cents + check digit)
+  - weight: scale read → EAN13 with embedded total; zero weight → PLU-only label
+  - weight-prepacked: price extracted from scanned barcode
+- [ ] SaleScreen UI polish (totals, cart switching)
 - [ ] ESC/POS receipt printer driver (network)
 - [ ] Payment flow
 - [ ] More label templates (different sizes, layouts)

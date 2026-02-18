@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useSalesStore } from "../../store/salesStore";
+import { LINE_PAGE_SIZE, useSalesStore } from "../../store/salesStore";
 import { useWeight } from "../../hooks/useWeight";
 import { useBarcodeScanner } from "../../hooks/useBarcodeScanner";
 import { searchItemByBarcode } from "../../service/item.service";
@@ -9,15 +9,38 @@ import { embededPriceParser } from "../../libs/scan-utils";
 import { SaleLineItem } from "../../types/sales";
 import SearchItemModal from "../../components/SearchItemModal";
 import WeightModal from "../../components/WeightModal";
-import SyncButton from "../../components/SyncButton";
+import SaleScreenLineViewer from "./SaleScreenLineViewer";
+import LineFunctionPanel from "./LineFunctionPanel";
+import ChangeQtyModal from "./ChangeQtyModal";
+import InjectPriceModal from "./InjectPriceModal";
+import DiscountAmountModal from "./DiscountAmountModal";
+import DiscountPercentModal from "./DiscountPercentModal";
+import Paging from "./Paging";
+import Hotkeys from "../../components/Hotkeys";
 
-type ModalTarget = null | "item-search" | "weight";
+type ModalTarget =
+  | null
+  | "item-search"
+  | "weight"
+  | "change-qty"
+  | "inject-price"
+  | "discount-amount"
+  | "discount-percent";
 
 export default function SaleScreen() {
   const [loading, setLoading] = useState(false);
+  const [selectedLineKey, setSelectedLineKey] = useState<string | null>(null);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const { readWeight } = useWeight();
-  const { addLine, carts, activeCartIndex, setMemberLevel } = useSalesStore();
+  const {
+    addLine,
+    carts,
+    activeCartIndex,
+    setMemberLevel,
+    lineOffset,
+    setLineOffset,
+  } = useSalesStore();
+
   const scanCallback = useCallback(
     async (rawBarcode: string) => {
       if (loading) return;
@@ -48,6 +71,7 @@ export default function SaleScreen() {
   const pendingWeightLineRef = useRef<SaleLineItem | null>(null);
 
   function addLineGateway(item: Item, rawBarcode: string) {
+    setSelectedLineKey(null);
     const data = generateSaleLineItem(item, rawBarcode);
     const type = data.type;
     let prepackedPrice: number | undefined = undefined;
@@ -111,6 +135,13 @@ export default function SaleScreen() {
     return cart.lines;
   }, [carts, activeCartIndex]);
 
+  const maxOffset = Math.max(0, lines.length - LINE_PAGE_SIZE);
+
+  const selectedLine = useMemo(() => {
+    if (selectedLineKey == null) return null;
+    return lines.find((line) => line.lineKey === selectedLineKey) || null;
+  }, [lines, selectedLineKey]);
+
   return (
     <div className="h-full w-full bg-gray-50 flex flex-col">
       <div className="h-16 flex items-center gap-4 px-4 border-b border-gray-200">
@@ -122,37 +153,47 @@ export default function SaleScreen() {
         <button onClick={() => setMemberLevel(2)}>level 2</button>
       </div>
 
-      <div className="flex-1 h-full">
-        <div className="flex flex-col gap-2">
-          {lines.map((line) => (
-            <div key={line.lineKey}>
-              <div>{line.type}</div>
-              <div>{line.name_en}</div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>ORiginal</th>
-                    <th>Discounted</th>
-                    <th>Adjusted</th>
-                    <th>Effective</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>{line.unit_price_original}</td>
-                    <td>{line.unit_price_discounted}</td>
-                    <td>{line.unit_price_adjusted}</td>
-                    <td>{line.unit_price_effective}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <div>{JSON.stringify(line.price?.prices)}</div>
-              <div>{JSON.stringify(line.promoPrice?.prices)}</div>
-              <div>{line.qty}</div>
-              <div>{line.measured_weight}</div>
-              <div>{line.total}</div>
-            </div>
-          ))}
+      {/* Inner Layout */}
+      <div className="flex-1 flex divide-x divide-gray-200 h-full overflow-hidden">
+        {/* Line Viewer */}
+        <div className="flex-1 bg-white">
+          <SaleScreenLineViewer
+            lines={lines}
+            lineOffset={lineOffset}
+            maxOffset={maxOffset}
+            setSelectedLineKey={setSelectedLineKey}
+            selectedLineKey={selectedLineKey}
+          />
+        </div>
+
+        {/* Pagination */}
+        <Paging
+          lineOffset={lineOffset}
+          maxOffset={maxOffset}
+          setLineOffset={(offset) => {
+            setLineOffset(offset);
+            setSelectedLineKey(null);
+          }}
+        />
+
+        {/* Functions */}
+        <div className="w-[600px] h-full flex flex-col divide-y divide-gray-200">
+          <div className="flex-1">
+            {selectedLine && (
+              <LineFunctionPanel
+                line={selectedLine}
+                onCancel={() => setSelectedLineKey(null)}
+                onOpenChangeQty={() => setModalTarget("change-qty")}
+                onOpenInjectPrice={() => setModalTarget("inject-price")}
+                onOpenDiscountAmount={() => setModalTarget("discount-amount")}
+                onOpenDiscountPercent={() => setModalTarget("discount-percent")}
+              />
+            )}
+            {selectedLine == null && <Hotkeys />}
+          </div>
+
+          {/* monitor */}
+          <div className="h-48"></div>
         </div>
       </div>
 
@@ -173,7 +214,29 @@ export default function SaleScreen() {
         onClose={handleWeightClose}
       />
 
-      <SyncButton />
+      <ChangeQtyModal
+        open={modalTarget === "change-qty"}
+        onClose={() => setModalTarget(null)}
+        line={selectedLine}
+      />
+
+      <InjectPriceModal
+        open={modalTarget === "inject-price"}
+        onClose={() => setModalTarget(null)}
+        line={selectedLine}
+      />
+
+      <DiscountAmountModal
+        open={modalTarget === "discount-amount"}
+        onClose={() => setModalTarget(null)}
+        line={selectedLine}
+      />
+
+      <DiscountPercentModal
+        open={modalTarget === "discount-percent"}
+        onClose={() => setModalTarget(null)}
+        line={selectedLine}
+      />
     </div>
   );
 }

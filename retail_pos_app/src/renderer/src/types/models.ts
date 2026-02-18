@@ -107,3 +107,21 @@ export interface Staff {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface Hotkey {
+  id: number;
+  sort: number;
+  name: string;
+  keys: HotkeyItem[];
+}
+
+export interface HotkeyItem {
+  id: number;
+  hotkeyId: number;
+  hotkey: Hotkey;
+  x: number;
+  y: number;
+  itemId: number;
+  item: Item;
+  name: string;
+}

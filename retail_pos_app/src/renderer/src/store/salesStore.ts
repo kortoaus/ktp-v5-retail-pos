@@ -8,6 +8,7 @@ interface Cart {
 }
 
 const CART_COUNT = 4;
+export const LINE_PAGE_SIZE = 10;
 
 function createEmptyCart(): Cart {
   return { lines: [] };
@@ -25,7 +26,9 @@ function resolveDiscountedPrice(
   const levelPrice = item.price?.prices[memberLevel] ?? 0;
   const promoPrice = item.promoPrice?.prices[memberLevel] ?? 0;
 
-  const candidates = [levelPrice, promoPrice].filter((p) => p > 0 && p < original);
+  const candidates = [levelPrice, promoPrice].filter(
+    (p) => p > 0 && p < original,
+  );
   if (candidates.length === 0) return null;
   return Math.min(...candidates);
 }
@@ -68,7 +71,8 @@ function buildNewLine(
   options?: AddLineOptions,
 ): SaleLineType {
   const prepackedPrice = options?.prepackedPrice;
-  const isPrepacked = item.type === "prepacked" || item.type === "weight-prepacked";
+  const isPrepacked =
+    item.type === "prepacked" || item.type === "weight-prepacked";
   const defaultPrice = item.price?.prices[0] ?? 0;
   const isSupplierPrepacked = isPrepacked && defaultPrice <= 0;
 
@@ -84,7 +88,10 @@ function buildNewLine(
     } else {
       unit_price_original = defaultPrice;
       unit_price_discounted = resolveDiscountedPrice(item, memberLevel);
-      qty = new Decimal(prepackedPrice).div(defaultPrice).toDecimalPlaces(QTY_DP).toNumber();
+      qty = new Decimal(prepackedPrice)
+        .div(defaultPrice)
+        .toDecimalPlaces(QTY_DP)
+        .toNumber();
     }
   } else {
     unit_price_original = resolveOriginalPrice(item);
@@ -98,7 +105,8 @@ function buildNewLine(
     index,
     original_receipt_id: null,
     original_receipt_line_id: null,
-    barcode_price: isPrepacked && prepackedPrice != null ? prepackedPrice : null,
+    barcode_price:
+      isPrepacked && prepackedPrice != null ? prepackedPrice : null,
     unit_price_adjusted: null,
     unit_price_discounted,
     unit_price_original,
@@ -135,7 +143,8 @@ function findMergeTarget(
 function recalculateAllLines(carts: Cart[], memberLevel: number): Cart[] {
   return carts.map((cart) => ({
     lines: cart.lines.map((line) => {
-      const isPrepacked = line.type === "prepacked" || line.type === "weight-prepacked";
+      const isPrepacked =
+        line.type === "prepacked" || line.type === "weight-prepacked";
       const defaultPrice = line.price?.prices[0] ?? 0;
 
       if (isPrepacked && line.barcode_price != null && defaultPrice <= 0) {
@@ -152,12 +161,14 @@ interface SalesState {
   activeCartIndex: number;
   carts: Cart[];
   memberLevel: number;
+  lineOffset: number;
 
   addLine: (item: SaleLineItem, options?: AddLineOptions) => void;
   removeLine: (lineKey: string) => void;
   changeLineQty: (lineKey: string, qty: number) => void;
-  injectLinePrice: (lineKey: string, price: number) => void;
+  injectLinePrice: (lineKey: string, price: number | null) => void;
   setMemberLevel: (level: number) => void;
+  setLineOffset: (offset: number) => void;
   switchCart: (index: number) => void;
   clearActiveCart: () => void;
 }
@@ -166,6 +177,7 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
   activeCartIndex: 0,
   carts: Array.from({ length: CART_COUNT }, createEmptyCart),
   memberLevel: 0,
+  lineOffset: 0,
 
   addLine: (item, options) => {
     if (item.type === "invalid") return;
@@ -183,9 +195,13 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
         });
         lines.splice(mergeIdx, 1);
         lines.push(merged);
+        const reindexed = reindexLines(lines);
         const updatedCarts = [...carts];
-        updatedCarts[activeCartIndex] = { lines: reindexLines(lines) };
-        set({ carts: updatedCarts });
+        updatedCarts[activeCartIndex] = { lines: reindexed };
+        set({
+          carts: updatedCarts,
+          lineOffset: Math.max(0, reindexed.length - LINE_PAGE_SIZE),
+        });
         return;
       }
     }
@@ -195,7 +211,10 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
 
     const updatedCarts = [...carts];
     updatedCarts[activeCartIndex] = { lines };
-    set({ carts: updatedCarts });
+    set({
+      carts: updatedCarts,
+      lineOffset: Math.max(0, lines.length - LINE_PAGE_SIZE),
+    });
   },
 
   removeLine: (lineKey) => {
@@ -240,10 +259,14 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     if (idx === -1) return;
 
     const line = cart.lines[idx];
+
     const updated = recalculateLine({
       ...line,
       unit_price_adjusted: price,
-      adjustments: [...line.adjustments, "PRICE_OVERRIDE"],
+      adjustments:
+        price !== null
+          ? [...line.adjustments, "PRICE_OVERRIDE"]
+          : line.adjustments.filter((adj) => adj !== "PRICE_OVERRIDE"),
     });
 
     const lines = [...cart.lines];
@@ -262,9 +285,16 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     });
   },
 
+  setLineOffset: (offset) => set({ lineOffset: offset }),
+
   switchCart: (index) => {
     if (index >= 0 && index < CART_COUNT) {
-      set({ activeCartIndex: index });
+      const { carts } = get();
+      const lines = carts[index].lines;
+      set({
+        activeCartIndex: index,
+        lineOffset: Math.max(0, lines.length - LINE_PAGE_SIZE),
+      });
     }
   },
 

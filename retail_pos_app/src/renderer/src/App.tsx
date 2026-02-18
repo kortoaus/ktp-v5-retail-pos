@@ -4,7 +4,8 @@ import { TerminalProvider } from "./contexts/TerminalContext";
 import InterfaceSettingsScreen from "./screens/InterfaceSettingsScreen";
 import LabelingScreen from "./screens/LabelingScreen";
 import SaleScreen from "./screens/SaleScreen";
-import OnScreenKeyboardTestScreen from "./screens/OnScreenKeyboardTestScreen";
+import TestScreen from "./screens/TestScreen";
+import HomeScreen from "./screens/HomeScreen";
 
 function App(): React.JSX.Element {
   return (
@@ -12,8 +13,10 @@ function App(): React.JSX.Element {
       <TerminalProvider>
         <Gateway>
           <Routes>
-            <Route path="/" element={<SaleScreen />} />
+            <Route path="/" element={<HomeScreen />} />
+            <Route path="/sale" element={<SaleScreen />} />
             <Route path="/settings" element={<InterfaceSettingsScreen />} />
+            <Route path="/test" element={<TestScreen />} />
             <Route path="/labeling" element={<LabelingScreen />} />
           </Routes>
         </Gateway>

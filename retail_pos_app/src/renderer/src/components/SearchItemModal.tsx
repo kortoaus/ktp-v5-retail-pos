@@ -4,6 +4,7 @@ import { searchItemsByKeyword } from "../service/item.service";
 import { itemNameParser } from "../libs/item-utils";
 import OnScreenKeyboard from "./OnScreenKeyboard";
 import { PagingType } from "../libs/api";
+import { MONEY_DP } from "../libs/constants";
 
 const ITEMS_PER_PAGE = 5;
 
@@ -145,7 +146,10 @@ export default function SearchItemModal({
 
         <div>
           {items.length === 0 && !loading && (
-            <div className="flex items-center justify-center text-gray-400" style={{ height: ITEMS_PER_PAGE * 64 }}>
+            <div
+              className="flex items-center justify-center text-gray-400"
+              style={{ height: ITEMS_PER_PAGE * 64 }}
+            >
               {keyword.trim() ? "No items found" : "Enter keyword to search"}
             </div>
           )}
@@ -162,7 +166,9 @@ export default function SearchItemModal({
                     className="w-full text-left px-4 h-16 border-b border-gray-100 active:bg-blue-50 flex items-center justify-between gap-4"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate text-sm">{name_en}</div>
+                      <div className="font-medium truncate text-sm">
+                        {name_en}
+                      </div>
                       <div className="text-xs text-gray-500 truncate">
                         {name_ko}
                       </div>
@@ -171,14 +177,14 @@ export default function SearchItemModal({
                       {item.barcode}
                     </div>
                     <div className="text-right shrink-0 w-20">
-                      <div className="font-bold text-sm">${price.toFixed(2)}</div>
+                      <div className="font-bold text-sm">
+                        ${price.toFixed(MONEY_DP)}
+                      </div>
                     </div>
                   </button>
                 );
               })}
-              {emptySlots > 0 && (
-                <div style={{ height: emptySlots * 64 }} />
-              )}
+              {emptySlots > 0 && <div style={{ height: emptySlots * 64 }} />}
             </>
           )}
         </div>

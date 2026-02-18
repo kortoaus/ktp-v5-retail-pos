@@ -39,17 +39,19 @@ function sendSerial(path: string, data: Buffer | string): Promise<void> {
   const dataSize = Buffer.isBuffer(data)
     ? data.length
     : Buffer.byteLength(data);
-  console.log(`[Label:Serial] Opening ${path} (115200/8/N/1/RTS-CTS)`);
+  console.log(`[Label:Serial] Opening ${path} (9600/8/N/1/XOFF)`);
   console.log(`[Label:Serial] Payload: ${dataSize} bytes`);
 
   return new Promise((resolve, reject) => {
     const port = new SerialPort({
       path,
-      baudRate: 115200,
+      baudRate: 9600,
       dataBits: 8,
       parity: "none",
       stopBits: 1,
-      rtscts: true,
+      xon: true,
+      xoff: true,
+      rtscts: false,
       autoOpen: false,
     });
 
@@ -70,6 +72,7 @@ function sendSerial(path: string, data: Buffer | string): Promise<void> {
       }
 
       console.log(`[Label:Serial] Port opened`);
+      port.set({ dtr: true, rts: true });
 
       port.write(data, (writeErr) => {
         if (writeErr) {
@@ -84,11 +87,15 @@ function sendSerial(path: string, data: Buffer | string): Promise<void> {
 
         port.drain(() => {
           clearTimeout(timeout);
-          port.close();
-          console.log(
-            `[Label:Serial] Done — ${dataSize} bytes sent, port closed`,
-          );
-          resolve();
+          port.close((closeErr) => {
+            if (closeErr) {
+              console.log(`[Label:Serial] Close error: ${closeErr.message}`);
+            }
+            console.log(
+              `[Label:Serial] Done — ${dataSize} bytes sent, port closed`,
+            );
+            resolve();
+          });
         });
       });
     });
@@ -96,25 +103,25 @@ function sendSerial(path: string, data: Buffer | string): Promise<void> {
 }
 
 function assembleSLCS(parts: SLCSPart[]): Buffer {
-  const buffers: Buffer[] = []
+  const buffers: Buffer[] = [];
   for (const part of parts) {
-    if (part.type === 'euc-kr') {
-      buffers.push(iconv.encode(part.data, 'euc-kr'))
+    if (part.type === "euc-kr") {
+      buffers.push(iconv.encode(part.data, "euc-kr"));
     } else {
-      buffers.push(Buffer.from(part.data, 'ascii'))
+      buffers.push(Buffer.from(part.data, "ascii"));
     }
   }
-  return Buffer.concat(buffers)
+  return Buffer.concat(buffers);
 }
 
 export function registerLabelHandlers(): void {
   ipcMain.handle("label:print", async (_event, request: LabelSendRequest) => {
-    let data: Buffer | string
+    let data: Buffer | string;
 
-    if (request.label.language === 'zpl') {
-      data = request.label.data
+    if (request.label.language === "zpl") {
+      data = request.label.data;
     } else {
-      data = assembleSLCS(request.label.parts)
+      data = assembleSLCS(request.label.parts);
     }
 
     try {

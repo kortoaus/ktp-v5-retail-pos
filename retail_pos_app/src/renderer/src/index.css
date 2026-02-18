@@ -12,3 +12,27 @@ table{
 th, td {
   @apply border border-gray-300 p-1;
 }
+
+
+
+
+/* Numpad */
+.Numpad-display {
+  @apply h-20 flex items-center justify-end px-4 text-4xl font-bold bg-zinc-900 text-green-500;
+}
+
+.Numpad-buttons {
+  @apply flex flex-col *:h-20 divide-gray-300 divide-y border border-gray-300 font-bold text-2xl;
+}
+
+.Numpad-row {
+  @apply grid grid-cols-3 divide-x divide-gray-300;
+}
+
+.Numpad-empty {
+  @apply bg-gray-100;
+}
+
+.center {
+  @apply flex flex-col items-center justify-center;
+}

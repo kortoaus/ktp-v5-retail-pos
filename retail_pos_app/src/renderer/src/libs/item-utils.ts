@@ -11,8 +11,10 @@ export type ItemTypes =
 
 export const itemNameParser = (item: Item) => {
   const { brand } = item;
-  const brandNameEn = brand ? `[${brand.name_en}] ` : "";
-  const brandNameKo = brand ? `[${brand.name_ko}] ` : "";
+  const brandNameEn =
+    brand && brand.name_en.trim() ? `[${brand.name_en}] ` : "";
+  const brandNameKo =
+    brand && brand.name_ko.trim() ? `[${brand.name_ko}] ` : "";
 
   const name_en = `${brandNameEn}${item.name_en}`;
   const name_ko = `${brandNameKo}${item.name_ko}`;

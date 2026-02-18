@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useWeight } from "../hooks/useWeight";
 import { useBarcodeScanner } from "../hooks/useBarcodeScanner";
 import SyncButton from "../components/SyncButton";
+import { QTY_DP } from "../libs/constants";
 
 export default function TestScreen() {
   const { weight, connected, connect, disconnect, readWeight } = useWeight();
@@ -72,7 +73,7 @@ export default function TestScreen() {
 
           <div className="bg-gray-50 rounded-lg p-4 text-center">
             <div className="text-4xl font-bold tabular-nums text-gray-900">
-              {weight.weight.toFixed(3)}
+              {weight.weight.toFixed(QTY_DP)}
             </div>
             <div className="text-sm text-gray-500 mt-1">
               {weight.unit} · {weight.status}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { QTY_DP } from "../libs/constants";
 
 interface WeightResult {
   weight: number;
@@ -13,6 +14,7 @@ interface WeightModalProps {
   readWeight: () => Promise<WeightResult>;
   onConfirm: (weightKg: number) => void;
   onClose: () => void;
+  allowZero?: boolean;
 }
 
 export default function WeightModal({
@@ -21,6 +23,7 @@ export default function WeightModal({
   readWeight,
   onConfirm,
   onClose,
+  allowZero = false,
 }: WeightModalProps) {
   const [weight, setWeight] = useState<WeightResult | null>(null);
   const [reading, setReading] = useState(false);
@@ -38,22 +41,31 @@ export default function WeightModal({
       const result = await readWeight();
       setWeight(result);
     } catch {
-      setWeight({ weight: 0, unit: "kg", status: "error", message: "Read failed" });
+      setWeight({
+        weight: 0,
+        unit: "kg",
+        status: "error",
+        message: "Read failed",
+      });
     } finally {
       setReading(false);
     }
   }, [readWeight]);
 
   const handleConfirm = useCallback(() => {
+    if (allowZero) {
+      onConfirm(weight?.weight ?? 0);
+      return;
+    }
     if (!weight || weight.weight <= 0) return;
     onConfirm(weight.weight);
-  }, [weight, onConfirm]);
+  }, [weight, allowZero, onConfirm]);
 
   if (!open) return null;
 
   const isStable = weight?.status === "stable";
   const hasWeight = weight != null && weight.weight > 0;
-  const canConfirm = hasWeight && isStable;
+  const canConfirm = allowZero || (hasWeight && isStable);
 
   return (
     <div
@@ -77,7 +89,7 @@ export default function WeightModal({
 
           <div className="bg-gray-50 rounded-xl p-6 text-center mb-4">
             <div className="text-5xl font-bold tabular-nums">
-              {weight ? weight.weight.toFixed(3) : "—.———"}
+              {weight ? weight.weight.toFixed(QTY_DP) : "—.———"}
             </div>
             <div className="text-lg text-gray-500 mt-1">
               {weight?.unit ?? "kg"}

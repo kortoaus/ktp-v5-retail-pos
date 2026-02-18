@@ -131,10 +131,7 @@ export class LabelBuilder {
         parts.push({ type: "raw", data: "'\r\n" });
       } else if (el.type === "barcode") {
         const hri = el.text ? 1 : 0;
-        let bType = el.format === "GTIN" ? 9 : 9;
-        if (el.format === "EAN13") {
-          bType = 7;
-        }
+        const bType = el.format === "EAN13" ? 7 : 9;
 
         raw(
           `B1${el.x},${el.y},${bType},2,6,${el.height},0,${hri},'${el.data}'`,
@@ -145,9 +142,7 @@ export class LabelBuilder {
       }
     }
 
-    parts.push({ type: "raw", data: "P1\r" });
-    parts.push({ type: "raw", data: "CR" });
-    parts.push({ type: "raw", data: "LF" });
+    parts.push({ type: "raw", data: "P1\r\n" });
 
     return parts;
   }
