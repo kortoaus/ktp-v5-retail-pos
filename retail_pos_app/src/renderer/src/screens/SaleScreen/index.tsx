@@ -20,6 +20,7 @@ import Hotkeys from "../../components/Hotkeys";
 import useHotkeys from "../../hooks/useHotkeys";
 import DocumentMonitor from "./DocumentMonitor";
 import MemberSearchModal from "../../components/MemberSearchModal";
+import PaymentModal from "../../components/PaymentModal";
 import SyncButton from "../../components/SyncButton";
 import { Link } from "react-router-dom";
 import { useShift } from "../../contexts/ShiftContext";
@@ -33,7 +34,8 @@ type ModalTarget =
   | "inject-price"
   | "discount-amount"
   | "discount-percent"
-  | "member-search";
+  | "member-search"
+  | "payment";
 
 export default function SaleScreen() {
   const { shift, loading: shiftLoading } = useShift();
@@ -256,6 +258,14 @@ export default function SaleScreen() {
                 Clear Cart
               </button>
             )}
+            {lines.length > 0 && (
+              <button
+                className="bg-blue-600 text-white font-bold rounded-lg"
+                onClick={() => setModalTarget("payment")}
+              >
+                Pay
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -299,6 +309,16 @@ export default function SaleScreen() {
         open={modalTarget === "discount-percent"}
         onClose={() => setModalTarget(null)}
         line={selectedLine}
+      />
+
+      <PaymentModal
+        open={modalTarget === "payment"}
+        onClose={() => setModalTarget(null)}
+        lines={lines}
+        onPayment={(payload) => {
+          console.log("PaymentPayload", payload);
+          setModalTarget(null);
+        }}
       />
 
       <MemberSearchModal
