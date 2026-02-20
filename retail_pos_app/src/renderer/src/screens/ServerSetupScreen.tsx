@@ -1,14 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-interface Props {
-  onSaved: () => Promise<void>
-}
-
-export default function ServerSetupScreen({ onSaved }: Props) {
+export default function ServerSetupScreen() {
   const [host, setHost] = useState('')
   const [port, setPort] = useState(2200)
   const [testing, setTesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    window.electronAPI.getConfig().then((config) => {
+      if (config.server) {
+        setHost(config.server.host)
+        setPort(config.server.port)
+      }
+    })
+  }, [])
 
   const handleSave = async () => {
     if (!host.trim()) {
@@ -20,7 +25,12 @@ export default function ServerSetupScreen({ onSaved }: Props) {
     setError(null)
 
     try {
-      const res = await fetch(`http://${host.trim()}:${port}/health`)
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 5000)
+      const res = await fetch(`http://${host.trim()}:${port}/health`, {
+        signal: controller.signal
+      })
+      clearTimeout(timeout)
       if (!res.ok) {
         setError(`Server responded with ${res.status}`)
         setTesting(false)
@@ -39,7 +49,7 @@ export default function ServerSetupScreen({ onSaved }: Props) {
     })
 
     setTesting(false)
-    await onSaved()
+    await window.electronAPI.restartApp()
   }
 
   return (

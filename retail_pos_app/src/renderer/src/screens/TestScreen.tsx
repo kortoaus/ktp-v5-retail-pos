@@ -22,7 +22,7 @@ export default function TestScreen() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-gray-900">Device Test</h1>
           <Link
-            to="/settings"
+            to="/manager/settings"
             className="text-sm text-blue-600 hover:text-blue-800 font-medium"
           >
             Settings

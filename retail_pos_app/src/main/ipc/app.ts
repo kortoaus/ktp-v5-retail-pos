@@ -1,7 +1,12 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import os from 'node:os'
 
 export function registerAppHandlers(): void {
+  ipcMain.handle('app:restart', () => {
+    app.relaunch()
+    app.exit(0)
+  })
+
   ipcMain.handle('app:get-network-ip', () => {
     const interfaces = os.networkInterfaces()
     for (const name of Object.keys(interfaces)) {

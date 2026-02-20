@@ -17,6 +17,22 @@ enum BarcodeType {
 
 // Cloud Sync Data Start
 
+model Company {
+  id       Int     @id
+  cloudId  Int     @unique
+  name     String
+  phone    String?
+  address1 String
+  address2 String?
+  suburb   String
+  state    String
+  postcode String
+  country  String
+  abn      String?
+  website  String?
+  email    String?
+}
+
 model Category {
   id        Int            @id
   name_en   String
@@ -176,12 +192,76 @@ model Staff {
 }
 
 model Terminal {
-  id        Int      @id @default(autoincrement())
+  id        Int             @id @default(autoincrement())
   name      String
   ipAddress String
+  archived  Boolean         @default(false)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  shifts    TerminalShift[]
+}
+
+model Hotkey {
+  id    Int          @id @default(autoincrement())
+  sort  Int
+  name  String
+  keys  HotkeyItem[]
+  color String       @default("bg-gray-100 text-black")
+}
+
+model HotkeyItem {
+  id       Int    @id @default(autoincrement())
+  hotkeyId Int
+  hotkey   Hotkey @relation(fields: [hotkeyId], references: [id])
+  x        Int
+  y        Int
+  itemId   Int
+  name     String
+  color    String @default("bg-gray-100 text-black")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  code      String
+  scope     String[]
   archived  Boolean  @default(false)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model TerminalShift {
+  id         Int      @id @default(autoincrement())
+  companyId  Int
+  terminalId Int
+  terminal   Terminal @relation(fields: [terminalId], references: [id])
+  // date meta
+  dayStr     String
+
+  // staff data
+  openedUserId Int
+  openedUser   String
+  openedAt     DateTime  @default(now())
+  openedNote   String?
+  closedUserId Int?
+  closedUser   String?
+  closedAt     DateTime?
+  closedNote   String?
+
+  // Money in Drawer
+  startedCach       Int @default(0)
+  endedCashExpected Int @default(0)
+  endedCashActual   Int @default(0)
+
+  // Sales
+  salesCash    Int @default(0)
+  salesCredit  Int @default(0)
+  totalCashIn  Int @default(0)
+  totalCashOut Int @default(0)
+
+  // Cloud Sync
+  syncedAt DateTime?
+  synced   Boolean   @default(false)
 }
 
 // Local Data End

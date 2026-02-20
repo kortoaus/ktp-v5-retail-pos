@@ -25,7 +25,7 @@ Electron desktop application for retail POS terminals. Communicates with `retail
 4. **No server configured?** → `ServerSetupScreen` (enter host:port, tests `/health`)
 5. **Server configured** → sets `apiService` baseURL + `ip-address` header → fetches `/api/terminal/me`
 6. **Terminal not found?** → error screen with retry
-7. **Terminal found** → app renders (routes, DeviceMonitor status bar)
+7. **Terminal found** → `ShiftContext` fetches current shift → app renders (routes, DeviceMonitor status bar)
 8. **On quit** → `before-quit` fires `cleanupAll()` (disconnects scale, closes serial ports)
 
 ## Config Store
@@ -98,6 +98,81 @@ printLabel(printer, label) ──IPC──→     assembleSLCS() → iconv.encod
 - **Label printers**: per-printer `language` config (`zpl` or `slcs`)
 - **Multiple network printers** supported, one serial printer max
 
+## Hotkeys (Quick-Select Grid)
+
+Touchscreen-friendly item shortcut system. Operators tap a grid cell instead of scanning/searching.
+
+### Data Model
+
+- **Hotkey** (group): named tab with a color, contains a 6×6 grid of items
+- **HotkeyItem** (cell): positioned at `(x, y)` in the grid, links to an `Item`, with optional custom display name and color
+
+### How It Works
+
+1. **SaleScreen** — when no cart line is selected, the hotkey grid appears. Tapping a cell triggers barcode scan for that item (same flow as physical scanner).
+2. **HotkeyManagerScreen** (`/hotkey-manager`) — full CRUD:
+   - Create / edit / delete groups (name, color)
+   - Assign items to cells via item search modal
+   - Edit cell display name and color (8 color presets)
+   - Replace or remove items per cell
+   - Dirty-tracking with bulk save
+
+### Files
+
+| File | Purpose |
+| ---- | ------- |
+| `components/Hotkeys.tsx` | Display component (tabs + 6×6 grid) used in SaleScreen |
+| `screens/HotkeyManagerScreen.tsx` | Management UI (CRUD groups + cells) |
+| `hooks/useHotkeys.ts` | Fetches hotkeys from server, exposes `refresh()` |
+| `service/hotkey.service.ts` | REST client (`GET /api/hotkey`, `POST /api/hotkey`, `DELETE /api/hotkey/:id`) |
+| `types/models.ts` | `Hotkey`, `HotkeyItem` interfaces |
+
+## User Management
+
+Admin screen at `/manager/user` for managing POS operator accounts.
+
+- **UserManageScreen** — 3-column layout: user list (col 1) + inline editor (cols 2–3)
+- **UserForm** — create/edit users with on-screen keyboard (numpad for code, full keyboard for name)
+- Code field is digits-only (`/^[0-9]*$/`)
+- State-driven pagination (up/down buttons), no URL params
+- User scopes: `admin`, `interface`, `user`
+
+### Files
+
+| File | Purpose |
+| ---- | ------- |
+| `screens/UserManageScreen/index.tsx` | List + editor layout with paging |
+| `components/user/UserForm.tsx` | Create/edit form with on-screen keyboard |
+| `service/user.service.ts` | REST client (`GET/POST /api/user`) |
+
+## Shift Management
+
+Terminal shift tracking — open/close shifts with cash drawer counting.
+
+- **ShiftContext** — global context providing `shift`, `openShift()`, `reloadShift()`; waits for terminal to be ready before fetching
+- **OpenShiftScreen** (`/shift/open`) — cash counter (denomination grid + numpad) + note with on-screen keyboard; blocks if shift already open
+- **CashCounter** — denomination-based cash counting component (dollars with 2dp, not cents)
+
+### Files
+
+| File | Purpose |
+| ---- | ------- |
+| `contexts/ShiftContext.tsx` | Shift state provider (`useShift` hook) |
+| `screens/OpenShiftScreen.tsx` | Open shift UI (cash count + note) |
+| `components/CashCounter.tsx` | Denomination grid + numpad for cash counting |
+| `service/shift.service.ts` | REST client (`GET /api/shift/current`, `POST /api/shift/open`) |
+
+## Reusable List Components
+
+Generic list page building blocks (converted from Next.js, adapted for react-router-dom SPA):
+
+| File | Purpose |
+| ---- | ------- |
+| `components/list/ListPageHeader.tsx` | Title link + action slot |
+| `components/list/ListPageSearch.tsx` | Search input with icon |
+| `components/list/ListPaginator.tsx` | Page number navigation (mobile + desktop) |
+| `libs/query-utils.ts` | Query string helpers (pagination, keyword, URL parsing) |
+
 ## IPC Channels
 
 | Channel                  | Direction       | Purpose                                         |
@@ -169,6 +244,12 @@ npm run package:win      # or package:mac
   - prepacked: EAN13 with embedded price (PLU + 5-digit cents + check digit)
   - weight: scale read → EAN13 with embedded total; zero weight → PLU-only label
   - weight-prepacked: price extracted from scanned barcode
+- [x] User management screen (list + inline editor with on-screen keyboard)
+- [x] Shift context + open shift screen (cash counter, denomination grid, note)
+- [x] CashCounter component (dollars with decimals, not cents)
+- [x] Reusable list components (header, search, paginator, query utils)
+- [x] ServerSetupScreen pre-fills host/port from saved config
+- [ ] Close shift flow
 - [ ] SaleScreen UI polish (totals, cart switching)
 - [ ] ESC/POS receipt printer driver (network)
 - [ ] Payment flow

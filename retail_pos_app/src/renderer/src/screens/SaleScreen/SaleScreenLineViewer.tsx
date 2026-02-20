@@ -46,7 +46,7 @@ export default function SaleScreenLineViewer({
           const isSelected = line && selectedLineKey === line.lineKey;
 
           return (
-            <div className="">
+            <div className="" key={index}>
               {line && (
                 <LineCaption
                   line={line}
@@ -96,7 +96,7 @@ function LineCaption({
   const priceNotMatched = unit_price_original !== unit_price_effective;
 
   let displayQty = qty;
-  if (type === "prepacked" || type === "weight-prepacked") {
+  if (type === "weight-prepacked") {
     displayQty = 1;
   }
 
@@ -112,7 +112,7 @@ function LineCaption({
       <div className="w-12 flex items-center justify-center">{index + 1}</div>
 
       {/* Names */}
-      <div className="flex-1 p-1">
+      <div className="flex-1 p-1 flex flex-col justify-center">
         <div className="line-clamp-1 truncate text-base font-medium">
           {name_en}
         </div>

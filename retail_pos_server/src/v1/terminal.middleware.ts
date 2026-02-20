@@ -26,7 +26,16 @@ export default async function terminalMiddleware(
     });
     if (!terminal) throw new NotFoundException("Terminal not found");
 
+    const company = await db.company.findUnique({
+      where: {
+        id: 1,
+      },
+    });
+
+    if (!company) throw new NotFoundException("Company not configured!");
+
     res.locals.terminal = terminal;
+    res.locals.company = company;
     next();
   } catch (e) {
     if (e instanceof HttpException) throw e;

@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from "axios";
-import { API_KEY, API_URL, ITEM_URL } from "./constants";
+import { API_KEY, API_URL, CRM_URL, ITEM_URL } from "./constants";
 import { PagingType } from "../types/cloud";
 
 export type ApiResponse<T = any> = {
@@ -104,5 +104,6 @@ class ApiService {
 
 export const apiService = new ApiService(API_URL);
 export const itemApiService = new ApiService(ITEM_URL);
+export const crmApiService = new ApiService(CRM_URL);
 
 export default apiService;

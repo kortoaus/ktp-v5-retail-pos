@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { SaleLineItem, SaleLineType } from "../types/sales";
 import { Decimal } from "decimal.js";
 import { MONEY_DP, QTY_DP } from "../libs/constants";
+import { useShallow } from "zustand/shallow";
 
 interface Cart {
   lines: SaleLineType[];
@@ -9,6 +10,11 @@ interface Cart {
 
 const CART_COUNT = 4;
 export const LINE_PAGE_SIZE = 10;
+export const ALLOWED_CHANGE_QTY_TYPES = [
+  "normal",
+  "prepacked",
+  // "weight-prepacked",
+];
 
 function createEmptyCart(): Cart {
   return { lines: [] };
@@ -88,6 +94,7 @@ function buildNewLine(
     } else {
       unit_price_original = defaultPrice;
       unit_price_discounted = resolveDiscountedPrice(item, memberLevel);
+      console.log(item.type, prepackedPrice, defaultPrice);
       qty = new Decimal(prepackedPrice)
         .div(defaultPrice)
         .toDecimalPlaces(QTY_DP)
@@ -99,8 +106,14 @@ function buildNewLine(
     qty = options?.qty ?? 1;
   }
 
+  let name_en = item.name_en;
+  if (item.type === "weight-prepacked") {
+    name_en = `${name_en} (Prepacked)`;
+  }
+
   const line: SaleLineType = {
     ...item,
+    name_en,
     lineKey: crypto.randomUUID(),
     index,
     original_receipt_id: null,
@@ -157,17 +170,24 @@ function recalculateAllLines(carts: Cart[], memberLevel: number): Cart[] {
   }));
 }
 
+export interface SaleMember {
+  id: string;
+  name: string;
+  level: number;
+  phone_last4: string | null;
+}
+
 interface SalesState {
   activeCartIndex: number;
   carts: Cart[];
-  memberLevel: number;
+  member: SaleMember | null;
   lineOffset: number;
 
   addLine: (item: SaleLineItem, options?: AddLineOptions) => void;
   removeLine: (lineKey: string) => void;
   changeLineQty: (lineKey: string, qty: number) => void;
   injectLinePrice: (lineKey: string, price: number | null) => void;
-  setMemberLevel: (level: number) => void;
+  setMember: (member: SaleMember | null) => void;
   setLineOffset: (offset: number) => void;
   switchCart: (index: number) => void;
   clearActiveCart: () => void;
@@ -176,13 +196,14 @@ interface SalesState {
 export const useSalesStore = create<SalesState>()((set, get) => ({
   activeCartIndex: 0,
   carts: Array.from({ length: CART_COUNT }, createEmptyCart),
-  memberLevel: 0,
+  member: null,
   lineOffset: 0,
 
   addLine: (item, options) => {
     if (item.type === "invalid") return;
 
-    const { activeCartIndex, carts, memberLevel } = get();
+    const { activeCartIndex, carts, member } = get();
+    const memberLevel = member?.level ?? 0;
     const cart = carts[activeCartIndex];
     let lines = [...cart.lines];
 
@@ -235,7 +256,8 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     if (idx === -1) return;
 
     const line = cart.lines[idx];
-    if (line.type !== "normal") return;
+
+    if (!ALLOWED_CHANGE_QTY_TYPES.includes(line.type)) return;
 
     if (qty <= 0) {
       get().removeLine(lineKey);
@@ -244,8 +266,7 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
 
     const updated = recalculateLine({ ...line, qty });
     const lines = [...cart.lines];
-    lines.splice(idx, 1);
-    lines.push(updated);
+    lines[idx] = updated;
 
     const updatedCarts = [...carts];
     updatedCarts[activeCartIndex] = { lines: reindexLines(lines) };
@@ -277,10 +298,11 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     set({ carts: updatedCarts });
   },
 
-  setMemberLevel: (level) => {
+  setMember: (member) => {
     const { carts } = get();
+    const level = member?.level ?? 0;
     set({
-      memberLevel: level,
+      member,
       carts: recalculateAllLines(carts, level),
     });
   },
@@ -302,6 +324,43 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     const { activeCartIndex, carts } = get();
     const updatedCarts = [...carts];
     updatedCarts[activeCartIndex] = createEmptyCart();
-    set({ carts: updatedCarts });
+    set({ carts: updatedCarts, member: null });
   },
 }));
+
+export const useCartTotals = () => {
+  return useSalesStore(
+    useShallow((s) => {
+      const cart = s.carts[s.activeCartIndex];
+      const lines = cart.lines ?? [];
+
+      const itemCount = [...new Set(lines.map((l) => l.itemId))].length;
+      const lineCount = lines.length;
+      const qtyCount = lines.reduce((acc, l) => {
+        if (l.type === "weight" || l.type === "weight-prepacked") {
+          return acc + 1;
+        }
+        return acc + l.qty;
+      }, 0);
+
+      const total = lines.reduce((acc, l) => {
+        return acc.add(new Decimal(l.total));
+      }, new Decimal(0));
+      const tax_amount = lines.reduce((acc, l) => {
+        return acc.add(new Decimal(l.tax_amount));
+      }, new Decimal(0));
+      const subtotal = lines.reduce((acc, l) => {
+        return acc.add(new Decimal(l.subtotal));
+      }, new Decimal(0));
+
+      return {
+        itemCount,
+        lineCount,
+        qtyCount,
+        total: total.toNumber(),
+        tax_amount: tax_amount.toNumber(),
+        subtotal: subtotal.toNumber(),
+      };
+    }),
+  );
+};

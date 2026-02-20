@@ -83,6 +83,7 @@ export interface ElectronAPI {
   setConfig: (config: AppConfig) => Promise<AppConfig>
 
   getNetworkIp: () => Promise<string | null>
+  restartApp: () => Promise<void>
 
   scaleConnect: () => Promise<{ ok: boolean; message: string }>
   scaleDisconnect: () => Promise<void>

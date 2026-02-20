@@ -85,7 +85,7 @@ export default function WeightModal({
         </div>
 
         <div className="px-4 py-4">
-          <div className="text-sm text-gray-500 mb-4 truncate">{itemName}</div>
+          <div className="text-base font-medium mb-4 truncate">{itemName}</div>
 
           <div className="bg-gray-50 rounded-xl p-6 text-center mb-4">
             <div className="text-5xl font-bold tabular-nums">

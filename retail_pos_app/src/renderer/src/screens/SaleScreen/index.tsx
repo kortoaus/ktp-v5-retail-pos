@@ -15,8 +15,15 @@ import ChangeQtyModal from "./ChangeQtyModal";
 import InjectPriceModal from "./InjectPriceModal";
 import DiscountAmountModal from "./DiscountAmountModal";
 import DiscountPercentModal from "./DiscountPercentModal";
-import Paging from "./Paging";
+import Paging from "./LinePaging";
 import Hotkeys from "../../components/Hotkeys";
+import useHotkeys from "../../hooks/useHotkeys";
+import DocumentMonitor from "./DocumentMonitor";
+import MemberSearchModal from "../../components/MemberSearchModal";
+import SyncButton from "../../components/SyncButton";
+import { Link } from "react-router-dom";
+import { useShift } from "../../contexts/ShiftContext";
+import BlockScreen from "../../components/BlockScreen";
 
 type ModalTarget =
   | null
@@ -25,9 +32,12 @@ type ModalTarget =
   | "change-qty"
   | "inject-price"
   | "discount-amount"
-  | "discount-percent";
+  | "discount-percent"
+  | "member-search";
 
 export default function SaleScreen() {
+  const { shift, loading: shiftLoading } = useShift();
+  const { hotkeys, hotkeysLoading } = useHotkeys();
   const [loading, setLoading] = useState(false);
   const [selectedLineKey, setSelectedLineKey] = useState<string | null>(null);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
@@ -36,9 +46,11 @@ export default function SaleScreen() {
     addLine,
     carts,
     activeCartIndex,
-    setMemberLevel,
+    setMember,
+    member,
     lineOffset,
     setLineOffset,
+    clearActiveCart,
   } = useSalesStore();
 
   const scanCallback = useCallback(
@@ -142,15 +154,38 @@ export default function SaleScreen() {
     return lines.find((line) => line.lineKey === selectedLineKey) || null;
   }, [lines, selectedLineKey]);
 
+  if (shiftLoading) {
+    return <div>loading...</div>;
+  }
+
+  if (!shift) {
+    return <BlockScreen label="Shift is not open" link="/" />;
+  }
+
   return (
     <div className="h-full w-full bg-gray-50 flex flex-col">
       <div className="h-16 flex items-center gap-4 px-4 border-b border-gray-200">
+        <Link to="/">
+          <button className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+            &larr; Back
+          </button>
+        </Link>
         <button onClick={() => setModalTarget("item-search")}>
           search item
         </button>
-        <button onClick={() => setMemberLevel(0)}>level 0</button>
-        <button onClick={() => setMemberLevel(1)}>level 1</button>
-        <button onClick={() => setMemberLevel(2)}>level 2</button>
+        <button
+          onClick={() => {
+            if (member === null) {
+              setModalTarget("member-search");
+            } else {
+              setMember(null);
+            }
+          }}
+        >
+          {member === null ? "search member" : member.name}
+        </button>
+
+        <SyncButton />
       </div>
 
       {/* Inner Layout */}
@@ -189,11 +224,39 @@ export default function SaleScreen() {
                 onOpenDiscountPercent={() => setModalTarget("discount-percent")}
               />
             )}
-            {selectedLine == null && <Hotkeys />}
+            {!hotkeysLoading && hotkeys.length > 0 && selectedLine == null && (
+              <Hotkeys
+                hotkeys={hotkeys}
+                onItemClick={(x, y, item) => {
+                  if (item) {
+                    scanCallback(item.barcode);
+                  }
+                }}
+              />
+            )}
           </div>
 
           {/* monitor */}
-          <div className="h-48"></div>
+          <div className="h-16">
+            <DocumentMonitor />
+          </div>
+          <div className="h-48 grid grid-cols-4 grid-rows-2 gap-4 p-2">
+            {lines.length > 0 && (
+              <button
+                className="bg-red-100"
+                onClick={() => {
+                  const ask = window.confirm(
+                    "Are you sure you want to clear the cart?",
+                  );
+                  if (ask) {
+                    clearActiveCart();
+                  }
+                }}
+              >
+                Clear Cart
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -236,6 +299,22 @@ export default function SaleScreen() {
         open={modalTarget === "discount-percent"}
         onClose={() => setModalTarget(null)}
         line={selectedLine}
+      />
+
+      <MemberSearchModal
+        open={modalTarget === "member-search"}
+        onClose={() => setModalTarget(null)}
+        onSelect={(member) => {
+          if (member) {
+            setMember({
+              id: member.id,
+              name: member.name,
+              level: member.level,
+              phone_last4: member.phone_last4,
+            });
+          }
+          setModalTarget(null);
+        }}
       />
     </div>
   );

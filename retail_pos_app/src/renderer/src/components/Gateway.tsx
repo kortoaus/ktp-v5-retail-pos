@@ -2,11 +2,14 @@ import { type ReactNode } from "react";
 import { useTerminal } from "../contexts/TerminalContext";
 import ServerSetupScreen from "../screens/ServerSetupScreen";
 import DeviceMonitor from "./DeviceMonitor";
+import { useShift } from "../contexts/ShiftContext";
 
 export default function Gateway({ children }: { children: ReactNode }) {
-  const { terminal, loading, serverConfigured, error, refetch } = useTerminal();
+  const { shift, loading: shiftLoading } = useShift();
+  const { terminal, company, loading, serverConfigured, error, refetch } =
+    useTerminal();
 
-  if (loading) {
+  if (loading || shiftLoading) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400">
         Loading...
@@ -15,10 +18,10 @@ export default function Gateway({ children }: { children: ReactNode }) {
   }
 
   if (!serverConfigured) {
-    return <ServerSetupScreen onSaved={refetch} />;
+    return <ServerSetupScreen />;
   }
 
-  if (!terminal) {
+  if (!terminal || !company) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <p className="text-red-600 font-medium">Not Registered Terminal.</p>
@@ -36,7 +39,11 @@ export default function Gateway({ children }: { children: ReactNode }) {
   return (
     <div className="w-screen h-screen flex flex-col">
       <div className="flex-1 h-full w-full overflow-y-auto">{children}</div>
-      <DeviceMonitor terminal={terminal} />
+      <DeviceMonitor
+        terminal={terminal}
+        company={company}
+        shift={shift || null}
+      />
     </div>
   );
 }

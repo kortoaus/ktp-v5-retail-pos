@@ -1,5 +1,9 @@
 import { SaleLineType } from "../../types/sales";
-import { useSalesStore } from "../../store/salesStore";
+import {
+  ALLOWED_CHANGE_QTY_TYPES,
+  useSalesStore,
+} from "../../store/salesStore";
+import { cn } from "../../libs/cn";
 
 interface LineFunctionPanelProps {
   line: SaleLineType | null;
@@ -23,81 +27,77 @@ export default function LineFunctionPanel({
   if (line == null) return null;
 
   return (
-    <div className="flex flex-col gap-2 p-2">
-      <button
-        type="button"
-        onPointerDown={() => {
-          const ask = confirm("Are you sure you want to remove this line?");
-          if (ask) {
-            removeLine(line.lineKey);
-          }
-        }}
-        className="w-full py-3 rounded-xl bg-gray-200 active:bg-gray-300 font-medium text-base"
-      >
-        Remove
-      </button>
-      {line.type === "normal" && (
+    <div className="flex flex-col gap-8 p-2 h-full bg-zinc-200">
+      {ALLOWED_CHANGE_QTY_TYPES.includes(line.type) && (
         <>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onPointerDown={() => changeLineQty(line.lineKey, line.qty - 1)}
-              className="flex-1 py-3 rounded-xl bg-gray-200 active:bg-gray-300 font-medium text-base"
-            >
-              −
-            </button>
-            <button
-              type="button"
-              onPointerDown={() => changeLineQty(line.lineKey, line.qty + 1)}
-              className="flex-1 py-3 rounded-xl bg-gray-200 active:bg-gray-300 font-medium text-base"
-            >
-              +
-            </button>
+          <div className="grid grid-cols-3 gap-2">
+            <LineActionButton
+              onClick={() => changeLineQty(line.lineKey, line.qty - 1)}
+              label="-1"
+            />
+            <LineActionButton
+              onClick={() => changeLineQty(line.lineKey, line.qty + 1)}
+              label="+1"
+            />
+            <LineActionButton onClick={onOpenChangeQty} label="Change Qty" />
           </div>
-          <button
-            type="button"
-            onPointerDown={onOpenChangeQty}
-            className="w-full py-3 rounded-xl bg-gray-200 active:bg-gray-300 font-medium text-base"
-          >
-            Change Qty
-          </button>
         </>
       )}
-      <button
-        type="button"
-        onPointerDown={onOpenInjectPrice}
-        className="w-full py-3 rounded-xl bg-gray-200 active:bg-gray-300 font-medium text-base"
-      >
-        Override Price
-      </button>
-      <button
-        type="button"
-        onPointerDown={onOpenDiscountAmount}
-        className="w-full py-3 rounded-xl bg-gray-200 active:bg-gray-300 font-medium text-base"
-      >
-        Discount $
-      </button>
-      <button
-        type="button"
-        onPointerDown={onOpenDiscountPercent}
-        className="w-full py-3 rounded-xl bg-gray-200 active:bg-gray-300 font-medium text-base"
-      >
-        Discount %
-      </button>
-      <button
-        type="button"
-        onPointerDown={() => injectLinePrice(line.lineKey, null)}
-        className="w-full py-3 rounded-xl bg-gray-200 active:bg-gray-300 font-medium text-base"
-      >
-        Clear Override Price
-      </button>
 
-      <button
-        onClick={onCancel}
-        className="w-full py-3 rounded-xl bg-gray-200 active:bg-gray-300 font-medium text-base"
-      >
-        Cancel
-      </button>
+      <div className="grid grid-cols-3 gap-2">
+        <LineActionButton onClick={onOpenDiscountAmount} label="Discount $" />
+
+        <LineActionButton onClick={onOpenDiscountPercent} label="Discount %" />
+
+        <LineActionButton onClick={onOpenInjectPrice} label="Override Price" />
+
+        {line.unit_price_adjusted && (
+          <div className="col-span-3">
+            <LineActionButton
+              bgColor="bg-red-500 text-white"
+              onClick={() => injectLinePrice(line.lineKey, null)}
+              label="Clear Override Price"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 flex flex-col items-end justify-end">
+        <div className="grid grid-cols-2 gap-2 w-full">
+          <LineActionButton
+            onClick={() => removeLine(line.lineKey)}
+            bgColor="bg-red-500 text-white"
+            label="Remove"
+          />
+          <LineActionButton
+            onClick={onCancel}
+            label="Close"
+            bgColor="bg-blue-500 text-white"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LineActionButton({
+  label,
+  onClick,
+  bgColor,
+}: {
+  label: string;
+  onClick: () => void;
+  bgColor?: string;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className={cn(
+        "center w-full h-16 rounded-md border border-gray-300 font-bold text-lg",
+        bgColor ? bgColor : "bg-zinc-900 text-green-600",
+      )}
+    >
+      {label}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { Brand, Category, Price } from "../../generated/prisma/browser";
 import {
+  Company,
   Item,
   ItemCategory,
   ItemScaleData,
@@ -339,6 +340,58 @@ export async function cloudPromoPriceMigrateService() {
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("cloudPromoPriceMigrateService error:", e);
+    return false;
+  }
+}
+
+export async function cloudCompanyMigrateService() {
+  try {
+    const { ok, msg, result } = await apiService.get<Company>(
+      "/device/migrate/company",
+    );
+    if (!ok || !result) {
+      throw new BadRequestException(
+        msg || "Failed to migrate companies from cloud",
+      );
+    }
+
+    await db.company.upsert({
+      where: { id: 1 },
+      create: {
+        id: 1,
+        cloudId: result.cloudId,
+        name: result.name,
+        phone: result.phone,
+        address1: result.address1,
+        address2: result.address2,
+        suburb: result.suburb,
+        state: result.state,
+        postcode: result.postcode,
+        country: result.country,
+        abn: result.abn,
+        website: result.website,
+        email: result.email,
+      },
+      update: {
+        cloudId: result.cloudId,
+        name: result.name,
+        phone: result.phone,
+        address1: result.address1,
+        address2: result.address2,
+        suburb: result.suburb,
+        state: result.state,
+        postcode: result.postcode,
+        country: result.country,
+        abn: result.abn,
+        website: result.website,
+        email: result.email,
+      },
+    });
+
+    return true;
+  } catch (e) {
+    if (e instanceof HttpException) throw e;
+    console.error("cloudCompanyMigrateService error:", e);
     return false;
   }
 }

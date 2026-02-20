@@ -2,6 +2,7 @@ import { Response, Request } from "express";
 import {
   cloudBrandMigrateService,
   cloudCategoryMigrateService,
+  cloudCompanyMigrateService,
   cloudItemMigrateService,
   cloudPriceMigrateService,
   cloudPromoPriceMigrateService,
@@ -15,6 +16,15 @@ export async function cloudItemMigrateController(req: Request, res: Response) {
     res.status(500).json({
       ok: false,
       msg: "Failed to migrate categories",
+    });
+    return;
+  }
+
+  const companyResult = await cloudCompanyMigrateService();
+  if (!companyResult) {
+    res.status(500).json({
+      ok: false,
+      msg: "Failed to migrate company data",
     });
     return;
   }

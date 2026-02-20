@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('config:set', config),
 
   getNetworkIp: (): Promise<string | null> => ipcRenderer.invoke('app:get-network-ip'),
+  restartApp: (): Promise<void> => ipcRenderer.invoke('app:restart'),
 
   scaleConnect: (): Promise<{ ok: boolean; message: string }> =>
     ipcRenderer.invoke('scale:connect'),
