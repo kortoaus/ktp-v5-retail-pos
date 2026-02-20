@@ -162,6 +162,29 @@ Terminal shift tracking — open/close shifts with cash drawer counting.
 | `components/CashCounter.tsx` | Denomination grid + numpad for cash counting |
 | `service/shift.service.ts` | REST client (`GET /api/shift/current`, `POST /api/shift/open`) |
 
+## Payment
+
+Full payment flow with document discount, credit surcharge, Australian 5c rounding, and split cash/credit.
+
+- **PaymentModal** — full-screen (95%) overlay from SaleScreen with 3-column layout: inputs+numpad | notes | summary
+- **Calculation engine** (`usePaymentCalc`) — all money math via `decimal.js`, rounded to 2dp at each step
+- **Rounding** — always applied (not conditional on cash), surcharge separate from sale total
+- **Validation** — on pay only (discount ≤ subtotal, credit ≤ total, not short); inputs are unrestricted
+- **Auto-fill** — double-tap Credit (when $0) fills exactDue; double-tap Cash fills remaining
+- **Note buttons** — $100/$50/$20/$10/$5/$2/$1/$0.50 quick-add to cash
+
+### Files
+
+| File | Purpose |
+| ---- | ------- |
+| `components/PaymentModal/index.tsx` | State, handlers, layout orchestration |
+| `components/PaymentModal/usePaymentCalc.ts` | All Decimal.js calculation logic |
+| `components/PaymentModal/PaymentSummary.tsx` | Right column summary panel + pay button |
+| `components/PaymentModal/PaymentParts.tsx` | `InputField` + `SummaryRow` reusable components |
+| `types/models.ts` (`OnPaymentPayload`) | Payload stored to DB on payment |
+| `docs/payment_rules.md` | Full calculation rules (EN) |
+| `docs/payment_rules_ko.md` | 결제 계산 규칙 (KO) |
+
 ## Reusable List Components
 
 Generic list page building blocks (converted from Next.js, adapted for react-router-dom SPA):
@@ -227,6 +250,8 @@ npm run package:win      # or package:mac
 | ------------------------------ | ------------------------------------- |
 | `docs/pricing_rules.md`        | Pricing rules for all item types (EN) |
 | `docs/pricing_rules_ko.md`     | 가격 계산 규칙 (KO)                   |
+| `docs/payment_rules.md`        | Payment calculation rules (EN)        |
+| `docs/payment_rules_ko.md`     | 결제 계산 규칙 (KO)                   |
 | `docs/external_device_plan.md` | External device integration plan      |
 
 ## What's Next
@@ -249,8 +274,11 @@ npm run package:win      # or package:mac
 - [x] CashCounter component (dollars with decimals, not cents)
 - [x] Reusable list components (header, search, paginator, query utils)
 - [x] ServerSetupScreen pre-fills host/port from saved config
+- [x] Payment modal (document discount, credit surcharge, 5c rounding, split cash/credit)
+- [x] Payment calculation engine with decimal.js precision
+- [x] Payment rules documentation (EN + KO)
 - [ ] Close shift flow
 - [ ] SaleScreen UI polish (totals, cart switching)
 - [ ] ESC/POS receipt printer driver (network)
-- [ ] Payment flow
+- [ ] Receipt generation from OnPaymentPayload
 - [ ] More label templates (different sizes, layouts)

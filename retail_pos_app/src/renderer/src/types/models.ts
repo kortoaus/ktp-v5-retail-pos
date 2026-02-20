@@ -209,8 +209,8 @@ export interface OnPaymentPayload {
   subtotal: number; // Σ line.total
   documentDiscountAmount: number; // document-level discount applied
   creditSurchargeAmount: number; // 1.5% surcharge on credit payment
-  cashRounding: number; // 5c rounding adjustment (+/-)
-  total: number; // final rounded amount customer pays
+  rounding: number; // 5c rounding adjustment (+/-)
+  total: number; // sale amount = subtotal - discount + rounding (excludes surcharge)
   taxAmount: number; // GST extracted (inclusive ÷ 11)
   cashPaid: number; // cash applied to bill (received - change)
   cashChange: number; // change given back to customer

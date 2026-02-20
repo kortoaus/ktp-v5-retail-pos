@@ -1,6 +1,6 @@
 # Payment Rules
 
-How the Retail POS calculates the final amount, tax, rounding, and change.
+How the POS calculates the final amount, tax, rounding, and change.
 
 All calculations use `decimal.js` to avoid floating-point errors. All amounts are in dollars.
 
@@ -12,12 +12,15 @@ All calculations use `decimal.js` to avoid floating-point errors. All amounts ar
 subTotal
   → documentDiscountAmount
   → exactDue = subTotal - documentDiscountAmount
-  → creditSurchargeAmount = creditReceived × 1.5%
-  → totalDue = exactDue + creditSurchargeAmount
-  → roundedTotalDue = round to 5c (only when cash is involved)
+  → roundedDue = exactDue rounded to 5c (ALWAYS, regardless of payment method)
+  → rounding = roundedDue - exactDue
+  → creditSurchargeAmount = creditReceived × 1.5% (separate from total)
+  → eftposAmount = creditReceived + creditSurchargeAmount (what EFTPOS charges)
   → taxAmount (from unrounded exactDue + surcharge)
-  → remaining = roundedTotalDue - cashReceived - creditReceived
+  → remaining = roundedDue - cashReceived - creditReceived
 ```
+
+Key design: **surcharge is separate from the sale total.** The bill is `roundedDue`. The surcharge is collected via the EFTPOS machine on top. This means `cashPaid + creditPaid = total` always balances.
 
 ---
 
@@ -50,35 +53,19 @@ A whole-document discount applied after line-level pricing. Two methods:
 | Percent | subTotal × (percent ÷ 100) |
 | Amount  | Flat dollar amount         |
 
-**Capped at subTotal** — discount cannot exceed the subtotal. The due can never go negative from a document discount.
+Validated on payment: discount cannot exceed subtotal.
 
 ### 4. Exact Due
 
-What the customer owes before surcharges and rounding.
+What the customer owes before rounding.
 
 ```
 exactDue = subTotal - documentDiscountAmount
 ```
 
-### 5. Credit Card Surcharge
+### 5. Rounding (Australian 5-Cent Rule)
 
-A 1.5% surcharge applied to the credit card payment amount.
-
-```
-creditSurchargeAmount = creditReceived × 0.015
-```
-
-The surcharge is calculated on the amount actually paid by credit, not on the total due. If the customer pays $50 by credit on a $100 bill, the surcharge is on $50.
-
-### 6. Total Due
-
-```
-totalDue = exactDue + creditSurchargeAmount
-```
-
-### 7. Cash Rounding (Australian 5-Cent Rule)
-
-Australia eliminated 1c and 2c coins. Cash transactions are rounded to the nearest 5 cents using Swedish rounding (round half up).
+**Always applied** to `exactDue`, regardless of payment method. Australia eliminated 1c and 2c coins.
 
 | Last digit(s) | Rounds to     |
 | ------------- | ------------- |
@@ -87,24 +74,27 @@ Australia eliminated 1c and 2c coins. Cash transactions are rounded to the neare
 | .06, .07      | .05 (down)    |
 | .08, .09      | .10 (up)      |
 
-**Rounding only applies when cash is involved.** Full credit card payments are not rounded.
-
 ```
-if cashReceived > 0:
-  roundedTotalDue = totalDue rounded to nearest 0.05 (ROUND_HALF_UP)
-else:
-  roundedTotalDue = totalDue
+roundedDue = exactDue rounded to nearest 0.05 (ROUND_HALF_UP)
+rounding = roundedDue - exactDue
 ```
 
-The rounding adjustment is tracked separately for the receipt:
+This is the **sale total** — the bill amount shown to the customer.
+
+### 6. Credit Card Surcharge (Separate)
+
+A 1.5% surcharge applied to the credit card payment amount.
 
 ```
-cashRounding = roundedTotalDue - totalDue
+creditSurchargeAmount = creditReceived × 0.015
+eftposAmount = creditReceived + creditSurchargeAmount
 ```
 
-This can be positive (rounded up) or negative (rounded down), and appears as a line on the receipt.
+The surcharge is **not included in the sale total**. It is collected via the EFTPOS machine. The card machine charges `eftposAmount`, the store receives `creditReceived`, and the surcharge offsets processing fees.
 
-### 8. Tax (GST)
+Validated on payment: credit cannot exceed `roundedDue`.
+
+### 7. Tax (GST)
 
 All prices are GST-inclusive (10% GST). Tax is extracted, not added.
 
@@ -112,7 +102,7 @@ All prices are GST-inclusive (10% GST). Tax is extracted, not added.
 GST = (taxable amount) ÷ 11
 ```
 
-Tax is calculated on the **unrounded** amounts to avoid rounding affecting the tax figure:
+Tax is calculated on the **unrounded** amounts:
 
 ```
 taxableGoods = exactDue × taxableRatio
@@ -122,10 +112,10 @@ taxAmount = (taxableGoods + taxableSurcharge) ÷ 11
 
 The credit surcharge is subject to GST in proportion to taxable goods.
 
-### 9. Remaining / Change
+### 8. Remaining / Change
 
 ```
-remaining = roundedTotalDue - cashReceived - creditReceived
+remaining = roundedDue - cashReceived - creditReceived
 ```
 
 | remaining | Meaning                            |
@@ -138,25 +128,45 @@ remaining = roundedTotalDue - cashReceived - creditReceived
 
 ## Total Discount (Receipt Summary)
 
-For the receipt "You Saved" line, the total discount combines line-level and document-level discounts:
+For the receipt "You Saved" line:
 
 ```
 originalSubTotal = Σ (line.unit_price_original × line.qty)
 totalDiscountAmount = (originalSubTotal - subTotal) + documentDiscountAmount
 ```
 
-- `originalSubTotal - subTotal` = all line-level savings (price overrides, promo prices, line discounts)
-- `+ documentDiscountAmount` = the document-level discount
-
 ---
 
 ## Payment Methods
 
-| Method        | Surcharge              | Rounding             |
-| ------------- | ---------------------- | -------------------- |
-| Cash only     | None                   | 5c rounding applies  |
-| Credit only   | 1.5%                   | No rounding          |
-| Cash + Credit | 1.5% on credit portion | 5c rounding on total |
+| Method        | Surcharge              | Rounding        |
+| ------------- | ---------------------- | --------------- |
+| Cash only     | None                   | Always applied  |
+| Credit only   | 1.5% (via EFTPOS)      | Always applied  |
+| Cash + Credit | 1.5% on credit (via EFTPOS) | Always applied |
+
+---
+
+## Payload (OnPaymentPayload)
+
+What gets stored to the database:
+
+| Field                  | Value                                  |
+| ---------------------- | -------------------------------------- |
+| subtotal               | Σ line.total                           |
+| documentDiscountAmount | document-level discount applied        |
+| creditSurchargeAmount  | 1.5% surcharge on credit               |
+| rounding               | 5c rounding adjustment (+/-)           |
+| total                  | roundedDue (sale amount, excl. surcharge) |
+| taxAmount              | GST extracted                          |
+| cashPaid               | cash applied to bill                   |
+| cashChange             | change given back                      |
+| creditPaid             | base card charge (excl. surcharge)     |
+| totalDiscountAmount    | line + document discounts              |
+
+Identity: `cashPaid + creditPaid = total`
+
+Derivable: `cashReceived = cashPaid + cashChange`, `eftposAmount = creditPaid + creditSurchargeAmount`
 
 ---
 
@@ -164,22 +174,29 @@ totalDiscountAmount = (originalSubTotal - subTotal) + documentDiscountAmount
 
 Cart: 3 items totalling $47.83 (of which $32.00 is taxable).
 
-Document discount: 5% → $2.39.
+Document discount: 5%.
 
 ```
 subTotal         = $47.83
 taxableRatio     = 32.00 ÷ 47.83 = 0.6690...
 documentDiscount = 47.83 × 0.05 = $2.39
 exactDue         = 47.83 - 2.39 = $45.44
+roundedDue       = $45.45 (rounded up)
+rounding         = +$0.01
 ```
 
 Customer pays $20.00 credit + rest cash:
 
 ```
 creditSurcharge  = 20.00 × 0.015 = $0.30
-totalDue         = 45.44 + 0.30 = $45.74
-roundedTotalDue  = $45.75 (rounded up to nearest 5c)
-cashRounding     = 45.75 - 45.74 = +$0.01
+eftposAmount     = 20.00 + 0.30 = $20.30 (EFTPOS charges this)
+remaining        = 45.45 - 20.00 = $25.45 (cash needed)
+```
+
+Customer gives $30 cash:
+
+```
+remaining = 45.45 - 30.00 - 20.00 = -$4.55 (change)
 ```
 
 Tax:
@@ -190,24 +207,20 @@ taxableSurcharge = 0.30 × 0.6690 = $0.20
 taxAmount        = (30.40 + 0.20) ÷ 11 = $2.78
 ```
 
-Customer gives $30 cash:
-
-```
-remaining = 45.75 - 30.00 - 20.00 = -$4.25 (change)
-```
-
-Receipt shows:
+Receipt:
 
 ```
 Subtotal:          $47.83
 Discount (5%):     -$2.39
-Credit Surcharge:   $0.30
-Cash Rounding:     +$0.01
+Rounding:          +$0.01
 ─────────────────────────
-Total:             $45.75
+Total:             $45.45
   Credit:          $20.00
   Cash:            $30.00
-  Change:           $4.25
+  Change:           $4.55
+─────────────────────────
+Card Surcharge:     $0.30
+EFTPOS Amount:     $20.30
 ─────────────────────────
 GST Included:       $2.78
 You Saved:          $X.XX
