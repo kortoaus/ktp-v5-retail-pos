@@ -34,8 +34,23 @@ export default async function terminalMiddleware(
 
     if (!company) throw new NotFoundException("Company not configured!");
 
+    const shiftId = await db.terminalShift
+      .findFirst({
+        where: {
+          terminalId: terminal.id,
+          closedAt: null,
+          synced: false,
+        },
+        select: {
+          id: true,
+        },
+      })
+      .then((r) => r?.id || null);
+
     res.locals.terminal = terminal;
     res.locals.company = company;
+    res.locals.shiftId = shiftId;
+
     next();
   } catch (e) {
     if (e instanceof HttpException) throw e;

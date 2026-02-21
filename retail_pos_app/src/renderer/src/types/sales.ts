@@ -19,8 +19,8 @@ export type LineAdjustment =
   | "DISCOUNT_OVERRIDE";
 
 export interface SaleLineType extends SaleLineItem {
-  original_receipt_id: number | null;
-  original_receipt_line_id: number | null;
+  original_invoice_id: number | null;
+  original_invoice_row_id: number | null;
   lineKey: string;
   index: number;
   barcode_price: number | null; // original barcode-embedded price (prepacked/weight-prepacked only)

@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useTerminal } from "../contexts/TerminalContext";
 import ServerSetupScreen from "../screens/ServerSetupScreen";
 import DeviceMonitor from "./DeviceMonitor";
@@ -6,6 +6,7 @@ import { useShift } from "../contexts/ShiftContext";
 
 export default function Gateway({ children }: { children: ReactNode }) {
   const { shift, loading: shiftLoading } = useShift();
+  const [serverSetup, setServerSetup] = useState(false);
   const { terminal, company, loading, serverConfigured, error, refetch } =
     useTerminal();
 
@@ -17,7 +18,7 @@ export default function Gateway({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!serverConfigured) {
+  if (!serverConfigured || serverSetup) {
     return <ServerSetupScreen />;
   }
 
@@ -31,6 +32,12 @@ export default function Gateway({ children }: { children: ReactNode }) {
           className="text-sm text-blue-600 hover:text-blue-800 font-medium"
         >
           Retry
+        </button>
+        <button
+          onClick={() => setServerSetup(true)}
+          className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+        >
+          Server Setup
         </button>
       </div>
     );

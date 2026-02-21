@@ -199,6 +199,7 @@ model Terminal {
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   shifts    TerminalShift[]
+  invoices  SaleInvoice[]
 }
 
 model Hotkey {
@@ -221,13 +222,14 @@ model HotkeyItem {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
+  id        Int           @id @default(autoincrement())
   name      String
   code      String
   scope     String[]
-  archived  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  archived  Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @default(now()) @updatedAt
+  invoices  SaleInvoice[]
 }
 
 model TerminalShift {
@@ -261,7 +263,97 @@ model TerminalShift {
 
   // Cloud Sync
   syncedAt DateTime?
-  synced   Boolean   @default(false)
+  synced   Boolean       @default(false)
+  invoices SaleInvoice[]
+}
+
+model SaleInvoice {
+  // document data
+  id                  Int     @id @default(autoincrement())
+  type                String  @default("sale")
+  serialNumber        String? @unique
+  original_invoice_id Int?
+
+  // Company
+  companyId   Int
+  companyName String
+  abn         String?
+  address1    String?
+  address2    String?
+  suburb      String?
+  state       String?
+  postcode    String?
+  country     String?
+  phone       String?
+  email       String?
+  website     String?
+
+  // membership data
+  memberId    Int?
+  memberLevel Int?
+
+  // Terminal & Shift & User
+  terminalId Int
+  terminal   Terminal      @relation(fields: [terminalId], references: [id])
+  shiftId    Int
+  shift      TerminalShift @relation(fields: [shiftId], references: [id])
+  userId     Int
+  user       User          @relation(fields: [userId], references: [id])
+
+  // Metadata
+  issuedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rows SaleInvoiceRow[]
+
+  // Calculated Fields
+  subtotal               Decimal @db.Decimal(18, 2)
+  documentDiscountAmount Decimal @db.Decimal(18, 2)
+  creditSurchargeAmount  Decimal @db.Decimal(18, 2)
+  rounding               Decimal @db.Decimal(18, 2)
+  total                  Decimal @db.Decimal(18, 2)
+  taxAmount              Decimal @db.Decimal(18, 2)
+  cashPaid               Decimal @db.Decimal(18, 2)
+  cashChange             Decimal @db.Decimal(18, 2)
+  creditPaid             Decimal @db.Decimal(18, 2)
+  totalDiscountAmount    Decimal @db.Decimal(18, 2)
+}
+
+model SaleInvoiceRow {
+  id        Int         @id @default(autoincrement())
+  invoiceId Int
+  invoice   SaleInvoice @relation(fields: [invoiceId], references: [id])
+
+  // Item Data
+  type    String
+  itemId  Int
+  name_en String
+  name_ko String
+  taxable Boolean
+  uom     String
+  barcode String
+  index   Int
+
+  // Price Data
+  barcodePrice          Decimal? @db.Decimal(18, 2)
+  unit_price_original   Decimal  @db.Decimal(18, 2)
+  unit_price_discounted Decimal? @db.Decimal(18, 2)
+  unit_price_adjusted   Decimal? @db.Decimal(18, 2)
+  unit_price_effective  Decimal  @db.Decimal(18, 2)
+  qty                   Decimal  @db.Decimal(18, 3)
+  measured_weight       Decimal? @db.Decimal(18, 3)
+  subtotal              Decimal  @db.Decimal(18, 2)
+  total                 Decimal  @db.Decimal(18, 2)
+
+  // Refund Data
+  original_invoice_id     Int?
+  original_invoice_row_id Int?
+  refunded                Boolean @default(false)
+
+  // Metadata
+  adjustments String[]
+  createdAt   DateTime @default(now())
 }
 
 // Local Data End

@@ -116,8 +116,8 @@ function buildNewLine(
     name_en,
     lineKey: crypto.randomUUID(),
     index,
-    original_receipt_id: null,
-    original_receipt_line_id: null,
+    original_invoice_id: null,
+    original_invoice_row_id: null,
     barcode_price:
       isPrepacked && prepackedPrice != null ? prepackedPrice : null,
     unit_price_adjusted: null,
