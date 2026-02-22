@@ -1,29 +1,121 @@
+import { TerminalShift } from "../../generated/prisma/browser";
 import { Company, Terminal, User } from "../../generated/prisma/client";
 import db from "../../libs/db";
-import { HttpException, InternalServerException } from "../../libs/exceptions";
+import {
+  HttpException,
+  InternalServerException,
+  NotFoundException,
+} from "../../libs/exceptions";
 
-type OnPaymentPayload = {
-  subtotal: number; // Σ line.total
-  documentDiscountAmount: number; // document-level discount applied
-  creditSurchargeAmount: number; // 1.5% surcharge on credit payment
-  rounding: number; // 5c rounding adjustment (+/-)
-  total: number; // sale amount = subtotal - discount + rounding (excludes surcharge)
-  taxAmount: number; // GST extracted (inclusive ÷ 11)
-  cashPaid: number; // cash applied to bill (received - change)
-  cashChange: number; // change given back to customer
-  creditPaid: number; // base card charge (excludes surcharge)
-  totalDiscountAmount: number; // line discounts + document discount ("You Saved")
+type InvoiceRowDto = {
+  type: string;
+  itemId: number;
+  name_en: string;
+  name_ko: string;
+  taxable: boolean;
+  uom: string;
+  barcode: string;
+  index: number;
+  barcodePrice: number | null;
+  unit_price_original: number;
+  unit_price_discounted: number | null;
+  unit_price_adjusted: number | null;
+  unit_price_effective: number;
+  qty: number;
+  measured_weight: number | null;
+  subtotal: number;
+  total: number;
+  original_invoice_id: number | null;
+  original_invoice_row_id: number | null;
+  adjustments: string[];
+};
+
+type CreateSaleInvoiceDto = {
+  subtotal: number;
+  documentDiscountAmount: number;
+  creditSurchargeAmount: number;
+  rounding: number;
+  total: number;
+  taxAmount: number;
+  cashPaid: number;
+  cashChange: number;
+  creditPaid: number;
+  totalDiscountAmount: number;
+  memberId: number | null;
+  memberLevel: number | null;
+  rows: InvoiceRowDto[];
 };
 
 export async function createSaleInvoiceService(
   company: Company,
   terminal: Terminal,
-  user: User,
-  shiftId: number,
-  dto: OnPaymentPayload,
+  shift: TerminalShift,
+  dto: CreateSaleInvoiceDto,
 ) {
   try {
-    return { ok: true, msg: "success" };
+    if (!shift) throw new NotFoundException("Shift not found");
+    if (!terminal) throw new NotFoundException("Terminal not found");
+    if (!company) throw new NotFoundException("Company not found");
+
+    const result = await db.saleInvoice.create({
+      data: {
+        type: "sale",
+        companyId: company.id,
+        companyName: company.name,
+        abn: company.abn,
+        address1: company.address1,
+        address2: company.address2,
+        suburb: company.suburb,
+        state: company.state,
+        postcode: company.postcode,
+        country: company.country,
+        phone: company.phone,
+        email: company.email,
+        website: company.website,
+        memberId: dto.memberId,
+        memberLevel: dto.memberLevel,
+        terminalId: terminal.id,
+        shiftId: shift.id,
+        userId: shift.openedUserId,
+        subtotal: dto.subtotal,
+        documentDiscountAmount: dto.documentDiscountAmount,
+        creditSurchargeAmount: dto.creditSurchargeAmount,
+        rounding: dto.rounding,
+        total: dto.total,
+        taxAmount: dto.taxAmount,
+        cashPaid: dto.cashPaid,
+        cashChange: dto.cashChange,
+        creditPaid: dto.creditPaid,
+        totalDiscountAmount: dto.totalDiscountAmount,
+        rows: {
+          create: dto.rows.map((row) => ({
+            type: row.type,
+            itemId: row.itemId,
+            name_en: row.name_en,
+            name_ko: row.name_ko,
+            taxable: row.taxable,
+            uom: row.uom,
+            barcode: row.barcode,
+            index: row.index,
+            barcodePrice: row.barcodePrice,
+            unit_price_original: row.unit_price_original,
+            unit_price_discounted: row.unit_price_discounted,
+            unit_price_adjusted: row.unit_price_adjusted,
+            unit_price_effective: row.unit_price_effective,
+            qty: row.qty,
+            measured_weight: row.measured_weight,
+            subtotal: row.subtotal,
+            total: row.total,
+            original_invoice_id: row.original_invoice_id,
+            original_invoice_row_id: row.original_invoice_row_id,
+            adjustments: row.adjustments,
+          })),
+        },
+      },
+      include: { rows: true },
+    });
+
+    return { ok: true, msg: "Invoice created", result: { id: result.id } };
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("createSaleInvoiceService error:", e);

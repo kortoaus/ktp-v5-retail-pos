@@ -323,7 +323,7 @@ model SaleInvoice {
 model SaleInvoiceRow {
   id        Int         @id @default(autoincrement())
   invoiceId Int
-  invoice   SaleInvoice @relation(fields: [invoiceId], references: [id])
+  invoice   SaleInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   // Item Data
   type    String

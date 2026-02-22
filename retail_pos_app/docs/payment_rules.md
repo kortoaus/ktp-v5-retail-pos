@@ -1,3 +1,8 @@
+# Todo
+
+- [ ]: multiple payments
+- [ ]: Rounding on Cash Received.(display on the side.)
+
 # Payment Rules
 
 How the POS calculates the final amount, tax, rounding, and change.
@@ -139,10 +144,10 @@ totalDiscountAmount = (originalSubTotal - subTotal) + documentDiscountAmount
 
 ## Payment Methods
 
-| Method        | Surcharge              | Rounding        |
-| ------------- | ---------------------- | --------------- |
-| Cash only     | None                   | Always applied  |
-| Credit only   | 1.5% (via EFTPOS)      | Always applied  |
+| Method        | Surcharge                   | Rounding       |
+| ------------- | --------------------------- | -------------- |
+| Cash only     | None                        | Always applied |
+| Credit only   | 1.5% (via EFTPOS)           | Always applied |
 | Cash + Credit | 1.5% on credit (via EFTPOS) | Always applied |
 
 ---
@@ -151,18 +156,18 @@ totalDiscountAmount = (originalSubTotal - subTotal) + documentDiscountAmount
 
 What gets stored to the database:
 
-| Field                  | Value                                  |
-| ---------------------- | -------------------------------------- |
-| subtotal               | Σ line.total                           |
-| documentDiscountAmount | document-level discount applied        |
-| creditSurchargeAmount  | 1.5% surcharge on credit               |
-| rounding               | 5c rounding adjustment (+/-)           |
+| Field                  | Value                                     |
+| ---------------------- | ----------------------------------------- |
+| subtotal               | Σ line.total                              |
+| documentDiscountAmount | document-level discount applied           |
+| creditSurchargeAmount  | 1.5% surcharge on credit                  |
+| rounding               | 5c rounding adjustment (+/-)              |
 | total                  | roundedDue (sale amount, excl. surcharge) |
-| taxAmount              | GST extracted                          |
-| cashPaid               | cash applied to bill                   |
-| cashChange             | change given back                      |
-| creditPaid             | base card charge (excl. surcharge)     |
-| totalDiscountAmount    | line + document discounts              |
+| taxAmount              | GST extracted                             |
+| cashPaid               | cash applied to bill                      |
+| cashChange             | change given back                         |
+| creditPaid             | base card charge (excl. surcharge)        |
+| totalDiscountAmount    | line + document discounts                 |
 
 Identity: `cashPaid + creditPaid = total`
 

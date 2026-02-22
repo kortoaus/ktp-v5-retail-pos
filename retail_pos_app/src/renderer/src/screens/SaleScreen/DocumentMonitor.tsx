@@ -38,7 +38,7 @@ export default function DocumentMonitor() {
         </div>
       </div>
       <div className="col-span-5 flex items-center justify-between gap-4">
-        <div className="text-lg text-white font-medium">Total</div>
+        <div className="text-lg text-white font-medium">DUE</div>
         <div className="text-green-400 text-3xl font-bold">
           ${total.toFixed(MONEY_DP)}
         </div>

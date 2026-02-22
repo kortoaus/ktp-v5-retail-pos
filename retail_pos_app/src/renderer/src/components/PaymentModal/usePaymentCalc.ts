@@ -75,12 +75,23 @@ export function usePaymentCalc({
     return r2(taxableGoods.add(taxableSurcharge).div(11));
   }, [exactDue, taxableRatio, creditSurchargeAmount]);
 
+  const hasCash = cashReceived > 0;
+
+  const effectiveDue = useMemo(
+    () => (hasCash ? roundedDue : exactDue),
+    [hasCash, roundedDue, exactDue],
+  );
+
+  const effectiveRounding = useMemo(
+    () => (hasCash ? roundedDue.sub(exactDue) : new Decimal(0)),
+    [hasCash, roundedDue, exactDue],
+  );
   const remaining = useMemo(
     () =>
-      roundedDue
+      effectiveDue
         .sub(new Decimal(cashReceived))
         .sub(new Decimal(creditReceived)),
-    [roundedDue, cashReceived, creditReceived],
+    [effectiveDue, cashReceived, creditReceived],
   );
 
   const lineDiscountAmount = useMemo(() => {
@@ -107,6 +118,9 @@ export function usePaymentCalc({
     exactDue,
     roundedDue,
     rounding,
+    effectiveDue,
+    effectiveRounding,
+    hasCash,
     creditSurchargeAmount,
     eftposAmount,
     taxAmount,

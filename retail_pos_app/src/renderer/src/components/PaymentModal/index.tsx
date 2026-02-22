@@ -94,7 +94,7 @@ export default function PaymentModal({
       window.alert("Discount cannot exceed subtotal");
       return;
     }
-    if (new Decimal(creditReceived).gt(calc.roundedDue)) {
+    if (new Decimal(creditReceived).gt(calc.effectiveDue)) {
       window.alert("Credit cannot exceed total");
       return;
     }
@@ -107,7 +107,7 @@ export default function PaymentModal({
       new Decimal(0),
       Decimal.min(
         new Decimal(cashReceived),
-        calc.roundedDue.sub(new Decimal(creditReceived)),
+        calc.effectiveDue.sub(new Decimal(creditReceived)),
       ),
     );
 
@@ -115,8 +115,8 @@ export default function PaymentModal({
       subtotal: calc.subTotal.toNumber(),
       documentDiscountAmount: calc.documentDiscountAmount.toNumber(),
       creditSurchargeAmount: calc.creditSurchargeAmount.toNumber(),
-      rounding: calc.rounding.toNumber(),
-      total: calc.roundedDue.toNumber(),
+      rounding: calc.effectiveRounding.toNumber(),
+      total: calc.effectiveDue.toNumber(),
       taxAmount: calc.taxAmount.toNumber(),
       cashPaid: cashPaid.toNumber(),
       cashChange: calc.changeAmount.toNumber(),
@@ -132,8 +132,9 @@ export default function PaymentModal({
       className="fixed inset-0 bg-black/60 flex items-center justify-center"
       style={{ zIndex: 999 }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden w-[95%] h-[95%]">
-        <div className="flex items-center justify-between px-6 h-16 border-b border-gray-200">
+      <div className="bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden w-[98%] h-[96%]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 h-12 border-b border-gray-200">
           <h2 className="text-xl font-bold">Payment</h2>
           <div className="flex items-center gap-6">
             {calc.isShort && (
@@ -160,6 +161,8 @@ export default function PaymentModal({
         </div>
 
         <div className="flex-1 flex overflow-hidden divide-x divide-gray-200">
+          {/* Inner */}
+
           <div className="flex-1 flex flex-col">
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-2">
@@ -236,8 +239,16 @@ export default function PaymentModal({
                   ${cashReceived.toFixed(MONEY_DP)}
                 </span>
               </InputField>
+            </div>
+          </div>
 
-              <div className="grid grid-cols-4 gap-2 h-48">
+          <div className="w-[320px] p-2 flex flex-col gap-2">
+            <div className="flex-1">
+              <MoneyNumpad val={numpadVal} setVal={handleNumpadChange} />
+            </div>
+
+            {numpadTarget === "cash" && (
+              <div className="h-48 grid grid-cols-4 gap-2">
                 {NOTES.map((n) => (
                   <button
                     key={n}
@@ -252,14 +263,10 @@ export default function PaymentModal({
                   </button>
                 ))}
               </div>
-            </div>
+            )}
           </div>
 
-          <div className="w-[300px] p-2 flex flex-col gap-2">
-            <div className="flex-1">
-              <MoneyNumpad val={numpadVal} setVal={handleNumpadChange} />
-            </div>
-          </div>
+          <div className="w-[220px]"></div>
 
           <PaymentSummary
             subTotal={calc.subTotal}
@@ -268,8 +275,9 @@ export default function PaymentModal({
             documentDiscountMethod={documentDiscountMethod}
             documentDiscountValue={documentDiscountValue}
             creditSurchargeAmount={calc.creditSurchargeAmount}
-            rounding={calc.rounding}
+            rounding={calc.effectiveRounding}
             roundedDue={calc.roundedDue}
+            effectiveDue={calc.effectiveDue}
             cashReceived={cashReceived}
             creditReceived={creditReceived}
             taxAmount={calc.taxAmount}

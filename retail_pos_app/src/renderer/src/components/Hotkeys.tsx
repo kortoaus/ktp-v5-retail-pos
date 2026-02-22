@@ -49,7 +49,7 @@ export default function Hotkeys({
   return (
     <div className="h-full flex flex-col divide-y divide-gray-200">
       {/* Tabs */}
-      <div className="h-14 flex items-center divide-x divide-gray-200 shrink-0">
+      <div className="h-10 flex items-center divide-x divide-gray-200 shrink-0">
         {hotkeys.map((hotkey) => {
           const isActive = hotkey.id === selectedHotkeyId;
           return (

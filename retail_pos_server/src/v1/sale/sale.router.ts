@@ -4,6 +4,6 @@ import { userMiddleware } from "../user/user.middleware";
 
 const router = Router();
 
-router.post("/invoice/create", userMiddleware, createSaleInvoiceController);
+router.post("/invoice/create", createSaleInvoiceController);
 
 export default router;

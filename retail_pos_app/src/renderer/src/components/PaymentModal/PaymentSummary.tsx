@@ -14,6 +14,7 @@ interface PaymentSummaryProps {
   creditSurchargeAmount: Decimal;
   rounding: Decimal;
   roundedDue: Decimal;
+  effectiveDue: Decimal;
   cashReceived: number;
   creditReceived: number;
   taxAmount: Decimal;
@@ -34,6 +35,7 @@ export default function PaymentSummary({
   creditSurchargeAmount,
   rounding,
   roundedDue,
+  effectiveDue,
   cashReceived,
   creditReceived,
   taxAmount,
@@ -45,7 +47,7 @@ export default function PaymentSummary({
   onPay,
 }: PaymentSummaryProps) {
   return (
-    <div className="w-[340px] flex flex-col">
+    <div className="w-[260px] flex flex-col">
       <div className="flex-1 overflow-y-auto p-4">
         <div className="flex flex-col gap-3">
           <SummaryRow label="Subtotal" value={fmt(subTotal)} />
@@ -76,8 +78,13 @@ export default function PaymentSummary({
             />
           )}
 
-          <div className="border-t border-gray-300 pt-3">
-            <SummaryRow label="Total" value={fmt(roundedDue)} bold />
+          <div className="border-t border-gray-300 pt-3 flex flex-col gap-2">
+            <SummaryRow label="Total" value={fmt(effectiveDue)} bold />
+            <SummaryRow
+              label="Cash Total"
+              value={fmt(roundedDue)}
+              className="text-gray-500"
+            />
           </div>
 
           <div className="border-t border-gray-200 pt-3 flex flex-col gap-2">
@@ -125,7 +132,7 @@ export default function PaymentSummary({
               : "bg-gray-200 text-gray-400 cursor-not-allowed",
           )}
         >
-          Pay {fmt(roundedDue)}
+          Pay {fmt(effectiveDue)}
         </button>
       </div>
     </div>

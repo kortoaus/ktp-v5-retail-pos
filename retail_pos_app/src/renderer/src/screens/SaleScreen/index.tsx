@@ -25,6 +25,9 @@ import SyncButton from "../../components/SyncButton";
 import { Link } from "react-router-dom";
 import { useShift } from "../../contexts/ShiftContext";
 import BlockScreen from "../../components/BlockScreen";
+import { OnPaymentPayload } from "../../types/models";
+import { createSaleInvoice } from "../../service/sale.service";
+import { MONEY_DP } from "../../libs/constants";
 
 type ModalTarget =
   | null
@@ -35,7 +38,8 @@ type ModalTarget =
   | "discount-amount"
   | "discount-percent"
   | "member-search"
-  | "payment";
+  | "payment"
+  | "change-screen";
 
 export default function SaleScreen() {
   const { shift, loading: shiftLoading } = useShift();
@@ -43,6 +47,7 @@ export default function SaleScreen() {
   const [loading, setLoading] = useState(false);
   const [selectedLineKey, setSelectedLineKey] = useState<string | null>(null);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
+  const [changeAmount, setChangeAmount] = useState(0);
   const { readWeight } = useWeight();
   const {
     addLine,
@@ -242,7 +247,7 @@ export default function SaleScreen() {
           <div className="h-16">
             <DocumentMonitor />
           </div>
-          <div className="h-48 grid grid-cols-4 grid-rows-2 gap-4 p-2">
+          <div className="h-20 grid grid-cols-4 grid-rows-2 gap-4 p-2">
             {lines.length > 0 && (
               <button
                 className="bg-red-100"
@@ -285,6 +290,7 @@ export default function SaleScreen() {
         readWeight={readWeight}
         onConfirm={handleWeightConfirm}
         onClose={handleWeightClose}
+        allowZero
       />
 
       <ChangeQtyModal
@@ -315,9 +321,35 @@ export default function SaleScreen() {
         open={modalTarget === "payment"}
         onClose={() => setModalTarget(null)}
         lines={lines}
-        onPayment={(payload) => {
-          console.log("PaymentPayload", payload);
-          setModalTarget(null);
+        onPayment={async (payload: OnPaymentPayload) => {
+          const memberId = member ? Number(member.id) : null;
+          const memberLevel = member?.level ?? null;
+          const { ok, msg } = await createSaleInvoice(
+            payload,
+            lines,
+            memberId,
+            memberLevel,
+          );
+
+          if (!ok) {
+            window.alert(msg);
+            return;
+          }
+
+          console.log("print invoice");
+
+          if (payload.cashPaid > 0) {
+            console.log("kick drawer");
+          }
+
+          clearActiveCart();
+
+          if (payload.cashChange > 0) {
+            setChangeAmount(payload.cashChange);
+            setModalTarget("change-screen");
+          } else {
+            setModalTarget(null);
+          }
         }}
       />
 
@@ -336,6 +368,25 @@ export default function SaleScreen() {
           setModalTarget(null);
         }}
       />
+
+      {modalTarget === "change-screen" && (
+        <div
+          className="fixed inset-0 bg-black flex flex-col items-center justify-center"
+          style={{ zIndex: 1000 }}
+        >
+          <span className="text-white text-3xl font-medium mb-4">CHANGE</span>
+          <span className="text-green-400 text-[120px] font-bold leading-none">
+            ${changeAmount.toFixed(MONEY_DP)}
+          </span>
+          <button
+            type="button"
+            onPointerDown={() => setModalTarget(null)}
+            className="mt-12 px-12 py-4 bg-white text-black text-2xl font-bold rounded-xl active:bg-gray-200"
+          >
+            Close
+          </button>
+        </div>
+      )}
     </div>
   );
 }
