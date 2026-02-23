@@ -7,6 +7,7 @@ import crmRouter from "./v1/crm/crm.router";
 import userRouter from "./v1/user/user.router";
 import shiftRouter from "./v1/shift/shift.router";
 import saleRouter from "./v1/sale/sale.router";
+import printerRouter from "./v1/printer/printer.router";
 
 const router = Router();
 
@@ -18,4 +19,5 @@ router.use("/hotkey", hotkeyRouter);
 router.use("/crm", crmRouter);
 router.use("/user", userRouter);
 router.use("/sale", saleRouter);
+router.use("/printer", printerRouter);
 export default router;

@@ -1,11 +1,13 @@
 import { TerminalShift } from "../../generated/prisma/browser";
 import { Company, Terminal } from "../../generated/prisma/client";
 import db from "../../libs/db";
+import { SaleInvoiceWhereInput } from "../../generated/prisma/models";
 import {
   HttpException,
   InternalServerException,
   NotFoundException,
 } from "../../libs/exceptions";
+import { FindManyQuery } from "../../libs/query";
 
 type InvoiceRowDto = {
   type: string;
@@ -121,8 +123,16 @@ export async function createSaleInvoiceService(
             })),
           },
         },
+        select: {
+          id: true,
+        },
       });
 
+      const serialNumber = `${company.id}-${shift.id}-${terminal.id}-${invoice.id}`;
+      await tx.saleInvoice.update({
+        where: { id: invoice.id },
+        data: { serialNumber },
+      });
       return invoice;
     });
 
@@ -130,6 +140,111 @@ export async function createSaleInvoiceService(
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("createSaleInvoiceService error:", e);
+    throw new InternalServerException();
+  }
+}
+
+export async function getSaleInvoicesService(query: FindManyQuery) {
+  const { keyword = "", page, limit, from, to } = query;
+  try {
+    const kws = keyword
+      .split(" ")
+      .filter(Boolean)
+      .map((kw) => kw.trim());
+
+    const where: SaleInvoiceWhereInput = {
+      AND: kws.map((kw) => ({
+        OR: [
+          { serialNumber: { contains: kw, mode: "insensitive" as const } },
+          { companyName: { contains: kw, mode: "insensitive" as const } },
+          {
+            rows: {
+              some: {
+                OR: [
+                  { name_en: { contains: kw, mode: "insensitive" as const } },
+                  { name_ko: { contains: kw, mode: "insensitive" as const } },
+                  { barcode: { contains: kw, mode: "insensitive" as const } },
+                ],
+              },
+            },
+          },
+        ],
+      })),
+    };
+
+    if (from || to) {
+      where.issuedAt = {};
+      if (from) where.issuedAt.gte = new Date(from);
+      if (to) where.issuedAt.lte = new Date(to);
+    }
+
+    const totalCount = await db.saleInvoice.count({ where });
+    const totalPages = Math.ceil(totalCount / limit);
+    const skip = (page - 1) * limit;
+
+    const result = await db.saleInvoice.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { issuedAt: "desc" },
+      include: {
+        rows: true,
+        payments: true,
+        terminal: true,
+      },
+    });
+
+    return {
+      ok: true,
+      result,
+      paging: {
+        currentPage: page,
+        totalPages,
+        hasPrev: page > 1,
+        hasNext: page < totalPages,
+      },
+    };
+  } catch (e) {
+    if (e instanceof HttpException) throw e;
+    console.error("getSaleInvoicesService error:", e);
+    throw new InternalServerException();
+  }
+}
+
+export async function getSaleInvoiceByIdService(id: number) {
+  try {
+    const invoice = await db.saleInvoice.findUnique({
+      where: { id },
+      include: {
+        rows: true,
+        payments: true,
+        terminal: true,
+      },
+    });
+    if (!invoice) throw new NotFoundException("Invoice not found");
+    return { ok: true, msg: "Invoice found", result: invoice };
+  } catch (e) {
+    if (e instanceof HttpException) throw e;
+    console.error("getSaleInvoiceByIdService error:", e);
+    throw new InternalServerException();
+  }
+}
+
+export async function getLatestTerminalInvoiceService(terminal: Terminal) {
+  try {
+    const invoice = await db.saleInvoice.findFirst({
+      where: { terminalId: terminal.id },
+      orderBy: { issuedAt: "desc" },
+      include: {
+        rows: true,
+        payments: true,
+        terminal: true,
+      },
+    });
+    return { ok: true, msg: "Invoice found", result: invoice || null };
+  } catch (e) {
+    if (e instanceof HttpException) throw e;
+    console.error("getLatestTerminalInvoiceService error:", e);
     throw new InternalServerException();
   }
 }

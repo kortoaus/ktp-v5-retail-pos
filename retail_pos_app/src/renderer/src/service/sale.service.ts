@@ -1,5 +1,5 @@
 import apiService, { ApiResponse } from "../libs/api";
-import { OnPaymentPayload } from "../types/models";
+import { OnPaymentPayload, SaleInvoice } from "../types/models";
 import { SaleLineType } from "../types/sales";
 
 type InvoiceRowPayload = {
@@ -62,4 +62,26 @@ export async function createSaleInvoice(
     memberLevel,
     rows: lines.map(sanitizeRow),
   });
+}
+
+export async function getSaleInvoiceById(
+  id: number,
+): Promise<ApiResponse<SaleInvoice>> {
+  return apiService.get<SaleInvoice>(`/api/sale/invoice/${id}`);
+}
+
+export async function getSaleInvoices(params: {
+  keyword?: string;
+  page?: number;
+  limit?: number;
+  from?: number;
+  to?: number;
+}): Promise<ApiResponse<SaleInvoice[]>> {
+  const qs = new URLSearchParams();
+  if (params.keyword) qs.set("keyword", params.keyword);
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.from) qs.set("from", String(params.from));
+  if (params.to) qs.set("to", String(params.to));
+  return apiService.get<SaleInvoice[]>(`/api/sale/invoices?${qs.toString()}`);
 }

@@ -12,15 +12,18 @@ POS가 최종 금액, 세금, 반올림, 거스름돈을 계산하는 방법.
 subTotal (소계)
   → documentDiscountAmount (전표 할인)
   → exactDue = subTotal - documentDiscountAmount (정확한 결제액)
-  → roundedDue = exactDue를 5센트 단위로 반올림 (항상, 결제 수단 무관)
-  → rounding = roundedDue - exactDue (반올림 조정)
-  → creditSurchargeAmount = creditReceived × 1.5% (총액과 별도)
-  → eftposAmount = creditReceived + creditSurchargeAmount (EFTPOS 청구 금액)
-  → taxAmount (반올림 전 금액 기준 세금)
-  → remaining = roundedDue - cashReceived - creditReceived (잔액)
+  → roundedDue = exactDue를 5센트 단위로 반올림
+  → hasCash = 현금 결제 존재 여부
+  → effectiveDue = hasCash ? roundedDue : exactDue (실제 청구액)
+  → effectiveRounding = hasCash ? (roundedDue - exactDue) : 0
+  → 카드 결제 건별 수수료 = r2(카드 결제액 × 1.5%)
+  → totalSurcharge = Σ 건별 수수료
+  → totalEftpos = totalCredit + totalSurcharge
+  → taxAmount (반올림 전 exactDue + totalSurcharge 기준 세금)
+  → remaining = effectiveDue - totalCash - totalCredit (잔액)
 ```
 
-핵심 설계: **수수료는 판매 총액과 분리됩니다.** 청구서는 `roundedDue`입니다. 수수료는 EFTPOS 기기를 통해 별도로 수금됩니다. `cashPaid + creditPaid = total`이 항상 성립합니다.
+핵심 설계: **수수료는 판매 총액과 분리됩니다.** 청구서는 `effectiveDue`입니다. 수수료는 EFTPOS 기기를 통해 별도로 수금됩니다. `cashPaid + creditPaid = total`이 항상 성립합니다.
 
 ---
 
@@ -65,7 +68,7 @@ exactDue = subTotal - documentDiscountAmount
 
 ### 5. 반올림 (호주 5센트 규칙)
 
-결제 수단과 관계없이 `exactDue`에 **항상 적용**됩니다.
+호주에서는 1센트, 2센트 동전이 폐지되었습니다. 반올림은 **현금 결제가 포함된 경우에만** 적용됩니다. 카드 단독 결제는 정확한 금액을 사용합니다.
 
 | 끝자리 | 반올림 결과 |
 |--------|------------|
@@ -77,24 +80,46 @@ exactDue = subTotal - documentDiscountAmount
 ```
 roundedDue = exactDue를 0.05 단위로 반올림 (ROUND_HALF_UP)
 rounding = roundedDue - exactDue
+
+hasCash = totalCash > 0
+effectiveDue = hasCash ? roundedDue : exactDue
+effectiveRounding = hasCash ? rounding : 0
 ```
 
-이것이 **판매 총액** — 고객에게 보여주는 청구 금액입니다.
+요약 화면에서는 결제 수단에 관계없이 항상 `roundedDue`를 "Cash Total"로 표시하여 캐셔가 참고할 수 있도록 합니다.
 
-### 6. 카드 수수료 (별도)
+### 6. 분할 결제 (Split Payments)
 
-카드 결제 금액에 1.5% 수수료 부과.
+결제는 결제 라인의 순서 목록으로 저장됩니다. 각 라인에는 유형과 금액(판매 잔액에 적용되는 금액)이 있습니다.
 
 ```
-creditSurchargeAmount = creditReceived × 0.015
-eftposAmount = creditReceived + creditSurchargeAmount
+Payment = { type: "cash" | "credit", amount: number }
 ```
 
-수수료는 **판매 총액에 포함되지 않습니다.** EFTPOS 기기를 통해 수금됩니다. 카드 기기는 `eftposAmount`를 청구하고, 매장은 `creditReceived`를 수령하며, 수수료는 카드 처리 비용을 상쇄합니다.
+**일반 흐름** (대부분의 거래): 캐셔가 카드/현금 금액을 입력 후 결제 버튼을 누르면 입력값에서 결제 라인이 자동 생성됩니다.
 
-결제 시 검증: 카드 금액이 `roundedDue`를 초과할 수 없음.
+**분할 흐름** (드문 경우): 금액 입력 → "Add Payment" 탭 → 결제 목록에 커밋되고 입력이 초기화됩니다. 필요한 만큼 반복. 결제 버튼을 누르면 커밋된 라인과 현재 입력값이 합쳐져 최종 결제가 됩니다.
 
-### 7. 세금 (GST)
+### 7. 카드 수수료 (건별 적용)
+
+1.5% 수수료가 **카드 결제 건별**로 적용되며, 각각 독립적으로 소수점 2자리 반올림됩니다.
+
+```
+각 카드 결제 건에 대해:
+  surcharge = r2(amount × 0.015)
+  eftpos = amount + surcharge
+
+totalSurcharge = Σ 건별 수수료
+totalEftpos = totalCredit + totalSurcharge
+```
+
+수수료는 **판매 총액에 포함되지 않습니다.** EFTPOS 기기를 통해 수금됩니다. 카드 기기는 건별로 `eftpos`를 청구합니다.
+
+건별 반올림으로 인해 `totalSurcharge`는 `totalCredit × 0.015`와 1센트 차이가 날 수 있습니다.
+
+결제 시 검증: 총 카드 금액이 `effectiveDue`를 초과할 수 없음.
+
+### 8. 세금 (GST)
 
 모든 가격은 GST 포함가 (10% GST). 세금은 추가가 아닌 추출.
 
@@ -106,16 +131,16 @@ GST = (과세 금액) ÷ 11
 
 ```
 taxableGoods = exactDue × taxableRatio
-taxableSurcharge = creditSurchargeAmount × taxableRatio
+taxableSurcharge = totalSurcharge × taxableRatio
 taxAmount = (taxableGoods + taxableSurcharge) ÷ 11
 ```
 
 카드 수수료는 과세 상품 비율에 따라 GST가 부과됩니다.
 
-### 8. 잔액 / 거스름돈
+### 9. 잔액 / 거스름돈
 
 ```
-remaining = roundedDue - cashReceived - creditReceived
+remaining = effectiveDue - totalCash - totalCredit
 ```
 
 | remaining | 의미 |
@@ -123,6 +148,12 @@ remaining = roundedDue - cashReceived - creditReceived
 | > 0 | 고객이 아직 지불해야 할 금액 |
 | = 0 | 결제 완료 |
 | < 0 | 거스름돈 (절대값) |
+
+거스름돈 표시는 총 현금 수령액으로 제한됩니다 (현금보다 많은 거스름돈을 줄 수 없음):
+
+```
+displayedChange = min(changeAmount, totalCash)
+```
 
 ---
 
@@ -141,9 +172,9 @@ totalDiscountAmount = (originalSubTotal - subTotal) + documentDiscountAmount
 
 | 수단 | 수수료 | 반올림 |
 |------|--------|--------|
-| 현금만 | 없음 | 항상 적용 |
-| 카드만 | 1.5% (EFTPOS 경유) | 항상 적용 |
-| 현금 + 카드 | 카드 부분에 1.5% (EFTPOS 경유) | 항상 적용 |
+| 현금만 | 없음 | 5센트 반올림 적용 |
+| 카드만 | 건별 1.5% (EFTPOS 경유) | 반올림 없음 |
+| 현금 + 카드 | 카드 건별 1.5% (EFTPOS 경유) | 5센트 반올림 적용 |
 
 ---
 
@@ -155,18 +186,19 @@ totalDiscountAmount = (originalSubTotal - subTotal) + documentDiscountAmount
 |------|-----|
 | subtotal | Σ line.total |
 | documentDiscountAmount | 전표 할인 금액 |
-| creditSurchargeAmount | 카드 수수료 (1.5%) |
-| rounding | 5센트 반올림 조정 (+/-) |
-| total | roundedDue (판매 금액, 수수료 제외) |
+| creditSurchargeAmount | Σ 건별 카드 수수료 |
+| rounding | effectiveRounding (카드 단독 시 0) |
+| total | effectiveDue (현금 시 반올림, 카드 단독 시 정확한 금액) |
 | taxAmount | GST 추출액 |
 | cashPaid | 청구서에 적용된 현금 |
 | cashChange | 거스름돈 |
-| creditPaid | 카드 기본 청구액 (수수료 제외) |
+| creditPaid | 총 카드 결제액 (수수료 제외) |
 | totalDiscountAmount | 라인 + 전표 할인 합계 |
+| payments | `{ type, amount, surcharge }[]` 결제 건별 |
 
 항등식: `cashPaid + creditPaid = total`
 
-유도 가능: `cashReceived = cashPaid + cashChange`, `eftposAmount = creditPaid + creditSurchargeAmount`
+유도 가능: `cashReceived = cashPaid + cashChange`, 카드 건별: `eftpos = amount + surcharge`
 
 ---
 
@@ -185,26 +217,31 @@ roundedDue       = $45.45 (올림)
 rounding         = +$0.01
 ```
 
-고객이 $20.00 카드 + 나머지 현금으로 결제:
+고객이 카드 2건 ($15 + $10)과 나머지 현금으로 결제:
 
 ```
-creditSurcharge  = 20.00 × 0.015 = $0.30
-eftposAmount     = 20.00 + 0.30 = $20.30 (EFTPOS 청구 금액)
-remaining        = 45.45 - 20.00 = $25.45 (현금 필요)
+결제 건 1: 카드 $15.00 → 수수료 = r2(15.00 × 0.015) = $0.23 → EFTPOS $15.23
+결제 건 2: 카드 $10.00 → 수수료 = r2(10.00 × 0.015) = $0.15 → EFTPOS $10.15
+결제 건 3: 현금 $25.00
+
+totalCash      = $25.00
+totalCredit    = $25.00
+totalSurcharge = $0.23 + $0.15 = $0.38
+totalEftpos    = $25.00 + $0.38 = $25.38
 ```
 
-고객이 현금 $30 지불:
+현금이 포함되어 있으므로: `effectiveDue = roundedDue = $45.45`, `effectiveRounding = +$0.01`.
 
 ```
-remaining = 45.45 - 30.00 - 20.00 = -$4.55 (거스름돈)
+remaining = 45.45 - 25.00 - 25.00 = -$4.55 (거스름돈)
 ```
 
 세금:
 
 ```
 taxableGoods     = 45.44 × 0.6690 = $30.40
-taxableSurcharge = 0.30 × 0.6690 = $0.20
-taxAmount        = (30.40 + 0.20) ÷ 11 = $2.78
+taxableSurcharge = 0.38 × 0.6690 = $0.25
+taxAmount        = (30.40 + 0.25) ÷ 11 = $2.79
 ```
 
 영수증:
@@ -215,13 +252,14 @@ taxAmount        = (30.40 + 0.20) ÷ 11 = $2.78
 반올림:            +$0.01
 ─────────────────────────
 합계:              $45.45
-  카드:            $20.00
-  현금:            $30.00
+Cash Total:        $45.45
+  카드:            $25.00
+  현금:            $25.00
   거스름돈:         $4.55
 ─────────────────────────
-카드 수수료:        $0.30
-EFTPOS 금액:       $20.30
+카드 수수료:        $0.38
+EFTPOS 합계:       $25.38
 ─────────────────────────
-GST 포함:           $2.78
+GST 포함:           $2.79
 절약 금액:          $X.XX
 ```

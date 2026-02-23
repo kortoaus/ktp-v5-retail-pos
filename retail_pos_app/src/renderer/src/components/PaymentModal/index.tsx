@@ -3,7 +3,12 @@ import { Decimal } from "decimal.js";
 import { MONEY_DP } from "../../libs/constants";
 import { cn } from "../../libs/cn";
 import { SaleLineType } from "../../types/sales";
-import { OnPaymentPayload } from "../../types/models";
+import {
+  createSaleInvoice,
+  getSaleInvoiceById,
+} from "../../service/sale.service";
+import { printSaleInvoiceReceipt } from "../../libs/printer/sale-invoice-receipt";
+import { kickDrawer } from "../../libs/printer/kick-drawer";
 import MoneyNumpad from "../Numpads/MoneyNumpad";
 import { Payment, usePaymentCalc } from "./usePaymentCalc";
 import { InputField } from "./PaymentParts";
@@ -19,12 +24,16 @@ export default function PaymentModal({
   open,
   onClose,
   lines,
-  onPayment,
+  memberId,
+  memberLevel,
+  onComplete,
 }: {
   open: boolean;
   onClose: () => void;
   lines: SaleLineType[];
-  onPayment: (payload: OnPaymentPayload) => void;
+  memberId: number | null;
+  memberLevel: number | null;
+  onComplete: () => void;
 }) {
   const [documentDiscountMethod, setDocumentDiscountMethod] = useState<
     "percent" | "amount"
@@ -35,6 +44,10 @@ export default function PaymentModal({
   const [numpadTarget, setNumpadTarget] = useState<NumpadTarget>("discount");
   const [numpadVal, setNumpadVal] = useState("");
   const [committedPayments, setCommittedPayments] = useState<Payment[]>([]);
+  const [changeScreen, setChangeScreen] = useState<{ amount: number } | null>(
+    null,
+  );
+  const [processing, setProcessing] = useState(false);
 
   const calc = usePaymentCalc({
     lines,
@@ -91,7 +104,7 @@ export default function PaymentModal({
   }
 
   function addNote(noteValue: number) {
-    const newCash = cashReceived + noteValue;
+    const newCash = new Decimal(cashReceived).add(noteValue).toNumber();
     setCashReceived(newCash);
     if (numpadTarget === "cash") {
       setNumpadVal(Math.round(newCash * 100).toString());
@@ -119,7 +132,7 @@ export default function PaymentModal({
     setCommittedPayments((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function handleClose() {
+  function resetState() {
     setDocumentDiscountMethod("percent");
     setDocumentDiscountValue(0);
     setCashReceived(0);
@@ -127,10 +140,21 @@ export default function PaymentModal({
     setNumpadTarget("discount");
     setNumpadVal("");
     setCommittedPayments([]);
+    setChangeScreen(null);
+    setProcessing(false);
+  }
+
+  function handleClose() {
+    resetState();
     onClose();
   }
 
-  function handlePayment() {
+  function handleComplete() {
+    resetState();
+    onComplete();
+  }
+
+  async function handlePayment() {
     if (calc.documentDiscountAmount.gt(calc.subTotal)) {
       window.alert("Discount cannot exceed subtotal");
       return;
@@ -144,14 +168,15 @@ export default function PaymentModal({
       return;
     }
 
-    const finalLines = calc.allPaymentLines;
+    setProcessing(true);
 
+    const finalLines = calc.allPaymentLines;
     const cashPaid = Decimal.max(
       new Decimal(0),
       Decimal.min(calc.totalCash, calc.effectiveDue.sub(calc.totalCredit)),
     );
 
-    onPayment({
+    const payload = {
       subtotal: calc.subTotal.toNumber(),
       documentDiscountAmount: calc.documentDiscountAmount.toNumber(),
       creditSurchargeAmount: calc.totalSurcharge.toNumber(),
@@ -167,7 +192,38 @@ export default function PaymentModal({
         amount: l.amount.toNumber(),
         surcharge: l.surcharge.toNumber(),
       })),
-    });
+    };
+
+    const { ok, msg, result } = await createSaleInvoice(
+      payload,
+      lines,
+      memberId,
+      memberLevel,
+    );
+    if (!ok || !result) {
+      window.alert(msg);
+      setProcessing(false);
+      return;
+    }
+
+    const { result: invoice } = await getSaleInvoiceById(result.id);
+
+    if (cashPaid.gt(0)) {
+      kickDrawer();
+    }
+
+    if (invoice) {
+      printSaleInvoiceReceipt(invoice);
+    }
+
+    if (calc.changeAmount.gt(0)) {
+      setChangeScreen({
+        amount: Decimal.min(calc.changeAmount, calc.totalCash).toNumber(),
+      });
+      setProcessing(false);
+    } else {
+      handleComplete();
+    }
   }
 
   if (!open) return null;
@@ -177,7 +233,7 @@ export default function PaymentModal({
       className="fixed inset-0 bg-black/60 flex items-center justify-center"
       style={{ zIndex: 999 }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden w-[98%] h-[96%]">
+      <div className="bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden w-[98%] h-[96%] relative">
         <div className="flex items-center justify-between px-6 h-12 border-b border-gray-200">
           <h2 className="text-xl font-bold">Payment</h2>
           <div className="flex items-center gap-6">
@@ -377,10 +433,37 @@ export default function PaymentModal({
             totalEftpos={calc.totalEftpos}
             isOverpaid={calc.isOverpaid}
             changeAmount={calc.changeAmount}
-            canPay={calc.canPay}
+            canPay={calc.canPay && !processing}
             onPay={handlePayment}
           />
         </div>
+
+        {changeScreen && (
+          <div className="absolute inset-0 bg-black flex flex-col items-center justify-center z-10 rounded-2xl">
+            <span className="text-white text-3xl font-medium mb-4">
+              CHANGE
+            </span>
+            <span className="text-green-400 text-[120px] font-bold leading-none">
+              ${changeScreen.amount.toFixed(MONEY_DP)}
+            </span>
+            <div className="mt-12 flex gap-4">
+              <button
+                type="button"
+                onPointerDown={() => kickDrawer()}
+                className="px-8 py-4 bg-amber-500 text-white text-xl font-bold rounded-xl active:bg-amber-600"
+              >
+                Kick Drawer
+              </button>
+              <button
+                type="button"
+                onPointerDown={handleComplete}
+                className="px-12 py-4 bg-white text-black text-2xl font-bold rounded-xl active:bg-gray-200"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

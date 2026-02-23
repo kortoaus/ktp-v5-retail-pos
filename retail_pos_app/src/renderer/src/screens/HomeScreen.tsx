@@ -47,6 +47,9 @@ export default function HomeScreen() {
       <Link to="/manager/user">
         <button className="w-full h-full bg-gray-100">User Management</button>
       </Link>
+      <Link to="/manager/invoices">
+        <button className="w-full h-full bg-gray-100">Invoice Search</button>
+      </Link>
       <Link to="/server-setup">
         <button className="w-full h-full bg-gray-100">Server Setup</button>
       </Link>

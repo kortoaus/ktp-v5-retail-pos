@@ -162,11 +162,17 @@ export function usePaymentCalc({
     [effectiveDue, totalCash, totalCredit],
   );
 
-  const isShort = remaining.gt(0);
-  const isOverpaid = remaining.lt(0);
-  const changeAmount = isOverpaid ? remaining.abs() : new Decimal(0);
-  const shortAmount = isShort ? remaining : new Decimal(0);
-  const canPay = !isShort;
+  const isShort = useMemo(() => remaining.gt(0), [remaining]);
+  const isOverpaid = useMemo(() => remaining.lt(0), [remaining]);
+  const changeAmount = useMemo(
+    () => (remaining.lt(0) ? remaining.abs() : new Decimal(0)),
+    [remaining],
+  );
+  const shortAmount = useMemo(
+    () => (remaining.gt(0) ? remaining : new Decimal(0)),
+    [remaining],
+  );
+  const canPay = useMemo(() => !remaining.gt(0), [remaining]);
 
   /* ── Tax (GST extracted from sale + surcharge) ─────── */
 

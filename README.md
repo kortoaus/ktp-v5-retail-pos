@@ -7,6 +7,8 @@ Retail point-of-sale system for Australian supermarkets. Monorepo with two proje
 - [Pricing Rules](./retail_pos_app/docs/pricing_rules.md) · [가격 계산 규칙](./retail_pos_app/docs/pricing_rules_ko.md)
 - [Payment Rules](./retail_pos_app/docs/payment_rules.md) · [결제 계산 규칙](./retail_pos_app/docs/payment_rules_ko.md)
 - [External Device Plan](./retail_pos_app/docs/external_device_plan.md)
+- [SLCS Printer Language](./retail_pos_app/docs/slcs.md)
+- [How to View Sale Invoice / Receipt](./retail_pos_app/docs/how_to_view_sale_invoice_receipt.md)
 
 ## Architecture
 
@@ -94,6 +96,8 @@ All routes prefixed with `/api`:
 | `/hotkey` | Hotkey | Quick-select grid CRUD |
 | `/crm` | CRM | Member lookup |
 | `/user` | User | User CRUD, auth by code |
+| `/sale` | Sale | Create & query sale invoices |
+| `/printer` | Printer | Server-side print (raw data) |
 | `/cloud` | Cloud | Sync with cloud system |
 
 ## Features
@@ -217,6 +221,8 @@ Windows prerequisites: Node.js 22, Visual Studio Build Tools (C++ workload), Pyt
 | `retail_pos_app/docs/payment_rules.md` | Payment calculation rules (EN) |
 | `retail_pos_app/docs/payment_rules_ko.md` | 결제 계산 규칙 (KO) |
 | `retail_pos_app/docs/external_device_plan.md` | External device integration plan |
+| `retail_pos_app/docs/slcs.md` | Bixolon SLCS label printer command reference |
+| `retail_pos_app/docs/how_to_view_sale_invoice_receipt.md` | Sale invoice API & data model |
 
 ## What's Next
 

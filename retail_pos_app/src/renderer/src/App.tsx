@@ -11,6 +11,7 @@ import HotkeyManagerScreen from "./screens/HotkeyManagerScreen";
 import UserManageScreen from "./screens/UserManageScreen";
 import ServerSetupScreen from "./screens/ServerSetupScreen";
 import OpenShiftScreen from "./screens/OpenShiftScreen";
+import SaleInvoiceSearchScreen from "./screens/SaleInvoiceSearchScreen";
 import { ShiftProvider } from "./contexts/ShiftContext";
 
 function App(): React.JSX.Element {
@@ -31,6 +32,10 @@ function App(): React.JSX.Element {
                 <Route path="test" element={<TestScreen />} />
                 <Route path="hotkey" element={<HotkeyManagerScreen />} />
                 <Route path="user" element={<UserManageScreen />} />
+              </Route>
+
+              <Route path="/manager" element={<ManagerLayout />}>
+                <Route path="invoices" element={<SaleInvoiceSearchScreen />} />
               </Route>
 
               <Route path="/shift" element={<ManagerLayout />}>

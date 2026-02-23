@@ -218,3 +218,89 @@ export interface OnPaymentPayload {
   totalDiscountAmount: number; // line discounts + document discount ("You Saved")
   payments: { type: string; amount: number; surcharge: number }[];
 }
+
+export interface Terminal {
+  id: number;
+  name: string;
+  ipAddress: string;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SaleInvoiceRow {
+  id: number;
+  invoiceId: number;
+  type: string;
+  itemId: number;
+  name_en: string;
+  name_ko: string;
+  taxable: boolean;
+  uom: string;
+  barcode: string;
+  index: number;
+  barcodePrice: number | null;
+  unit_price_original: number;
+  unit_price_discounted: number | null;
+  unit_price_adjusted: number | null;
+  unit_price_effective: number;
+  qty: number;
+  measured_weight: number | null;
+  subtotal: number;
+  total: number;
+  original_invoice_id: number | null;
+  original_invoice_row_id: number | null;
+  refunded: boolean;
+  adjustments: string[];
+  createdAt: string;
+}
+
+export interface SaleInvoicePayment {
+  id: number;
+  invoiceId: number;
+  type: string;
+  amount: number;
+  surcharge: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SaleInvoice {
+  id: number;
+  type: string;
+  serialNumber: string | null;
+  original_invoice_id: number | null;
+  companyId: number;
+  companyName: string;
+  abn: string | null;
+  address1: string | null;
+  address2: string | null;
+  suburb: string | null;
+  state: string | null;
+  postcode: string | null;
+  country: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  memberId: number | null;
+  memberLevel: number | null;
+  terminalId: number;
+  terminal: Terminal;
+  shiftId: number;
+  userId: number;
+  issuedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  rows: SaleInvoiceRow[];
+  subtotal: number;
+  documentDiscountAmount: number;
+  creditSurchargeAmount: number;
+  rounding: number;
+  total: number;
+  taxAmount: number;
+  cashPaid: number;
+  cashChange: number;
+  creditPaid: number;
+  totalDiscountAmount: number;
+  payments: SaleInvoicePayment[];
+}

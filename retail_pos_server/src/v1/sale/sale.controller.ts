@@ -1,6 +1,12 @@
 import { Request, Response } from "express";
 import { NotFoundException } from "../../libs/exceptions";
-import { createSaleInvoiceService } from "./sale.service";
+import {
+  createSaleInvoiceService,
+  getLatestTerminalInvoiceService,
+  getSaleInvoiceByIdService,
+  getSaleInvoicesService,
+} from "./sale.service";
+import { parseIntId, parseFindManyQuery } from "../../libs/query";
 
 function getAuth(res: Response) {
   const { company, terminal, user, shift } = res.locals;
@@ -21,5 +27,28 @@ export async function createSaleInvoiceController(req: Request, res: Response) {
     shift,
     req.body,
   );
-  res.status(200).json({ ok: false, msg: "Not implemented" });
+  res.status(200).json(result);
+}
+
+export async function getLatestTerminalInvoiceController(
+  req: Request,
+  res: Response,
+) {
+  const { terminal } = getAuth(res);
+  const result = await getLatestTerminalInvoiceService(terminal);
+  res.status(200).json(result);
+}
+
+export async function getSaleInvoicesController(req: Request, res: Response) {
+  const query = parseFindManyQuery(req);
+  const result = await getSaleInvoicesService(query);
+  res.status(200).json(result);
+}
+
+export async function getSaleInvoiceByIdController(
+  req: Request,
+  res: Response,
+) {
+  const result = await getSaleInvoiceByIdService(parseIntId(req, "id"));
+  res.status(200).json(result);
 }
