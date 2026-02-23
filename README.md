@@ -149,7 +149,7 @@ All routes prefixed with `/api`:
 | USB HID Barcode Scanner | Keyboard emulation | Done |
 | Label Printer (ZPL) | Network / Serial | Done |
 | Label Printer (SLCS/Bixolon) | Network / Serial | Done |
-| ESC/POS Receipt Printer | Network | Config only |
+| ESC/POS Receipt Printer | Network | Done |
 
 ## App Config
 
@@ -237,6 +237,6 @@ Windows prerequisites: Node.js 22, Visual Studio Build Tools (C++ workload), Pyt
 - [x] Payment rules documentation (EN + KO)
 - [ ] Close shift flow
 - [ ] SaleScreen UI polish (totals, cart switching)
-- [ ] ESC/POS receipt printer driver
-- [ ] Receipt generation from OnPaymentPayload
+- [x] ESC/POS receipt printer driver
+- [x] Receipt generation from OnPaymentPayload
 - [ ] More label templates

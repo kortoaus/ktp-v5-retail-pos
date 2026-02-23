@@ -1,8 +1,3 @@
-# Todo
-
-- [x]: multiple payments
-- [x]: Rounding on Cash Received.(display on the side.)
-
 # Payment Rules
 
 How the POS calculates the final amount, tax, rounding, and change.
@@ -268,3 +263,42 @@ EFTPOS Total:      $25.38
 GST Included:       $2.79
 You Saved:          $X.XX
 ```
+
+---
+
+## Post-Payment Behaviour
+
+### Change Screen
+
+When the customer is owed change, a full-screen overlay appears showing the change amount. The cashier hands back the cash, then taps **Close** to finish the sale. A **Kick Drawer** button is also available to re-open the cash drawer.
+
+### Cash Drawer
+
+The cash drawer kicks automatically when `cashPaid > 0`. Uses ESC/POS pulse command on pin 2 (`ESC p 0x00`). The cashier can also manually kick the drawer from the change screen.
+
+### Receipt Printing
+
+A receipt is printed automatically after payment via the ESC/POS thermal receipt printer. The receipt is rendered as a **canvas image** (576px wide) and sent as a raster bitmap — not text-mode ESC/POS.
+
+Receipt sections (top to bottom):
+
+1. **Store header** — company name, address, ABN, phone
+2. **TAX INVOICE** label
+3. **Meta** — invoice serial number, date/time, terminal name, member level
+4. **Line items** — each item with qty/weight, unit price, line total
+   - `^` prefix = price was changed (override/discount)
+   - `#` prefix = GST applicable
+   - Weighted items show: `0.650KG @ $5.00/KG`
+   - Price-changed items show original price in brackets: `($3.50)`
+5. **Totals** — subtotal, discount, card surcharge, rounding, **TOTAL**
+   - Receipt TOTAL = `effectiveDue + totalSurcharge` (what the customer actually pays out of pocket, including surcharges)
+6. **Payments** — cash amount, credit EFTPOS amount (incl. surcharge), change
+7. **Footer** — GST included, You Saved, legend, "Thank you!"
+8. **QR code** — encodes the invoice serial number for quick lookup
+9. **Print timestamp**
+
+Copy receipts (reprints) show `** COPY **` at the bottom.
+
+### Invoice Lookup
+
+Past invoices can be searched via the Invoice Search screen (`/sale/invoices`). Search by serial number, item name (EN/KO), or barcode. Results are paginated and each invoice can be reprinted as a copy.
