@@ -300,7 +300,7 @@ model SaleInvoice {
   userId     Int
   user       User          @relation(fields: [userId], references: [id])
 
-  // Metadata
+  // Metadataoda
   issuedAt  DateTime @default(now())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -308,16 +308,17 @@ model SaleInvoice {
   rows SaleInvoiceRow[]
 
   // Calculated Fields
-  subtotal               Decimal @db.Decimal(18, 2)
-  documentDiscountAmount Decimal @db.Decimal(18, 2)
-  creditSurchargeAmount  Decimal @db.Decimal(18, 2)
-  rounding               Decimal @db.Decimal(18, 2)
-  total                  Decimal @db.Decimal(18, 2)
-  taxAmount              Decimal @db.Decimal(18, 2)
-  cashPaid               Decimal @db.Decimal(18, 2)
-  cashChange             Decimal @db.Decimal(18, 2)
-  creditPaid             Decimal @db.Decimal(18, 2)
-  totalDiscountAmount    Decimal @db.Decimal(18, 2)
+  subtotal               Decimal              @db.Decimal(18, 2)
+  documentDiscountAmount Decimal              @db.Decimal(18, 2)
+  creditSurchargeAmount  Decimal              @db.Decimal(18, 2)
+  rounding               Decimal              @db.Decimal(18, 2)
+  total                  Decimal              @db.Decimal(18, 2)
+  taxAmount              Decimal              @db.Decimal(18, 2)
+  cashPaid               Decimal              @db.Decimal(18, 2)
+  cashChange             Decimal              @db.Decimal(18, 2)
+  creditPaid             Decimal              @db.Decimal(18, 2)
+  totalDiscountAmount    Decimal              @db.Decimal(18, 2)
+  payments               SaleInvoicePayment[]
 }
 
 model SaleInvoiceRow {
@@ -354,6 +355,17 @@ model SaleInvoiceRow {
   // Metadata
   adjustments String[]
   createdAt   DateTime @default(now())
+}
+
+model SaleInvoicePayment {
+  id        Int         @id @default(autoincrement())
+  invoiceId Int
+  invoice   SaleInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  type      String
+  amount    Decimal     @db.Decimal(18, 2)
+  surcharge Decimal     @db.Decimal(18, 2)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 }
 
 // Local Data End

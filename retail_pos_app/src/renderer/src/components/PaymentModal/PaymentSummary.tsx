@@ -11,15 +11,15 @@ interface PaymentSummaryProps {
   documentDiscountAmount: Decimal;
   documentDiscountMethod: "percent" | "amount";
   documentDiscountValue: number;
-  creditSurchargeAmount: Decimal;
+  totalSurcharge: Decimal;
   rounding: Decimal;
   roundedDue: Decimal;
   effectiveDue: Decimal;
-  cashReceived: number;
-  creditReceived: number;
+  totalCash: Decimal;
+  totalCredit: Decimal;
   taxAmount: Decimal;
   totalDiscountAmount: Decimal;
-  eftposAmount: Decimal;
+  totalEftpos: Decimal;
   isOverpaid: boolean;
   changeAmount: Decimal;
   canPay: boolean;
@@ -32,15 +32,15 @@ export default function PaymentSummary({
   documentDiscountAmount,
   documentDiscountMethod,
   documentDiscountValue,
-  creditSurchargeAmount,
+  totalSurcharge,
   rounding,
   roundedDue,
   effectiveDue,
-  cashReceived,
-  creditReceived,
+  totalCash,
+  totalCredit,
   taxAmount,
   totalDiscountAmount,
-  eftposAmount,
+  totalEftpos,
   isOverpaid,
   changeAmount,
   canPay,
@@ -65,10 +65,10 @@ export default function PaymentSummary({
               className="text-red-600"
             />
           )}
-          {!creditSurchargeAmount.isZero() && (
+          {!totalSurcharge.isZero() && (
             <SummaryRow
               label="Card Surcharge (1.5%)"
-              value={`+${fmt(creditSurchargeAmount)}`}
+              value={`+${fmt(totalSurcharge)}`}
             />
           )}
           {!rounding.isZero() && (
@@ -88,11 +88,8 @@ export default function PaymentSummary({
           </div>
 
           <div className="border-t border-gray-200 pt-3 flex flex-col gap-2">
-            <SummaryRow label="Cash" value={fmt(new Decimal(cashReceived))} />
-            <SummaryRow
-              label="Credit"
-              value={fmt(new Decimal(creditReceived))}
-            />
+            <SummaryRow label="Cash" value={fmt(totalCash)} />
+            <SummaryRow label="Credit" value={fmt(totalCredit)} />
           </div>
 
           <div className="border-t border-gray-200 pt-3 flex flex-col gap-2">
@@ -109,16 +106,16 @@ export default function PaymentSummary({
       </div>
 
       <div className="p-4 border-t border-gray-200 flex flex-col gap-3">
-        {creditReceived > 0 && (
+        {totalCredit.gt(0) && (
           <div className="flex justify-between items-center text-lg font-bold text-blue-700">
-            <span>EFTPOS Amount</span>
-            <span className="font-mono">{fmt(eftposAmount)}</span>
+            <span>EFTPOS Total</span>
+            <span className="font-mono">{fmt(totalEftpos)}</span>
           </div>
         )}
         {isOverpaid && (
           <div className="flex justify-between items-center text-lg font-bold text-green-600">
             <span>Change</span>
-            <span className="font-mono">{fmt(changeAmount)}</span>
+            <span className="font-mono">{fmt(Decimal.min(changeAmount, totalCash))}</span>
           </div>
         )}
         <button

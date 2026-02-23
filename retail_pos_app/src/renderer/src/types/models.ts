@@ -216,4 +216,5 @@ export interface OnPaymentPayload {
   cashChange: number; // change given back to customer
   creditPaid: number; // base card charge (excludes surcharge)
   totalDiscountAmount: number; // line discounts + document discount ("You Saved")
+  payments: { type: string; amount: number; surcharge: number }[];
 }

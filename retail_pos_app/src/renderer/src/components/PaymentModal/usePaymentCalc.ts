@@ -7,21 +7,38 @@ const CREDIT_SURCHARGE_RATE = 0.015; // 1.5%
 
 const r2 = (d: Decimal) => d.toDecimalPlaces(MONEY_DP, Decimal.ROUND_HALF_UP);
 
+export interface Payment {
+  type: "cash" | "credit";
+  amount: number;
+}
+export interface PaymentLine {
+  type: "cash" | "credit";
+  amount: Decimal;
+  surcharge: Decimal;
+  eftpos: Decimal;
+}
+
 export interface PaymentCalcInputs {
   lines: SaleLineType[];
   documentDiscountMethod: "percent" | "amount";
   documentDiscountValue: number;
-  cashReceived: number;
-  creditReceived: number;
+  committedPayments: Payment[];
+  stagingCash: number;
+  stagingCredit: number;
 }
+
+
 
 export function usePaymentCalc({
   lines,
   documentDiscountMethod,
   documentDiscountValue,
-  cashReceived,
-  creditReceived,
+  committedPayments,
+  stagingCash,
+  stagingCredit,
 }: PaymentCalcInputs) {
+  /* ── Sale-level calculations (unchanged) ───────────── */
+
   const subTotal = useMemo(() => {
     return lines.reduce((acc, line) => {
       return acc.add(new Decimal(line.total));
@@ -59,41 +76,6 @@ export function usePaymentCalc({
     [roundedDue, exactDue],
   );
 
-  const creditSurchargeAmount = useMemo(
-    () => r2(new Decimal(creditReceived).mul(CREDIT_SURCHARGE_RATE)),
-    [creditReceived],
-  );
-
-  const eftposAmount = useMemo(
-    () => r2(new Decimal(creditReceived).add(creditSurchargeAmount)),
-    [creditReceived, creditSurchargeAmount],
-  );
-
-  const taxAmount = useMemo(() => {
-    const taxableGoods = exactDue.mul(taxableRatio);
-    const taxableSurcharge = creditSurchargeAmount.mul(taxableRatio);
-    return r2(taxableGoods.add(taxableSurcharge).div(11));
-  }, [exactDue, taxableRatio, creditSurchargeAmount]);
-
-  const hasCash = cashReceived > 0;
-
-  const effectiveDue = useMemo(
-    () => (hasCash ? roundedDue : exactDue),
-    [hasCash, roundedDue, exactDue],
-  );
-
-  const effectiveRounding = useMemo(
-    () => (hasCash ? roundedDue.sub(exactDue) : new Decimal(0)),
-    [hasCash, roundedDue, exactDue],
-  );
-  const remaining = useMemo(
-    () =>
-      effectiveDue
-        .sub(new Decimal(cashReceived))
-        .sub(new Decimal(creditReceived)),
-    [effectiveDue, cashReceived, creditReceived],
-  );
-
   const lineDiscountAmount = useMemo(() => {
     const originalSubTotal = lines.reduce((acc, line) => {
       return acc.add(new Decimal(line.unit_price_original).mul(line.qty));
@@ -106,11 +88,93 @@ export function usePaymentCalc({
     [lineDiscountAmount, documentDiscountAmount],
   );
 
+  /* ── Payment lines (committed + staging) ───────────── */
+
+  const allPaymentLines = useMemo(() => {
+    const result: PaymentLine[] = committedPayments.map((p) => {
+      const amt = new Decimal(p.amount);
+      if (p.type === "credit") {
+        const sc = r2(amt.mul(CREDIT_SURCHARGE_RATE));
+        return { type: p.type, amount: amt, surcharge: sc, eftpos: amt.add(sc) };
+      }
+      return { type: p.type, amount: amt, surcharge: new Decimal(0), eftpos: amt };
+    });
+
+    if (stagingCash > 0) {
+      const amt = new Decimal(stagingCash);
+      result.push({ type: "cash", amount: amt, surcharge: new Decimal(0), eftpos: amt });
+    }
+    if (stagingCredit > 0) {
+      const amt = new Decimal(stagingCredit);
+      const sc = r2(amt.mul(CREDIT_SURCHARGE_RATE));
+      result.push({ type: "credit", amount: amt, surcharge: sc, eftpos: amt.add(sc) });
+    }
+
+    return result;
+  }, [committedPayments, stagingCash, stagingCredit]);
+
+  /* ── Payment aggregates ────────────────────────────── */
+
+  const totalCash = useMemo(
+    () =>
+      allPaymentLines
+        .filter((p) => p.type === "cash")
+        .reduce((acc, p) => acc.add(p.amount), new Decimal(0)),
+    [allPaymentLines],
+  );
+
+  const totalCredit = useMemo(
+    () =>
+      allPaymentLines
+        .filter((p) => p.type === "credit")
+        .reduce((acc, p) => acc.add(p.amount), new Decimal(0)),
+    [allPaymentLines],
+  );
+
+  const totalSurcharge = useMemo(
+    () => allPaymentLines.reduce((acc, p) => acc.add(p.surcharge), new Decimal(0)),
+    [allPaymentLines],
+  );
+
+  const totalEftpos = useMemo(
+    () => totalCredit.add(totalSurcharge),
+    [totalCredit, totalSurcharge],
+  );
+
+  /* ── Cash rounding ─────────────────────────────────── */
+
+  const hasCash = totalCash.gt(0);
+
+  const effectiveDue = useMemo(
+    () => (hasCash ? roundedDue : exactDue),
+    [hasCash, roundedDue, exactDue],
+  );
+
+  const effectiveRounding = useMemo(
+    () => (hasCash ? roundedDue.sub(exactDue) : new Decimal(0)),
+    [hasCash, roundedDue, exactDue],
+  );
+
+  /* ── Remaining / status ────────────────────────────── */
+
+  const remaining = useMemo(
+    () => effectiveDue.sub(totalCash).sub(totalCredit),
+    [effectiveDue, totalCash, totalCredit],
+  );
+
   const isShort = remaining.gt(0);
   const isOverpaid = remaining.lt(0);
   const changeAmount = isOverpaid ? remaining.abs() : new Decimal(0);
   const shortAmount = isShort ? remaining : new Decimal(0);
   const canPay = !isShort;
+
+  /* ── Tax (GST extracted from sale + surcharge) ─────── */
+
+  const taxAmount = useMemo(() => {
+    const taxableGoods = exactDue.mul(taxableRatio);
+    const taxableSurcharge = totalSurcharge.mul(taxableRatio);
+    return r2(taxableGoods.add(taxableSurcharge).div(11));
+  }, [exactDue, taxableRatio, totalSurcharge]);
 
   return {
     subTotal,
@@ -120,13 +184,16 @@ export function usePaymentCalc({
     rounding,
     effectiveDue,
     effectiveRounding,
-    hasCash,
-    creditSurchargeAmount,
-    eftposAmount,
-    taxAmount,
-    remaining,
     lineDiscountAmount,
     totalDiscountAmount,
+    allPaymentLines,
+    totalCash,
+    totalCredit,
+    totalSurcharge,
+    totalEftpos,
+    hasCash,
+    taxAmount,
+    remaining,
     isShort,
     isOverpaid,
     changeAmount,
