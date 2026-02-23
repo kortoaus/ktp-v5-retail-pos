@@ -84,13 +84,12 @@ Banana                0.650kg   $3.25
 | @ $5.00/kg | Unit price per kilogram |
 
 ### Prepacked item (price in barcode)
-
 ```
-Beef Steak              0.350kg  $8.75
-  Barcode price: $8.75
+Beef Steak (Prepacked)
+  1 @ $8.75                        $8.75
 ```
 
-The price is embedded in the barcode label. The weight and price were set at packing time.
+The price is embedded in the barcode label. The weight and price were set at packing time. On the receipt, prepacked items always show qty 1 and the barcode price as the unit price.
 
 ### Line adjustments
 

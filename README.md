@@ -8,7 +8,7 @@ Retail point-of-sale system for Australian supermarkets. Monorepo with two proje
 - [Payment Rules](./retail_pos_app/docs/payment_rules.md) · [결제 계산 규칙](./retail_pos_app/docs/payment_rules_ko.md)
 - [External Device Plan](./retail_pos_app/docs/external_device_plan.md)
 - [SLCS Printer Language](./retail_pos_app/docs/slcs.md)
-- [How to View Sale Invoice / Receipt](./retail_pos_app/docs/how_to_view_sale_invoice_receipt.md)
+- [How to Read a Sale Receipt](./retail_pos_app/docs/how_to_read_sale_invoice_receipt.md)
 
 ## Architecture
 
@@ -222,7 +222,7 @@ Windows prerequisites: Node.js 22, Visual Studio Build Tools (C++ workload), Pyt
 | `retail_pos_app/docs/payment_rules_ko.md` | 결제 계산 규칙 (KO) |
 | `retail_pos_app/docs/external_device_plan.md` | External device integration plan |
 | `retail_pos_app/docs/slcs.md` | Bixolon SLCS label printer command reference |
-| `retail_pos_app/docs/how_to_view_sale_invoice_receipt.md` | Sale invoice API & data model |
+| `retail_pos_app/docs/how_to_read_sale_invoice_receipt.md` | How to read a printed sale receipt |
 
 ## What's Next
 

@@ -100,6 +100,11 @@ function LineCaption({
     displayQty = 1;
   }
 
+  let displayPrice = unit_price_effective;
+  if (type === "weight-prepacked") {
+    displayPrice = total;
+  }
+
   return (
     <div
       onClick={onClick}
@@ -125,7 +130,7 @@ function LineCaption({
       <div className="flex flex-col items-end justify-center w-28 p-1">
         <div className="text-lg font-medium">
           {unit_price_adjusted && <span className="text-red-500">*</span>}
-          {unit_price_effective.toFixed(MONEY_DP)}
+          {displayPrice.toFixed(MONEY_DP)}
         </div>
         {priceNotMatched && (
           <div className="text-red-500 text-sm line-through">

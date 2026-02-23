@@ -161,7 +161,9 @@ async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Promise<HTM
     }
     ctx.font = `${FONT_SM}px sans-serif`;
     let qtyStr: string;
-    if (r.measured_weight !== null) {
+    if (r.type === "weight-prepacked") {
+      qtyStr = `1 @ ${fmt(r.total)}`;
+    } else if (r.measured_weight !== null) {
       qtyStr = `${r.measured_weight}${r.uom} @ ${fmt(r.unit_price_effective)}/${r.uom}`;
     } else {
       qtyStr = `${r.qty} @ ${fmt(r.unit_price_effective)}`;
