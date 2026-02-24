@@ -19,7 +19,10 @@ subTotal
   → per-line credit surcharge = r2(creditLineAmount × 1.5%) for each credit payment
   → totalSurcharge = Σ per-line surcharges
   → totalEftpos = totalCredit + totalSurcharge
-  → taxAmount (from unrounded exactDue + totalSurcharge)
+  → goodsTaxAmount = r2(exactDue × taxableRatio ÷ 11)
+  → surchargeTaxAmount = r2(totalSurcharge ÷ 11)
+  → taxAmount = goodsTaxAmount + surchargeTaxAmount
+  → per-line includedTaxAmount via largest-remainder allocation of goodsTaxAmount
   → remaining = effectiveDue - totalCash - totalCredit
 ```
 
@@ -120,22 +123,36 @@ Per-line rounding means `totalSurcharge` may differ by a cent from `totalCredit 
 Validated on payment: total credit cannot exceed `effectiveDue`.
 
 ### 8. Tax (GST)
-
 All prices are GST-inclusive (10% GST). Tax is extracted, not added.
 
 ```
 GST = (taxable amount) ÷ 11
 ```
 
-Tax is calculated on the **unrounded** amounts:
+Tax is split into two components, calculated on **unrounded** amounts:
 
 ```
-taxableGoods = exactDue × taxableRatio
-taxableSurcharge = totalSurcharge × taxableRatio
-taxAmount = (taxableGoods + taxableSurcharge) ÷ 11
+goodsTaxAmount     = r2(exactDue × taxableRatio ÷ 11)
+surchargeTaxAmount = r2(totalSurcharge ÷ 11)
+taxAmount          = goodsTaxAmount + surchargeTaxAmount
 ```
 
-The credit surcharge is subject to GST in proportion to taxable goods.
+The goods tax uses `taxableRatio` to extract GST from only the taxable portion. The surcharge is always fully taxable (surcharge only exists on credit card payments, which are a service).
+
+#### Per-Line Tax Allocation
+
+`goodsTaxAmount` is distributed across taxable invoice rows using the **largest-remainder method**:
+
+1. For each taxable line: `precise = goodsTaxAmount × (lineTotal / taxableTotal)`
+2. Floor each to 2dp: `floored = floor(precise, 2)`
+3. Sum all floored values. The difference from `goodsTaxAmount` is the remainder (in whole cents).
+4. Sort lines by fractional remainder descending (tie-break by index).
+5. Distribute remaining cents one-by-one to lines with largest fractional parts.
+6. Non-taxable lines get `includedTaxAmount = 0`.
+
+This guarantees: `Σ includedTaxAmount = goodsTaxAmount` exactly (no penny gap).
+
+Each row’s `includedTaxAmount` is stored on `SaleInvoiceRow` and used for accurate partial refund calculations.
 
 ### 9. Remaining / Change
 
@@ -194,6 +211,7 @@ What gets stored to the database:
 | cashChange             | change given back                                   |
 | creditPaid             | total credit toward sale (excl. surcharge)          |
 | totalDiscountAmount    | line + document discounts                           |
+| rows[].includedTaxAmount | per-line GST via largest-remainder allocation        |
 | payments               | `{ type, amount, surcharge }[]` per payment line    |
 
 Identity: `cashPaid + creditPaid = total`
@@ -249,16 +267,16 @@ Receipt:
 ```
 Subtotal:          $47.83
 Discount (5%):     -$2.39
+Card Surcharge:    +$0.38
 Rounding:          +$0.01
 ─────────────────────────
-Total:             $45.45
-Cash Total:        $45.45
-  Credit:          $25.00
-  Cash:            $25.00
+TOTAL:             $45.83
+  Cash Total:        $45.45
+  ─────────────────────────
+  Cash Received:   $25.00
+  Cash Paid:       $20.45
   Change:           $4.55
-─────────────────────────
-Card Surcharge:     $0.38
-EFTPOS Total:      $25.38
+  Credit Paid:     $25.38
 ─────────────────────────
 GST Included:       $2.79
 You Saved:          $X.XX
@@ -292,7 +310,7 @@ Receipt sections (top to bottom):
    - Price-changed items show original price in brackets: `($3.50)`
 5. **Totals** — subtotal, discount, card surcharge, rounding, **TOTAL**
    - Receipt TOTAL = `effectiveDue + totalSurcharge` (what the customer actually pays out of pocket, including surcharges)
-6. **Payments** — cash amount, credit EFTPOS amount (incl. surcharge), change
+6. **Payments** — Cash Received, Cash Paid, Change, Credit Paid (incl. surcharge as single line)
 7. **Footer** — GST included, You Saved, legend, "Thank you!"
 8. **QR code** — encodes the invoice serial number for quick lookup
 9. **Print timestamp**
@@ -300,5 +318,8 @@ Receipt sections (top to bottom):
 Copy receipts (reprints) show `** COPY **` at the bottom.
 
 ### Invoice Lookup
+Past invoices can be searched via the Invoice Search screen (`/sale/invoices`) or the `SearchInvoiceModal` (used in refund flow). Both use the shared `InvoiceSearchPanel` component.
 
-Past invoices can be searched via the Invoice Search screen (`/sale/invoices`). Search by serial number, item name (EN/KO), or barcode. Results are paginated and each invoice can be reprinted as a copy.
+Search filters: keyword (serial number, item name EN/KO, barcode), date range (nullable — omit for all dates), and member. Barcode scanning auto-searches serial numbers (format `X-X-X-X`). Results are paginated and each invoice can be previewed and reprinted as a copy.
+
+`SearchInvoiceModal` accepts an optional `onSelect` callback, adding a green "Select" button in the receipt preview panel for programmatic invoice selection.

@@ -31,7 +31,7 @@ export default function PaymentModal({
   open: boolean;
   onClose: () => void;
   lines: SaleLineType[];
-  memberId: number | null;
+  memberId: string | null;
   memberLevel: number | null;
   onComplete: () => void;
 }) {
@@ -154,6 +154,22 @@ export default function PaymentModal({
     onComplete();
   }
 
+  // function calTaxAmountByLine(lines: SaleLineType[], totalTaxAmount: Decimal) {
+  //   const taxableLines = lines.filter((l) => l.taxable);
+  //   const taxableLineTotal = taxableLines.reduce(
+  //     (acc, l) => acc.add(new Decimal(l.total)),
+  //     new Decimal(0),
+  //   );
+
+  //   return lines.map((line) => {
+  //     if (line.taxable === false) return { ...line, taxAmount: 0 };
+
+  //     const lineRatio = new Decimal(line.total).div(taxableLineTotal);
+  //     const lineTaxAmount = totalTaxAmount.mul(lineRatio);
+  //     return { ...line, taxAmount: lineTaxAmount.toNumber() };
+  //   });
+  // }
+
   async function handlePayment() {
     if (calc.documentDiscountAmount.gt(calc.subTotal)) {
       window.alert("Discount cannot exceed subtotal");
@@ -196,7 +212,7 @@ export default function PaymentModal({
 
     const { ok, msg, result } = await createSaleInvoice(
       payload,
-      lines,
+      calc.calTaxAmountByLineExact(lines, calc.goodsTaxAmount),
       memberId,
       memberLevel,
     );
@@ -440,9 +456,7 @@ export default function PaymentModal({
 
         {changeScreen && (
           <div className="absolute inset-0 bg-black flex flex-col items-center justify-center z-10 rounded-2xl">
-            <span className="text-white text-3xl font-medium mb-4">
-              CHANGE
-            </span>
+            <span className="text-white text-3xl font-medium mb-4">CHANGE</span>
             <span className="text-green-400 text-[120px] font-bold leading-none">
               ${changeScreen.amount.toFixed(MONEY_DP)}
             </span>

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useZplPrinters } from "../hooks/useZplPrinters";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Item } from "../types/models";
 import { useBarcodeScanner } from "../hooks/useBarcodeScanner";
 import { useWeight } from "../hooks/useWeight";
@@ -10,11 +10,10 @@ import { buildPriceTag60x30 } from "../libs/label-templates";
 import { ean13CheckDigit, fiveDigitFloat } from "../libs/barcode-utils";
 import { embededPriceParser } from "../libs/scan-utils";
 import { BarcodeFormat } from "../libs/label-builder";
-import { MONEY_DP } from "../libs/constants";
+import { MONEY_DP, QTY_DP } from "../libs/constants";
 import SearchItemModal from "../components/SearchItemModal";
-import WeightModal from "../components/WeightModal";
 
-type ModalTarget = null | "item-search" | "weight";
+type ModalTarget = null | "item-search";
 
 export default function LabelingScreen() {
   const [item, setItem] = useState<Item | null>(null);
@@ -23,9 +22,18 @@ export default function LabelingScreen() {
   const [loading, setLoading] = useState(false);
   const [lastScanned, setLastScanned] = useState("");
   const [modalTarget, setModalTarget] = useState<ModalTarget>(null);
+  const [scaleReading, setScaleReading] = useState<{
+    weight: number;
+    unit: string;
+    status: string;
+    message?: string;
+  } | null>(null);
+  const [readingScale, setReadingScale] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const pollingRef = useRef(false);
 
   const { printers, printLabel } = useZplPrinters();
-  const { readWeight } = useWeight();
+  const { connected: scaleConnected, readWeight } = useWeight();
 
   // ── Item gateway ──────────────────────────────────────────────
 
@@ -37,18 +45,9 @@ export default function LabelingScreen() {
       return;
     }
 
-    const isWeightPrepacked =
-      type === "weight" && isEAN13WithEmbeddedPrice(barcode);
-
     setItem(newItem);
     setRawBarcode(barcode);
     setWeightKg(null);
-
-    if (type === "weight" && !isWeightPrepacked) {
-      setModalTarget("weight");
-      return;
-    }
-
     setModalTarget(null);
   }
 
@@ -78,16 +77,56 @@ export default function LabelingScreen() {
 
   useBarcodeScanner(scanCallback);
 
-  // ── Weight modal handlers ─────────────────────────────────────
+  // ── Scale ─────────────────────────────────────────────────────
 
-  const handleWeightConfirm = useCallback((kg: number) => {
-    setWeightKg(kg);
-    setModalTarget(null);
-  }, []);
+  const needsWeight = useMemo(() => {
+    if (!item) return false;
+    const type = getItemType(item);
+    return type === "weight" && !isEAN13WithEmbeddedPrice(rawBarcode);
+  }, [item, rawBarcode]);
 
-  const handleWeightClose = useCallback(() => {
-    setModalTarget(null);
-  }, []);
+  const handleReadScale = useCallback(async () => {
+    setReadingScale(true);
+    try {
+      const result = await readWeight();
+      setScaleReading(result);
+      if (result.status === "stable" && needsWeight) {
+        setWeightKg(result.weight);
+      }
+    } catch {
+      setScaleReading({
+        weight: 0,
+        unit: "kg",
+        status: "error",
+        message: "Read failed",
+      });
+    } finally {
+      setReadingScale(false);
+    }
+  }, [readWeight, needsWeight]);
+
+  useEffect(() => {
+    pollingRef.current = polling;
+    if (!polling) return;
+    let cancelled = false;
+    const poll = async () => {
+      while (pollingRef.current && !cancelled) {
+        try {
+          const result = await readWeight();
+          if (cancelled) break;
+          setScaleReading(result);
+          if (result.status === "stable" && needsWeight) {
+            setWeightKg(result.weight);
+          }
+        } catch {
+          // keep polling
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    };
+    poll();
+    return () => { cancelled = true; };
+  }, [polling, readWeight, needsWeight]);
 
   // ── Computed label data ───────────────────────────────────────
 
@@ -111,7 +150,6 @@ export default function LabelingScreen() {
     const isWP = type === "weight" && isEAN13WithEmbeddedPrice(rawBarcode);
 
     if (isWP) {
-      // weight-prepacked: price already embedded in scanned barcode
       const raw13 = rawBarcode.length === 12 ? "0" + rawBarcode : rawBarcode;
       price = embededPriceParser(raw13);
       barcode = raw13;
@@ -127,13 +165,11 @@ export default function LabelingScreen() {
         barcodeFormat = "EAN13";
       }
     } else if (type === "prepacked") {
-      // prepacked: original price embedded in EAN13
       price = unitPrice;
       const barcode12 = `${plu}${fiveDigitFloat(price)}`;
       barcode = `${barcode12}${ean13CheckDigit(barcode12)}`;
       barcodeFormat = "EAN13";
     } else {
-      // normal
       price = unitPrice;
       if (item.barcodeGTIN) {
         barcode = item.barcodeGTIN;
@@ -158,7 +194,6 @@ export default function LabelingScreen() {
 
   return (
     <div className="h-full w-full bg-gray-50 flex flex-col">
-      {/* Header */}
       <div className="h-16 flex items-center gap-4 px-4 border-b border-gray-200 bg-white">
         <Link
           to="/"
@@ -181,98 +216,133 @@ export default function LabelingScreen() {
         )}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6">
-        {/* Empty state */}
-        {!item && (
-          <div className="text-gray-400 text-lg">
-            Scan an item or search to print labels
-          </div>
-        )}
+      <div className="flex-1 flex min-h-0">
+        <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6">
+          {!item && (
+            <div className="text-gray-400 text-lg">
+              Scan an item or search to print labels
+            </div>
+          )}
 
-        {/* Weight item waiting for scale */}
-        {item && !labelData && itemType === "weight" && (
-          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md text-center">
-            <div className="text-lg font-bold truncate">
-              {itemNameParser(item).name_en}
-            </div>
-            <div className="text-base text-gray-500 truncate">
-              {itemNameParser(item).name_ko}
-            </div>
-            <div className="text-sm text-gray-400 mt-2">
-              ${(item.price?.prices[0] ?? 0).toFixed(MONEY_DP)} / kg
-            </div>
-            <div className="text-gray-500 mt-4">
-              Waiting for weight reading...
-            </div>
-            <button
-              type="button"
-              onPointerDown={() => setModalTarget("weight")}
-              className="mt-4 px-6 py-3 rounded-xl bg-blue-600 text-white active:bg-blue-700 font-medium"
-            >
-              Read Scale
-            </button>
-          </div>
-        )}
+          {item && labelData && (
+            <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md">
+              <div className="text-lg font-bold truncate">
+                {labelData.name_en}
+              </div>
+              <div className="text-base text-gray-500 truncate">
+                {labelData.name_ko}
+              </div>
 
-        {/* Item ready to print */}
-        {item && labelData && (
-          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md">
-            <div className="text-lg font-bold truncate">
-              {labelData.name_en}
-            </div>
-            <div className="text-base text-gray-500 truncate">
-              {labelData.name_ko}
-            </div>
-
-            <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-3xl font-bold">
-                ${labelData.price.toFixed(MONEY_DP)}
-              </span>
-              {labelData.weightKg != null && (
-                <span className="text-sm text-gray-400">
-                  ({labelData.weightKg.toFixed(3)} kg &times; $
-                  {labelData.unitPrice.toFixed(MONEY_DP)}/kg)
-                </span>
+              {needsWeight && weightKg == null && (
+                <div className="mt-3 px-3 py-2 rounded-lg bg-amber-50 text-amber-700 text-sm font-medium">
+                  Read scale to apply weight
+                </div>
               )}
-            </div>
 
-            <div className="mt-2 text-xs text-gray-400 font-mono">
-              {labelData.barcode} ({labelData.barcodeFormat})
-            </div>
-            <div className="mt-1 text-xs text-gray-400">Type: {itemType}</div>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-3xl font-bold">
+                  ${labelData.price.toFixed(MONEY_DP)}
+                </span>
+                {labelData.weightKg != null && (
+                  <span className="text-sm text-gray-400">
+                    ({labelData.weightKg.toFixed(3)} kg &times; $
+                    {labelData.unitPrice.toFixed(MONEY_DP)}/kg)
+                  </span>
+                )}
+              </div>
 
-            <div className="mt-4 flex flex-col gap-2">
-              {printers.map((printer) => (
-                <button
-                  key={printer.name}
-                  type="button"
-                  onPointerDown={() => {
-                    const label = buildPriceTag60x30(printer.language, {
-                      name_ko: labelData.name_ko,
-                      name_en: labelData.name_en,
-                      price: labelData.price.toFixed(MONEY_DP),
-                      barcode: labelData.barcode,
-                      barcodeFormat: labelData.barcodeFormat,
-                    });
-                    printLabel(printer, label);
-                  }}
-                  className="w-full py-3 rounded-xl bg-blue-600 text-white active:bg-blue-700 font-medium text-base"
+              <div className="mt-2 text-xs text-gray-400 font-mono">
+                {labelData.barcode} ({labelData.barcodeFormat})
+              </div>
+              <div className="mt-1 text-xs text-gray-400">
+                Type: {itemType}
+              </div>
+
+              <div className="mt-4 flex flex-col gap-2">
+                {printers.map((printer) => (
+                  <button
+                    key={printer.name}
+                    type="button"
+                    onPointerDown={() => {
+                      const label = buildPriceTag60x30(printer.language, {
+                        name_ko: labelData.name_ko,
+                        name_en: labelData.name_en,
+                        price: labelData.price.toFixed(MONEY_DP),
+                        barcode: labelData.barcode,
+                        barcodeFormat: labelData.barcodeFormat,
+                      });
+                      printLabel(printer, label);
+                    }}
+                    className="w-full py-3 rounded-xl bg-blue-600 text-white active:bg-blue-700 font-medium text-base"
+                  >
+                    Print on {printer.name}
+                  </button>
+                ))}
+                {printers.length === 0 && (
+                  <div className="text-sm text-gray-400 text-center">
+                    No printers configured
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="w-72 border-l border-gray-200 bg-white flex flex-col">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200">
+            <h2 className="text-base font-bold">Scale</h2>
+            <span
+              className={`w-2 h-2 rounded-full ${scaleConnected ? "bg-green-500" : "bg-gray-300"}`}
+            />
+          </div>
+
+          <div className="flex-1 flex flex-col items-center justify-center p-4 gap-4">
+            <div className="bg-gray-50 rounded-xl p-6 w-full text-center">
+              <div className="text-4xl font-bold tabular-nums">
+                {scaleReading
+                  ? scaleReading.weight.toFixed(QTY_DP)
+                  : "\u2014.\u2014\u2014\u2014"}
+              </div>
+              <div className="text-base text-gray-500 mt-1">
+                {scaleReading?.unit ?? "kg"}
+              </div>
+              {scaleReading && (
+                <div
+                  className={`text-sm mt-2 font-medium ${scaleReading.status === "stable" ? "text-green-600" : "text-amber-600"}`}
                 >
-                  Print on {printer.name}
-                </button>
-              ))}
-              {printers.length === 0 && (
-                <div className="text-sm text-gray-400 text-center">
-                  No printers configured
+                  {scaleReading.status === "stable" && "Stable"}
+                  {scaleReading.status === "unstable" && "Unstable"}
+                  {scaleReading.status === "error" &&
+                    (scaleReading.message ?? "Error")}
+                  {scaleReading.status === "disconnected" && "Disconnected"}
                 </div>
               )}
             </div>
+
+            <button
+              type="button"
+              onPointerDown={handleReadScale}
+              disabled={readingScale}
+              className="w-full py-3 rounded-xl bg-gray-200 active:bg-gray-300 disabled:opacity-50 font-medium text-base"
+            >
+              {readingScale
+                ? "Reading..."
+                : scaleReading
+                  ? "Re-read"
+                  : "Read Scale"}
+            </button>
+
+            <button
+              type="button"
+              onPointerDown={() => setPolling((p) => !p)}
+              className={`w-full py-3 rounded-xl font-medium text-base ${polling ? "bg-red-100 text-red-700 active:bg-red-200" : "bg-gray-100 active:bg-gray-200"}`}
+            >
+              {polling ? "Stop Auto" : "Auto Read"}
+            </button>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Modals */}
       <SearchItemModal
         open={modalTarget === "item-search"}
         onClose={() => setModalTarget(null)}
@@ -281,20 +351,9 @@ export default function LabelingScreen() {
           processItem(selectedItem, barcodeGTIN || barcodePLU || barcode);
         }}
       />
-
-      <WeightModal
-        open={modalTarget === "weight"}
-        itemName={item ? itemNameParser(item).name_en : ""}
-        readWeight={readWeight}
-        onConfirm={handleWeightConfirm}
-        onClose={handleWeightClose}
-        allowZero
-      />
     </div>
   );
 }
-
-// ── Helpers ───────────────────────────────────────────────────────
 
 function isEAN13WithEmbeddedPrice(barcode: string): boolean {
   const len = barcode.length;

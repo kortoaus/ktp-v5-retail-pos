@@ -19,7 +19,10 @@ subTotal (소계)
   → 카드 결제 건별 수수료 = r2(카드 결제액 × 1.5%)
   → totalSurcharge = Σ 건별 수수료
   → totalEftpos = totalCredit + totalSurcharge
-  → taxAmount (반올림 전 exactDue + totalSurcharge 기준 세금)
+  → goodsTaxAmount = r2(exactDue × taxableRatio ÷ 11) (상품 세금)
+  → surchargeTaxAmount = r2(totalSurcharge ÷ 11) (수수료 세금)
+  → taxAmount = goodsTaxAmount + surchargeTaxAmount
+  → 라인별 includedTaxAmount (최대 잔여법으로 goodsTaxAmount 배분)
   → remaining = effectiveDue - totalCash - totalCredit (잔액)
 ```
 
@@ -120,22 +123,36 @@ totalEftpos = totalCredit + totalSurcharge
 결제 시 검증: 총 카드 금액이 `effectiveDue`를 초과할 수 없음.
 
 ### 8. 세금 (GST)
-
 모든 가격은 GST 포함가 (10% GST). 세금은 추가가 아닌 추출.
 
 ```
 GST = (과세 금액) ÷ 11
 ```
 
-세금은 **반올림 전** 금액 기준으로 계산:
+세금은 두 구성요소로 분리되며, **반올림 전** 금액 기준으로 계산:
 
 ```
-taxableGoods = exactDue × taxableRatio
-taxableSurcharge = totalSurcharge × taxableRatio
-taxAmount = (taxableGoods + taxableSurcharge) ÷ 11
+goodsTaxAmount     = r2(exactDue × taxableRatio ÷ 11)  (상품 GST)
+surchargeTaxAmount = r2(totalSurcharge ÷ 11)              (수수료 GST)
+taxAmount          = goodsTaxAmount + surchargeTaxAmount
 ```
 
-카드 수수료는 과세 상품 비율에 따라 GST가 부과됩니다.
+상품 세금은 `taxableRatio`를 사용하여 과세 부분에서만 GST를 추출합니다. 수수료는 항상 전액 과세입니다 (카드 결제 서비스이므로).
+
+#### 라인별 세금 배분
+
+`goodsTaxAmount`을 **최대 잔여법(largest-remainder method)**으로 과세 영수증 행에 배분:
+
+1. 각 과세 라인: `precise = goodsTaxAmount × (lineTotal / taxableTotal)`
+2. 각각 2dp로 내림: `floored = floor(precise, 2)`
+3. 내림 합계를 구함. `goodsTaxAmount`와의 차이가 나머지 (정수 센트).
+4. 소수 잔여가 큰 순서로 정렬 (동률 시 인덱스로 tie-break).
+5. 남은 센트를 잔여가 가장 큰 라인부터 1센트씩 분배.
+6. 비과세 라인은 `includedTaxAmount = 0`.
+
+보장: `Σ includedTaxAmount = goodsTaxAmount` 정확히 일치 (1센트 오차 없음).
+
+각 행의 `includedTaxAmount`는 `SaleInvoiceRow`에 저장되어 부분 환불 계산에 사용됩니다.
 
 ### 9. 잔액 / 거스름돈
 
@@ -194,6 +211,7 @@ totalDiscountAmount = (originalSubTotal - subTotal) + documentDiscountAmount
 | cashChange | 거스름돈 |
 | creditPaid | 총 카드 결제액 (수수료 제외) |
 | totalDiscountAmount | 라인 + 전표 할인 합계 |
+| rows[].includedTaxAmount | 최대 잔여법으로 배분된 라인별 GST |
 | payments | `{ type, amount, surcharge }[]` 결제 건별 |
 
 항등식: `cashPaid + creditPaid = total`
@@ -249,16 +267,16 @@ taxAmount        = (30.40 + 0.25) ÷ 11 = $2.79
 ```
 소계:              $47.83
 할인 (5%):         -$2.39
+카드 수수료:        +$0.38
 반올림:            +$0.01
 ─────────────────────────
-합계:              $45.45
-Cash Total:        $45.45
-  카드:            $25.00
-  현금:            $25.00
+합계:              $45.83
+  Cash Total:        $45.45
+  ─────────────────────────
+  현금 수령:        $25.00
+  현금 적용:        $20.45
   거스름돈:         $4.55
-─────────────────────────
-카드 수수료:        $0.38
-EFTPOS 합계:       $25.38
+  카드 결제:        $25.38
 ─────────────────────────
 GST 포함:           $2.79
 절약 금액:          $X.XX
@@ -292,7 +310,7 @@ GST 포함:           $2.79
    - 가격 변경 품목은 원래 가격을 괄호로 표시: `($3.50)`
 5. **합계** — 소계, 할인, 카드 수수료, 반올림, **총액**
    - 영수증 총액 = `effectiveDue + totalSurcharge` (수수료 포함, 고객이 실제 지불하는 금액)
-6. **결제 내역** — 현금 금액, 카드 EFTPOS 금액 (수수료 포함), 거스름돈
+6. **결제 내역** — 현금 수령, 현금 적용, 거스름돈, 카드 결제 (수수료 포함 단일 라인으로 표시)
 7. **하단** — GST 포함 금액, 절약 금액, 범례, "Thank you!"
 8. **QR 코드** — 영수증 번호를 인코딩하여 빠른 조회 가능
 9. **출력 시각**
@@ -300,5 +318,8 @@ GST 포함:           $2.79
 재출력 영수증은 하단에 `** COPY **`가 표시됩니다.
 
 ### 영수증 조회
+과거 영수증은 영수증 검색 화면 (`/sale/invoices`) 또는 `SearchInvoiceModal` (환불 플로우에서 사용)에서 조회할 수 있습니다. 둘 다 공유 `InvoiceSearchPanel` 컴포넌트를 사용합니다.
 
-과거 영수증은 영수증 검색 화면 (`/sale/invoices`)에서 조회할 수 있습니다. 영수증 번호, 상품명 (영문/한글), 바코드로 검색 가능합니다. 결과는 페이지네이션되며 각 영수증을 복사본으로 재출력할 수 있습니다.
+검색 필터: 키워드 (영수증 번호, 상품명 영문/한글, 바코드), 날짜 범위 (nullable — 생략 시 전체), 회원별. 바코드 스캔 시 영수증 번호 형식(`X-X-X-X`) 자동 검색. 결과는 페이지네이션되며 각 영수증을 미리보기하고 복사본으로 재출력할 수 있습니다.
+
+`SearchInvoiceModal`은 선택적 `onSelect` 콜백을 받아 영수증 미리보기 패널에 녹색 "Select" 버튼을 추가합니다.

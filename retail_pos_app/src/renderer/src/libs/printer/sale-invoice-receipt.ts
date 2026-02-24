@@ -66,10 +66,10 @@ function estimateHeight(invoice: SaleInvoice, isCopy: boolean): number {
   if (invoice.creditSurchargeAmount > 0) totalLines += 1;
   if (invoice.rounding !== 0) totalLines += 1;
 
-  let payLines = invoice.payments.length + 1;
+  let payLines = 0;
+  if (invoice.cashPaid > 0) payLines += 2;
   if (invoice.cashChange > 0) payLines += 1;
-  const creditPayments = invoice.payments.filter((p) => p.type === "credit");
-  if (creditPayments.length > 0) payLines += 1;
+  if (invoice.creditPaid > 0) payLines += 1;
 
   const footerLines = 6;
 
@@ -218,17 +218,20 @@ async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Promise<HTM
   y += 14;
 
   ctx.font = `${FONT}px sans-serif`;
-  for (const p of invoice.payments) {
-    if (p.type === "cash") {
-      row(ctx, "Cash", fmt(p.amount), y);
-    } else {
-      const eftpos = Math.round(p.amount * 100) + Math.round(p.surcharge * 100);
-      row(ctx, "Credit", fmt(eftpos / 100), y);
-    }
+  if (invoice.cashPaid > 0) {
+    const cashReceived = invoice.cashPaid + invoice.cashChange;
+    row(ctx, "Cash Received", fmt(cashReceived), y);
+    y += LH;
+    row(ctx, "Cash Paid", fmt(invoice.cashPaid), y);
     y += LH;
   }
   if (invoice.cashChange > 0) {
     row(ctx, "Change", fmt(invoice.cashChange), y);
+    y += LH;
+  }
+  if (invoice.creditPaid > 0) {
+    const eftposTotal = invoice.creditPaid + invoice.creditSurchargeAmount;
+    row(ctx, "Credit Paid", fmt(eftposTotal), y);
     y += LH;
   }
 

@@ -13,6 +13,7 @@ import ServerSetupScreen from "./screens/ServerSetupScreen";
 import OpenShiftScreen from "./screens/OpenShiftScreen";
 import SaleInvoiceSearchScreen from "./screens/SaleInvoiceSearchScreen";
 import { ShiftProvider } from "./contexts/ShiftContext";
+import RefundScreen from "./screens/RefundScreen";
 
 function App(): React.JSX.Element {
   return (
@@ -32,10 +33,8 @@ function App(): React.JSX.Element {
                 <Route path="test" element={<TestScreen />} />
                 <Route path="hotkey" element={<HotkeyManagerScreen />} />
                 <Route path="user" element={<UserManageScreen />} />
-              </Route>
-
-              <Route path="/manager" element={<ManagerLayout />}>
                 <Route path="invoices" element={<SaleInvoiceSearchScreen />} />
+                <Route path="refund" element={<RefundScreen />} />
               </Route>
 
               <Route path="/shift" element={<ManagerLayout />}>

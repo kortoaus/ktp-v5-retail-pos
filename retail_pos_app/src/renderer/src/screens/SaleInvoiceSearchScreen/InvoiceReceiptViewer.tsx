@@ -134,28 +134,28 @@ export default function InvoiceReceiptViewer({
       <hr className="border-dashed border-gray-400 my-3" />
 
       <div className="space-y-1">
-        {invoice.payments.map((p) => {
-          if (p.type === "cash") {
-            return (
-              <div key={p.id} className="flex justify-between">
-                <span>Cash</span>
-                <span>{fmt(p.amount)}</span>
-              </div>
-            );
-          }
-          const eftpos =
-            Math.round(p.amount * 100) + Math.round(p.surcharge * 100);
-          return (
-            <div key={p.id} className="flex justify-between">
-              <span>Credit</span>
-              <span>{fmt(eftpos / 100)}</span>
+        {invoice.cashPaid > 0 && (
+          <>
+            <div className="flex justify-between">
+              <span>Cash Received</span>
+              <span>{fmt(invoice.cashPaid + invoice.cashChange)}</span>
             </div>
-          );
-        })}
+            <div className="flex justify-between">
+              <span>Cash Paid</span>
+              <span>{fmt(invoice.cashPaid)}</span>
+            </div>
+          </>
+        )}
         {invoice.cashChange > 0 && (
           <div className="flex justify-between">
             <span>Change</span>
             <span>{fmt(invoice.cashChange)}</span>
+          </div>
+        )}
+        {invoice.creditPaid > 0 && (
+          <div className="flex justify-between">
+            <span>Credit Paid</span>
+            <span>{fmt(invoice.creditPaid + invoice.creditSurchargeAmount)}</span>
           </div>
         )}
       </div>

@@ -270,7 +270,7 @@ model TerminalShift {
 model SaleInvoice {
   // document data
   id                  Int     @id @default(autoincrement())
-  type                String  @default("sale")
+  type                String  @default("sale") // sale, refund,
   serialNumber        String? @unique
   original_invoice_id Int?
 
@@ -289,7 +289,7 @@ model SaleInvoice {
   website     String?
 
   // membership data
-  memberId    Int?
+  memberId    String?
   memberLevel Int?
 
   // Terminal & Shift & User
@@ -346,15 +346,20 @@ model SaleInvoiceRow {
   measured_weight       Decimal? @db.Decimal(18, 3)
   subtotal              Decimal  @db.Decimal(18, 2)
   total                 Decimal  @db.Decimal(18, 2)
+  includedTaxAmount     Decimal  @default(0) @db.Decimal(18, 2)
 
   // Refund Data
   original_invoice_id     Int?
   original_invoice_row_id Int?
-  refunded                Boolean @default(false)
+  // remaining_qty                 Decimal? @default(0) @db.Decimal(18, 3)
+  // remaining_total               Decimal? @default(0) @db.Decimal(18, 2)
+  // remaining_included_tax_amount Decimal? @default(0) @db.Decimal(18, 2)
 
   // Metadata
   adjustments String[]
   createdAt   DateTime @default(now())
+
+  @@index([original_invoice_row_id])
 }
 
 model SaleInvoicePayment {

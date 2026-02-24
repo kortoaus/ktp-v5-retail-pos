@@ -15,11 +15,12 @@ export type FindManyQuery = {
   limit: number;
   from?: number;
   to?: number;
+  memberId?: string;
   archived: boolean;
 };
 
 export function parseFindManyQuery(req: Request): FindManyQuery {
-  const { keyword, page, limit, from, to, archived } = req.query;
+  const { keyword, page, limit, from, to, archived, memberId } = req.query;
 
   let parsedPage = 1;
   if (page) {
@@ -59,6 +60,7 @@ export function parseFindManyQuery(req: Request): FindManyQuery {
     limit: parsedLimit,
     from: parsedFrom,
     to: parsedTo,
+    memberId: typeof memberId === "string" ? memberId : undefined,
     archived: archived === "true",
   };
 }

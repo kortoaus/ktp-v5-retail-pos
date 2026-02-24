@@ -83,6 +83,8 @@ Retail point-of-sale system for Australian supermarkets. Monorepo with two proje
 | `/manager/test` | TestScreen | Hardware testing |
 | `/manager/hotkey` | HotkeyManagerScreen | Quick-select grid CRUD |
 | `/manager/user` | UserManageScreen | User account management |
+| `/sale/invoices` | SaleInvoiceSearchScreen | Invoice search, reprint |
+| `/refund` | RefundScreen | Refund against sale invoice |
 
 ## Server API Routes
 
@@ -112,12 +114,11 @@ All routes prefixed with `/api`:
 - Hotkeys: touchscreen 6×6 grid for quick item selection
 
 ### Payment
-
-- Document discount (% or flat $)
 - Credit card surcharge (1.5%, separate from sale total)
-- Australian 5c rounding (always applied, not conditional on payment method)
+- Australian 5c rounding (cash payments only)
 - Split cash/credit, note denomination quick-add buttons
-- Validation on pay only — inputs unrestricted
+- Per-line GST allocation via largest-remainder method (`includedTaxAmount`)
+- Tax split: `goodsTaxAmount` (goods) + `surchargeTaxAmount` (surcharge)
 - Auto-fill: double-tap Credit fills exactDue, double-tap Cash fills remaining
 - All math via `decimal.js`, rounded to 2dp at each step
 - See `retail_pos_app/docs/payment_rules.md` for full calculation chain
@@ -235,8 +236,15 @@ Windows prerequisites: Node.js 22, Visual Studio Build Tools (C++ workload), Pyt
 - [x] Shift management (context + open shift with cash counter)
 - [x] Payment modal (discount, surcharge, 5c rounding, split cash/credit)
 - [x] Payment rules documentation (EN + KO)
-- [ ] Close shift flow
-- [ ] SaleScreen UI polish (totals, cart switching)
 - [x] ESC/POS receipt printer driver
 - [x] Receipt generation from OnPaymentPayload
+- [x] Invoice search screen (keyword, date range, member, barcode scan)
+- [x] Invoice search modal (`SearchInvoiceModal` + shared `InvoiceSearchPanel`)
+- [x] Labeling screen with persistent weight scale panel + auto-polling
+- [x] Per-line tax allocation (`includedTaxAmount`) for refund accuracy
+- [x] Refund screen (select invoice → view refundable rows → refund)
+- [x] Touch-friendly input components (`KeyboardInputText`, `DateRangeSelector`)
+- [x] Server Decimal→number conversion (`numberifySaleInvoice`, `numberifyRow`)
+- [ ] Close shift flow
+- [ ] SaleScreen UI polish (totals, cart switching)
 - [ ] More label templates

@@ -316,7 +316,7 @@ export default function SaleScreen() {
         open={modalTarget === "payment"}
         onClose={() => setModalTarget(null)}
         lines={lines}
-        memberId={member ? Number(member.id) : null}
+        memberId={member ? member.id : null}
         memberLevel={member?.level ?? null}
         onComplete={() => {
           clearActiveCart();

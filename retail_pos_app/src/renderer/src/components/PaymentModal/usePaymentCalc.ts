@@ -5,6 +5,8 @@ import { SaleLineType } from "../../types/sales";
 
 const CREDIT_SURCHARGE_RATE = 0.015; // 1.5%
 
+const CENT = new Decimal("0.01");
+const floor2 = (d: Decimal) => d.toDecimalPlaces(MONEY_DP, Decimal.ROUND_FLOOR);
 const r2 = (d: Decimal) => d.toDecimalPlaces(MONEY_DP, Decimal.ROUND_HALF_UP);
 
 export interface Payment {
@@ -26,8 +28,6 @@ export interface PaymentCalcInputs {
   stagingCash: number;
   stagingCredit: number;
 }
-
-
 
 export function usePaymentCalc({
   lines,
@@ -95,19 +95,39 @@ export function usePaymentCalc({
       const amt = new Decimal(p.amount);
       if (p.type === "credit") {
         const sc = r2(amt.mul(CREDIT_SURCHARGE_RATE));
-        return { type: p.type, amount: amt, surcharge: sc, eftpos: amt.add(sc) };
+        return {
+          type: p.type,
+          amount: amt,
+          surcharge: sc,
+          eftpos: amt.add(sc),
+        };
       }
-      return { type: p.type, amount: amt, surcharge: new Decimal(0), eftpos: amt };
+      return {
+        type: p.type,
+        amount: amt,
+        surcharge: new Decimal(0),
+        eftpos: amt,
+      };
     });
 
     if (stagingCash > 0) {
       const amt = new Decimal(stagingCash);
-      result.push({ type: "cash", amount: amt, surcharge: new Decimal(0), eftpos: amt });
+      result.push({
+        type: "cash",
+        amount: amt,
+        surcharge: new Decimal(0),
+        eftpos: amt,
+      });
     }
     if (stagingCredit > 0) {
       const amt = new Decimal(stagingCredit);
       const sc = r2(amt.mul(CREDIT_SURCHARGE_RATE));
-      result.push({ type: "credit", amount: amt, surcharge: sc, eftpos: amt.add(sc) });
+      result.push({
+        type: "credit",
+        amount: amt,
+        surcharge: sc,
+        eftpos: amt.add(sc),
+      });
     }
 
     return result;
@@ -132,7 +152,8 @@ export function usePaymentCalc({
   );
 
   const totalSurcharge = useMemo(
-    () => allPaymentLines.reduce((acc, p) => acc.add(p.surcharge), new Decimal(0)),
+    () =>
+      allPaymentLines.reduce((acc, p) => acc.add(p.surcharge), new Decimal(0)),
     [allPaymentLines],
   );
 
@@ -176,11 +197,86 @@ export function usePaymentCalc({
 
   /* ── Tax (GST extracted from sale + surcharge) ─────── */
 
-  const taxAmount = useMemo(() => {
+  const goodsTaxAmount = useMemo(() => {
     const taxableGoods = exactDue.mul(taxableRatio);
-    const taxableSurcharge = totalSurcharge.mul(taxableRatio);
-    return r2(taxableGoods.add(taxableSurcharge).div(11));
-  }, [exactDue, taxableRatio, totalSurcharge]);
+    return r2(taxableGoods.div(11));
+  }, [exactDue, taxableRatio]);
+
+  const surchargeTaxAmount = useMemo(() => {
+    return r2(totalSurcharge.div(11));
+  }, [totalSurcharge]);
+
+  const taxAmount = useMemo(() => {
+    return goodsTaxAmount.add(surchargeTaxAmount);
+  }, [goodsTaxAmount, surchargeTaxAmount]);
+
+  function calTaxAmountByLineExact(
+    lines: SaleLineType[],
+    totalTaxAmount: Decimal,
+  ) {
+    const taxable = lines
+      .map((l, idx) => ({ ...l, idx }))
+      .filter((l) => l.taxable);
+
+    const taxableTotal = taxable.reduce(
+      (acc, l) => acc.add(new Decimal(l.total)),
+      new Decimal(0),
+    );
+
+    // 전부 면세면 0
+    if (taxableTotal.isZero()) {
+      return lines.map((l) => ({ ...l, taxAmount: 0 }));
+    }
+
+    // 1) 정밀 배분값
+    const alloc = taxable.map((l) => {
+      const ratio = new Decimal(l.total).div(taxableTotal);
+      const precise = totalTaxAmount.mul(ratio); // 무한정밀
+      const floored = floor2(precise); // 2dp 내림
+      const frac = precise.sub(floored); // 나머지(소수부분)
+      return { idx: l.idx, precise, floored, frac };
+    });
+
+    // 2) 내림 합
+    const flooredSum = alloc.reduce(
+      (acc, a) => acc.add(a.floored),
+      new Decimal(0),
+    );
+
+    // 3) 남은 센트 계산 (totalTaxAmount도 2dp 확정이라고 가정하지만 안전하게 r2)
+    const target = r2(totalTaxAmount);
+    let remainder = target.sub(flooredSum);
+
+    // remainder가 음수면(이론상 거의 없음) 반대로 처리
+    // (여기선 방어만)
+    const sign = remainder.gte(0) ? 1 : -1;
+    remainder = remainder.abs();
+
+    const centsToDistribute = remainder.div(CENT).toNumber(); // 정수여야 함
+
+    // 4) 소수부분 큰 순서로 정렬해서 0.01씩 분배
+    // 동률이면 idx로 tie-break 해서 항상 deterministic
+    alloc.sort((a, b) => {
+      const c = b.frac.comparedTo(a.frac);
+      return c !== 0 ? c : a.idx - b.idx;
+    });
+
+    // 5) 라인별 taxAmount = floored + distributed cents
+    const byIdx = new Map<number, Decimal>();
+    for (const a of alloc) byIdx.set(a.idx, a.floored);
+
+    for (let i = 0; i < centsToDistribute; i++) {
+      const a = alloc[i % alloc.length];
+      byIdx.set(a.idx, byIdx.get(a.idx)!.add(CENT.mul(sign)));
+    }
+
+    // 6) 결과 매핑 (면세=0, 과세=확정 2dp)
+    return lines.map((l, idx) => {
+      if (!l.taxable) return { ...l, taxAmount: 0 };
+      const amt = byIdx.get(idx) ?? new Decimal(0);
+      return { ...l, taxAmount: amt.toNumber() }; // 이미 2dp 확정
+    });
+  }
 
   return {
     subTotal,
@@ -205,5 +301,8 @@ export function usePaymentCalc({
     changeAmount,
     shortAmount,
     canPay,
+    goodsTaxAmount,
+    surchargeTaxAmount,
+    calTaxAmountByLineExact,
   };
 }

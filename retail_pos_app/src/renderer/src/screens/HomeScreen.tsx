@@ -53,6 +53,9 @@ export default function HomeScreen() {
       <Link to="/server-setup">
         <button className="w-full h-full bg-gray-100">Server Setup</button>
       </Link>
+      <Link to="/manager/refund">
+        <button className="w-full h-full bg-gray-100">Refund</button>
+      </Link>
     </div>
   );
 }

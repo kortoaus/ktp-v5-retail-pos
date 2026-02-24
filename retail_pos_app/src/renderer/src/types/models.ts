@@ -248,6 +248,7 @@ export interface SaleInvoiceRow {
   measured_weight: number | null;
   subtotal: number;
   total: number;
+  tax_amount_included: number;
   original_invoice_id: number | null;
   original_invoice_row_id: number | null;
   refunded: boolean;
@@ -303,4 +304,15 @@ export interface SaleInvoice {
   creditPaid: number;
   totalDiscountAmount: number;
   payments: SaleInvoicePayment[];
+  }
+
+export interface RefundableRow extends SaleInvoiceRow {
+  remainingQty: number;
+  remainingTotal: number;
+  remainingIncludedTaxAmount: number;
+}
+
+export interface RefundableInvoice extends Omit<SaleInvoice, 'rows'> {
+  rows: RefundableRow[];
+  refundedInvoices: SaleInvoice[];
 }

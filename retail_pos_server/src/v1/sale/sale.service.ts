@@ -8,6 +8,8 @@ import {
   NotFoundException,
 } from "../../libs/exceptions";
 import { FindManyQuery } from "../../libs/query";
+import { numberifySaleInvoice, numberifyRow } from "../../libs/decimal-utils";
+import { Decimal } from "@prisma/client/runtime/index-browser";
 
 type InvoiceRowDto = {
   type: string;
@@ -30,6 +32,7 @@ type InvoiceRowDto = {
   original_invoice_id: number | null;
   original_invoice_row_id: number | null;
   adjustments: string[];
+  tax_amount_included: number;
 };
 
 type CreateSaleInvoiceDto = {
@@ -43,7 +46,7 @@ type CreateSaleInvoiceDto = {
   cashChange: number;
   creditPaid: number;
   totalDiscountAmount: number;
-  memberId: number | null;
+  memberId: string | null;
   memberLevel: number | null;
   rows: InvoiceRowDto[];
   payments: { type: string; amount: number; surcharge: number }[];
@@ -113,6 +116,7 @@ export async function createSaleInvoiceService(
               original_invoice_id: row.original_invoice_id,
               original_invoice_row_id: row.original_invoice_row_id,
               adjustments: row.adjustments,
+              includedTaxAmount: row.tax_amount_included,
             })),
           },
           payments: {
@@ -145,7 +149,7 @@ export async function createSaleInvoiceService(
 }
 
 export async function getSaleInvoicesService(query: FindManyQuery) {
-  const { keyword = "", page, limit, from, to } = query;
+  const { keyword = "", page, limit, from, to, memberId } = query;
   try {
     const kws = keyword
       .split(" ")
@@ -178,6 +182,10 @@ export async function getSaleInvoicesService(query: FindManyQuery) {
       if (to) where.issuedAt.lte = new Date(to);
     }
 
+    if (memberId) {
+      where.memberId = memberId;
+    }
+
     const totalCount = await db.saleInvoice.count({ where });
     const totalPages = Math.ceil(totalCount / limit);
     const skip = (page - 1) * limit;
@@ -196,7 +204,7 @@ export async function getSaleInvoicesService(query: FindManyQuery) {
 
     return {
       ok: true,
-      result,
+      result: result.map(numberifySaleInvoice),
       paging: {
         currentPage: page,
         totalPages,
@@ -222,7 +230,11 @@ export async function getSaleInvoiceByIdService(id: number) {
       },
     });
     if (!invoice) throw new NotFoundException("Invoice not found");
-    return { ok: true, msg: "Invoice found", result: invoice };
+    return {
+      ok: true,
+      msg: "Invoice found",
+      result: numberifySaleInvoice(invoice),
+    };
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("getSaleInvoiceByIdService error:", e);
@@ -241,10 +253,90 @@ export async function getLatestTerminalInvoiceService(terminal: Terminal) {
         terminal: true,
       },
     });
-    return { ok: true, msg: "Invoice found", result: invoice || null };
+    return {
+      ok: true,
+      msg: "Invoice found",
+      result: invoice ? numberifySaleInvoice(invoice) : null,
+    };
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("getLatestTerminalInvoiceService error:", e);
+    throw new InternalServerException();
+  }
+}
+
+export async function getRefundableSaleInvoiceByIdService(id: number) {
+  try {
+    const invoice = await db.saleInvoice.findFirst({
+      where: {
+        id,
+        type: "sale",
+      },
+      include: {
+        payments: true,
+        terminal: true,
+      },
+    });
+
+    if (!invoice) throw new NotFoundException("Invoice not found");
+
+    const refundedInvoices = await db.saleInvoice.findMany({
+      where: {
+        type: "refund",
+        original_invoice_id: invoice.id,
+      },
+      include: {
+        rows: true,
+        payments: true,
+        terminal: true,
+      },
+    });
+
+    const originalRows = await db.saleInvoiceRow.findMany({
+      where: {
+        invoiceId: invoice.id,
+      },
+    });
+    const refundedRows = refundedInvoices.flatMap((i) => i.rows);
+    const patchedRows = originalRows.map((row) => {
+      const refunds = refundedRows.filter(
+        (r) => r.original_invoice_row_id === row.id,
+      );
+
+      const refundedQty = refunds.reduce(
+        (acc, r) => acc.plus(r.qty),
+        new Decimal(0),
+      );
+      const refundedTotal = refunds.reduce(
+        (acc, r) => acc.plus(r.total),
+        new Decimal(0),
+      );
+      const refundedTax = refunds.reduce(
+        (acc, r) => acc.plus(r.includedTaxAmount),
+        new Decimal(0),
+      );
+      return {
+        ...row,
+        remainingQty: row.qty.minus(refundedQty).toNumber(),
+        remainingTotal: row.total.minus(refundedTotal).toNumber(),
+        remainingIncludedTaxAmount: row.includedTaxAmount
+          .minus(refundedTax)
+          .toNumber(),
+      };
+    });
+
+    return {
+      ok: true,
+      msg: "Refundable invoice found",
+      result: {
+        ...numberifySaleInvoice(invoice),
+        rows: patchedRows.map(numberifyRow),
+        refundedInvoices: refundedInvoices.map(numberifySaleInvoice),
+      },
+    };
+  } catch (e) {
+    if (e instanceof HttpException) throw e;
+    console.error("getRefundableSaleInvoiceByIdService error:", e);
     throw new InternalServerException();
   }
 }
