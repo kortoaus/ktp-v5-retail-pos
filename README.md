@@ -6,6 +6,7 @@ Retail point-of-sale system for Australian supermarkets. Monorepo with two proje
 
 - [Pricing Rules](./retail_pos_app/docs/pricing_rules.md) · [가격 계산 규칙](./retail_pos_app/docs/pricing_rules_ko.md)
 - [Payment Rules](./retail_pos_app/docs/payment_rules.md) · [결제 계산 규칙](./retail_pos_app/docs/payment_rules_ko.md)
+- [Refund Rules](./retail_pos_app/docs/refund_rules.md)
 - [External Device Plan](./retail_pos_app/docs/external_device_plan.md)
 - [SLCS Printer Language](./retail_pos_app/docs/slcs.md)
 - [How to Read a Sale Receipt](./retail_pos_app/docs/how_to_read_sale_invoice_receipt.md)
@@ -98,7 +99,7 @@ All routes prefixed with `/api`:
 | `/hotkey` | Hotkey | Quick-select grid CRUD |
 | `/crm` | CRM | Member lookup |
 | `/user` | User | User CRUD, auth by code |
-| `/sale` | Sale | Create & query sale invoices |
+| `/sale` | Sale | Create & query sale/refund invoices |
 | `/printer` | Printer | Server-side print (raw data) |
 | `/cloud` | Cloud | Sync with cloud system |
 
@@ -122,6 +123,18 @@ All routes prefixed with `/api`:
 - Auto-fill: double-tap Credit fills exactDue, double-tap Cash fills remaining
 - All math via `decimal.js`, rounded to 2dp at each step
 - See `retail_pos_app/docs/payment_rules.md` for full calculation chain
+
+### Refunds
+- Refund against any completed sale invoice
+- Full or partial refund — by item and by quantity
+- Proportional amount calculation; uses exact remaining values when refunding last unit
+- Cash/credit split capped at original payment method amounts (server-enforced)
+- No surcharge on refund, 5c rounding always applied
+- Server-side race condition protection (transactional validation)
+- Separate refund receipt template (`*** REFUND ***`)
+- Reprint sale → continuous print of sale + all linked refund receipts, single paper cut
+- Shift settlement tracks `refundsCash` / `refundsCredit` separately
+- See `retail_pos_app/docs/refund_rules.md` for full rules
 
 ### Shift Management
 
@@ -221,10 +234,10 @@ Windows prerequisites: Node.js 22, Visual Studio Build Tools (C++ workload), Pyt
 | `retail_pos_app/docs/pricing_rules_ko.md` | 가격 계산 규칙 (KO) |
 | `retail_pos_app/docs/payment_rules.md` | Payment calculation rules (EN) |
 | `retail_pos_app/docs/payment_rules_ko.md` | 결제 계산 규칙 (KO) |
+| `retail_pos_app/docs/refund_rules.md` | Refund rules and payment caps (EN) |
 | `retail_pos_app/docs/external_device_plan.md` | External device integration plan |
 | `retail_pos_app/docs/slcs.md` | Bixolon SLCS label printer command reference |
 | `retail_pos_app/docs/how_to_read_sale_invoice_receipt.md` | How to read a printed sale receipt |
-
 ## What's Next
 
 - [x] Sales store (4 carts, pricing engine, member levels)
@@ -243,8 +256,16 @@ Windows prerequisites: Node.js 22, Visual Studio Build Tools (C++ workload), Pyt
 - [x] Labeling screen with persistent weight scale panel + auto-polling
 - [x] Per-line tax allocation (`includedTaxAmount`) for refund accuracy
 - [x] Refund screen (select invoice → view refundable rows → refund)
+- [x] Refund payment modal (cash/credit split, capped at original amounts)
+- [x] Refund receipt printing + continuous sale+refund reprint
 - [x] Touch-friendly input components (`KeyboardInputText`, `DateRangeSelector`)
 - [x] Server Decimal→number conversion (`numberifySaleInvoice`, `numberifyRow`)
-- [ ] Close shift flow
-- [ ] SaleScreen UI polish (totals, cart switching)
+- [ ] Store configuration (credit card surcharge rate, tax rate, receipt footer)
+- [ ] Close shift flow (cash count, expected vs actual, Z-report print)
+- [ ] Cash in/out (petty cash, float top-up — tracked on shift)
+- [ ] SaleScreen UI polish (cart switching indicator, totals display)
+- [ ] Reprint last receipt (one-tap from sale screen)
+- [ ] Cloud sync (invoices, shifts)
 - [ ] More label templates
+
+Reports, analytics, and benchmarking are handled by the cloud app only — the POS does not store or display reporting data locally.

@@ -63,6 +63,10 @@ export default function RefundScreen() {
         open={modalTarget === "invoice"}
         onClose={() => setModalTarget(null)}
         onSelect={(invoice) => {
+          if (invoice.type !== "sale") {
+            window.alert("Only sale invoices can be refunded");
+            return;
+          }
           handleSearchInvoice(invoice.id);
           setModalTarget(null);
         }}

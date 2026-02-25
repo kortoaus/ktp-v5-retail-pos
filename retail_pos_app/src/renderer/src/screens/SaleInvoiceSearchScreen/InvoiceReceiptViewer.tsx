@@ -8,6 +8,7 @@ export default function InvoiceReceiptViewer({
 }: {
   invoice: SaleInvoice;
 }) {
+  const isRefund = invoice.type === "refund";
   const date = dayjsAU(invoice.issuedAt);
   const locality = [invoice.suburb, invoice.state, invoice.postcode]
     .filter(Boolean)
@@ -28,10 +29,13 @@ export default function InvoiceReceiptViewer({
         {invoice.address2 && <div>{invoice.address2}</div>}
         {locality && <div>{locality}</div>}
         <div className="mt-1">
-          {invoice.abn
-            ? `TAX INVOICE - ABN ${invoice.abn}`
-            : "TAX INVOICE"}
+          {isRefund
+            ? "*** REFUND ***"
+            : invoice.abn
+              ? `TAX INVOICE - ABN ${invoice.abn}`
+              : "TAX INVOICE"}
         </div>
+        {!isRefund && invoice.abn && <div>ABN {invoice.abn}</div>}
         {invoice.phone && <div>Ph: {invoice.phone}</div>}
       </div>
 
@@ -40,8 +44,14 @@ export default function InvoiceReceiptViewer({
       <div className="text-xs space-y-0.5">
         {invoice.serialNumber && (
           <div className="flex justify-between">
-            <span>Invoice</span>
+            <span>{isRefund ? "Refund Invoice" : "Invoice"}</span>
             <span>{invoice.serialNumber}</span>
+          </div>
+        )}
+        {isRefund && invoice.original_invoice_serialNumber && (
+          <div className="flex justify-between">
+            <span>Original Invoice</span>
+            <span>{invoice.original_invoice_serialNumber}</span>
           </div>
         )}
         <div className="flex justify-between">
@@ -127,7 +137,7 @@ export default function InvoiceReceiptViewer({
       <hr className="border-dashed border-gray-400 my-3" />
 
       <div className="flex justify-between text-lg font-bold">
-        <span>TOTAL</span>
+        <span>{isRefund ? "REFUND TOTAL" : "TOTAL"}</span>
         <span>{fmt(totalCents / 100)}</span>
       </div>
 
@@ -135,18 +145,25 @@ export default function InvoiceReceiptViewer({
 
       <div className="space-y-1">
         {invoice.cashPaid > 0 && (
-          <>
+          isRefund ? (
             <div className="flex justify-between">
-              <span>Cash Received</span>
-              <span>{fmt(invoice.cashPaid + invoice.cashChange)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Cash Paid</span>
+              <span>Cash Refunded</span>
               <span>{fmt(invoice.cashPaid)}</span>
             </div>
-          </>
+          ) : (
+            <>
+              <div className="flex justify-between">
+                <span>Cash Received</span>
+                <span>{fmt(invoice.cashPaid + invoice.cashChange)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Cash Paid</span>
+                <span>{fmt(invoice.cashPaid)}</span>
+              </div>
+            </>
+          )
         )}
-        {invoice.cashChange > 0 && (
+        {!isRefund && invoice.cashChange > 0 && (
           <div className="flex justify-between">
             <span>Change</span>
             <span>{fmt(invoice.cashChange)}</span>
@@ -154,8 +171,8 @@ export default function InvoiceReceiptViewer({
         )}
         {invoice.creditPaid > 0 && (
           <div className="flex justify-between">
-            <span>Credit Paid</span>
-            <span>{fmt(invoice.creditPaid + invoice.creditSurchargeAmount)}</span>
+            <span>{isRefund ? "Credit Refunded" : "Credit Paid"}</span>
+            <span>{fmt(isRefund ? invoice.creditPaid : invoice.creditPaid + invoice.creditSurchargeAmount)}</span>
           </div>
         )}
       </div>
@@ -180,7 +197,7 @@ export default function InvoiceReceiptViewer({
       <div className="text-xs text-gray-500">
         ^ = price changed &nbsp; # = GST applicable
       </div>
-      <div className="text-center mt-3 text-gray-400">Thank you!</div>
+      <div className="text-center mt-3 text-gray-400">{isRefund ? "Refund processed" : "Thank you!"}</div>
     </div>
   );
 }

@@ -1,19 +1,23 @@
 import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { RefundableInvoice, RefundableRow } from "../../types/models";
 import PagingRowList from "../../components/list/PagingRowList";
 import Decimal from "decimal.js";
 import RefundQtyModal from "./RefundQtyModal";
 import RefundableRowCard from "./RefundableRowCard";
 import RefundedRowCard from "./RefundedRowCard";
+import RefundDocumentMonitor from "./RefundDocumentMonitor";
+import RefundPaymentModal from "./RefundPaymentModal";
 import { ClientRefundableRow } from "./refund.types";
 
-type ModalTarget = null | "qty-input";
+type ModalTarget = null | "qty-input" | "refund-payment";
 
 export default function RefundPanels({
   invoice,
 }: {
   invoice: RefundableInvoice;
 }) {
+  const navigate = useNavigate();
   const [refundedRows, setRefundedRows] = useState<ClientRefundableRow[]>([]);
   const [modalTarget, setModalTarget] = useState<ModalTarget>(null);
   const pendingRowRef = useRef<RefundableRow | null>(null);
@@ -26,8 +30,8 @@ export default function RefundPanels({
       return;
     }
 
-    // all or nothing, weight-prepacked qty is actually 1 always.
-    if (row.type === "weight-prepacked" || row.qty === 1) {
+    // all or nothing: weight-prepacked, qty=1, or remainingQty=1 (only one possible)
+    if (row.type === "weight-prepacked" || row.qty === 1 || row.remainingQty === 1) {
       if (row.remainingQty === 0) {
         window.alert("This line is already fully refunded.");
         return;
@@ -36,8 +40,10 @@ export default function RefundPanels({
         ...row,
         original_invoice_row_id: row.id,
         original_invoice_id: row.invoiceId,
-        qty: row.qty,
-        applyQty: row.qty,
+        qty: row.remainingQty,
+        total: row.remainingTotal,
+        tax_amount_included: row.remainingIncludedTaxAmount,
+        applyQty: row.remainingQty,
       };
       setRefundedRows([...refundedRows, newRow]);
       return;
@@ -185,7 +191,13 @@ export default function RefundPanels({
       </div>
 
       <div className="flex-1 flex flex-col">
-        {/* {JSON.stringify(refundedRows, null, 2)} */}
+        <div className="bg-blue-500 text-white h-14 center">Summary</div>
+        <div className="flex-1">
+          <RefundDocumentMonitor
+            rows={refundedRows}
+            onRefund={() => setModalTarget("refund-payment")}
+          />
+        </div>
       </div>
 
       <RefundQtyModal
@@ -196,6 +208,14 @@ export default function RefundPanels({
         }}
         row={pendingRowRef.current}
         onConfirm={onQtyConfirm}
+      />
+
+      <RefundPaymentModal
+        open={modalTarget === "refund-payment"}
+        onClose={() => setModalTarget(null)}
+        onComplete={() => navigate("/")}
+        invoice={invoice}
+        refundedRows={refundedRows}
       />
     </div>
   );

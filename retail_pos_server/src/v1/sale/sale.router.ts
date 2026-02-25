@@ -4,6 +4,7 @@ import {
   getLatestTerminalInvoiceController,
   getRefundableSaleInvoiceByIdController,
   getSaleInvoiceByIdController,
+  getSaleInvoiceWithChildrenController,
   getSaleInvoicesController,
 } from "./sale.controller";
 import { createRefundInvoiceController } from "./sale.refund.controller";
@@ -17,5 +18,6 @@ router.get("/invoices", userMiddleware, getSaleInvoicesController);
 router.get("/invoice/:id", getSaleInvoiceByIdController);
 router.get("/invoice/:id/refundable", getRefundableSaleInvoiceByIdController);
 router.post("/refund", userMiddleware, createRefundInvoiceController);
+router.get("/invoice/:id/with-children", getSaleInvoiceWithChildrenController);
 
 export default router;

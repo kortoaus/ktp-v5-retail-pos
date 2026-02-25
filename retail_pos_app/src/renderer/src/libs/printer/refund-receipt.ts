@@ -3,6 +3,7 @@ import { SaleInvoice } from "../../types/models";
 import { buildPrintBuffer } from "./escpos";
 import { printESCPOS } from "./print.service";
 import dayjsAU from "../dayjsAU";
+
 const W = 576;
 const PAD = 20;
 const LH = 36;
@@ -48,40 +49,28 @@ function row(
   ctx.textAlign = "left";
 }
 
-function estimateHeight(invoice: SaleInvoice, isCopy: boolean): number {
+function estimateHeight(invoice: SaleInvoice): number {
   const headerLines = 6;
-  const metaLines = 3;
+  const metaLines = 4;
 
   let itemLines = 0;
   for (const r of invoice.rows) {
-    const prefix =
-      (r.unit_price_effective !== r.unit_price_original ? "^" : "") +
-      (r.taxable ? "#" : "");
-    itemLines += wrapText(prefix + r.name_en, NAME_MAX).length;
+    itemLines += wrapText(r.name_en, NAME_MAX).length;
     itemLines += 1;
   }
 
-  let totalLines = 2;
-  if (invoice.documentDiscountAmount > 0) totalLines += 1;
-  if (invoice.creditSurchargeAmount > 0) totalLines += 1;
-  if (invoice.rounding !== 0) totalLines += 1;
+  const totalLines = 3;
+  const payLines = 2;
+  const footerLines = 5;
 
-  let payLines = 0;
-  if (invoice.cashPaid > 0) payLines += 2;
-  if (invoice.cashChange > 0) payLines += 1;
-  if (invoice.creditPaid > 0) payLines += 1;
-
-  const footerLines = 6;
-
-  const total =
-    headerLines + metaLines + itemLines + totalLines + payLines + footerLines;
-  return 60 + total * LH + (invoice.serialNumber ? 220 : 0) + (isCopy ? LH : 0) + LH + 100;
+  const total = headerLines + metaLines + itemLines + totalLines + payLines + footerLines;
+  return 60 + total * LH + (invoice.serialNumber ? 220 : 0) + 100;
 }
 
-export async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Promise<HTMLCanvasElement> {
+export async function renderRefundReceipt(invoice: SaleInvoice): Promise<HTMLCanvasElement> {
   const canvas = document.createElement("canvas");
   canvas.width = W;
-  canvas.height = estimateHeight(invoice, isCopy);
+  canvas.height = estimateHeight(invoice);
 
   const ctx = canvas.getContext("2d")!;
   ctx.fillStyle = "#fff";
@@ -114,10 +103,7 @@ export async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Prom
     y += LH - 8;
   }
   if (invoice.abn) {
-    ctx.fillText(`TAX INVOICE - ABN ${invoice.abn}`, W / 2, y);
-    y += LH - 4;
-  } else {
-    ctx.fillText("TAX INVOICE", W / 2, y);
+    ctx.fillText(`ABN ${invoice.abn}`, W / 2, y);
     y += LH - 4;
   }
   if (invoice.phone) {
@@ -126,6 +112,11 @@ export async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Prom
   }
   y += 6;
 
+  /* ── REFUND banner ── */
+  ctx.font = `bold ${FONT_LG}px sans-serif`;
+  ctx.fillText("*** REFUND ***", W / 2, y);
+  y += LH + 4;
+
   /* ── Meta ── */
   ctx.textAlign = "left";
   dashedLine(ctx, y);
@@ -133,44 +124,31 @@ export async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Prom
 
   ctx.font = `${FONT_SM}px sans-serif`;
   if (invoice.serialNumber) {
-    row(ctx, "Invoice", invoice.serialNumber, y);
+    row(ctx, "Refund Invoice", invoice.serialNumber, y);
+    y += LH - 6;
+  }
+  if (invoice.original_invoice_serialNumber) {
+    row(ctx, "Original Invoice", invoice.original_invoice_serialNumber, y);
     y += LH - 6;
   }
   row(ctx, "Date", dayjsAU(invoice.issuedAt).format("ddd, DD MMM YYYY hh:mm A"), y);
   y += LH - 6;
   row(ctx, "Terminal", invoice.terminal.name, y);
   y += LH - 6;
-  if (invoice.memberLevel != null && invoice.memberLevel > 0) {
-    row(ctx, "Member", `Level ${invoice.memberLevel}`, y);
-    y += LH - 6;
-  }
 
   dashedLine(ctx, y);
   y += 14;
 
   /* ── Items ── */
-
   for (const r of invoice.rows) {
-    const priceChanged = r.unit_price_effective !== r.unit_price_original;
-    const prefix = (priceChanged ? "^" : "") + (r.taxable ? "#" : "");
-    const nameLines = wrapText(prefix + r.name_en, NAME_MAX);
+    const nameLines = wrapText(r.name_en, NAME_MAX);
     ctx.font = `${FONT}px sans-serif`;
     for (const line of nameLines) {
       ctx.fillText(line, PAD, y);
       y += LH;
     }
     ctx.font = `${FONT_SM}px sans-serif`;
-    let qtyStr: string;
-    if (r.type === "weight-prepacked") {
-      qtyStr = `1 @ ${fmt(r.total)}`;
-    } else if (r.measured_weight !== null) {
-      qtyStr = `${r.measured_weight}${r.uom} @ ${fmt(r.unit_price_effective)}/${r.uom}`;
-    } else {
-      qtyStr = `${r.qty} @ ${fmt(r.unit_price_effective)}`;
-    }
-    if (priceChanged) {
-      qtyStr += ` (${fmt(r.unit_price_original)})`;
-    }
+    const qtyStr = `${r.qty} @ ${fmt(r.unit_price_effective)}`;
     ctx.fillText("  " + qtyStr, PAD, y);
     ctx.textAlign = "right";
     ctx.fillText(fmt(r.total), W - PAD, y);
@@ -183,17 +161,9 @@ export async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Prom
   y += 14;
 
   ctx.font = `${FONT}px sans-serif`;
-  row(ctx, `${invoice.rows.length} SUBTOTAL`, fmt(invoice.subtotal), y);
+  row(ctx, `${invoice.rows.length} ITEMS`, fmt(invoice.subtotal), y);
   y += LH;
 
-  if (invoice.documentDiscountAmount > 0) {
-    row(ctx, "Discount", `-${fmt(invoice.documentDiscountAmount)}`, y);
-    y += LH;
-  }
-  if (invoice.creditSurchargeAmount > 0) {
-    row(ctx, "Card Surcharge", `+${fmt(invoice.creditSurchargeAmount)}`, y);
-    y += LH;
-  }
   if (invoice.rounding !== 0) {
     const sign = invoice.rounding > 0 ? "+" : "-";
     row(ctx, "Rounding", `${sign}${fmt(invoice.rounding)}`, y);
@@ -204,13 +174,7 @@ export async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Prom
   y += 14;
 
   ctx.font = `bold ${FONT_LG}px sans-serif`;
-  let totalCents = Math.round(invoice.total * 100);
-  for (const p of invoice.payments) {
-    if (p.type === "credit") {
-      totalCents += Math.round(p.surcharge * 100);
-    }
-  }
-  row(ctx, "TOTAL", fmt(totalCents / 100), y);
+  row(ctx, "REFUND TOTAL", fmt(invoice.total), y);
   y += LH + 4;
 
   /* ── Payments ── */
@@ -219,19 +183,11 @@ export async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Prom
 
   ctx.font = `${FONT}px sans-serif`;
   if (invoice.cashPaid > 0) {
-    const cashReceived = invoice.cashPaid + invoice.cashChange;
-    row(ctx, "Cash Received", fmt(cashReceived), y);
-    y += LH;
-    row(ctx, "Cash Paid", fmt(invoice.cashPaid), y);
-    y += LH;
-  }
-  if (invoice.cashChange > 0) {
-    row(ctx, "Change", fmt(invoice.cashChange), y);
+    row(ctx, "Cash Refunded", fmt(invoice.cashPaid), y);
     y += LH;
   }
   if (invoice.creditPaid > 0) {
-    const eftposTotal = invoice.creditPaid + invoice.creditSurchargeAmount;
-    row(ctx, "Credit Paid", fmt(eftposTotal), y);
+    row(ctx, "Credit Refunded", fmt(invoice.creditPaid), y);
     y += LH;
   }
 
@@ -242,22 +198,14 @@ export async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Prom
   ctx.font = `${FONT}px sans-serif`;
   row(ctx, "GST Included", fmt(invoice.taxAmount), y);
   y += LH;
-  if (invoice.totalDiscountAmount > 0) {
-    row(ctx, "You Saved", fmt(invoice.totalDiscountAmount), y);
-    y += LH;
-  }
 
   dashedLine(ctx, y);
   y += 14;
 
   ctx.font = `${FONT_SM}px sans-serif`;
-  ctx.textAlign = "left";
-  ctx.fillText("^ = price changed  # = GST applicable", PAD, y);
-  y += LH;
-
-  y += 10;
   ctx.textAlign = "center";
-  ctx.fillText("Thank you!", W / 2, y);
+  y += 10;
+  ctx.fillText("Refund processed", W / 2, y);
   y += LH + 10;
 
   if (invoice.serialNumber) {
@@ -271,23 +219,14 @@ export async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Prom
     y += qrSize + 10;
   }
 
-  if (isCopy) {
-    ctx.font = `bold ${FONT}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.fillText("** COPY **", W / 2, y);
-    y += LH;
-  }
-
   ctx.font = `${FONT_SM}px sans-serif`;
   ctx.textAlign = "center";
   ctx.fillText(`Printed: ${dayjsAU().format("DD/MM/YYYY hh:mm A")}`, W / 2, y);
   return canvas;
 }
-export async function printSaleInvoiceReceipt(
-  invoice: SaleInvoice,
-  isCopy: boolean = false,
-): Promise<void> {
-  const canvas = await renderReceipt(invoice, isCopy);
+
+export async function printRefundReceipt(invoice: SaleInvoice): Promise<void> {
+  const canvas = await renderRefundReceipt(invoice);
   const buffer = buildPrintBuffer(canvas);
   await printESCPOS(buffer);
 }

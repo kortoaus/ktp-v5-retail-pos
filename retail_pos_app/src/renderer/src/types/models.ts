@@ -271,6 +271,7 @@ export interface SaleInvoice {
   type: string;
   serialNumber: string | null;
   original_invoice_id: number | null;
+  original_invoice_serialNumber: string | null;
   companyId: number;
   companyName: string;
   abn: string | null;
@@ -315,4 +316,6 @@ export interface RefundableRow extends SaleInvoiceRow {
 export interface RefundableInvoice extends Omit<SaleInvoice, 'rows'> {
   rows: RefundableRow[];
   refundedInvoices: SaleInvoice[];
+  remainingCash: number;
+  remainingCredit: number;
 }

@@ -82,3 +82,12 @@ export const buildPrintBuffer = (canvas: HTMLCanvasElement): Uint8Array => {
 
   return buffer;
 };
+
+export const buildPrintBufferNoCut = (canvas: HTMLCanvasElement): Uint8Array => {
+  const init = initPrinterCommand();
+  const raster = canvasToEscposRaster(canvas);
+  const buffer = new Uint8Array(init.length + raster.length);
+  buffer.set(init, 0);
+  buffer.set(raster, init.length);
+  return buffer;
+};

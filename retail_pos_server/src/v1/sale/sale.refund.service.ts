@@ -149,6 +149,7 @@ export async function createRefundInvoiceService(
         data: {
           type: "refund",
           original_invoice_id: originalInvoice.id,
+          original_invoice_serialNumber: originalInvoice.serialNumber,
           companyId: company.id,
           companyName: company.name,
           abn: company.abn,

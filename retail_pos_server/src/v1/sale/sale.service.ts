@@ -242,6 +242,34 @@ export async function getSaleInvoiceByIdService(id: number) {
   }
 }
 
+export async function getSaleInvoiceWithChildrenService(id: number) {
+  try {
+    const invoice = await db.saleInvoice.findUnique({
+      where: { id },
+      include: { rows: true, payments: true, terminal: true },
+    });
+    if (!invoice) throw new NotFoundException("Invoice not found");
+
+    const refundInvoices = await db.saleInvoice.findMany({
+      where: { type: "refund", original_invoice_id: invoice.id },
+      orderBy: { issuedAt: "asc" },
+      include: { rows: true, payments: true, terminal: true },
+    });
+
+    return {
+      ok: true,
+      result: {
+        invoice: numberifySaleInvoice(invoice),
+        refundInvoices: refundInvoices.map(numberifySaleInvoice),
+      },
+    };
+  } catch (e) {
+    if (e instanceof HttpException) throw e;
+    console.error("getSaleInvoiceWithChildrenService error:", e);
+    throw new InternalServerException();
+  }
+}
+
 export async function getLatestTerminalInvoiceService(terminal: Terminal) {
   try {
     const invoice = await db.saleInvoice.findFirst({
@@ -325,6 +353,22 @@ export async function getRefundableSaleInvoiceByIdService(id: number) {
       };
     });
 
+    // Compute remaining payment caps
+    const originalCash = invoice.payments
+      .filter((p) => p.type === "cash")
+      .reduce((acc, p) => acc.plus(p.amount), new Decimal(0));
+    const originalCredit = invoice.payments
+      .filter((p) => p.type === "credit")
+      .reduce((acc, p) => acc.plus(p.amount), new Decimal(0));
+    const refundedCash = refundedInvoices
+      .flatMap((r) => r.payments)
+      .filter((p) => p.type === "cash")
+      .reduce((acc, p) => acc.plus(p.amount), new Decimal(0));
+    const refundedCredit = refundedInvoices
+      .flatMap((r) => r.payments)
+      .filter((p) => p.type === "credit")
+      .reduce((acc, p) => acc.plus(p.amount), new Decimal(0));
+
     return {
       ok: true,
       msg: "Refundable invoice found",
@@ -332,6 +376,8 @@ export async function getRefundableSaleInvoiceByIdService(id: number) {
         ...numberifySaleInvoice(invoice),
         rows: patchedRows.map(numberifyRow),
         refundedInvoices: refundedInvoices.map(numberifySaleInvoice),
+        remainingCash: originalCash.minus(refundedCash).toNumber(),
+        remainingCredit: originalCredit.minus(refundedCredit).toNumber(),
       },
     };
   } catch (e) {

@@ -5,6 +5,7 @@ import {
   getLatestTerminalInvoiceService,
   getRefundableSaleInvoiceByIdService,
   getSaleInvoiceByIdService,
+  getSaleInvoiceWithChildrenService,
   getSaleInvoicesService,
 } from "./sale.service";
 import { parseIntId, parseFindManyQuery } from "../../libs/query";
@@ -59,6 +60,16 @@ export async function getRefundableSaleInvoiceByIdController(
   res: Response,
 ) {
   const result = await getRefundableSaleInvoiceByIdService(
+    parseIntId(req, "id"),
+  );
+  res.status(200).json(result);
+}
+
+export async function getSaleInvoiceWithChildrenController(
+  req: Request,
+  res: Response,
+) {
+  const result = await getSaleInvoiceWithChildrenService(
     parseIntId(req, "id"),
   );
   res.status(200).json(result);

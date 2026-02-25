@@ -86,6 +86,19 @@ export async function getRefundableInvoiceById(
   );
 }
 
+export type SaleInvoiceWithChildren = {
+  invoice: SaleInvoice;
+  refundInvoices: SaleInvoice[];
+};
+
+export async function getSaleInvoiceWithChildren(
+  id: number,
+): Promise<ApiResponse<SaleInvoiceWithChildren>> {
+  return apiService.get<SaleInvoiceWithChildren>(
+    `/api/sale/invoice/${id}/with-children`,
+  );
+}
+
 export async function getSaleInvoices(params: {
   keyword?: string;
   page?: number;
@@ -102,4 +115,28 @@ export async function getSaleInvoices(params: {
   if (params.to) qs.set("to", String(params.to));
   if (params.memberId) qs.set("memberId", String(params.memberId));
   return apiService.get<SaleInvoice[]>(`/api/sale/invoices?${qs.toString()}`);
+}
+
+export type RefundInvoicePayload = {
+  original_invoice_id: number;
+  subtotal: number;
+  documentDiscountAmount: number;
+  creditSurchargeAmount: number;
+  rounding: number;
+  total: number;
+  taxAmount: number;
+  cashPaid: number;
+  cashChange: number;
+  creditPaid: number;
+  totalDiscountAmount: number;
+  memberId: string | null;
+  memberLevel: number | null;
+  rows: InvoiceRowPayload[];
+  payments: { type: string; amount: number; surcharge: number }[];
+};
+
+export async function createRefundInvoice(
+  payload: RefundInvoicePayload,
+): Promise<ApiResponse<{ id: number }>> {
+  return apiService.post<{ id: number }>("/api/sale/refund", payload);
 }

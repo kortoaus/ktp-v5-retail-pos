@@ -1,7 +1,10 @@
 import { useState } from "react";
 import type { Dayjs } from "dayjs";
-import { getSaleInvoices } from "../service/sale.service";
-import { printSaleInvoiceReceipt } from "../libs/printer/sale-invoice-receipt";
+import { getSaleInvoices, getSaleInvoiceWithChildren } from "../service/sale.service";
+import { printSaleInvoiceReceipt, renderReceipt } from "../libs/printer/sale-invoice-receipt";
+import { printRefundReceipt, renderRefundReceipt } from "../libs/printer/refund-receipt";
+import { buildPrintBufferNoCut, cutCommand } from "../libs/printer/escpos";
+import { printESCPOS } from "../libs/printer/print.service";
 import { Member, SaleInvoice } from "../types/models";
 import { PagingType } from "../libs/api";
 import { cn } from "../libs/cn";
@@ -106,7 +109,38 @@ export default function InvoiceSearchPanel({
 
   async function handlePrint() {
     if (!selected) return;
-    await printSaleInvoiceReceipt(selected, true);
+
+    if (selected.type === "refund") {
+      await printRefundReceipt(selected);
+      return;
+    }
+
+    // Sale invoice: fetch with children, print all with single cut
+    const { ok, result } = await getSaleInvoiceWithChildren(selected.id);
+    if (!ok || !result) {
+      await printSaleInvoiceReceipt(selected, true);
+      return;
+    }
+
+    const buffers: Uint8Array[] = [];
+
+    // Sale receipt
+    const saleCanvas = await renderReceipt(result.invoice, true);
+    buffers.push(buildPrintBufferNoCut(saleCanvas));
+
+    // Refund receipts
+    for (const refund of result.refundInvoices) {
+      const refundCanvas = await renderRefundReceipt(refund);
+      buffers.push(buildPrintBufferNoCut(refundCanvas));
+    }
+
+    // Single cut at the end
+    buffers.push(cutCommand());
+
+    const combined = Uint8Array.from(
+      buffers.reduce<number[]>((acc, b) => [...acc, ...b], []),
+    );
+    await printESCPOS(combined);
   }
 
   return (
@@ -170,6 +204,7 @@ export default function InvoiceSearchPanel({
 
           <div className="text-xs bg-gray-100 border-b border-gray-200 h-8 flex items-center divide-x divide-gray-200 *:flex *:justify-center *:items-center *:h-full">
             <div className="w-12">No.</div>
+            <div className="w-16">Type</div>
             <div className="flex-1">Invoice</div>
             <div className="w-40">Date</div>
             <div className="w-28">Terminal</div>
@@ -199,6 +234,12 @@ export default function InvoiceSearchPanel({
                       <div className="w-12 flex items-center justify-center text-sm text-gray-400">
                         {(page - 1) * PAGE_SIZE + i + 1}
                       </div>
+                      <div className={cn(
+                        "w-16 flex items-center justify-center text-[10px] font-bold uppercase",
+                        inv.type === "refund" ? "text-red-600" : "text-blue-600",
+                      )}>
+                        {inv.type}
+                      </div>
                       <div className="flex-1 p-1 flex flex-col justify-center min-w-0">
                         <div className="text-sm font-medium truncate">
                           {inv.serialNumber ?? `#${inv.id}`}
@@ -210,8 +251,11 @@ export default function InvoiceSearchPanel({
                       <div className="w-28 flex items-center justify-center text-xs">
                         {inv.terminal.name}
                       </div>
-                      <div className="w-28 flex items-center justify-end pr-2 text-sm font-bold font-mono">
-                        {fmt(inv.total)}
+                      <div className={cn(
+                        "w-28 flex items-center justify-end pr-2 text-sm font-bold font-mono",
+                        inv.type === "refund" && "text-red-600",
+                      )}>
+                        {inv.type === "refund" ? "-" : ""}{fmt(inv.total)}
                       </div>
                     </div>
                   )}
