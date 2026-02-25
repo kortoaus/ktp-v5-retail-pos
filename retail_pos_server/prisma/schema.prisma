@@ -273,10 +273,11 @@ model TerminalShift {
 
 model SaleInvoice {
   // document data
-  id                  Int     @id @default(autoincrement())
-  type                String  @default("sale") // sale, refund,
-  serialNumber        String? @unique
-  original_invoice_id Int?
+  id                            Int     @id @default(autoincrement())
+  type                          String  @default("sale") // sale, refund,
+  serialNumber                  String? @unique
+  original_invoice_id           Int?
+  original_invoice_serialNumber String?
 
   // Company
   companyId   Int
