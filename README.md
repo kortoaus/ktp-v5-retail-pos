@@ -6,7 +6,7 @@ Retail point-of-sale system for Australian supermarkets. Monorepo with two proje
 
 - [Pricing Rules](./retail_pos_app/docs/pricing_rules.md) · [가격 계산 규칙](./retail_pos_app/docs/pricing_rules_ko.md)
 - [Payment Rules](./retail_pos_app/docs/payment_rules.md) · [결제 계산 규칙](./retail_pos_app/docs/payment_rules_ko.md)
-- [Refund Rules](./retail_pos_app/docs/refund_rules.md)
+- [Refund Rules](./retail_pos_app/docs/refund_rules.md) · [환불 규칙](./retail_pos_app/docs/refund_rules_ko.md)
 - [External Device Plan](./retail_pos_app/docs/external_device_plan.md)
 - [SLCS Printer Language](./retail_pos_app/docs/slcs.md)
 - [How to Read a Sale Receipt](./retail_pos_app/docs/how_to_read_sale_invoice_receipt.md)
@@ -235,6 +235,7 @@ Windows prerequisites: Node.js 22, Visual Studio Build Tools (C++ workload), Pyt
 | `retail_pos_app/docs/payment_rules.md` | Payment calculation rules (EN) |
 | `retail_pos_app/docs/payment_rules_ko.md` | 결제 계산 규칙 (KO) |
 | `retail_pos_app/docs/refund_rules.md` | Refund rules and payment caps (EN) |
+| `retail_pos_app/docs/refund_rules_ko.md` | 환불 규칙 (KO) |
 | `retail_pos_app/docs/external_device_plan.md` | External device integration plan |
 | `retail_pos_app/docs/slcs.md` | Bixolon SLCS label printer command reference |
 | `retail_pos_app/docs/how_to_read_sale_invoice_receipt.md` | How to read a printed sale receipt |
