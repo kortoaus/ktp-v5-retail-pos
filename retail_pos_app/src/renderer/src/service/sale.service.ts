@@ -1,5 +1,9 @@
 import apiService, { ApiResponse } from "../libs/api";
-import { OnPaymentPayload, SaleInvoice } from "../types/models";
+import {
+  OnPaymentPayload,
+  RefundableInvoice,
+  SaleInvoice,
+} from "../types/models";
 import { SaleLineType } from "../types/sales";
 
 type InvoiceRowPayload = {
@@ -72,6 +76,14 @@ export async function getSaleInvoiceById(
   id: number,
 ): Promise<ApiResponse<SaleInvoice>> {
   return apiService.get<SaleInvoice>(`/api/sale/invoice/${id}`);
+}
+
+export async function getRefundableInvoiceById(
+  id: number,
+): Promise<ApiResponse<RefundableInvoice>> {
+  return apiService.get<RefundableInvoice>(
+    `/api/sale/invoice/${id}/refundable`,
+  );
 }
 
 export async function getSaleInvoices(params: {

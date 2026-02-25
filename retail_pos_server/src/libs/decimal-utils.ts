@@ -56,7 +56,7 @@ type RawRow = {
   measured_weight: Prisma.Decimal | null;
   subtotal: Prisma.Decimal;
   total: Prisma.Decimal;
-  includedTaxAmount: Prisma.Decimal;
+  tax_amount_included: Prisma.Decimal;
 };
 
 export function numberifyRow<T extends RawRow>(row: T) {
@@ -71,7 +71,7 @@ export function numberifyRow<T extends RawRow>(row: T) {
     measured_weight: toNum(row.measured_weight),
     subtotal: toNumReq(row.subtotal),
     total: toNumReq(row.total),
-    includedTaxAmount: toNumReq(row.includedTaxAmount),
+    tax_amount_included: toNumReq(row.tax_amount_included),
   };
 }
 

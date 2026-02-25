@@ -3,6 +3,7 @@ import { NotFoundException } from "../../libs/exceptions";
 import {
   createSaleInvoiceService,
   getLatestTerminalInvoiceService,
+  getRefundableSaleInvoiceByIdService,
   getSaleInvoiceByIdService,
   getSaleInvoicesService,
 } from "./sale.service";
@@ -50,5 +51,15 @@ export async function getSaleInvoiceByIdController(
   res: Response,
 ) {
   const result = await getSaleInvoiceByIdService(parseIntId(req, "id"));
+  res.status(200).json(result);
+}
+
+export async function getRefundableSaleInvoiceByIdController(
+  req: Request,
+  res: Response,
+) {
+  const result = await getRefundableSaleInvoiceByIdService(
+    parseIntId(req, "id"),
+  );
   res.status(200).json(result);
 }

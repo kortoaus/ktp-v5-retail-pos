@@ -346,7 +346,7 @@ model SaleInvoiceRow {
   measured_weight       Decimal? @db.Decimal(18, 3)
   subtotal              Decimal  @db.Decimal(18, 2)
   total                 Decimal  @db.Decimal(18, 2)
-  includedTaxAmount     Decimal  @default(0) @db.Decimal(18, 2)
+  tax_amount_included   Decimal  @default(0) @db.Decimal(18, 2)
 
   // Refund Data
   original_invoice_id     Int?

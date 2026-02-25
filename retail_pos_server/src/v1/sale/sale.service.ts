@@ -116,7 +116,7 @@ export async function createSaleInvoiceService(
               original_invoice_id: row.original_invoice_id,
               original_invoice_row_id: row.original_invoice_row_id,
               adjustments: row.adjustments,
-              includedTaxAmount: row.tax_amount_included,
+              tax_amount_included: row.tax_amount_included,
             })),
           },
           payments: {
@@ -312,14 +312,14 @@ export async function getRefundableSaleInvoiceByIdService(id: number) {
         new Decimal(0),
       );
       const refundedTax = refunds.reduce(
-        (acc, r) => acc.plus(r.includedTaxAmount),
+        (acc, r) => acc.plus(r.tax_amount_included),
         new Decimal(0),
       );
       return {
         ...row,
         remainingQty: row.qty.minus(refundedQty).toNumber(),
         remainingTotal: row.total.minus(refundedTotal).toNumber(),
-        remainingIncludedTaxAmount: row.includedTaxAmount
+        remainingIncludedTaxAmount: row.tax_amount_included
           .minus(refundedTax)
           .toNumber(),
       };
