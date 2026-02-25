@@ -261,6 +261,10 @@ model TerminalShift {
   totalCashIn  Int @default(0)
   totalCashOut Int @default(0)
 
+  // Refunds
+  refundsCash   Int @default(0)
+  refundsCredit Int @default(0)
+
   // Cloud Sync
   syncedAt DateTime?
   synced   Boolean       @default(false)
