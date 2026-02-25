@@ -1,6 +1,6 @@
 # Refund Process Plan
 
-## Status: PLANNING (not yet implemented)
+## Status: IN PROGRESS
 
 ---
 
@@ -71,9 +71,8 @@ answer2: I think we have to calculate remaining's or something strictly in serve
 
 - `SaleInvoice` table handles both sale and refund (`type` field)
 - `SaleInvoiceRow` has `original_invoice_id` / `original_invoice_row_id` for refund linking
-- Same `createSaleInvoiceService` creates both types
 - `getRefundableSaleInvoiceByIdService` computes remaining qty/total/tax by subtracting already-refunded rows
-
+- Refund goes through manager auth — `user` passed to service for `userId` on invoice
 ### Existing Sale Payment Modal (reference)
 
 - Discount (% or $), credit/cash split, 1.5% credit surcharge, 5c rounding
@@ -143,37 +142,26 @@ No surcharge on refund.
 6. Kick cash drawer (if cash refund > 0)
 7. Navigate to home
 
-### Schema Change
+### Schema Change — DONE
 
-**`TerminalShift`** — add:
-```prisma
-refundsCash    Int @default(0)
-refundsCredit  Int @default(0)
-```
+**`TerminalShift`** — added `refundsCash`, `refundsCredit` (Int, default 0).
+Prisma client regenerated.
 
 Settlement calc: `endedCashExpected = startedCash + salesCash - refundsCash`
 
-On sale creation: `salesCash += cashPaid`, `salesCredit += creditPaid`
-On refund creation: `refundsCash += cashPaid`, `refundsCredit += creditPaid`
-
-### Server: Dedicated Refund Endpoint
+### Server: Dedicated Refund Endpoint — DONE
 
 **Route:** `POST /api/sale/refund`
+**Files:** `sale.refund.service.ts`, `sale.refund.controller.ts`, `sale.router.ts`
 
-**Request body:** Same shape as `CreateSaleInvoiceDto` + `original_invoice_id: number`
-
-**Server logic:**
-1. Fetch original invoice + all existing refund invoices for it
-2. For each row in the request, validate:
-   - `original_invoice_row_id` exists on the original invoice
-   - `qty` does not exceed remaining qty (original qty - sum of already-refunded qty)
-3. Validate total payment amounts:
-   - Cash refund ≤ original cash paid (across all payments)
-   - Credit refund ≤ original credit paid
-4. Create `SaleInvoice` with `type: "refund"`, `original_invoice_id`
-5. Update `TerminalShift`: increment `refundsCash` / `refundsCredit`
-6. Return created invoice id
-
+**Server logic (inside `$transaction`):**
+1. Fetch original invoice (type "sale") + all existing refund invoices
+2. Validate each row: `original_invoice_row_id` exists, qty ≤ remaining
+3. Validate payment caps: cash ≤ remaining cash cap, credit ≤ remaining credit cap (accounting for previous refunds)
+4. Create `SaleInvoice` with `type: "refund"`, `original_invoice_id`, `userId: user.id`
+5. Generate serial number
+6. Increment `refundsCash` / `refundsCredit` on `TerminalShift` (in cents)
+7. Return created invoice id
 ### Refund Receipt
 
 - Separate file: `refund-receipt.ts`
@@ -187,14 +175,24 @@ On refund creation: `refundsCash += cashPaid`, `refundsCredit += creditPaid`
 
 ### File Changes Summary
 
-| File | Change |
-|------|--------|
-| `schema.prisma` | Add `refundsCash`, `refundsCredit` to `TerminalShift` |
-| `RefundPanels.tsx` | Third panel: refund document monitor + "Refund" button |
-| `RefundScreen/RefundPaymentModal.tsx` | New: cash/credit inputs, MoneyNumpad, confirm |
-| `RefundScreen/RefundDocumentMonitor.tsx` | New: item count, qty, subtotal, GST, refund due |
-| `sale.service.ts` (client) | New: `createRefundInvoice()` API call |
-| `sale.router.ts` (server) | New: `POST /sale/refund` route + controller |
-| `sale.service.ts` (server) | New: `createRefundInvoiceService()` with validation + shift update |
-| `refund-receipt.ts` (client) | New: refund receipt renderer |
-| `printer/` | Reuse `buildPrintBuffer` + `printESCPOS` |
+| File | Status | Change |
+|------|--------|--------|
+| `schema.prisma` | ✅ DONE | Added `refundsCash`, `refundsCredit` to `TerminalShift` |
+| `sale.refund.service.ts` (server) | ✅ DONE | `createRefundInvoiceService()` with validation + shift update |
+| `sale.refund.controller.ts` (server) | ✅ DONE | Controller with user auth |
+| `sale.router.ts` (server) | ✅ DONE | `POST /sale/refund` route |
+| `RefundPanels.tsx` | TODO | Third panel: refund document monitor + "Refund" button |
+| `RefundScreen/RefundPaymentModal.tsx` | TODO | Cash/credit inputs, MoneyNumpad, confirm |
+| `RefundScreen/RefundDocumentMonitor.tsx` | TODO | Item count, qty, subtotal, GST, refund due |
+| `sale.service.ts` (client) | TODO | `createRefundInvoice()` API call |
+| `refund-receipt.ts` (client) | TODO | Refund receipt renderer |
+| `printer/` | — | Reuse `buildPrintBuffer` + `printESCPOS` |
+
+### Remaining Work (client)
+
+1. `RefundDocumentMonitor` — third panel summary from `refundedRows`
+2. `RefundPaymentModal` — cash/credit inputs, MoneyNumpad, confirm flow
+3. `sale.service.ts` — `createRefundInvoice()` API call
+4. Wire modal into `RefundPanels.tsx` — "Refund" button, onComplete → navigate home
+5. `refund-receipt.ts` — receipt renderer (separate template)
+6. DB migration — `npx prisma db push` or migration for new shift fields
