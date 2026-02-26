@@ -8,6 +8,8 @@ import userRouter from "./v1/user/user.router";
 import shiftRouter from "./v1/shift/shift.router";
 import saleRouter from "./v1/sale/sale.router";
 import printerRouter from "./v1/printer/printer.router";
+import cashIORouter from "./v1/cashio/cashio.router";
+import storeRouter from "./v1/store/store.router";
 
 const router = Router();
 
@@ -20,4 +22,6 @@ router.use("/crm", crmRouter);
 router.use("/user", userRouter);
 router.use("/sale", saleRouter);
 router.use("/printer", printerRouter);
+router.use("/cashio", cashIORouter);
+router.use("/store", storeRouter);
 export default router;

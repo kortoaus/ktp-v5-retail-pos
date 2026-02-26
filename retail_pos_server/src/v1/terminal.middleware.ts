@@ -34,6 +34,14 @@ export default async function terminalMiddleware(
 
     if (!company) throw new NotFoundException("Company not configured!");
 
+    const storeSetting = await db.storeSetting.findUnique({
+      where: {
+        id: 1,
+      },
+    });
+
+    if (!storeSetting) throw new NotFoundException("Store setting not found");
+
     const shift = await db.terminalShift.findFirst({
       where: {
         terminalId: terminal.id,
@@ -44,6 +52,7 @@ export default async function terminalMiddleware(
 
     res.locals.terminal = terminal;
     res.locals.company = company;
+    res.locals.storeSetting = storeSetting;
     res.locals.shift = shift;
 
     next();

@@ -11,20 +11,21 @@ import {
 import { parseIntId, parseFindManyQuery } from "../../libs/query";
 
 function getAuth(res: Response) {
-  const { company, terminal, user, shift } = res.locals;
+  const { company, terminal, user, shift, storeSetting } = res.locals;
 
   if (!company) throw new NotFoundException("Company not found");
   if (!terminal) throw new NotFoundException("Terminal not found");
   if (!shift) throw new NotFoundException("Shift not found");
-
-  return { company, terminal, user, shift };
+  if (!storeSetting) throw new NotFoundException("Store setting not found");
+  return { company, terminal, user, shift, storeSetting };
 }
 
 export async function createSaleInvoiceController(req: Request, res: Response) {
-  const { company, terminal, user, shift } = getAuth(res);
+  const { company, terminal, user, shift, storeSetting } = getAuth(res);
   console.log(shift, terminal, user, company);
   const result = await createSaleInvoiceService(
     company,
+    storeSetting,
     terminal,
     shift,
     req.body,
@@ -69,8 +70,6 @@ export async function getSaleInvoiceWithChildrenController(
   req: Request,
   res: Response,
 ) {
-  const result = await getSaleInvoiceWithChildrenService(
-    parseIntId(req, "id"),
-  );
+  const result = await getSaleInvoiceWithChildrenService(parseIntId(req, "id"));
   res.status(200).json(result);
 }

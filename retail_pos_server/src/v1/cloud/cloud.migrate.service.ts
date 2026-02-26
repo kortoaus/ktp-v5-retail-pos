@@ -388,6 +388,31 @@ export async function cloudCompanyMigrateService() {
       },
     });
 
+    await db.storeSetting.upsert({
+      where: {
+        id: 1,
+      },
+      create: {
+        id: 1,
+        companyId: result.cloudId,
+        companyName: result.name,
+        name: result.name,
+        phone: result.phone,
+        address1: result.address1,
+        address2: result.address2,
+        suburb: result.suburb,
+        state: result.state,
+        postcode: result.postcode,
+        country: result.country,
+        abn: result.abn,
+        website: result.website,
+        email: result.email,
+      },
+      update: {
+        companyName: result.name,
+      },
+    });
+
     return true;
   } catch (e) {
     if (e instanceof HttpException) throw e;

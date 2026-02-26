@@ -8,7 +8,7 @@ import {
   getSaleInvoicesController,
 } from "./sale.controller";
 import { createRefundInvoiceController } from "./sale.refund.controller";
-import { userMiddleware } from "../user/user.middleware";
+import { scopeMiddleware, userMiddleware } from "../user/user.middleware";
 
 const router = Router();
 
@@ -17,7 +17,12 @@ router.get("/invoice/latest", getLatestTerminalInvoiceController);
 router.get("/invoices", userMiddleware, getSaleInvoicesController);
 router.get("/invoice/:id", getSaleInvoiceByIdController);
 router.get("/invoice/:id/refundable", getRefundableSaleInvoiceByIdController);
-router.post("/refund", userMiddleware, createRefundInvoiceController);
+router.post(
+  "/refund",
+  userMiddleware,
+  scopeMiddleware("refund"),
+  createRefundInvoiceController,
+);
 router.get("/invoice/:id/with-children", getSaleInvoiceWithChildrenController);
 
 export default router;

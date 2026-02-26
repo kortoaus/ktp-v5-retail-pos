@@ -1,4 +1,4 @@
-import { Prisma } from "../generated/prisma/client";
+import { CashInOut, Prisma } from "../generated/prisma/client";
 
 function toNum(v: Prisma.Decimal | null): number | null {
   if (v === null) return null;
@@ -85,5 +85,12 @@ function numberifyPayment<T extends RawPayment>(payment: T) {
     ...payment,
     amount: toNumReq(payment.amount),
     surcharge: toNumReq(payment.surcharge),
+  };
+}
+
+export function numberifyCashInOut<T extends CashInOut>(cashInOut: T) {
+  return {
+    ...cashInOut,
+    amount: toNumReq(cashInOut.amount),
   };
 }

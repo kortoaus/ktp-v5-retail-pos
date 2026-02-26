@@ -1,4 +1,4 @@
-import { TerminalShift } from "../../generated/prisma/browser";
+import { StoreSetting, TerminalShift } from "../../generated/prisma/browser";
 import { Company, Terminal } from "../../generated/prisma/client";
 import db from "../../libs/db";
 import { SaleInvoiceWhereInput } from "../../generated/prisma/models";
@@ -54,6 +54,7 @@ type CreateSaleInvoiceDto = {
 
 export async function createSaleInvoiceService(
   company: Company,
+  storeSetting: StoreSetting,
   terminal: Terminal,
   shift: TerminalShift,
   dto: CreateSaleInvoiceDto,
@@ -62,23 +63,24 @@ export async function createSaleInvoiceService(
     if (!shift) throw new NotFoundException("Shift not found");
     if (!terminal) throw new NotFoundException("Terminal not found");
     if (!company) throw new NotFoundException("Company not found");
+    if (!storeSetting) throw new NotFoundException("Store setting not found");
 
     const result = await db.$transaction(async (tx) => {
       const invoice = await tx.saleInvoice.create({
         data: {
           type: "sale",
           companyId: company.id,
-          companyName: company.name,
-          abn: company.abn,
-          address1: company.address1,
-          address2: company.address2,
-          suburb: company.suburb,
-          state: company.state,
-          postcode: company.postcode,
+          companyName: storeSetting.name,
+          abn: storeSetting.abn,
+          address1: storeSetting.address1,
+          address2: storeSetting.address2,
+          suburb: storeSetting.suburb,
+          state: storeSetting.state,
+          postcode: storeSetting.postcode,
           country: company.country,
-          phone: company.phone,
-          email: company.email,
-          website: company.website,
+          phone: storeSetting.phone,
+          email: storeSetting.email,
+          website: storeSetting.website,
           memberId: dto.memberId,
           memberLevel: dto.memberLevel,
           terminalId: terminal.id,

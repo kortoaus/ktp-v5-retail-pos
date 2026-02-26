@@ -200,6 +200,7 @@ model Terminal {
   updatedAt DateTime        @updatedAt
   shifts    TerminalShift[]
   invoices  SaleInvoice[]
+  cashIos   CashInOut[]
 }
 
 model Hotkey {
@@ -221,6 +222,27 @@ model HotkeyItem {
   color    String @default("bg-gray-100 text-black")
 }
 
+model StoreSetting {
+  id                    Int      @id @default(autoincrement())
+  companyId             Int
+  companyName           String
+  name                  String
+  phone                 String?
+  address1              String
+  address2              String?
+  suburb                String
+  state                 String
+  postcode              String
+  country               String
+  abn                   String?
+  website               String?
+  email                 String?
+  credit_surcharge_rate Float?   @default(0.015) // 1.5%
+  receipt_below_text    String?  @default("Thank you!")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
 model User {
   id        Int           @id @default(autoincrement())
   name      String
@@ -230,6 +252,7 @@ model User {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @default(now()) @updatedAt
   invoices  SaleInvoice[]
+  cashIos   CashInOut[]
 }
 
 model TerminalShift {
@@ -256,19 +279,30 @@ model TerminalShift {
   endedCashActual   Int @default(0)
 
   // Sales
-  salesCash    Int @default(0)
-  salesCredit  Int @default(0)
+  salesCash   Int @default(0)
+  salesCredit Int @default(0)
+
+  // cash in out
   totalCashIn  Int @default(0)
   totalCashOut Int @default(0)
+
+  // tax
+  salesTax   Int @default(0)
+  refundsTax Int @default(0)
 
   // Refunds
   refundsCash   Int @default(0)
   refundsCredit Int @default(0)
 
+  // Cash In Out
+  cashIn  Int @default(0)
+  cashOut Int @default(0)
+
   // Cloud Sync
   syncedAt DateTime?
   synced   Boolean       @default(false)
   invoices SaleInvoice[]
+  cashIos  CashInOut[]
 }
 
 model SaleInvoice {
@@ -376,6 +410,22 @@ model SaleInvoicePayment {
   surcharge Decimal     @db.Decimal(18, 2)
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
+}
+
+model CashInOut {
+  id         Int           @id @default(autoincrement())
+  shiftId    Int
+  shift      TerminalShift @relation(fields: [shiftId], references: [id])
+  terminalId Int
+  terminal   Terminal      @relation(fields: [terminalId], references: [id])
+  userId     Int
+  userName   String
+  type       String // in, out
+  amount     Decimal       @db.Decimal(18, 2)
+  note       String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  user       User          @relation(fields: [userId], references: [id])
 }
 
 // Local Data End
