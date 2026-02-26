@@ -11,6 +11,7 @@
 | [Server Setup](./01-server-setup.md) | Connecting the terminal to the server |
 | [Terminal & Users](./02-terminal-and-users.md) | Terminal registration, user accounts, permissions |
 | [Store Settings](./03-store-settings.md) | Store name, address, ABN, surcharge rate, receipt footer |
+| [Interface Settings](./23-interface-settings.md) | Hardware device configuration — scale, printers |
 
 ---
 

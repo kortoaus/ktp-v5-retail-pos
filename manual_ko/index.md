@@ -11,6 +11,7 @@
 | [Server Setup](./01-server-setup.md) | Terminal을 server에 연결하기 |
 | [Terminal & Users](./02-terminal-and-users.md) | Terminal 등록, 사용자 계정, 권한 |
 | [Store Settings](./03-store-settings.md) | 매장명, 주소, ABN, surcharge 비율, 영수증 하단 문구 |
+| [Interface Settings](./23-interface-settings.md) | 하드웨어 장치 설정 — 저울, 프린터 |
 
 ---
 
