@@ -168,9 +168,9 @@ export default function CloseShiftScreen() {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Summary */}
-        <div className="w-[240px] border-r border-gray-200 p-4 flex flex-col">
+        <div className="w-[340px] border-r border-gray-200 p-4 flex flex-col">
           <h3 className="text-sm font-bold mb-3">Shift Summary</h3>
-          <div className="flex flex-col gap-1 text-sm">
+          <div className="flex flex-col gap-1 text-lg">
             {summaryRows.map(([label, value]) => (
               <div key={label} className="flex justify-between py-0.5">
                 <span className="text-gray-500">{label}</span>
@@ -180,16 +180,16 @@ export default function CloseShiftScreen() {
           </div>
 
           <div className="mt-auto pt-3 border-t border-gray-200 flex flex-col gap-1">
-            <div className="flex justify-between text-sm font-bold">
+            <div className="flex justify-between text-lg font-bold">
               <span>Expected</span>
               <span>{fmt(expectedCash)}</span>
             </div>
-            <div className="flex justify-between text-sm font-bold">
+            <div className="flex justify-between text-lg font-bold">
               <span>Actual</span>
               <span>{fmt(cashActual)}</span>
             </div>
             <div
-              className={`flex justify-between text-sm font-bold ${
+              className={`flex justify-between text-lg font-bold ${
                 difference === 0
                   ? "text-green-600"
                   : difference > 0
@@ -206,7 +206,9 @@ export default function CloseShiftScreen() {
           </div>
 
           <div className="mt-auto pt-3">
-            <label className="text-xs font-medium text-gray-500 mb-1 block">Note</label>
+            <label className="text-xs font-medium text-gray-500 mb-1 block">
+              Note
+            </label>
             <KeyboardInputText
               value={note}
               onChange={setNote}

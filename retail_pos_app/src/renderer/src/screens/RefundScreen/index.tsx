@@ -3,15 +3,22 @@ import { RefundableInvoice } from "../../types/models";
 import SearchInvoiceModal from "../../components/SearchInvoiceModal";
 import { Link } from "react-router-dom";
 import SyncButton from "../../components/SyncButton";
+import BlockScreen from "../../components/BlockScreen";
+import { useShift } from "../../contexts/ShiftContext";
 import RefundPanels from "./RefundPanels";
 import { getRefundableInvoiceById } from "../../service/sale.service";
 
 type ModalTarget = null | "invoice" | "item-search" | "member-search";
 
 export default function RefundScreen() {
+  const { shift } = useShift();
   const [modalTarget, setModalTarget] = useState<ModalTarget | null>(null);
   const [loading, setLoading] = useState(false);
   const [invoice, setInvoice] = useState<RefundableInvoice | null>(null);
+
+  if (!shift) {
+    return <BlockScreen label="No shift is open" link="/" />;
+  }
 
   async function handleSearchInvoice(invoiceId: number) {
     if (loading) return;

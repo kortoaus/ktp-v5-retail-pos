@@ -39,10 +39,12 @@ export default function CashCounter({ value, onChange }: CashCounterProps) {
   };
 
   const handleNumpadChange = (newVal: string) => {
-    setNumpadVal(newVal);
     if (selected === null) return;
 
     const count = parseInt(newVal, 10) || 0;
+    if (count > 999) return;
+
+    setNumpadVal(newVal);
     const newCounts = { ...counts, [selected]: count };
     setCounts(newCounts);
 

@@ -1,4 +1,4 @@
-import { TerminalShift } from "../../generated/prisma/browser";
+import { StoreSetting, TerminalShift } from "../../generated/prisma/browser";
 import { Company, Terminal, User } from "../../generated/prisma/client";
 import db from "../../libs/db";
 import {
@@ -7,7 +7,6 @@ import {
   InternalServerException,
   NotFoundException,
 } from "../../libs/exceptions";
-import { numberifySaleInvoice } from "../../libs/decimal-utils";
 import { Decimal } from "@prisma/client/runtime/index-browser";
 
 type RefundRowDto = {
@@ -54,6 +53,7 @@ type CreateRefundInvoiceDto = {
 
 export async function createRefundInvoiceService(
   company: Company,
+  storeSetting: StoreSetting,
   terminal: Terminal,
   shift: TerminalShift,
   user: User,
@@ -63,7 +63,7 @@ export async function createRefundInvoiceService(
     if (!shift) throw new NotFoundException("Shift not found");
     if (!terminal) throw new NotFoundException("Terminal not found");
     if (!company) throw new NotFoundException("Company not found");
-
+    if (!storeSetting) throw new NotFoundException("Store setting not found");
     if (!dto.original_invoice_id) {
       throw new BadRequestException("original_invoice_id is required");
     }
@@ -151,17 +151,17 @@ export async function createRefundInvoiceService(
           original_invoice_id: originalInvoice.id,
           original_invoice_serialNumber: originalInvoice.serialNumber,
           companyId: company.id,
-          companyName: company.name,
-          abn: company.abn,
-          address1: company.address1,
-          address2: company.address2,
-          suburb: company.suburb,
-          state: company.state,
-          postcode: company.postcode,
+          companyName: storeSetting.name,
+          abn: storeSetting.abn,
+          address1: storeSetting.address1,
+          address2: storeSetting.address2,
+          suburb: storeSetting.suburb,
+          state: storeSetting.state,
+          postcode: storeSetting.postcode,
           country: company.country,
-          phone: company.phone,
-          email: company.email,
-          website: company.website,
+          phone: storeSetting.phone,
+          email: storeSetting.email,
+          website: storeSetting.website,
           memberId: dto.memberId,
           memberLevel: dto.memberLevel,
           terminalId: terminal.id,
@@ -218,17 +218,6 @@ export async function createRefundInvoiceService(
       await tx.saleInvoice.update({
         where: { id: invoice.id },
         data: { serialNumber },
-      });
-
-      // 7. Update shift refund totals
-      const cashPaidCents = Math.round(dto.cashPaid * 100);
-      const creditPaidCents = Math.round(dto.creditPaid * 100);
-      await tx.terminalShift.update({
-        where: { id: shift.id },
-        data: {
-          refundsCash: { increment: cashPaidCents },
-          refundsCredit: { increment: creditPaidCents },
-        },
       });
 
       return invoice;

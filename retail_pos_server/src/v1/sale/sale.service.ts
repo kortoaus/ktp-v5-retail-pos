@@ -3,6 +3,7 @@ import { Company, Terminal } from "../../generated/prisma/client";
 import db from "../../libs/db";
 import { SaleInvoiceWhereInput } from "../../generated/prisma/models";
 import {
+  BadRequestException,
   HttpException,
   InternalServerException,
   NotFoundException,
@@ -64,6 +65,41 @@ export async function createSaleInvoiceService(
     if (!terminal) throw new NotFoundException("Terminal not found");
     if (!company) throw new NotFoundException("Company not found");
     if (!storeSetting) throw new NotFoundException("Store setting not found");
+
+    // Validate totals
+    if (!dto.rows || dto.rows.length === 0) {
+      throw new BadRequestException("At least one row is required");
+    }
+    if (!dto.payments || dto.payments.length === 0) {
+      throw new BadRequestException("At least one payment is required");
+    }
+
+    const rowTotal = dto.rows.reduce((sum, r) => sum + r.total, 0);
+    const paymentTotal = dto.payments.reduce((sum, p) => sum + p.amount, 0);
+
+    // Row totals should approximately equal subtotal
+    if (Math.abs(rowTotal - dto.subtotal) > 0.02) {
+      throw new BadRequestException(
+        `Row total ${rowTotal} does not match subtotal ${dto.subtotal}`,
+      );
+    }
+
+    // Payment total (cash + credit) should equal total (after discount + rounding)
+    // const expectedPayment = dto.total;
+    // if (Math.abs(paymentTotal - expectedPayment) > 0.02) {
+    //   throw new BadRequestException(
+    //     `Payment total ${paymentTotal} does not match expected ${expectedPayment}`,
+    //   );
+    // }
+
+    // Total should be subtotal - discount + rounding
+    const expectedTotal =
+      dto.subtotal - dto.documentDiscountAmount + dto.rounding;
+    if (Math.abs(dto.total - expectedTotal) > 0.02) {
+      throw new BadRequestException(
+        `Total ${dto.total} does not match calculated ${expectedTotal}`,
+      );
+    }
 
     const result = await db.$transaction(async (tx) => {
       const invoice = await tx.saleInvoice.create({

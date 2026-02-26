@@ -22,9 +22,11 @@ import DocumentMonitor from "./DocumentMonitor";
 import MemberSearchModal from "../../components/MemberSearchModal";
 import PaymentModal from "../../components/PaymentModal";
 import SyncButton from "../../components/SyncButton";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useShift } from "../../contexts/ShiftContext";
 import BlockScreen from "../../components/BlockScreen";
+import CartSwitcher from "./CartSwitcher";
+import { cn } from "../../libs/cn";
 
 type ModalTarget =
   | null
@@ -38,6 +40,7 @@ type ModalTarget =
   | "payment";
 
 export default function SaleScreen() {
+  const navigate = useNavigate();
   const { shift, loading: shiftLoading } = useShift();
   const { hotkeys, hotkeysLoading } = useHotkeys();
   const [loading, setLoading] = useState(false);
@@ -50,7 +53,6 @@ export default function SaleScreen() {
     carts,
     activeCartIndex,
     setMember,
-    member,
     lineOffset,
     setLineOffset,
     clearActiveCart,
@@ -80,6 +82,10 @@ export default function SaleScreen() {
     },
     [loading, addLineGateway],
   );
+
+  const member = useMemo(() => {
+    return carts[activeCartIndex].member;
+  }, [carts, activeCartIndex]);
 
   useBarcodeScanner(scanCallback);
   const [modalTarget, setModalTarget] = useState<ModalTarget>(null);
@@ -167,28 +173,74 @@ export default function SaleScreen() {
 
   return (
     <div className="h-full w-full bg-gray-50 flex flex-col">
-      <div className="h-16 flex items-center gap-4 px-4 border-b border-gray-200">
-        <Link to="/">
-          <button className="text-sm text-blue-600 hover:text-blue-800 font-medium">
-            &larr; Back
-          </button>
-        </Link>
-        <button onClick={() => setModalTarget("item-search")}>
-          search item
-        </button>
-        <button
-          onClick={() => {
-            if (member === null) {
-              setModalTarget("member-search");
-            } else {
-              setMember(null);
-            }
-          }}
-        >
-          {member === null ? "search member" : member.name}
-        </button>
+      <div className="h-16 flex items-center justify-between gap-4 px-4 border-b border-gray-200">
+        <div className="flex items-center gap-4 h-full py-2">
+          <div
+            className={cn(
+              "w-24 h-full rounded-sm text-sm font-bold center bg-gray-200 border border-gray-300",
+            )}
+            onClick={() => navigate("/")}
+          >
+            <div>&larr; Back</div>
+          </div>
+          <div
+            className={cn(
+              "w-24 h-full rounded-sm text-sm font-bold center bg-gray-200 border border-gray-300",
+            )}
+            onClick={() => setModalTarget("item-search")}
+          >
+            <div>Search</div>
+            <div>Item</div>
+          </div>
+          <div
+            className={cn(
+              "w-24 h-full rounded-sm text-sm font-bold center border border-gray-300",
+              member === null ? "bg-gray-200" : "bg-blue-500 text-white",
+            )}
+            onClick={() => {
+              if (member === null) {
+                setModalTarget("member-search");
+              } else {
+                setMember(null);
+              }
+            }}
+          >
+            {member === null ? (
+              <>
+                <div>Search</div>
+                <div>Member</div>
+              </>
+            ) : (
+              <>
+                <div>{member.name}</div>
+                <div className="text-sm text-gray-300">
+                  {`Level ${member.level}`}
+                </div>
+              </>
+            )}
+          </div>
+          <div
+            className={cn(
+              "w-24 h-full rounded-sm text-sm font-bold center bg-gray-200 border border-gray-300",
+            )}
+            onClick={() => navigate("/manager/invoices")}
+          >
+            <div>Invoices</div>
+          </div>
+          <div
+            className={cn(
+              "w-24 h-full rounded-sm text-sm font-bold center bg-gray-200 border border-gray-300",
+            )}
+            onClick={() => navigate("/manager/cashio")}
+          >
+            <div>Cash I/O</div>
+          </div>
+        </div>
 
-        <SyncButton />
+        <div className="flex items-center justify-end gap-4">
+          <SyncButton />
+          <CartSwitcher />
+        </div>
       </div>
 
       {/* Inner Layout */}
@@ -243,30 +295,36 @@ export default function SaleScreen() {
           <div className="h-16">
             <DocumentMonitor />
           </div>
-          <div className="h-20 grid grid-cols-4 grid-rows-2 gap-4 p-2">
-            {lines.length > 0 && (
-              <button
-                className="bg-red-100"
-                onClick={() => {
-                  const ask = window.confirm(
-                    "Are you sure you want to clear the cart?",
-                  );
-                  if (ask) {
-                    clearActiveCart();
-                  }
-                }}
-              >
-                Clear Cart
-              </button>
-            )}
-            {lines.length > 0 && (
-              <button
-                className="bg-blue-600 text-white font-bold rounded-lg"
-                onClick={() => setModalTarget("payment")}
-              >
-                Pay
-              </button>
-            )}
+          <div className="h-20 grid grid-cols-4 gap-2 p-2">
+            <div
+              className="bg-red-500 text-white font-bold rounded-lg center"
+              onClick={() => {
+                const ask = window.confirm(
+                  "Are you sure you want to clear the cart?",
+                );
+                if (ask) {
+                  clearActiveCart();
+                }
+              }}
+            >
+              Clear Cart
+            </div>
+
+            <div
+              className={cn(
+                "bg-blue-600 text-white font-bold rounded-lg col-span-3 center transition-opacity",
+                lines.length === 0 && "opacity-50",
+              )}
+              onClick={() => {
+                if (lines.length === 0) {
+                  window.alert("No lines to pay");
+                  return;
+                }
+                setModalTarget("payment");
+              }}
+            >
+              Pay
+            </div>
           </div>
         </div>
       </div>

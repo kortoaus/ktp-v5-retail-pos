@@ -6,6 +6,7 @@ import { useShallow } from "zustand/shallow";
 
 interface Cart {
   lines: SaleLineType[];
+  member: SaleMember | null;
 }
 
 const CART_COUNT = 4;
@@ -17,7 +18,7 @@ export const ALLOWED_CHANGE_QTY_TYPES = [
 ];
 
 function createEmptyCart(): Cart {
-  return { lines: [] };
+  return { lines: [], member: null };
 }
 
 function resolveOriginalPrice(item: SaleLineItem): number {
@@ -167,6 +168,7 @@ function recalculateAllLines(carts: Cart[], memberLevel: number): Cart[] {
       const unit_price_discounted = resolveDiscountedPrice(line, memberLevel);
       return recalculateLine({ ...line, unit_price_discounted });
     }),
+    member: cart.member,
   }));
 }
 
@@ -180,9 +182,7 @@ export interface SaleMember {
 interface SalesState {
   activeCartIndex: number;
   carts: Cart[];
-  member: SaleMember | null;
   lineOffset: number;
-
   addLine: (item: SaleLineItem, options?: AddLineOptions) => void;
   removeLine: (lineKey: string) => void;
   changeLineQty: (lineKey: string, qty: number) => void;
@@ -191,18 +191,19 @@ interface SalesState {
   setLineOffset: (offset: number) => void;
   switchCart: (index: number) => void;
   clearActiveCart: () => void;
+  cartCount: number;
 }
 
 export const useSalesStore = create<SalesState>()((set, get) => ({
   activeCartIndex: 0,
   carts: Array.from({ length: CART_COUNT }, createEmptyCart),
-  member: null,
   lineOffset: 0,
-
+  cartCount: CART_COUNT,
   addLine: (item, options) => {
     if (item.type === "invalid") return;
 
-    const { activeCartIndex, carts, member } = get();
+    const { activeCartIndex, carts } = get();
+    const member = carts[activeCartIndex].member;
     const memberLevel = member?.level ?? 0;
     const cart = carts[activeCartIndex];
     let lines = [...cart.lines];
@@ -218,7 +219,7 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
         lines.push(merged);
         const reindexed = reindexLines(lines);
         const updatedCarts = [...carts];
-        updatedCarts[activeCartIndex] = { lines: reindexed };
+        updatedCarts[activeCartIndex] = { lines: reindexed, member };
         set({
           carts: updatedCarts,
           lineOffset: Math.max(0, reindexed.length - LINE_PAGE_SIZE),
@@ -231,7 +232,7 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     lines.push(newLine);
 
     const updatedCarts = [...carts];
-    updatedCarts[activeCartIndex] = { lines };
+    updatedCarts[activeCartIndex] = { lines, member };
     set({
       carts: updatedCarts,
       lineOffset: Math.max(0, lines.length - LINE_PAGE_SIZE),
@@ -245,7 +246,10 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     if (filtered.length === cart.lines.length) return;
 
     const updatedCarts = [...carts];
-    updatedCarts[activeCartIndex] = { lines: reindexLines(filtered) };
+    updatedCarts[activeCartIndex] = {
+      lines: reindexLines(filtered),
+      member: cart.member,
+    };
     set({ carts: updatedCarts });
   },
 
@@ -269,7 +273,10 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     lines[idx] = updated;
 
     const updatedCarts = [...carts];
-    updatedCarts[activeCartIndex] = { lines: reindexLines(lines) };
+    updatedCarts[activeCartIndex] = {
+      lines: reindexLines(lines),
+      member: cart.member,
+    };
     set({ carts: updatedCarts });
   },
 
@@ -294,16 +301,18 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     lines[idx] = updated;
 
     const updatedCarts = [...carts];
-    updatedCarts[activeCartIndex] = { lines };
+    updatedCarts[activeCartIndex] = { lines, member: cart.member };
     set({ carts: updatedCarts });
   },
 
   setMember: (member) => {
-    const { carts } = get();
+    const { carts, activeCartIndex } = get();
     const level = member?.level ?? 0;
+    const cart = carts[activeCartIndex];
+    const updatedCarts = [...carts];
+    updatedCarts[activeCartIndex] = { ...cart, member };
     set({
-      member,
-      carts: recalculateAllLines(carts, level),
+      carts: recalculateAllLines(updatedCarts, level),
     });
   },
 
@@ -324,7 +333,7 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     const { activeCartIndex, carts } = get();
     const updatedCarts = [...carts];
     updatedCarts[activeCartIndex] = createEmptyCart();
-    set({ carts: updatedCarts, member: null });
+    set({ carts: updatedCarts });
   },
 }));
 

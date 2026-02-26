@@ -6,7 +6,7 @@ export async function createRefundInvoiceController(
   req: Request,
   res: Response,
 ) {
-  const { company, terminal, shift, user } = res.locals;
+  const { company, storeSetting, terminal, shift, user } = res.locals;
 
   if (!company) throw new NotFoundException("Company not found");
   if (!terminal) throw new NotFoundException("Terminal not found");
@@ -15,6 +15,7 @@ export async function createRefundInvoiceController(
 
   const result = await createRefundInvoiceService(
     company,
+    storeSetting,
     terminal,
     shift,
     user,

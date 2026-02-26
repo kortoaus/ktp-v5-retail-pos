@@ -31,6 +31,9 @@ retail_pos_app (Electron)
 - **Effective price resolution**: `unit_price_adjusted ?? unit_price_discounted ?? unit_price_original`
 - **Line total**: `unit_price_effective × qty`, rounded to 2dp
 - **Tax**: `total / 11` (GST inclusive, Australian style), rounded to 2dp. Subtotal = total - tax.
+- **4-cart system**: Zustand store holds 4 independent carts, switchable via `switchCart(index)`
+- **Member is per-cart**: Each cart has its own `SaleMember | null`. Setting member only affects the active cart and recalculates its lines.
+- `clearActiveCart()` resets lines + member for the active cart only, other carts unaffected
 
 ### Item Types
 - `normal` — standard qty item, mergeable in cart (same item + same prices = increment qty)
