@@ -3,7 +3,7 @@ import { Decimal } from "decimal.js";
 import { MONEY_DP } from "../../libs/constants";
 import { SaleLineType } from "../../types/sales";
 
-const CREDIT_SURCHARGE_RATE = 0.015; // 1.5%
+// const CREDIT_SURCHARGE_RATE = 0.015; // 1.5%
 
 const CENT = new Decimal("0.01");
 const floor2 = (d: Decimal) => d.toDecimalPlaces(MONEY_DP, Decimal.ROUND_FLOOR);
@@ -27,6 +27,7 @@ export interface PaymentCalcInputs {
   committedPayments: Payment[];
   stagingCash: number;
   stagingCredit: number;
+  CREDIT_SURCHARGE_RATE: number;
 }
 
 export function usePaymentCalc({
@@ -36,6 +37,7 @@ export function usePaymentCalc({
   committedPayments,
   stagingCash,
   stagingCredit,
+  CREDIT_SURCHARGE_RATE,
 }: PaymentCalcInputs) {
   /* ── Sale-level calculations (unchanged) ───────────── */
 

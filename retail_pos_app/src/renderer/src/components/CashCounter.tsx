@@ -3,9 +3,7 @@ import Numpad from "./Numpads/Numpad";
 import { cn } from "../libs/cn";
 import { MONEY_DP } from "../libs/constants";
 
-function kickDrawer() {
-  console.log("kickDrawer");
-}
+import { kickDrawer } from "../libs/printer/kick-drawer";
 
 const DENOMINATIONS = [
   { label: "$100", value: 100 },

@@ -50,7 +50,7 @@ function row(
 }
 
 function estimateHeight(invoice: SaleInvoice): number {
-  const headerLines = 6;
+  const headerLines = 6 + (invoice.website ? 1 : 0);
   const metaLines = 4;
 
   let itemLines = 0;
@@ -108,6 +108,10 @@ export async function renderRefundReceipt(invoice: SaleInvoice): Promise<HTMLCan
   }
   if (invoice.phone) {
     ctx.fillText(`Ph: ${invoice.phone}`, W / 2, y);
+    y += LH - 8;
+  }
+  if (invoice.website) {
+    ctx.fillText(`https://${invoice.website}`, W / 2, y);
     y += LH - 8;
   }
   y += 6;

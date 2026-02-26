@@ -91,14 +91,10 @@ export default function RefundPaymentModal({
         const fill = remaining.toNumber();
         if (target === "cash") {
           setCashRefund(cashRefund + fill);
-          setNumpadVal(
-            Math.round((cashRefund + fill) * 100).toString(),
-          );
+          setNumpadVal(Math.round((cashRefund + fill) * 100).toString());
         } else {
           setCreditRefund(creditRefund + fill);
-          setNumpadVal(
-            Math.round((creditRefund + fill) * 100).toString(),
-          );
+          setNumpadVal(Math.round((creditRefund + fill) * 100).toString());
         }
       }
       return;
@@ -236,7 +232,7 @@ export default function RefundPaymentModal({
               )}
             </div>
 
-            <div className="border-t border-gray-200 pt-3 flex flex-col gap-1 text-xs text-gray-400">
+            <div className="border-t border-gray-200 pt-3 flex flex-col gap-1 text-base font-bold text-red-400">
               <span>Remaining Cash Cap: {fmt(remainingCashCap)}</span>
               <span>Remaining Credit Cap: {fmt(remainingCreditCap)}</span>
             </div>
@@ -300,7 +296,9 @@ export default function RefundPaymentModal({
                   : "bg-gray-200 text-gray-400 cursor-not-allowed",
               )}
             >
-              {processing ? "Processing..." : `Confirm Refund ${fmt(effectiveTotal)}`}
+              {processing
+                ? "Processing..."
+                : `Confirm Refund ${fmt(effectiveTotal)}`}
             </button>
           </div>
 

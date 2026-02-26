@@ -3,6 +3,7 @@ import { useTerminal } from "../contexts/TerminalContext";
 import ServerSetupScreen from "../screens/ServerSetupScreen";
 import DeviceMonitor from "./DeviceMonitor";
 import { useShift } from "../contexts/ShiftContext";
+import SyncButton from "./SyncButton";
 
 export default function Gateway({ children }: { children: ReactNode }) {
   const { shift, loading: shiftLoading } = useShift();
@@ -33,6 +34,7 @@ export default function Gateway({ children }: { children: ReactNode }) {
         >
           Retry
         </button>
+        <SyncButton />
         <button
           onClick={() => setServerSetup(true)}
           className="text-sm text-blue-600 hover:text-blue-800 font-medium"

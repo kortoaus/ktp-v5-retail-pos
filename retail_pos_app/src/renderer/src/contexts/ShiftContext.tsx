@@ -9,6 +9,8 @@ import {
 import {
   getCurrentShift,
   openShift as openShiftApi,
+  closeShift as closeShiftApi,
+  type CloseShiftDTO,
 } from "../service/shift.service";
 import { TerminalShift } from "../types/models";
 import { useTerminal } from "./TerminalContext";
@@ -26,6 +28,9 @@ interface ShiftContextValue {
   loading: boolean;
   openShift: (
     payload: OpenShiftPayload,
+  ) => Promise<{ ok: boolean; msg: string }>;
+  closeShift: (
+    dto: CloseShiftDTO,
   ) => Promise<{ ok: boolean; msg: string }>;
   reloadShift: () => Promise<void>;
 }
@@ -85,9 +90,20 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
     [reload],
   );
 
+  const doCloseShift = useCallback(
+    async (dto: CloseShiftDTO) => {
+      const res = await closeShiftApi(dto);
+      if (res.ok) {
+        setShift(null);
+      }
+      return { ok: res.ok, msg: res.msg };
+    },
+    [],
+  );
+
   return (
     <ShiftContext.Provider
-      value={{ shift, loading, openShift, reloadShift: reload }}
+      value={{ shift, loading, openShift, closeShift: doCloseShift, reloadShift: reload }}
     >
       {children}
     </ShiftContext.Provider>

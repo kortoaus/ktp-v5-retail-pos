@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Decimal } from "decimal.js";
 import { MONEY_DP } from "../../libs/constants";
 import { cn } from "../../libs/cn";
@@ -13,6 +13,7 @@ import MoneyNumpad from "../Numpads/MoneyNumpad";
 import { Payment, usePaymentCalc } from "./usePaymentCalc";
 import { InputField } from "./PaymentParts";
 import PaymentSummary from "./PaymentSummary";
+import { useStoreSetting } from "../../hooks/useStoreSetting";
 
 const NOTES = [100, 50, 20, 10, 5, 2, 1, 0.5];
 
@@ -35,6 +36,7 @@ export default function PaymentModal({
   memberLevel: number | null;
   onComplete: () => void;
 }) {
+  const { storeSetting, reload } = useStoreSetting();
   const [documentDiscountMethod, setDocumentDiscountMethod] = useState<
     "percent" | "amount"
   >("percent");
@@ -49,6 +51,16 @@ export default function PaymentModal({
   );
   const [processing, setProcessing] = useState(false);
 
+  useEffect(() => {
+    if (open) {
+      reload();
+    }
+  }, [reload, open]);
+
+  const CREDIT_SURCHARGE_RATE = useMemo(() => {
+    return storeSetting?.credit_surcharge_rate || 0.015;
+  }, [storeSetting]);
+
   const calc = usePaymentCalc({
     lines,
     documentDiscountMethod,
@@ -56,6 +68,7 @@ export default function PaymentModal({
     committedPayments,
     stagingCash: cashReceived,
     stagingCredit: creditReceived,
+    CREDIT_SURCHARGE_RATE,
   });
 
   const stagingCreditEftpos = useMemo(() => {
@@ -229,7 +242,11 @@ export default function PaymentModal({
     }
 
     if (invoice) {
-      printSaleInvoiceReceipt(invoice);
+      printSaleInvoiceReceipt(
+        invoice,
+        false,
+        storeSetting?.receipt_below_text || "Thank you!",
+      );
     }
 
     if (calc.changeAmount.gt(0)) {
@@ -339,7 +356,8 @@ export default function PaymentModal({
                 </span>
                 {creditReceived > 0 && (
                   <span className="text-xs text-blue-700 font-medium">
-                    EFTPOS: {fmt(stagingCreditEftpos)} (incl. 1.5%)
+                    EFTPOS: {fmt(stagingCreditEftpos)}{" "}
+                    {`(incl. ${(CREDIT_SURCHARGE_RATE * 100).toFixed(2)}%)`}
                   </span>
                 )}
               </InputField>
@@ -451,6 +469,7 @@ export default function PaymentModal({
             changeAmount={calc.changeAmount}
             canPay={calc.canPay && !processing}
             onPay={handlePayment}
+            CREDIT_SURCHARGE_RATE={CREDIT_SURCHARGE_RATE}
           />
         </div>
 

@@ -22,7 +22,7 @@ export default function OpenShiftScreen() {
     try {
       const { ok, msg } = await openShift({
         openedNote: note.trim(),
-        cashInDrawer,
+        cashInDrawer: Math.round(cashInDrawer * 100),
         getBackItemIds: [],
         getBackOptionIds: [],
         isPublicHoliday: false,

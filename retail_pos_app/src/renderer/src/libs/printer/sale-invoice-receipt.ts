@@ -49,7 +49,7 @@ function row(
 }
 
 function estimateHeight(invoice: SaleInvoice, isCopy: boolean): number {
-  const headerLines = 6;
+  const headerLines = 6 + (invoice.website ? 1 : 0);
   const metaLines = 3;
 
   let itemLines = 0;
@@ -75,10 +75,21 @@ function estimateHeight(invoice: SaleInvoice, isCopy: boolean): number {
 
   const total =
     headerLines + metaLines + itemLines + totalLines + payLines + footerLines;
-  return 60 + total * LH + (invoice.serialNumber ? 220 : 0) + (isCopy ? LH : 0) + LH + 100;
+  return (
+    60 +
+    total * LH +
+    (invoice.serialNumber ? 220 : 0) +
+    (isCopy ? LH : 0) +
+    LH +
+    100
+  );
 }
 
-export async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Promise<HTMLCanvasElement> {
+export async function renderReceipt(
+  invoice: SaleInvoice,
+  isCopy: boolean,
+  belowText: string = "Thank you!",
+): Promise<HTMLCanvasElement> {
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = estimateHeight(invoice, isCopy);
@@ -124,6 +135,10 @@ export async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Prom
     ctx.fillText(`Ph: ${invoice.phone}`, W / 2, y);
     y += LH - 8;
   }
+  if (invoice.website) {
+    ctx.fillText(`https://${invoice.website}`, W / 2, y);
+    y += LH - 8;
+  }
   y += 6;
 
   /* ── Meta ── */
@@ -136,7 +151,12 @@ export async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Prom
     row(ctx, "Invoice", invoice.serialNumber, y);
     y += LH - 6;
   }
-  row(ctx, "Date", dayjsAU(invoice.issuedAt).format("ddd, DD MMM YYYY hh:mm A"), y);
+  row(
+    ctx,
+    "Date",
+    dayjsAU(invoice.issuedAt).format("ddd, DD MMM YYYY hh:mm A"),
+    y,
+  );
   y += LH - 6;
   row(ctx, "Terminal", invoice.terminal.name, y);
   y += LH - 6;
@@ -257,7 +277,7 @@ export async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Prom
 
   y += 10;
   ctx.textAlign = "center";
-  ctx.fillText("Thank you!", W / 2, y);
+  ctx.fillText(belowText, W / 2, y);
   y += LH + 10;
 
   if (invoice.serialNumber) {
@@ -286,8 +306,9 @@ export async function renderReceipt(invoice: SaleInvoice, isCopy: boolean): Prom
 export async function printSaleInvoiceReceipt(
   invoice: SaleInvoice,
   isCopy: boolean = false,
+  belowText: string = "Thank you!",
 ): Promise<void> {
-  const canvas = await renderReceipt(invoice, isCopy);
+  const canvas = await renderReceipt(invoice, isCopy, belowText);
   const buffer = buildPrintBuffer(canvas);
   await printESCPOS(buffer);
 }

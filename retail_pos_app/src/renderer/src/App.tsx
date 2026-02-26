@@ -14,6 +14,9 @@ import OpenShiftScreen from "./screens/OpenShiftScreen";
 import SaleInvoiceSearchScreen from "./screens/SaleInvoiceSearchScreen";
 import { ShiftProvider } from "./contexts/ShiftContext";
 import RefundScreen from "./screens/RefundScreen";
+import CashIOManageScreen from "./screens/CashIOManageScreen";
+import StoreSettingScreen from "./screens/StoreSettingScreen";
+import CloseShiftScreen from "./screens/CloseShiftScreen";
 
 function App(): React.JSX.Element {
   return (
@@ -35,10 +38,13 @@ function App(): React.JSX.Element {
                 <Route path="user" element={<UserManageScreen />} />
                 <Route path="invoices" element={<SaleInvoiceSearchScreen />} />
                 <Route path="refund" element={<RefundScreen />} />
+                <Route path="cashio" element={<CashIOManageScreen />} />
+                <Route path="store" element={<StoreSettingScreen />} />
               </Route>
 
               <Route path="/shift" element={<ManagerLayout />}>
                 <Route path="open" element={<OpenShiftScreen />} />
+                <Route path="close" element={<CloseShiftScreen />} />
               </Route>
             </Routes>
           </Gateway>

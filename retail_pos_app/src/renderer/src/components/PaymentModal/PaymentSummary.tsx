@@ -24,6 +24,7 @@ interface PaymentSummaryProps {
   changeAmount: Decimal;
   canPay: boolean;
   onPay: () => void;
+  CREDIT_SURCHARGE_RATE: number;
 }
 
 export default function PaymentSummary({
@@ -45,6 +46,7 @@ export default function PaymentSummary({
   changeAmount,
   canPay,
   onPay,
+  CREDIT_SURCHARGE_RATE,
 }: PaymentSummaryProps) {
   return (
     <div className="w-[260px] flex flex-col">
@@ -67,7 +69,7 @@ export default function PaymentSummary({
           )}
           {!totalSurcharge.isZero() && (
             <SummaryRow
-              label="Card Surcharge (1.5%)"
+              label={`Card Surcharge (${CREDIT_SURCHARGE_RATE * 100}%)`}
               value={`+${fmt(totalSurcharge)}`}
             />
           )}
@@ -115,7 +117,9 @@ export default function PaymentSummary({
         {isOverpaid && (
           <div className="flex justify-between items-center text-lg font-bold text-green-600">
             <span>Change</span>
-            <span className="font-mono">{fmt(Decimal.min(changeAmount, totalCash))}</span>
+            <span className="font-mono">
+              {fmt(Decimal.min(changeAmount, totalCash))}
+            </span>
           </div>
         )}
         <button

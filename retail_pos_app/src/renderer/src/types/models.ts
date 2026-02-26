@@ -195,15 +195,33 @@ export interface TerminalShift {
   // Sales
   salesCash: number;
   salesCredit: number;
+  salesTax: number;
+
+  // Refunds
+  refundsCash: number;
+  refundsCredit: number;
+  refundsTax: number;
+
+  // Cash In/Out
+  cashIn: number;
+  cashOut: number;
   totalCashIn: number;
   totalCashOut: number;
-
   // Cloud Sync
   syncedAt?: string | null;
   synced: boolean;
 }
 
-export const SCOPES = ["admin", "interface", "user", "hotkey"];
+export const SCOPES = [
+  "admin",
+  "interface",
+  "user",
+  "hotkey",
+  "refund",
+  "cashio",
+  "store",
+  "shift",
+];
 
 export interface OnPaymentPayload {
   subtotal: number; // Σ line.total
@@ -305,7 +323,7 @@ export interface SaleInvoice {
   creditPaid: number;
   totalDiscountAmount: number;
   payments: SaleInvoicePayment[];
-  }
+}
 
 export interface RefundableRow extends SaleInvoiceRow {
   remainingQty: number;
@@ -313,9 +331,38 @@ export interface RefundableRow extends SaleInvoiceRow {
   remainingIncludedTaxAmount: number;
 }
 
-export interface RefundableInvoice extends Omit<SaleInvoice, 'rows'> {
+export interface RefundableInvoice extends Omit<SaleInvoice, "rows"> {
   rows: RefundableRow[];
   refundedInvoices: SaleInvoice[];
   remainingCash: number;
   remainingCredit: number;
+}
+
+export interface CashInOut {
+  id: number;
+  shiftId: number;
+  terminalId: number;
+  userId: number;
+  userName: string;
+  type: string;
+  amount: number;
+  note?: string | null;
+  createdAt: string;
+}
+
+export interface StoreSetting {
+  id: number;
+  name: string;
+  phone?: string | null;
+  address1: string;
+  address2?: string | null;
+  suburb: string;
+  state: string;
+  postcode: string;
+  country: string;
+  abn?: string | null;
+  website?: string | null;
+  email?: string | null;
+  credit_surcharge_rate?: number | null;
+  receipt_below_text?: string | null;
 }
