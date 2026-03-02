@@ -45,7 +45,7 @@ function sendSerial(path: string, data: Buffer | string): Promise<void> {
   return new Promise((resolve, reject) => {
     const port = new SerialPort({
       path,
-      baudRate: 9600,
+      baudRate: 115200,
       dataBits: 8,
       parity: "none",
       stopBits: 1,
