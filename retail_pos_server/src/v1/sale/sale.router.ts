@@ -12,7 +12,7 @@ import { scopeMiddleware, userMiddleware } from "../user/user.middleware";
 
 const router = Router();
 
-router.post("/invoice/create", createSaleInvoiceController);
+router.post("/invoice/create", userMiddleware, createSaleInvoiceController);
 router.get("/invoice/latest", getLatestTerminalInvoiceController);
 router.get("/invoices", userMiddleware, getSaleInvoicesController);
 router.get("/invoice/:id", getSaleInvoiceByIdController);

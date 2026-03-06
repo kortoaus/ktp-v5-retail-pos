@@ -1,8 +1,17 @@
 import { useState } from "react";
 import type { Dayjs } from "dayjs";
-import { getSaleInvoices, getSaleInvoiceWithChildren } from "../service/sale.service";
-import { printSaleInvoiceReceipt, renderReceipt } from "../libs/printer/sale-invoice-receipt";
-import { printRefundReceipt, renderRefundReceipt } from "../libs/printer/refund-receipt";
+import {
+  getSaleInvoices,
+  getSaleInvoiceWithChildren,
+} from "../service/sale.service";
+import {
+  printSaleInvoiceReceipt,
+  renderReceipt,
+} from "../libs/printer/sale-invoice-receipt";
+import {
+  printRefundReceipt,
+  renderRefundReceipt,
+} from "../libs/printer/refund-receipt";
 import { buildPrintBufferNoCut, cutCommand } from "../libs/printer/escpos";
 import { printESCPOS } from "../libs/printer/print.service";
 import { Member, SaleInvoice } from "../types/models";
@@ -46,11 +55,12 @@ export default function InvoiceSearchPanel({
 
   useBarcodeScanner((scanned) => {
     if (!scanEnabled) return;
-    if (scanned.split("-").length !== 4) return;
-    setKeyword(scanned);
+    const [prefix, value] = scanned.split("%%%");
+    if (prefix !== "receipt" || value.split("-").length !== 4) return;
+    setKeyword(value);
     setPage(1);
     getSaleInvoices({
-      keyword: scanned,
+      keyword: value,
       page: 1,
       limit: PAGE_SIZE,
       from: dateFrom?.valueOf(),
@@ -234,10 +244,14 @@ export default function InvoiceSearchPanel({
                       <div className="w-12 flex items-center justify-center text-sm text-gray-400">
                         {(page - 1) * PAGE_SIZE + i + 1}
                       </div>
-                      <div className={cn(
-                        "w-16 flex items-center justify-center text-[10px] font-bold uppercase",
-                        inv.type === "refund" ? "text-red-600" : "text-blue-600",
-                      )}>
+                      <div
+                        className={cn(
+                          "w-16 flex items-center justify-center text-[10px] font-bold uppercase",
+                          inv.type === "refund"
+                            ? "text-red-600"
+                            : "text-blue-600",
+                        )}
+                      >
                         {inv.type}
                       </div>
                       <div className="flex-1 p-1 flex flex-col justify-center min-w-0">
@@ -251,11 +265,14 @@ export default function InvoiceSearchPanel({
                       <div className="w-28 flex items-center justify-center text-xs">
                         {inv.terminal.name}
                       </div>
-                      <div className={cn(
-                        "w-28 flex items-center justify-end pr-2 text-sm font-bold font-mono",
-                        inv.type === "refund" && "text-red-600",
-                      )}>
-                        {inv.type === "refund" ? "-" : ""}{fmt(inv.total)}
+                      <div
+                        className={cn(
+                          "w-28 flex items-center justify-end pr-2 text-sm font-bold font-mono",
+                          inv.type === "refund" && "text-red-600",
+                        )}
+                      >
+                        {inv.type === "refund" ? "-" : ""}
+                        {fmt(inv.total)}
                       </div>
                     </div>
                   )}

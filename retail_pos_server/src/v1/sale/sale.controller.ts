@@ -13,6 +13,7 @@ import { parseIntId, parseFindManyQuery } from "../../libs/query";
 function getAuth(res: Response) {
   const { company, terminal, user, shift, storeSetting } = res.locals;
 
+  if (!user) throw new NotFoundException("User not found");
   if (!company) throw new NotFoundException("Company not found");
   if (!terminal) throw new NotFoundException("Terminal not found");
   if (!shift) throw new NotFoundException("Shift not found");
@@ -21,13 +22,13 @@ function getAuth(res: Response) {
 }
 
 export async function createSaleInvoiceController(req: Request, res: Response) {
-  const { company, terminal, user, shift, storeSetting } = getAuth(res);
-  console.log(shift, terminal, user, company);
+  const { company, terminal, shift, storeSetting, user } = getAuth(res);
   const result = await createSaleInvoiceService(
     company,
     storeSetting,
     terminal,
     shift,
+    user,
     req.body,
   );
   res.status(200).json(result);

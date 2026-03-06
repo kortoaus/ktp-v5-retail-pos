@@ -8,6 +8,7 @@ import {
   InternalServerException,
   NotFoundException,
 } from "../../libs/exceptions";
+import { terminalShiftSyncService } from "../cloud/cloud.sync.service";
 
 type OpenShiftDTO = {
   openedNote: string;
@@ -222,6 +223,8 @@ export async function closeTerminalShiftService(
         totalCashOut: dto.totalCashOut,
       },
     });
+
+    await terminalShiftSyncService(shift.id);
 
     return {
       ok: true,

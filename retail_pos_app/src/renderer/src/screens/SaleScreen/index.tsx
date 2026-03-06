@@ -27,6 +27,7 @@ import { useShift } from "../../contexts/ShiftContext";
 import BlockScreen from "../../components/BlockScreen";
 import CartSwitcher from "./CartSwitcher";
 import { cn } from "../../libs/cn";
+import { searchMemberById } from "../../service/crm.service";
 
 type ModalTarget =
   | null
@@ -62,8 +63,31 @@ export default function SaleScreen() {
     async (rawBarcode: string) => {
       if (loading) return;
 
-      setLoading(true);
+      console.log("scanCallback", rawBarcode);
+
+      // Search Member
+      if (rawBarcode.startsWith("member%%%")) {
+        try {
+          setLoading(true);
+          const memberId = rawBarcode.split("%%%")[1];
+          const { ok, msg, result } = await searchMemberById(memberId);
+          if (ok && result) {
+            setMember(result);
+          } else {
+            window.alert(msg);
+          }
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setLoading(false);
+        }
+
+        return;
+      }
+
+      // Search Item
       try {
+        setLoading(true);
         const { ok, msg, result } = await searchItemByBarcode(rawBarcode);
         if (ok) {
           if (result) {
@@ -344,6 +368,7 @@ export default function SaleScreen() {
         readWeight={readWeight}
         onConfirm={handleWeightConfirm}
         onClose={handleWeightClose}
+        autoPolling={true}
       />
 
       <ChangeQtyModal

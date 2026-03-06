@@ -28,7 +28,7 @@ export default function OpenShiftScreen() {
         isPublicHoliday: false,
       });
       if (ok) {
-        navigate("/sale");
+        navigate("/");
       } else {
         window.alert(msg || "Failed to open shift");
       }

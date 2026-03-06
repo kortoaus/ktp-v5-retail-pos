@@ -8,6 +8,7 @@ import {
   NotFoundException,
 } from "../../libs/exceptions";
 import { Decimal } from "@prisma/client/runtime/index-browser";
+import { saleInvoiceSyncService } from "../cloud/cloud.sync.service";
 
 type RefundRowDto = {
   type: string;
@@ -162,8 +163,8 @@ export async function createRefundInvoiceService(
           phone: storeSetting.phone,
           email: storeSetting.email,
           website: storeSetting.website,
-          memberId: dto.memberId,
-          memberLevel: dto.memberLevel,
+          memberId: originalInvoice.memberId,
+          memberLevel: originalInvoice.memberLevel,
           terminalId: terminal.id,
           shiftId: shift.id,
           userId: user.id,
@@ -222,6 +223,8 @@ export async function createRefundInvoiceService(
 
       return invoice;
     });
+
+    await saleInvoiceSyncService(result.id);
 
     return {
       ok: true,

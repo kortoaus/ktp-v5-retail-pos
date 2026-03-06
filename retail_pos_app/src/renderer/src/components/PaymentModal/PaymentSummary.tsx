@@ -49,7 +49,7 @@ export default function PaymentSummary({
   CREDIT_SURCHARGE_RATE,
 }: PaymentSummaryProps) {
   return (
-    <div className="w-[260px] flex flex-col">
+    <div className="w-[300px] flex flex-col">
       <div className="flex-1 overflow-y-auto p-4">
         <div className="flex flex-col gap-3">
           <SummaryRow label="Subtotal" value={fmt(subTotal)} />

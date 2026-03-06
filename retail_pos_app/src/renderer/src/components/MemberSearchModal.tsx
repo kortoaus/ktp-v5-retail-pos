@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Member } from "../types/models";
-import { searchMember, createMember } from "../service/crm.service";
+import { searchMemberByPhone, createMember } from "../service/crm.service";
 import OnScreenKeyboard from "./OnScreenKeyboard";
 import { cn } from "../libs/cn";
 import { sanitizePhone } from "../libs/phone-utils";
@@ -60,7 +60,7 @@ export default function MemberSearchModal({
     setFoundMember(null);
     setSearched(true);
     try {
-      const res = await searchMember(phone);
+      const res = await searchMemberByPhone(phone);
       if (res.ok && res.result) {
         setFoundMember(res.result);
       } else {

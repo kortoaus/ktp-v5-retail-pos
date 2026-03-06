@@ -3,6 +3,8 @@ import { SaleInvoice } from "../../types/models";
 import { buildPrintBuffer } from "./escpos";
 import { printESCPOS } from "./print.service";
 import dayjsAU from "../dayjsAU";
+import Decimal from "decimal.js";
+import { MONEY_DP } from "../constants";
 const W = 576;
 const PAD = 20;
 const LH = 36;
@@ -188,12 +190,24 @@ export async function renderReceipt(
     } else {
       qtyStr = `${r.qty} @ ${fmt(r.unit_price_effective)}`;
     }
+    let totalStr = fmt(r.total);
     if (priceChanged) {
       qtyStr += ` (${fmt(r.unit_price_original)})`;
+
+      const originalTotal = new Decimal(r.unit_price_original)
+        .mul(r.qty)
+        .toDecimalPlaces(MONEY_DP)
+        .toNumber();
+      const howMuchSaved = new Decimal(originalTotal)
+        .sub(r.total)
+        .toDecimalPlaces(MONEY_DP)
+        .toNumber();
+      totalStr = `(Saved ${fmt(howMuchSaved)}) ` + totalStr;
     }
+
     ctx.fillText("  " + qtyStr, PAD, y);
     ctx.textAlign = "right";
-    ctx.fillText(fmt(r.total), W - PAD, y);
+    ctx.fillText(totalStr, W - PAD, y);
     ctx.textAlign = "left";
     y += LH - 6;
   }
@@ -225,11 +239,11 @@ export async function renderReceipt(
 
   ctx.font = `bold ${FONT_LG}px sans-serif`;
   let totalCents = Math.round(invoice.total * 100);
-  for (const p of invoice.payments) {
-    if (p.type === "credit") {
-      totalCents += Math.round(p.surcharge * 100);
-    }
-  }
+  // for (const p of invoice.payments) {
+  //   if (p.type === "credit") {
+  //     totalCents += Math.round(p.surcharge * 100);
+  //   }
+  // }
   row(ctx, "TOTAL", fmt(totalCents / 100), y);
   y += LH + 4;
 
@@ -283,7 +297,7 @@ export async function renderReceipt(
   if (invoice.serialNumber) {
     const qrSize = 200;
     const qrCanvas = document.createElement("canvas");
-    await QRCode.toCanvas(qrCanvas, invoice.serialNumber, {
+    await QRCode.toCanvas(qrCanvas, "receipt%%%" + invoice.serialNumber, {
       width: qrSize,
       margin: 0,
     });

@@ -197,6 +197,23 @@ export function usePaymentCalc({
   );
   const canPay = useMemo(() => !remaining.gt(0), [remaining]);
 
+  /* ── Applied payment lines (change-adjusted for API) ── */
+
+  const appliedPaymentLines = useMemo(() => {
+    if (changeAmount.isZero()) return allPaymentLines;
+    const result = allPaymentLines.map((p) => ({ ...p }));
+    let remain = changeAmount;
+    // subtract change from cash lines, last → first
+    for (let i = result.length - 1; i >= 0 && remain.gt(0); i--) {
+      if (result[i].type !== "cash") continue;
+      const reduction = Decimal.min(result[i].amount, remain);
+      result[i].amount = result[i].amount.sub(reduction);
+      result[i].eftpos = result[i].amount;
+      remain = remain.sub(reduction);
+    }
+    return result.filter((p) => p.amount.gt(0));
+  }, [allPaymentLines, changeAmount]);
+
   /* ── Tax (GST extracted from sale + surcharge) ─────── */
 
   const goodsTaxAmount = useMemo(() => {
@@ -291,6 +308,7 @@ export function usePaymentCalc({
     lineDiscountAmount,
     totalDiscountAmount,
     allPaymentLines,
+    appliedPaymentLines,
     totalCash,
     totalCredit,
     totalSurcharge,

@@ -27,10 +27,12 @@ function App(): React.JSX.Element {
             <Routes>
               <Route path="/" element={<HomeScreen />} />
 
-              <Route path="/sale" element={<SaleScreen />} />
               <Route path="/labeling" element={<LabelingScreen />} />
               <Route path="/server-setup" element={<ServerSetupScreen />} />
 
+              <Route path="/sale" element={<ManagerLayout />}>
+                <Route path="" element={<SaleScreen />} />
+              </Route>
               <Route path="/manager" element={<ManagerLayout />}>
                 <Route path="settings" element={<InterfaceSettingsScreen />} />
                 <Route path="test" element={<TestScreen />} />

@@ -15,6 +15,7 @@ interface WeightModalProps {
   onConfirm: (weightKg: number) => void;
   onClose: () => void;
   allowZero?: boolean;
+  autoPolling?: boolean;
 }
 
 export default function WeightModal({
@@ -24,6 +25,7 @@ export default function WeightModal({
   onConfirm,
   onClose,
   allowZero = false,
+  autoPolling = false,
 }: WeightModalProps) {
   const [weight, setWeight] = useState<WeightResult | null>(null);
   const [reading, setReading] = useState(false);
@@ -32,8 +34,40 @@ export default function WeightModal({
     if (!open) {
       setWeight(null);
       setReading(false);
+      return;
     }
-  }, [open]);
+    // initial read on open
+    let cancelled = false;
+    (async () => {
+      setReading(true);
+      try {
+        const result = await readWeight();
+        if (!cancelled) setWeight(result);
+      } catch {
+        if (!cancelled)
+          setWeight({ weight: 0, unit: "kg", status: "error", message: "Read failed" });
+      } finally {
+        if (!cancelled) setReading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, readWeight]);
+
+  useEffect(() => {
+    if (!open || !autoPolling) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const result = await readWeight();
+        if (!cancelled) setWeight(result);
+      } catch {
+        if (!cancelled)
+          setWeight({ weight: 0, unit: "kg", status: "error", message: "Read failed" });
+      }
+    };
+    const id = setInterval(poll, 500);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [open, autoPolling, readWeight]);
 
   const handleRead = useCallback(async () => {
     setReading(true);

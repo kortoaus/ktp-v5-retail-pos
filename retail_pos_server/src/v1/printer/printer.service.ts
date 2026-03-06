@@ -12,7 +12,7 @@ function enqueue(ip: string, job: () => Promise<void>): Promise<void> {
   queues.set(ip, next);
   next.finally(() => {
     if (queues.get(ip) === next) queues.delete(ip);
-  });
+  }).catch(() => {}); // rejection already handled via returned `next`
   return next;
 }
 

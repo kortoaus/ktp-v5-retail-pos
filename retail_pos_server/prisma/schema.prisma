@@ -358,6 +358,10 @@ model SaleInvoice {
   creditPaid             Decimal              @db.Decimal(18, 2)
   totalDiscountAmount    Decimal              @db.Decimal(18, 2)
   payments               SaleInvoicePayment[]
+
+  // Cloud Sync
+  syncedAt DateTime?
+  synced   Boolean   @default(false)
 }
 
 model SaleInvoiceRow {

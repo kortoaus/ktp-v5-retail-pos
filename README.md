@@ -87,9 +87,9 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 | `/shift`    | Shift    | user + shift       | Open/close shifts, closing data      |
 | `/item`     | Item     | —                  | Item search, barcode lookup          |
 | `/hotkey`   | Hotkey   | —                  | Quick-select grid CRUD               |
-| `/crm`      | CRM      | —                  | Member lookup                        |
+| `/crm`      | CRM      | —                  | Member lookup (by phone, by ID)    |
 | `/user`     | User     | user + user        | User CRUD, auth by code              |
-| `/sale`     | Sale     | user + refund      | Create & query sale/refund invoices  |
+| `/sale`     | Sale     | user + refund      | Create (user auth) & query invoices|
 | `/printer`  | Printer  | —                  | Server-side print (raw data)         |
 | `/cloud`    | Cloud    | —                  | Sync with cloud system               |
 | `/cashio`   | CashIO   | user + cashio      | Cash in/out CRUD with search         |
@@ -101,7 +101,9 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 
 - 4 independent carts with per-cart member assignment
 - Barcode scan → GTIN → PLU → raw lookup chain
+- QR scan: `member%%%{id}` assigns member, `receipt%%%{serial}` searches invoice
 - Item types: normal, prepacked, weight, weight-prepacked
+- Weight items: auto-read on modal open + 500ms polling when `autoPolling` enabled
 - Normal item merge (same item + same price = qty increment)
 - Line functions: change qty, override price, discount $, discount %
 - On-screen keyboard (Korean dubeolsik + English + numpad)
@@ -119,12 +121,12 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 ### Payment
 
 - Credit card surcharge (configurable rate from Store Settings, default 1.5%)
-- Surcharge separate from sale total: `cashPaid + creditPaid = total`
+- Server stores `total = sum(payments.amount + payments.surcharge)` (includes surcharge)
+- Client computes `appliedPaymentLines` (change-adjusted) before sending to server
 - Australian 5c rounding (cash payments only)
 - Split cash/credit with committed payment lines
 - Per-line GST allocation via largest-remainder method
 - Tax: `goodsTax = exactDue × taxableRatio ÷ 11`, `surchargeTax = surcharge ÷ 11`
-- Server-side validation: row totals ≈ subtotal, payment ≈ total
 - All math via `decimal.js`
 
 ### Refunds
@@ -134,6 +136,7 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - Cash/credit capped at original payment method amounts (server-enforced)
 - No surcharge on refunds, 5c rounding applied
 - Refund receipt uses StoreSetting data (consistent with sale)
+- Refund inherits memberId/memberLevel from original invoice
 
 ### Shift Management
 
@@ -163,10 +166,11 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 
 ### Receipts
 
-- **Sale**: store header, items (^=price changed, #=GST), totals, payments, QR code, footer
-- **Refund**: "*** REFUND ***" banner, links original serial, StoreSetting data
+- **Sale**: store header, items (^=price changed, #=GST), "Saved $X" on discounted items, totals, payments, QR code (`receipt%%%serial`), footer
+- **Refund**: "*** REFUND ***" banner, links original serial, StoreSetting data, QR code (`receipt%%%serial`)
 - **Z-report**: shift settlement (sales/refunds/cashio, drawer expected vs actual)
 - All: 576px canvas → ESC/POS thermal print
+- Touchscreen tap-through guard: ModalContainer keeps invisible backdrop 100ms after close
 
 ### Hardware
 
@@ -220,7 +224,8 @@ npx prisma db push       # Push schema to database
 ## What's Next
 
 - [ ] Reprint last receipt (one-tap from sale screen)
-- [ ] Cloud sync (invoices, shifts → cloud)
+- [x] Cloud sync (invoices, shifts → cloud on create/close)
 - [ ] More label templates
+- [ ] Re-enable server-side payment validation (row totals ≈ subtotal, payment ≈ total)
 
 Reports and analytics are handled by the cloud app — the POS does not store reporting data locally.

@@ -8,6 +8,10 @@ import {
   cloudPromoPriceMigrateService,
   normalizeBarcodesService,
 } from "./cloud.migrate.service";
+import {
+  syncAllSaleInvoicesService,
+  syncAllTerminalShiftsService,
+} from "./cloud.sync.service";
 
 export async function cloudItemMigrateController(req: Request, res: Response) {
   const categoryResult = await cloudCategoryMigrateService();
@@ -72,6 +76,25 @@ export async function cloudItemMigrateController(req: Request, res: Response) {
     });
     return;
   }
+
+  const syncAllTerminalShiftsResult = await syncAllTerminalShiftsService();
+  if (!syncAllTerminalShiftsResult) {
+    res.status(500).json({
+      ok: false,
+      msg: "Failed to sync all terminal shifts",
+    });
+    return;
+  }
+
+  const syncAllSaleInvoicesResult = await syncAllSaleInvoicesService();
+  if (!syncAllSaleInvoicesResult) {
+    res.status(500).json({
+      ok: false,
+      msg: "Failed to sync all sale invoices",
+    });
+    return;
+  }
+
   res.status(200).json({
     ok: true,
     msg: "Migrated all data from cloud",

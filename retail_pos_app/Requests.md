@@ -1,0 +1,12 @@
+- [x]: Sale 화면에서 무게 자동 입력
+- [x]: Payment 모달에서 Cash가 먼저
+- [x]: 캐셔 로그인 온 세일
+- [ ]: 금액 범위로 인보이스 검색
+- [x]: 리펀드 아이템 아이디 라인키(동일상품 못찾음, I think this is the touchscreen issue.)
+- [x]: 터치 인터피어(라인모달 <-> 클리어), backdrop delay added(suspect finger liftup event after modal closed, 100ms, must be double checked in prod env)
+- [ ]: 핫키 클라우드
+- [ ]: 핫키에 판매단위 표시, 탭 파지네이터, 판매 단위 표시
+- [ ]: 직원 식대 처리
+- [ ]: 비품 처리
+- [x]: 카트 공용(but I don't think no good way.)
+- [x]: QR Code Prefixes(member, receipt)

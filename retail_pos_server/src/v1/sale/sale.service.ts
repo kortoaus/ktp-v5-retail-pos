@@ -1,5 +1,5 @@
 import { StoreSetting, TerminalShift } from "../../generated/prisma/browser";
-import { Company, Terminal } from "../../generated/prisma/client";
+import { Company, Terminal, User } from "../../generated/prisma/client";
 import db from "../../libs/db";
 import { SaleInvoiceWhereInput } from "../../generated/prisma/models";
 import {
@@ -11,6 +11,7 @@ import {
 import { FindManyQuery } from "../../libs/query";
 import { numberifySaleInvoice, numberifyRow } from "../../libs/decimal-utils";
 import { Decimal } from "@prisma/client/runtime/index-browser";
+import { saleInvoiceSyncService } from "../cloud/cloud.sync.service";
 
 type InvoiceRowDto = {
   type: string;
@@ -58,6 +59,7 @@ export async function createSaleInvoiceService(
   storeSetting: StoreSetting,
   terminal: Terminal,
   shift: TerminalShift,
+  user: User,
   dto: CreateSaleInvoiceDto,
 ) {
   try {
@@ -74,32 +76,51 @@ export async function createSaleInvoiceService(
       throw new BadRequestException("At least one payment is required");
     }
 
-    const rowTotal = dto.rows.reduce((sum, r) => sum + r.total, 0);
-    const paymentTotal = dto.payments.reduce((sum, p) => sum + p.amount, 0);
+    // const rowTotal = dto.rows.reduce((sum, r) => sum + r.total, 0);
 
-    // Row totals should approximately equal subtotal
-    if (Math.abs(rowTotal - dto.subtotal) > 0.02) {
-      throw new BadRequestException(
-        `Row total ${rowTotal} does not match subtotal ${dto.subtotal}`,
-      );
-    }
-
-    // Payment total (cash + credit) should equal total (after discount + rounding)
-    // const expectedPayment = dto.total;
-    // if (Math.abs(paymentTotal - expectedPayment) > 0.02) {
+    // // Row totals should approximately equal subtotal
+    // if (Math.abs(rowTotal - dto.subtotal) > 0.02) {
     //   throw new BadRequestException(
-    //     `Payment total ${paymentTotal} does not match expected ${expectedPayment}`,
+    //     `Row total ${rowTotal} does not match subtotal ${dto.subtotal}`,
     //   );
     // }
 
-    // Total should be subtotal - discount + rounding
-    const expectedTotal =
-      dto.subtotal - dto.documentDiscountAmount + dto.rounding;
-    if (Math.abs(dto.total - expectedTotal) > 0.02) {
-      throw new BadRequestException(
-        `Total ${dto.total} does not match calculated ${expectedTotal}`,
-      );
-    }
+    // // Payment total (cash + credit) should equal total (after discount + rounding)
+    // // const expectedPayment = dto.total;
+    // // if (Math.abs(paymentTotal - expectedPayment) > 0.02) {
+    // //   throw new BadRequestException(
+    // //     `Payment total ${paymentTotal} does not match expected ${expectedPayment}`,
+    // //   );
+    // // }
+
+    // // Total should be subtotal - discount + rounding
+    // const expectedTotal =
+    //   dto.subtotal - dto.documentDiscountAmount + dto.rounding;
+    // if (Math.abs(dto.total - expectedTotal) > 0.02) {
+    //   throw new BadRequestException(
+    //     `Total ${dto.total} does not match calculated ${expectedTotal}`,
+    //   );
+    // }
+
+    // [{cash: 39.25}, {credit: 25, surcharge: 0.38}]
+
+    const total = dto.payments
+      .reduce((acc, p) => {
+        console.log("Payment:", p);
+        const amount = new Decimal(p.amount);
+        const surcharge = new Decimal(p.surcharge);
+        console.log(amount, surcharge);
+        return acc.plus(amount).plus(surcharge);
+      }, new Decimal(0))
+      .toNumber();
+
+    console.log("Total:", total);
+    // 39.25+25+0.38
+    // const total = new Decimal(dto.cashPaid)
+    // .add(
+    //   new Decimal(dto.creditPaid).add(new Decimal(dto.creditSurchargeAmount)),
+    // )
+    // .toNumber();
 
     const result = await db.$transaction(async (tx) => {
       const invoice = await tx.saleInvoice.create({
@@ -121,12 +142,12 @@ export async function createSaleInvoiceService(
           memberLevel: dto.memberLevel,
           terminalId: terminal.id,
           shiftId: shift.id,
-          userId: shift.openedUserId,
+          userId: user.id,
           subtotal: dto.subtotal,
           documentDiscountAmount: dto.documentDiscountAmount,
           creditSurchargeAmount: dto.creditSurchargeAmount,
           rounding: dto.rounding,
-          total: dto.total,
+          total: total,
           taxAmount: dto.taxAmount,
           cashPaid: dto.cashPaid,
           cashChange: dto.cashChange,
@@ -177,6 +198,8 @@ export async function createSaleInvoiceService(
       });
       return invoice;
     });
+
+    await saleInvoiceSyncService(result.id);
 
     return { ok: true, msg: "Invoice created", result: { id: result.id } };
   } catch (e) {

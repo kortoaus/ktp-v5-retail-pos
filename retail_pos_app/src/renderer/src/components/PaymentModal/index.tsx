@@ -43,7 +43,7 @@ export default function PaymentModal({
   const [documentDiscountValue, setDocumentDiscountValue] = useState(0);
   const [cashReceived, setCashReceived] = useState(0);
   const [creditReceived, setCreditReceived] = useState(0);
-  const [numpadTarget, setNumpadTarget] = useState<NumpadTarget>("discount");
+  const [numpadTarget, setNumpadTarget] = useState<NumpadTarget>("cash");
   const [numpadVal, setNumpadVal] = useState("");
   const [committedPayments, setCommittedPayments] = useState<Payment[]>([]);
   const [changeScreen, setChangeScreen] = useState<{ amount: number } | null>(
@@ -199,11 +199,10 @@ export default function PaymentModal({
 
     setProcessing(true);
 
-    const finalLines = calc.allPaymentLines;
-    const cashPaid = Decimal.max(
-      new Decimal(0),
-      Decimal.min(calc.totalCash, calc.effectiveDue.sub(calc.totalCredit)),
-    );
+    const appliedLines = calc.appliedPaymentLines;
+    const cashPaid = appliedLines
+      .filter((p) => p.type === "cash")
+      .reduce((acc, p) => acc.add(p.amount), new Decimal(0));
 
     const payload = {
       subtotal: calc.subTotal.toNumber(),
@@ -216,7 +215,7 @@ export default function PaymentModal({
       cashChange: calc.changeAmount.toNumber(),
       creditPaid: calc.totalCredit.toNumber(),
       totalDiscountAmount: calc.totalDiscountAmount.toNumber(),
-      payments: finalLines.map((l) => ({
+      payments: appliedLines.map((l) => ({
         type: l.type,
         amount: l.amount.toNumber(),
         surcharge: l.surcharge.toNumber(),
@@ -347,6 +346,16 @@ export default function PaymentModal({
               </InputField>
 
               <InputField
+                label="Cash"
+                active={numpadTarget === "cash"}
+                onActivate={() => switchTarget("cash")}
+              >
+                <span className="text-2xl font-bold font-mono">
+                  ${cashReceived.toFixed(MONEY_DP)}
+                </span>
+              </InputField>
+
+              <InputField
                 label="Credit"
                 active={numpadTarget === "credit"}
                 onActivate={() => switchTarget("credit")}
@@ -355,21 +364,11 @@ export default function PaymentModal({
                   ${creditReceived.toFixed(MONEY_DP)}
                 </span>
                 {creditReceived > 0 && (
-                  <span className="text-xs text-blue-700 font-medium">
+                  <span className="text-base text-blue-700 font-semibold">
                     EFTPOS: {fmt(stagingCreditEftpos)}{" "}
                     {`(incl. ${(CREDIT_SURCHARGE_RATE * 100).toFixed(2)}%)`}
                   </span>
                 )}
-              </InputField>
-
-              <InputField
-                label="Cash"
-                active={numpadTarget === "cash"}
-                onActivate={() => switchTarget("cash")}
-              >
-                <span className="text-2xl font-bold font-mono">
-                  ${cashReceived.toFixed(MONEY_DP)}
-                </span>
               </InputField>
 
               <button
@@ -413,8 +412,8 @@ export default function PaymentModal({
           </div>
 
           {committedPayments.length > 0 && (
-            <div className="w-[220px] overflow-y-auto p-2 flex flex-col gap-1">
-              <span className="text-xs font-bold text-gray-400 uppercase px-1">
+            <div className="w-[300px] overflow-y-auto p-2 flex flex-col gap-1">
+              <span className="text-base font-bold text-gray-400 uppercase px-1">
                 Payments
               </span>
               {committedPayments.map((p, i) => (
@@ -426,25 +425,25 @@ export default function PaymentModal({
                   )}
                 >
                   <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-bold text-gray-500 uppercase">
+                    <span className="text-base font-bold text-gray-500 uppercase">
                       {p.type}
                     </span>
                     <span className="text-base font-bold font-mono">
                       ${p.amount.toFixed(MONEY_DP)}
                     </span>
                     {p.type === "credit" && (
-                      <span className="text-xs text-blue-700">
+                      <span className="text-lg font-bold text-blue-700">
                         EFTPOS: {fmt(calc.allPaymentLines[i].eftpos)}
                       </span>
                     )}
                   </div>
-                  <button
-                    type="button"
+                  <div
+                    // type="button"
                     onPointerDown={() => removePayment(i)}
-                    className="w-8 h-8 flex items-center justify-center rounded text-red-400 active:bg-red-100 text-lg shrink-0"
+                    className="w-12 h-12 text-xl flex items-center justify-center rounded text-red-400 active:bg-red-100 font-bold shrink-0"
                   >
                     ✕
-                  </button>
+                  </div>
                 </div>
               ))}
             </div>

@@ -42,7 +42,7 @@ export function SummaryRow({
     <div
       className={cn(
         "flex justify-between items-center",
-        bold ? "text-lg font-bold" : "text-sm",
+        bold ? "text-lg font-bold" : "text-lg",
         className,
       )}
     >

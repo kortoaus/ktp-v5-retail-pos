@@ -63,11 +63,14 @@ function estimateHeight(invoice: SaleInvoice): number {
   const payLines = 2;
   const footerLines = 5;
 
-  const total = headerLines + metaLines + itemLines + totalLines + payLines + footerLines;
+  const total =
+    headerLines + metaLines + itemLines + totalLines + payLines + footerLines;
   return 60 + total * LH + (invoice.serialNumber ? 220 : 0) + 100;
 }
 
-export async function renderRefundReceipt(invoice: SaleInvoice): Promise<HTMLCanvasElement> {
+export async function renderRefundReceipt(
+  invoice: SaleInvoice,
+): Promise<HTMLCanvasElement> {
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = estimateHeight(invoice);
@@ -135,7 +138,12 @@ export async function renderRefundReceipt(invoice: SaleInvoice): Promise<HTMLCan
     row(ctx, "Original Invoice", invoice.original_invoice_serialNumber, y);
     y += LH - 6;
   }
-  row(ctx, "Date", dayjsAU(invoice.issuedAt).format("ddd, DD MMM YYYY hh:mm A"), y);
+  row(
+    ctx,
+    "Date",
+    dayjsAU(invoice.issuedAt).format("ddd, DD MMM YYYY hh:mm A"),
+    y,
+  );
   y += LH - 6;
   row(ctx, "Terminal", invoice.terminal.name, y);
   y += LH - 6;
@@ -215,7 +223,7 @@ export async function renderRefundReceipt(invoice: SaleInvoice): Promise<HTMLCan
   if (invoice.serialNumber) {
     const qrSize = 200;
     const qrCanvas = document.createElement("canvas");
-    await QRCode.toCanvas(qrCanvas, invoice.serialNumber, {
+    await QRCode.toCanvas(qrCanvas, "receipt%%%" + invoice.serialNumber, {
       width: qrSize,
       margin: 0,
     });
