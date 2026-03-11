@@ -29,6 +29,7 @@ import { searchMemberById } from "../../service/crm.service";
 import useCloudHotkeys from "../../hooks/useCloudHotkeys";
 import CloudHotkeyViewer from "../../components/CloudHotkeyViewer";
 import LoadingOverlay from "../../components/LoadingOverlay";
+import SyncPostButton from "../../components/SyncPostButton";
 
 type ModalTarget =
   | null
@@ -266,6 +267,7 @@ export default function SaleScreen() {
 
         <div className="flex items-center justify-end gap-4">
           <SyncButton />
+          <SyncPostButton />
           <CartSwitcher />
         </div>
       </div>

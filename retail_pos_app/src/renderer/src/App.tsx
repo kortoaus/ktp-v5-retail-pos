@@ -1,6 +1,7 @@
 import { HashRouter, Routes, Route } from "react-router-dom";
 import Gateway from "./components/Gateway";
 import { TerminalProvider } from "./contexts/TerminalContext";
+import { useTerminal } from "./contexts/TerminalContext";
 import ManagerLayout from "./layouts/ManagerLayout";
 import InterfaceSettingsScreen from "./screens/InterfaceSettingsScreen";
 import LabelingScreen from "./screens/LabelingScreen";
@@ -18,6 +19,9 @@ import CashIOManageScreen from "./screens/CashIOManageScreen";
 import StoreSettingScreen from "./screens/StoreSettingScreen";
 import CloseShiftScreen from "./screens/CloseShiftScreen";
 import CustomerScreen from "./components/CustomerScreen";
+import { useCartBroadcast } from "./hooks/useCartBroadcast";
+import { useStoreSetting } from "./hooks/useStoreSetting";
+import { useEffect, useRef } from "react";
 
 function App(): React.JSX.Element {
   return (
@@ -31,10 +35,12 @@ function App(): React.JSX.Element {
 }
 
 function MainApp() {
+  useCartBroadcast();
   return (
     <TerminalProvider>
       <ShiftProvider>
         <Gateway>
+          <StoreSettingBroadcast />
           <Routes>
             <Route path="/" element={<HomeScreen />} />
 
@@ -64,6 +70,26 @@ function MainApp() {
       </ShiftProvider>
     </TerminalProvider>
   );
+}
+
+function StoreSettingBroadcast() {
+  const { company } = useTerminal();
+  const { storeSetting } = useStoreSetting();
+  const channelRef = useRef<BroadcastChannel | null>(null);
+
+  useEffect(() => {
+    channelRef.current = new BroadcastChannel("pos-store");
+    return () => {
+      channelRef.current?.close();
+      channelRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!storeSetting || !company || !channelRef.current) return;
+    channelRef.current.postMessage({ storeSetting, company });
+  }, [storeSetting, company]);
+  return null;
 }
 
 export default App;

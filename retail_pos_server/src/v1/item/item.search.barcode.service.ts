@@ -1,4 +1,3 @@
-import { Item } from "../../generated/prisma/browser";
 import { BarcodeType } from "../../generated/prisma/enums";
 import { getNormalizedBarcode } from "../../libs/barcode-utils";
 import db from "../../libs/db";

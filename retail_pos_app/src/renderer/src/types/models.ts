@@ -392,3 +392,26 @@ export interface StoreSetting {
   credit_surcharge_rate?: number | null;
   receipt_below_text?: string | null;
 }
+
+export interface CloudPost {
+  id: number;
+  companyId: number;
+  status: string;
+  category: string;
+  titleEn: string;
+  titleKo: string;
+  descEn: string | null;
+  descKo: string | null;
+  imgId: string;
+  content: CloudPostContentType;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CloudPostContentType {
+  type: string;
+  attrs?: Record<string, any>;
+  content?: CloudPostContentType[];
+  marks?: { type: string; attrs?: Record<string, any> }[];
+  text?: string;
+}
