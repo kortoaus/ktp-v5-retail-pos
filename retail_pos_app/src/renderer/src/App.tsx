@@ -17,42 +17,52 @@ import RefundScreen from "./screens/RefundScreen";
 import CashIOManageScreen from "./screens/CashIOManageScreen";
 import StoreSettingScreen from "./screens/StoreSettingScreen";
 import CloseShiftScreen from "./screens/CloseShiftScreen";
+import CustomerScreen from "./components/CustomerScreen";
 
 function App(): React.JSX.Element {
   return (
     <HashRouter>
-      <TerminalProvider>
-        <ShiftProvider>
-          <Gateway>
-            <Routes>
-              <Route path="/" element={<HomeScreen />} />
-
-              <Route path="/labeling" element={<LabelingScreen />} />
-              <Route path="/server-setup" element={<ServerSetupScreen />} />
-
-              <Route path="/sale" element={<ManagerLayout />}>
-                <Route path="" element={<SaleScreen />} />
-              </Route>
-              <Route path="/manager" element={<ManagerLayout />}>
-                <Route path="settings" element={<InterfaceSettingsScreen />} />
-                <Route path="test" element={<TestScreen />} />
-                <Route path="hotkey" element={<HotkeyManagerScreen />} />
-                <Route path="user" element={<UserManageScreen />} />
-                <Route path="invoices" element={<SaleInvoiceSearchScreen />} />
-                <Route path="refund" element={<RefundScreen />} />
-                <Route path="cashio" element={<CashIOManageScreen />} />
-                <Route path="store" element={<StoreSettingScreen />} />
-              </Route>
-
-              <Route path="/shift" element={<ManagerLayout />}>
-                <Route path="open" element={<OpenShiftScreen />} />
-                <Route path="close" element={<CloseShiftScreen />} />
-              </Route>
-            </Routes>
-          </Gateway>
-        </ShiftProvider>
-      </TerminalProvider>
+      <Routes>
+        <Route path="/customer-display" element={<CustomerScreen />} />
+        <Route path="/*" element={<MainApp />} />
+      </Routes>
     </HashRouter>
+  );
+}
+
+function MainApp() {
+  return (
+    <TerminalProvider>
+      <ShiftProvider>
+        <Gateway>
+          <Routes>
+            <Route path="/" element={<HomeScreen />} />
+
+            <Route path="/labeling" element={<LabelingScreen />} />
+            <Route path="/server-setup" element={<ServerSetupScreen />} />
+
+            <Route path="/sale" element={<ManagerLayout />}>
+              <Route path="" element={<SaleScreen />} />
+            </Route>
+            <Route path="/manager" element={<ManagerLayout />}>
+              <Route path="settings" element={<InterfaceSettingsScreen />} />
+              <Route path="test" element={<TestScreen />} />
+              <Route path="hotkey" element={<HotkeyManagerScreen />} />
+              <Route path="user" element={<UserManageScreen />} />
+              <Route path="invoices" element={<SaleInvoiceSearchScreen />} />
+              <Route path="refund" element={<RefundScreen />} />
+              <Route path="cashio" element={<CashIOManageScreen />} />
+              <Route path="store" element={<StoreSettingScreen />} />
+            </Route>
+
+            <Route path="/shift" element={<ManagerLayout />}>
+              <Route path="open" element={<OpenShiftScreen />} />
+              <Route path="close" element={<CloseShiftScreen />} />
+            </Route>
+          </Routes>
+        </Gateway>
+      </ShiftProvider>
+    </TerminalProvider>
   );
 }
 

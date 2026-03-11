@@ -3,6 +3,7 @@ import {
   cloudBrandMigrateService,
   cloudCategoryMigrateService,
   cloudCompanyMigrateService,
+  cloudHotkeyMigrateService,
   cloudItemMigrateService,
   cloudPriceMigrateService,
   cloudPromoPriceMigrateService,
@@ -73,6 +74,15 @@ export async function cloudItemMigrateController(req: Request, res: Response) {
     res.status(500).json({
       ok: false,
       msg: "Failed to normalize barcodes",
+    });
+    return;
+  }
+
+  const cloudHotkeyResult = await cloudHotkeyMigrateService();
+  if (!cloudHotkeyResult) {
+    res.status(500).json({
+      ok: false,
+      msg: "Failed to migrate hotkeys",
     });
     return;
   }

@@ -90,6 +90,32 @@ export interface Item {
   promoPrice: PromoPrice | null;
 }
 
+export interface CloudHotkey {
+  id: number;
+  companyId: number;
+  sort: number;
+  name_en: string;
+  name_ko: string;
+  keys: CloudHotkeyItem[];
+  color: string; // e.g. "bg-gray-100 text-black"
+  archived: boolean;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface CloudHotkeyItem {
+  id: number;
+  companyId: number;
+  hotkeyId: number;
+  hotkey: CloudHotkey;
+  x: number;
+  y: number;
+  itemId: number;
+  color: string; // e.g. "bg-gray-100 text-black"
+  page: number;
+  item: Item;
+}
+
 export interface Price {
   id: number;
   companyId: number;

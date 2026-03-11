@@ -82,13 +82,11 @@ export async function getItemByPLU(plu: string) {
 
 export async function getItemByBarcode(rawBarcode: string) {
   const { gtin14, type } = getNormalizedBarcode(rawBarcode);
-  console.log(type, gtin14);
 
   // check by gtin14 first
   if (gtin14) {
     // check by gtin14
     const gtin14Item = await getItemByGTIN(gtin14);
-    console.log(gtin14Item);
     if (gtin14Item) {
       return {
         ok: true,
@@ -102,7 +100,6 @@ export async function getItemByBarcode(rawBarcode: string) {
   if (rawBarcode.length < 14) {
     if (rawBarcode.startsWith("02") || rawBarcode.startsWith("2")) {
       const cadidatePLU = extractCandidatePLU(rawBarcode);
-      console.log(cadidatePLU);
       if (cadidatePLU) {
         const pluItem = await getItemByPLU(cadidatePLU);
         if (pluItem) {

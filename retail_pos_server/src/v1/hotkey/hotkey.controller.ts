@@ -3,6 +3,7 @@ import {
   upsertHotkeyService,
   getHotkeysService,
   deleteHotkeyService,
+  getCloudHotkeysService,
 } from "./hotkey.service";
 
 export async function upsertHotkeyController(req: Request, res: Response) {
@@ -12,6 +13,11 @@ export async function upsertHotkeyController(req: Request, res: Response) {
 
 export async function getHotkeysController(req: Request, res: Response) {
   const result = await getHotkeysService();
+  res.json(result);
+}
+
+export async function getCloudHotkeysController(req: Request, res: Response) {
+  const result = await getCloudHotkeysService();
   res.json(result);
 }
 

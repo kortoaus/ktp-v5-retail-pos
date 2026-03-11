@@ -179,6 +179,31 @@ model PromoPrice {
   @@index([itemId])
 }
 
+model CloudHotkey {
+  id        Int               @id
+  companyId Int
+  sort      Int
+  name_en   String
+  name_ko   String
+  keys      CloudHotkeyItem[]
+  color     String            @default("bg-gray-100 text-black")
+  archived  Boolean           @default(false)
+  updatedAt DateTime          @default(now()) @updatedAt
+  createdAt DateTime          @default(now())
+}
+
+model CloudHotkeyItem {
+  id        Int         @id @default(autoincrement())
+  companyId Int
+  hotkeyId  Int
+  hotkey    CloudHotkey @relation(fields: [hotkeyId], references: [id])
+  x         Int
+  y         Int
+  itemId    Int
+  color     String      @default("bg-gray-100 text-black")
+  page      Int         @default(1)
+}
+
 // Cloud Sync Data End
 
 // Local Data Start

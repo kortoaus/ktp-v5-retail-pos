@@ -4,6 +4,7 @@ import {
   InternalServerException,
   NotFoundException,
 } from "../../libs/exceptions";
+import { ItemInclude } from "../item/item.query.option";
 
 type UpsertHotkeyDTO = {
   id?: number;
@@ -150,6 +151,51 @@ export async function getHotkeysService() {
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("Error getting hotkeys:", e);
+    throw new InternalServerException("Internal server error");
+  }
+}
+
+export async function getCloudHotkeysService() {
+  try {
+    const result = await db.cloudHotkey.findMany({
+      orderBy: {
+        sort: "asc",
+      },
+      include: {
+        keys: true,
+      },
+    });
+
+    console.log(
+      result
+        .map((k) => k.keys.map((k) => k.page))
+        .flat()
+        .join(","),
+    );
+
+    const allKeys = result.flatMap((hotkey) => hotkey.keys);
+    const distinctItemIds = [...new Set(allKeys.map((key) => key.itemId))];
+    const items = await db.item.findMany({
+      where: {
+        id: {
+          in: distinctItemIds,
+        },
+      },
+      include: ItemInclude,
+    });
+
+    const resultWithItems = result.map((hotkey) => ({
+      ...hotkey,
+      keys: hotkey.keys.map((key) => ({
+        ...key,
+        item: items.find((item) => item.id === key.itemId),
+      })),
+    }));
+
+    return { ok: true, result: resultWithItems };
+  } catch (e) {
+    if (e instanceof HttpException) throw e;
+    console.error("Error getting cloud hotkeys:", e);
     throw new InternalServerException("Internal server error");
   }
 }

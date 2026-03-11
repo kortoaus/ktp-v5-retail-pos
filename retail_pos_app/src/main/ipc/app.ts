@@ -1,7 +1,7 @@
-import { app, ipcMain } from 'electron'
+import { app, ipcMain, type BrowserWindow } from 'electron'
 import os from 'node:os'
 
-export function registerAppHandlers(): void {
+export function registerAppHandlers(getMainWindow: () => BrowserWindow | null, toggleCustomerDisplay: () => void): void {
   ipcMain.handle('app:restart', () => {
     app.relaunch()
     app.exit(0)
@@ -17,5 +17,15 @@ export function registerAppHandlers(): void {
       }
     }
     return null
+  })
+
+  ipcMain.handle('app:toggle-fullscreen', () => {
+    const win = getMainWindow()
+    if (!win) return
+    win.setFullScreen(!win.isFullScreen())
+  })
+
+  ipcMain.handle('app:toggle-customer-display', () => {
+    toggleCustomerDisplay()
   })
 }

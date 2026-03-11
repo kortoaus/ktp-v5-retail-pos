@@ -5,8 +5,11 @@ import { registerSerialHandlers, closeActivePort } from './serial'
 import { registerScaleHandlers, autoConnectScale, disconnectScale } from './scale'
 import { registerLabelHandlers } from './label'
 
-export function registerAllHandlers(getMainWindow: () => BrowserWindow | null): void {
-  registerAppHandlers()
+export function registerAllHandlers(
+  getMainWindow: () => BrowserWindow | null,
+  toggleCustomerDisplay: () => void,
+): void {
+  registerAppHandlers(getMainWindow, toggleCustomerDisplay)
   registerConfigHandlers()
   registerSerialHandlers(getMainWindow)
   registerScaleHandlers(getMainWindow)

@@ -1,5 +1,7 @@
 import { Brand, Category, Price } from "../../generated/prisma/browser";
 import {
+  CloudHotkey,
+  CloudHotkeyItem,
   Company,
   Item,
   ItemCategory,
@@ -417,6 +419,74 @@ export async function cloudCompanyMigrateService() {
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("cloudCompanyMigrateService error:", e);
+    return false;
+  }
+}
+
+type CloudHotkeyWithKeys = CloudHotkey & { keys: CloudHotkeyItem[] };
+
+export async function cloudHotkeyMigrateService() {
+  try {
+    const lastUpdatedAt = await db.cloudHotkey
+      .findFirst({
+        select: {
+          updatedAt: true,
+        },
+        orderBy: {
+          updatedAt: "desc",
+        },
+        take: 1,
+      })
+      .then((result) => result?.updatedAt?.getTime() || 0);
+
+    const { ok, msg, result } = await apiService.post<CloudHotkeyWithKeys[]>(
+      "/device/migrate/hotkey",
+      {
+        lastUpdatedAt,
+      },
+    );
+    console.log("Got hotkeys from cloud:", ok, msg, result);
+    if (!ok || !result) {
+      throw new BadRequestException(
+        msg || "Failed to migrate hotkeys from cloud",
+      );
+    }
+
+    for (const hotkey of result) {
+      const { keys, ...rest } = hotkey;
+      console.log("Upserting hotkey:", hotkey.name_en);
+      const updatedHotkey = await db.cloudHotkey.upsert({
+        where: { id: hotkey.id },
+        create: {
+          ...rest,
+        },
+        update: {
+          ...rest,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      await db.cloudHotkeyItem.deleteMany({
+        where: {
+          hotkeyId: updatedHotkey.id,
+        },
+      });
+
+      await db.cloudHotkeyItem.createMany({
+        data: keys.map((key) => ({
+          ...key,
+          hotkeyId: updatedHotkey.id,
+        })),
+      });
+      console.log("Upserted hotkey:", hotkey.name_en);
+    }
+
+    return true;
+  } catch (e) {
+    if (e instanceof HttpException) throw e;
+    console.error("cloudHotkeyMigrateService error:", e);
     return false;
   }
 }

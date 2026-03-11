@@ -16,18 +16,19 @@ import InjectPriceModal from "./InjectPriceModal";
 import DiscountAmountModal from "./DiscountAmountModal";
 import DiscountPercentModal from "./DiscountPercentModal";
 import Paging from "./LinePaging";
-import Hotkeys from "../../components/Hotkeys";
-import useHotkeys from "../../hooks/useHotkeys";
 import DocumentMonitor from "./DocumentMonitor";
 import MemberSearchModal from "../../components/MemberSearchModal";
 import PaymentModal from "../../components/PaymentModal";
 import SyncButton from "../../components/SyncButton";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useShift } from "../../contexts/ShiftContext";
 import BlockScreen from "../../components/BlockScreen";
 import CartSwitcher from "./CartSwitcher";
 import { cn } from "../../libs/cn";
 import { searchMemberById } from "../../service/crm.service";
+import useCloudHotkeys from "../../hooks/useCloudHotkeys";
+import CloudHotkeyViewer from "../../components/CloudHotkeyViewer";
+import LoadingOverlay from "../../components/LoadingOverlay";
 
 type ModalTarget =
   | null
@@ -43,7 +44,8 @@ type ModalTarget =
 export default function SaleScreen() {
   const navigate = useNavigate();
   const { shift, loading: shiftLoading } = useShift();
-  const { hotkeys, hotkeysLoading } = useHotkeys();
+  // const { hotkeys, hotkeysLoading } = useHotkeys();
+  const { cloudHotkeys, cloudHotkeysLoading } = useCloudHotkeys();
   const [loading, setLoading] = useState(false);
   const [selectedLineKey, setSelectedLineKey] = useState<string | null>(null);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
@@ -197,6 +199,7 @@ export default function SaleScreen() {
 
   return (
     <div className="h-full w-full bg-gray-50 flex flex-col">
+      {loading && <LoadingOverlay />}
       <div className="h-16 flex items-center justify-between gap-4 px-4 border-b border-gray-200">
         <div className="flex items-center gap-4 h-full py-2">
           <div
@@ -303,16 +306,17 @@ export default function SaleScreen() {
                 onOpenDiscountPercent={() => setModalTarget("discount-percent")}
               />
             )}
-            {!hotkeysLoading && hotkeys.length > 0 && selectedLine == null && (
-              <Hotkeys
-                hotkeys={hotkeys}
-                onItemClick={(x, y, item) => {
-                  if (item) {
-                    scanCallback(item.barcode);
-                  }
-                }}
-              />
-            )}
+
+            {!cloudHotkeysLoading &&
+              cloudHotkeys.length > 0 &&
+              selectedLine == null && (
+                <CloudHotkeyViewer
+                  hotkeys={cloudHotkeys}
+                  onItemClick={(barcode: string) => {
+                    scanCallback(barcode);
+                  }}
+                />
+              )}
           </div>
 
           {/* monitor */}

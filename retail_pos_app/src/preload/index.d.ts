@@ -84,6 +84,8 @@ export interface ElectronAPI {
 
   getNetworkIp: () => Promise<string | null>
   restartApp: () => Promise<void>
+  toggleFullscreen: () => Promise<void>
+  toggleCustomerDisplay: () => Promise<void>
 
   scaleConnect: () => Promise<{ ok: boolean; message: string }>
   scaleDisconnect: () => Promise<void>
