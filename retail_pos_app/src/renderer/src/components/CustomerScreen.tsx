@@ -5,31 +5,42 @@ import CustomerIdleScreen from "./CustomerIdleScreen";
 import SaleScreenLineViewer from "../screens/SaleScreen/SaleScreenLineViewer";
 import DocumentMonitor from "../screens/SaleScreen/DocumentMonitor";
 
+const REFRESH_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+
 export default function CustomerScreen() {
   const [storeSetting, setStoreSetting] = useState<StoreSetting | null>(null);
   const [posts, setPosts] = useState<CloudPost[]>([]);
 
   useEffect(() => {
+    // Listen for cart pushes from main window
     const cartChannel = new BroadcastChannel("pos-cart");
     cartChannel.onmessage = (event) => {
       const { carts, activeCartIndex, lineOffset } = event.data;
       useSalesStore.setState({ carts, activeCartIndex, lineOffset });
     };
 
-    const storeChannel = new BroadcastChannel("pos-store");
-    storeChannel.onmessage = (event) => {
-      setStoreSetting(event.data.storeSetting);
+    // Listen for data responses from main window
+    const dataChannel = new BroadcastChannel("pos-customer-data");
+    dataChannel.onmessage = (event) => {
+      const { storeSetting: ss, posts: p } = event.data;
+      if (ss) setStoreSetting(ss);
+      if (p) setPosts(p);
     };
 
-    const postsChannel = new BroadcastChannel("pos-posts");
-    postsChannel.onmessage = (event) => {
-      setPosts(event.data.posts);
+    // Request refresh on mount + every 10 minutes
+    const requestRefresh = () => {
+      const ch = new BroadcastChannel("pos-refresh");
+      ch.postMessage("refresh");
+      ch.close();
     };
+
+    requestRefresh();
+    const timer = setInterval(requestRefresh, REFRESH_INTERVAL_MS);
 
     return () => {
       cartChannel.close();
-      storeChannel.close();
-      postsChannel.close();
+      dataChannel.close();
+      clearInterval(timer);
     };
   }, []);
 

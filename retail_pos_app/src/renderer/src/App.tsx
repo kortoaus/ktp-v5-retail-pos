@@ -1,7 +1,6 @@
 import { HashRouter, Routes, Route } from "react-router-dom";
 import Gateway from "./components/Gateway";
 import { TerminalProvider } from "./contexts/TerminalContext";
-import { useTerminal } from "./contexts/TerminalContext";
 import ManagerLayout from "./layouts/ManagerLayout";
 import InterfaceSettingsScreen from "./screens/InterfaceSettingsScreen";
 import LabelingScreen from "./screens/LabelingScreen";
@@ -21,7 +20,9 @@ import CloseShiftScreen from "./screens/CloseShiftScreen";
 import CustomerScreen from "./components/CustomerScreen";
 import { useCartBroadcast } from "./hooks/useCartBroadcast";
 import { useStoreSetting } from "./hooks/useStoreSetting";
-import { useEffect, useRef } from "react";
+import { getCloudPosts } from "./service/cloud.service";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CloudPost } from "./types/models";
 
 function App(): React.JSX.Element {
   return (
@@ -40,7 +41,7 @@ function MainApp() {
     <TerminalProvider>
       <ShiftProvider>
         <Gateway>
-          <StoreSettingBroadcast />
+          <CustomerDisplayBroadcast />
           <Routes>
             <Route path="/" element={<HomeScreen />} />
 
@@ -72,23 +73,45 @@ function MainApp() {
   );
 }
 
-function StoreSettingBroadcast() {
-  const { company } = useTerminal();
+function CustomerDisplayBroadcast() {
   const { storeSetting } = useStoreSetting();
+  const [posts, setPosts] = useState<CloudPost[]>([]);
   const channelRef = useRef<BroadcastChannel | null>(null);
 
+  const fetchPosts = useCallback(async () => {
+    try {
+      const { result, ok } = await getCloudPosts();
+      if (ok && result) setPosts(result);
+    } catch (e) {
+      console.error("Failed to fetch posts", e);
+    }
+  }, []);
+
+  // Fetch posts on mount
   useEffect(() => {
-    channelRef.current = new BroadcastChannel("pos-store");
+    fetchPosts();
+  }, [fetchPosts]);
+
+  // Listen for refresh requests from customer screen or SyncPostButton
+  useEffect(() => {
+    channelRef.current = new BroadcastChannel("pos-refresh");
+    channelRef.current.onmessage = () => {
+      fetchPosts();
+    };
     return () => {
       channelRef.current?.close();
       channelRef.current = null;
     };
-  }, []);
+  }, [fetchPosts]);
 
+  // Broadcast storeSetting + posts whenever they change
   useEffect(() => {
-    if (!storeSetting || !company || !channelRef.current) return;
-    channelRef.current.postMessage({ storeSetting, company });
-  }, [storeSetting, company]);
+    if (!storeSetting) return;
+    const responseChannel = new BroadcastChannel("pos-customer-data");
+    responseChannel.postMessage({ storeSetting, posts });
+    responseChannel.close();
+  }, [storeSetting, posts]);
+
   return null;
 }
 

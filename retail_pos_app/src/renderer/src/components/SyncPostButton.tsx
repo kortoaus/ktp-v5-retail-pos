@@ -1,59 +1,17 @@
-import React, { useEffect, useRef, useState } from "react";
-import { getCloudPosts } from "../service/cloud.service";
-import { CloudPost } from "../types/models";
+import { useState } from "react";
 
 export default function SyncPostButton() {
-  const [loading, setLoading] = useState(true);
-  const [posts, setPosts] = useState<CloudPost[]>([]);
-  const channelRef = useRef<BroadcastChannel | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const { result, ok, msg } = await getCloudPosts();
-        if (ok && result) {
-          setPosts(result);
-        } else {
-          console.log(msg || "Failed to sync posts");
-        }
-      } catch (e) {
-        console.error(e);
-        console.log("Failed to sync posts");
-      } finally {
-        setLoading(false);
-      }
-    };
-    init();
-
-    channelRef.current = new BroadcastChannel("pos-posts");
-    return () => {
-      channelRef.current?.close();
-      channelRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!channelRef.current) return;
-    channelRef.current.postMessage({ posts });
-  }, [channelRef, posts]);
-
-  const handleSync = async () => {
+  const handleSync = () => {
     if (loading) return;
     setLoading(true);
-    try {
-      const { msg, result, ok } = await getCloudPosts();
-      if (ok && result) {
-        window.alert(msg);
-      } else {
-        window.alert(msg);
-      }
-    } catch (e) {
-      console.error(e);
-      window.alert("Failed to sync posts");
-    } finally {
-      setLoading(false);
-    }
+    const channel = new BroadcastChannel("pos-refresh");
+    channel.postMessage("refresh");
+    channel.close();
+    setTimeout(() => setLoading(false), 1000);
   };
+
   return (
     <button
       onClick={handleSync}

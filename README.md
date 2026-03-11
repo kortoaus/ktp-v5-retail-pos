@@ -76,6 +76,7 @@ Retail point-of-sale system for Australian supermarkets. Monorepo with two proje
 | `/manager/refund`   | RefundScreen            | Yes   | refund    | Refund against sale invoice |
 | `/manager/cashio`   | CashIOManageScreen      | Yes   | cashio    | Cash in/out management      |
 | `/manager/store`    | StoreSettingScreen      | —     | store     | Store settings              |
+| `/customer-display` | CustomerScreen          | —     | —         | Customer-facing display      |
 
 ## Server API Routes
 
@@ -164,6 +165,22 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - Admin (ID 1) bypasses all scope checks, cannot be edited
 - ServerPagingList with search
 
+### Customer Display
+
+- Secondary screen on external monitor (auto-detected, fullscreen, frameless)
+- **Idle mode**: Rotates cloud posts (image + Tiptap rich text) with 5s slide-up transition; falls back to store info
+- **Active mode**: Mirrors current cart lines and document totals via BroadcastChannel
+- Data refresh: customer screen requests `pos-refresh` on mount + every 10 min; main window responds with storeSetting + posts on `pos-customer-data`
+- Manual refresh: "Posts" button in main window triggers `pos-refresh` for urgent updates
+
+### Inter-Window Communication (BroadcastChannel)
+
+| Channel              | Direction          | Payload                        | Trigger                          |
+| -------------------- | ------------------ | ------------------------------ | -------------------------------- |
+| `pos-cart`           | Main → Customer    | `{ carts, activeCartIndex, lineOffset }` | Real-time cart state changes     |
+| `pos-refresh`        | Customer/Button → Main | `"refresh"` (signal only)    | Mount, 10 min poll, manual sync  |
+| `pos-customer-data`  | Main → Customer    | `{ storeSetting, posts }`      | On refresh signal or data change |
+
 ### Receipts
 
 - **Sale**: store header, items (^=price changed, #=GST), "Saved $X" on discounted items, totals, payments, QR code (`receipt%%%serial`), footer
@@ -224,7 +241,7 @@ npx prisma db push       # Push schema to database
 ## What's Next
 
 - [ ] Reprint last receipt (one-tap from sale screen)
-- [x] Cloud sync (invoices, shifts → cloud on create/close)
+- [x] Cloud sync (invoices, shifts → cloud on create/close, cloud posts display)
 - [ ] More label templates
 - [ ] Re-enable server-side payment validation (row totals ≈ subtotal, payment ≈ total)
 
