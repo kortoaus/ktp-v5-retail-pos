@@ -25,6 +25,7 @@ export type ClosingShiftData = {
   shift: TerminalShift;
   salesCash: number;
   salesCredit: number;
+  salesVoucher: number;
   salesTax: number;
   refundsCash: number;
   refundsCredit: number;
@@ -45,6 +46,7 @@ export type CloseShiftDTO = {
   endedCashActual: number;
   salesCash: number;
   salesCredit: number;
+  salesVoucher: number;
   salesTax: number;
   refundsCash: number;
   refundsCredit: number;

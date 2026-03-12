@@ -35,3 +35,11 @@ export interface SaleLineType extends SaleLineItem {
   subtotal: number; // total - tax_amount
   adjustments: LineAdjustment[];
 }
+
+export interface SaleStoreDiscount {
+  lineKey: string | null;
+  entityType: "user-voucher" | "promotion" | "member-voucher";
+  entityId: number;
+  description: string;
+  amount: number;
+}

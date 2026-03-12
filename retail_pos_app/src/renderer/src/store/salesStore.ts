@@ -1,11 +1,12 @@
 import { create } from "zustand";
-import { SaleLineItem, SaleLineType } from "../types/sales";
+import { SaleLineItem, SaleLineType, SaleStoreDiscount } from "../types/sales";
 import { Decimal } from "decimal.js";
 import { MONEY_DP, QTY_DP } from "../libs/constants";
 import { useShallow } from "zustand/shallow";
 
 interface Cart {
   lines: SaleLineType[];
+  discounts: SaleStoreDiscount[];
   member: SaleMember | null;
 }
 
@@ -18,7 +19,7 @@ export const ALLOWED_CHANGE_QTY_TYPES = [
 ];
 
 function createEmptyCart(): Cart {
-  return { lines: [], member: null };
+  return { lines: [], discounts: [], member: null };
 }
 
 function resolveOriginalPrice(item: SaleLineItem): number {
@@ -169,6 +170,7 @@ function recalculateAllLines(carts: Cart[], memberLevel: number): Cart[] {
       return recalculateLine({ ...line, unit_price_discounted });
     }),
     member: cart.member,
+    discounts: cart.discounts,
   }));
 }
 
@@ -191,6 +193,8 @@ interface SalesState {
   setLineOffset: (offset: number) => void;
   switchCart: (index: number) => void;
   clearActiveCart: () => void;
+  addDiscount: (discount: SaleStoreDiscount) => void;
+  removeDiscount: (entityType: SaleStoreDiscount["entityType"], entityId: number) => void;
   cartCount: number;
 }
 
@@ -219,7 +223,11 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
         lines.push(merged);
         const reindexed = reindexLines(lines);
         const updatedCarts = [...carts];
-        updatedCarts[activeCartIndex] = { lines: reindexed, member };
+        updatedCarts[activeCartIndex] = {
+          lines: reindexed,
+          member,
+          discounts: cart.discounts,
+        };
         set({
           carts: updatedCarts,
           lineOffset: Math.max(0, reindexed.length - LINE_PAGE_SIZE),
@@ -232,7 +240,11 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     lines.push(newLine);
 
     const updatedCarts = [...carts];
-    updatedCarts[activeCartIndex] = { lines, member };
+    updatedCarts[activeCartIndex] = {
+      lines,
+      member,
+      discounts: cart.discounts,
+    };
     set({
       carts: updatedCarts,
       lineOffset: Math.max(0, lines.length - LINE_PAGE_SIZE),
@@ -249,6 +261,7 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     updatedCarts[activeCartIndex] = {
       lines: reindexLines(filtered),
       member: cart.member,
+      discounts: cart.discounts,
     };
     set({ carts: updatedCarts });
   },
@@ -276,6 +289,7 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     updatedCarts[activeCartIndex] = {
       lines: reindexLines(lines),
       member: cart.member,
+      discounts: cart.discounts,
     };
     set({ carts: updatedCarts });
   },
@@ -301,7 +315,11 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     lines[idx] = updated;
 
     const updatedCarts = [...carts];
-    updatedCarts[activeCartIndex] = { lines, member: cart.member };
+    updatedCarts[activeCartIndex] = {
+      lines,
+      member: cart.member,
+      discounts: cart.discounts,
+    };
     set({ carts: updatedCarts });
   },
 
@@ -333,6 +351,44 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     const { activeCartIndex, carts } = get();
     const updatedCarts = [...carts];
     updatedCarts[activeCartIndex] = createEmptyCart();
+    set({ carts: updatedCarts });
+  },
+
+  addDiscount: (discount) => {
+    const { activeCartIndex, carts } = get();
+    const cart = carts[activeCartIndex];
+
+    const exists = cart.discounts.some(
+      (d) =>
+        d.entityType === discount.entityType &&
+        d.entityId === discount.entityId,
+    );
+    if (exists) {
+      window.alert("This discount is already applied");
+      return;
+    }
+
+    const updatedCarts = [...carts];
+    updatedCarts[activeCartIndex] = {
+      ...cart,
+      discounts: [...cart.discounts, discount],
+    };
+    set({ carts: updatedCarts });
+  },
+
+  removeDiscount: (entityType, entityId) => {
+    const { activeCartIndex, carts } = get();
+    const cart = carts[activeCartIndex];
+    const filtered = cart.discounts.filter(
+      (d) => !(d.entityType === entityType && d.entityId === entityId),
+    );
+    if (filtered.length === cart.discounts.length) return;
+
+    const updatedCarts = [...carts];
+    updatedCarts[activeCartIndex] = {
+      ...cart,
+      discounts: filtered,
+    };
     set({ carts: updatedCarts });
   },
 }));
@@ -369,6 +425,7 @@ export const useCartTotals = () => {
         total: total.toNumber(),
         tax_amount: tax_amount.toNumber(),
         subtotal: subtotal.toNumber(),
+        discounts: cart.discounts,
       };
     }),
   );

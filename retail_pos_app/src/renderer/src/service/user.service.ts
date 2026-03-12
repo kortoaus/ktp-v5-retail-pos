@@ -26,6 +26,13 @@ export const getUsers = async (qs?: string): Promise<ApiResponse<User[]>> => {
   return await apiService.get<User[]>(url);
 };
 
+export const getPublicUsers = async (
+  qs?: string,
+): Promise<ApiResponse<User[]>> => {
+  const url = qs ? `/api/user/public${qs}` : "/api/user/public";
+  return await apiService.get<User[]>(url);
+};
+
 export const getUserById = async (id: number): Promise<ApiResponse<User>> => {
   return await apiService.get<User>(`/api/user/${id}`);
 };

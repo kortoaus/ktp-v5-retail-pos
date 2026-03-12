@@ -196,6 +196,19 @@ export interface User {
   createdAt: string;
   updatedAt: string;
 }
+export interface UserVoucher {
+  id: number;
+  userId: number;
+  user: User;
+  init_amount: number;
+  left_amount: number;
+  validFrom: string;
+  validTo: string;
+  issuedById: number;
+  issuedByName: string;
+  createdAt: string;
+}
+
 export interface TerminalShift {
   id: number;
   companyId: number;
@@ -221,6 +234,7 @@ export interface TerminalShift {
   // Sales
   salesCash: number;
   salesCredit: number;
+  salesVoucher: number;
   salesTax: number;
 
   // Refunds
@@ -240,6 +254,7 @@ export interface TerminalShift {
 
 export const SCOPES = [
   "admin",
+  "sale",
   "interface",
   "user",
   "hotkey",
@@ -307,6 +322,8 @@ export interface SaleInvoicePayment {
   amount: number;
   surcharge: number;
   createdAt: string;
+  entityType: string | null;
+  entityId: number | null;
   updatedAt: string;
 }
 
@@ -347,6 +364,7 @@ export interface SaleInvoice {
   cashPaid: number;
   cashChange: number;
   creditPaid: number;
+  voucherPaid: number;
   totalDiscountAmount: number;
   payments: SaleInvoicePayment[];
 }
@@ -391,6 +409,7 @@ export interface StoreSetting {
   email?: string | null;
   credit_surcharge_rate?: number | null;
   receipt_below_text?: string | null;
+  user_daily_voucher_default?: number | null;
 }
 
 export interface CloudPost {
