@@ -13,6 +13,14 @@ import { numberifySaleInvoice, numberifyRow } from "../../libs/decimal-utils";
 import { Decimal } from "@prisma/client/runtime/index-browser";
 import { saleInvoiceSyncService } from "../cloud/cloud.sync.service";
 
+type PaymentDto = {
+  type: string;
+  amount: number;
+  surcharge: number;
+  entityType?: string;
+  entityId?: number;
+};
+
 type InvoiceRowDto = {
   type: string;
   itemId: number;
@@ -47,11 +55,12 @@ type CreateSaleInvoiceDto = {
   cashPaid: number;
   cashChange: number;
   creditPaid: number;
+  voucherPaid: number;
   totalDiscountAmount: number;
   memberId: string | null;
   memberLevel: number | null;
   rows: InvoiceRowDto[];
-  payments: { type: string; amount: number; surcharge: number }[];
+  payments: PaymentDto[];
 };
 
 export async function createSaleInvoiceService(
@@ -76,51 +85,13 @@ export async function createSaleInvoiceService(
       throw new BadRequestException("At least one payment is required");
     }
 
-    // const rowTotal = dto.rows.reduce((sum, r) => sum + r.total, 0);
-
-    // // Row totals should approximately equal subtotal
-    // if (Math.abs(rowTotal - dto.subtotal) > 0.02) {
-    //   throw new BadRequestException(
-    //     `Row total ${rowTotal} does not match subtotal ${dto.subtotal}`,
-    //   );
-    // }
-
-    // // Payment total (cash + credit) should equal total (after discount + rounding)
-    // // const expectedPayment = dto.total;
-    // // if (Math.abs(paymentTotal - expectedPayment) > 0.02) {
-    // //   throw new BadRequestException(
-    // //     `Payment total ${paymentTotal} does not match expected ${expectedPayment}`,
-    // //   );
-    // // }
-
-    // // Total should be subtotal - discount + rounding
-    // const expectedTotal =
-    //   dto.subtotal - dto.documentDiscountAmount + dto.rounding;
-    // if (Math.abs(dto.total - expectedTotal) > 0.02) {
-    //   throw new BadRequestException(
-    //     `Total ${dto.total} does not match calculated ${expectedTotal}`,
-    //   );
-    // }
-
-    // [{cash: 39.25}, {credit: 25, surcharge: 0.38}]
-
     const total = dto.payments
       .reduce((acc, p) => {
-        console.log("Payment:", p);
         const amount = new Decimal(p.amount);
         const surcharge = new Decimal(p.surcharge);
-        console.log(amount, surcharge);
         return acc.plus(amount).plus(surcharge);
       }, new Decimal(0))
       .toNumber();
-
-    console.log("Total:", total);
-    // 39.25+25+0.38
-    // const total = new Decimal(dto.cashPaid)
-    // .add(
-    //   new Decimal(dto.creditPaid).add(new Decimal(dto.creditSurchargeAmount)),
-    // )
-    // .toNumber();
 
     const result = await db.$transaction(async (tx) => {
       const invoice = await tx.saleInvoice.create({
@@ -152,6 +123,7 @@ export async function createSaleInvoiceService(
           cashPaid: dto.cashPaid,
           cashChange: dto.cashChange,
           creditPaid: dto.creditPaid,
+          voucherPaid: dto.voucherPaid,
           totalDiscountAmount: dto.totalDiscountAmount,
           rows: {
             create: dto.rows.map((row) => ({
@@ -183,6 +155,8 @@ export async function createSaleInvoiceService(
               type: p.type,
               amount: p.amount,
               surcharge: p.surcharge,
+              entityType: p.entityType,
+              entityId: p.entityId,
             })),
           },
         },
@@ -196,6 +170,53 @@ export async function createSaleInvoiceService(
         where: { id: invoice.id },
         data: { serialNumber },
       });
+
+      // apply voucher payments
+      const userVoucherPayments = dto.payments.filter(
+        (p) =>
+          p.type === "voucher" &&
+          p.entityType === "user-voucher" &&
+          typeof p.entityId === "number",
+      );
+
+      for (const p of userVoucherPayments) {
+        const targetVoucher = await tx.userVoucher.findUnique({
+          where: {
+            id: p.entityId,
+          },
+          select: {
+            id: true,
+            left_amount: true,
+            userId: true,
+          },
+        });
+
+        if (!targetVoucher) throw new NotFoundException("Voucher not found");
+        if (targetVoucher.left_amount.toNumber() < p.amount)
+          throw new BadRequestException("Voucher amount is not enough");
+
+        // update voucher left amount
+        await tx.userVoucher.update({
+          where: {
+            id: p.entityId,
+          },
+          data: {
+            left_amount: targetVoucher.left_amount.minus(p.amount),
+          },
+        });
+
+        // make history
+        await tx.userVoucherHistory.create({
+          data: {
+            voucherId: targetVoucher.id,
+            userId: targetVoucher.userId,
+            spent_amount: p.amount,
+            saleInvoiceId: invoice.id,
+            saleInvoiceSerialNumber: serialNumber,
+          },
+        });
+      }
+
       return invoice;
     });
 

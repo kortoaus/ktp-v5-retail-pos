@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import {
   getUserByCodeService,
   getUserByIdService,
+  getUsersPublicService,
   getUsersService,
   upsertUserService,
 } from "./user.service";
@@ -16,6 +17,12 @@ export async function upsertUserController(req: Request, res: Response) {
 export async function getUsersController(req: Request, res: Response) {
   const query = parseFindManyQuery(req);
   const result = await getUsersService(query);
+  res.status(200).json(result);
+}
+
+export async function getUsersPublicController(req: Request, res: Response) {
+  const query = parseFindManyQuery(req);
+  const result = await getUsersPublicService(query);
   res.status(200).json(result);
 }
 

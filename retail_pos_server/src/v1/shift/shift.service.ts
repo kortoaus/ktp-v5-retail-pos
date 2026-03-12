@@ -128,10 +128,16 @@ export async function getClosingTerminalShiftDataService(terminalId: number) {
     });
 
     const sum = (
-      arr: { cashPaid: Decimal; creditPaid: Decimal; taxAmount: Decimal }[],
+      arr: {
+        cashPaid: Decimal;
+        creditPaid: Decimal;
+        taxAmount: Decimal;
+        voucherPaid: Decimal;
+      }[],
     ) => ({
       cash: arr.reduce((acc, i) => acc.add(i.cashPaid), new Decimal(0)),
       credit: arr.reduce((acc, i) => acc.add(i.creditPaid), new Decimal(0)),
+      voucher: arr.reduce((acc, i) => acc.add(i.voucherPaid), new Decimal(0)),
       tax: arr.reduce((acc, i) => acc.add(i.taxAmount), new Decimal(0)),
     });
 
@@ -151,6 +157,7 @@ export async function getClosingTerminalShiftDataService(terminalId: number) {
         shift,
         salesCash: sales.cash.toNumber(),
         salesCredit: sales.credit.toNumber(),
+        salesVoucher: sales.voucher.toNumber(),
         salesTax: sales.tax.toNumber(),
         refundsCash: refunds.cash.toNumber(),
         refundsCredit: refunds.credit.toNumber(),
@@ -173,6 +180,7 @@ type CloseShiftDTO = {
   endedCashActual: number;
   salesCash: number;
   salesCredit: number;
+  salesVoucher: number;
   salesTax: number;
   refundsCash: number;
   refundsCredit: number;
@@ -213,6 +221,7 @@ export async function closeTerminalShiftService(
         endedCashActual: dto.endedCashActual,
         salesCash: dto.salesCash,
         salesCredit: dto.salesCredit,
+        salesVoucher: dto.salesVoucher,
         salesTax: dto.salesTax,
         refundsCash: dto.refundsCash,
         refundsCredit: dto.refundsCredit,

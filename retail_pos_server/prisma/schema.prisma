@@ -248,36 +248,65 @@ model HotkeyItem {
 }
 
 model StoreSetting {
-  id                    Int      @id @default(autoincrement())
-  companyId             Int
-  companyName           String
-  name                  String
-  phone                 String?
-  address1              String
-  address2              String?
-  suburb                String
-  state                 String
-  postcode              String
-  country               String
-  abn                   String?
-  website               String?
-  email                 String?
-  credit_surcharge_rate Float?   @default(0.015) // 1.5%
-  receipt_below_text    String?  @default("Thank you!")
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                         Int      @id @default(autoincrement())
+  companyId                  Int
+  companyName                String
+  name                       String
+  phone                      String?
+  address1                   String
+  address2                   String?
+  suburb                     String
+  state                      String
+  postcode                   String
+  country                    String
+  abn                        String?
+  website                    String?
+  email                      String?
+  credit_surcharge_rate      Float?   @default(0.015) // 1.5%
+  receipt_below_text         String?  @default("Thank you!")
+  user_daily_voucher_default Float    @default(20)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 }
 
 model User {
-  id        Int           @id @default(autoincrement())
-  name      String
-  code      String
-  scope     String[]
-  archived  Boolean       @default(false)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @default(now()) @updatedAt
-  invoices  SaleInvoice[]
-  cashIos   CashInOut[]
+  id              Int                  @id @default(autoincrement())
+  name            String
+  code            String
+  scope           String[]
+  archived        Boolean              @default(false)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @default(now()) @updatedAt
+  invoices        SaleInvoice[]
+  cashIos         CashInOut[]
+  vouchers        UserVoucher[]
+  voucher_history UserVoucherHistory[]
+}
+
+model UserVoucher {
+  id           Int                  @id @default(autoincrement())
+  userId       Int
+  user         User                 @relation(fields: [userId], references: [id])
+  init_amount  Decimal              @db.Decimal(18, 2)
+  left_amount  Decimal              @default(0) @db.Decimal(18, 2)
+  validFrom    DateTime
+  validTo      DateTime
+  issuedById   Int
+  issuedByName String
+  createdAt    DateTime             @default(now())
+  history      UserVoucherHistory[]
+}
+
+model UserVoucherHistory {
+  id                      Int         @id @default(autoincrement())
+  voucherId               Int
+  voucher                 UserVoucher @relation(fields: [voucherId], references: [id])
+  userId                  Int
+  user                    User        @relation(fields: [userId], references: [id])
+  spent_amount            Decimal     @db.Decimal(18, 2)
+  saleInvoiceId           Int
+  saleInvoiceSerialNumber String
+  createdAt               DateTime    @default(now())
 }
 
 model TerminalShift {
@@ -304,8 +333,9 @@ model TerminalShift {
   endedCashActual   Int @default(0)
 
   // Sales
-  salesCash   Int @default(0)
-  salesCredit Int @default(0)
+  salesCash    Int @default(0)
+  salesCredit  Int @default(0)
+  salesVoucher Int @default(0)
 
   // cash in out
   totalCashIn  Int @default(0)
@@ -381,12 +411,14 @@ model SaleInvoice {
   cashPaid               Decimal              @db.Decimal(18, 2)
   cashChange             Decimal              @db.Decimal(18, 2)
   creditPaid             Decimal              @db.Decimal(18, 2)
+  voucherPaid            Decimal              @default(0) @db.Decimal(18, 2)
   totalDiscountAmount    Decimal              @db.Decimal(18, 2)
   payments               SaleInvoicePayment[]
 
   // Cloud Sync
-  syncedAt DateTime?
-  synced   Boolean   @default(false)
+  syncedAt  DateTime?
+  synced    Boolean               @default(false)
+  discounts SaleInvoiceDiscount[]
 }
 
 model SaleInvoiceRow {
@@ -431,14 +463,28 @@ model SaleInvoiceRow {
 }
 
 model SaleInvoicePayment {
-  id        Int         @id @default(autoincrement())
-  invoiceId Int
-  invoice   SaleInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  type      String
-  amount    Decimal     @db.Decimal(18, 2)
-  surcharge Decimal     @db.Decimal(18, 2)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id         Int         @id @default(autoincrement())
+  invoiceId  Int
+  invoice    SaleInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  type       String // cash, credit, voucher
+  amount     Decimal     @db.Decimal(18, 2)
+  entityId   Int?
+  entityType String? // user-voucher, member-voucher
+  surcharge  Decimal     @db.Decimal(18, 2)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model SaleInvoiceDiscount {
+  id         Int         @id @default(autoincrement())
+  invoiceId  Int
+  invoice    SaleInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  entityId   Int?
+  entityType String
+  name       String
+  amount     Decimal     @db.Decimal(18, 2)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 }
 
 model CashInOut {

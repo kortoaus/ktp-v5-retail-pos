@@ -19,6 +19,7 @@ type StoreSettingDTO = {
   email?: string;
   credit_surcharge_rate?: number; // 1.5% default (0.015) handled elsewhere
   receipt_below_text?: string;
+  user_daily_voucher_default?: number;
 };
 
 export const updateStoreSettingService = async (dto: StoreSettingDTO) => {
@@ -37,6 +38,7 @@ export const updateStoreSettingService = async (dto: StoreSettingDTO) => {
       email,
       credit_surcharge_rate,
       receipt_below_text,
+      user_daily_voucher_default,
     } = dto;
 
     const storeSetting = await db.storeSetting.update({
@@ -55,6 +57,7 @@ export const updateStoreSettingService = async (dto: StoreSettingDTO) => {
         email,
         credit_surcharge_rate,
         receipt_below_text,
+        user_daily_voucher_default,
       },
     });
 

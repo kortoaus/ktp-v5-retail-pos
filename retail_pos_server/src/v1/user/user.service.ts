@@ -160,3 +160,46 @@ export async function getUsersService(query: FindManyQuery) {
     throw new InternalServerException();
   }
 }
+
+export async function getUsersPublicService(query: FindManyQuery) {
+  const { keyword, page, limit } = query;
+
+  try {
+    const where: Prisma.UserWhereInput = {
+      ...buildUserKeywordFilter(keyword),
+      id: {
+        not: 1,
+      },
+    };
+
+    const totalCount = await db.user.count({ where });
+    const totalPages = Math.ceil(totalCount / limit);
+    const skip = (page - 1) * limit;
+
+    const result = await db.user.findMany({
+      where,
+      skip,
+      take: limit,
+      select: {
+        id: true,
+        name: true,
+      },
+      orderBy: [{ archived: "desc" }, { id: "asc" }],
+    });
+
+    return {
+      ok: true,
+      result,
+      paging: {
+        currentPage: page,
+        totalPages,
+        hasPrev: page > 1,
+        hasNext: page < totalPages,
+      },
+    };
+  } catch (e) {
+    if (e instanceof HttpException) throw e;
+    console.error("getUsersService error:", e);
+    throw new InternalServerException();
+  }
+}
