@@ -30,6 +30,9 @@ import useCloudHotkeys from "../../hooks/useCloudHotkeys";
 import CloudHotkeyViewer from "../../components/CloudHotkeyViewer";
 import LoadingOverlay from "../../components/LoadingOverlay";
 import SyncPostButton from "../../components/SyncPostButton";
+import { useUser } from "../../contexts/UserContext";
+import hasScope from "../../libs/scope-utils";
+import DiscountListModal from "./DiscountListModal";
 
 type ModalTarget =
   | null
@@ -40,10 +43,13 @@ type ModalTarget =
   | "discount-amount"
   | "discount-percent"
   | "member-search"
-  | "payment";
+  | "payment"
+  | "user-voucher"
+  | "discount-list";
 
 export default function SaleScreen() {
   const navigate = useNavigate();
+  const { user, loading: userLoading } = useUser();
   const { shift, loading: shiftLoading } = useShift();
   // const { hotkeys, hotkeysLoading } = useHotkeys();
   const { cloudHotkeys, cloudHotkeysLoading } = useCloudHotkeys();
@@ -54,19 +60,19 @@ export default function SaleScreen() {
   const { readWeight } = useWeight();
   const {
     addLine,
+    addDiscount,
     carts,
     activeCartIndex,
     setMember,
     lineOffset,
     setLineOffset,
     clearActiveCart,
+    removeDiscount,
   } = useSalesStore();
 
   const scanCallback = useCallback(
     async (rawBarcode: string) => {
       if (loading) return;
-
-      console.log("scanCallback", rawBarcode);
 
       // Search Member
       if (rawBarcode.startsWith("member%%%")) {
@@ -183,6 +189,10 @@ export default function SaleScreen() {
     return cart.lines;
   }, [carts, activeCartIndex]);
 
+  const discounts = useMemo(() => {
+    return carts[activeCartIndex].discounts;
+  }, [carts, activeCartIndex]);
+
   const maxOffset = Math.max(0, lines.length - LINE_PAGE_SIZE);
 
   const selectedLine = useMemo(() => {
@@ -190,8 +200,24 @@ export default function SaleScreen() {
     return lines.find((line) => line.lineKey === selectedLineKey) || null;
   }, [lines, selectedLineKey]);
 
-  if (shiftLoading) {
+  // const handleAddDiscount = useCallback(
+  //   (discount: SaleStoreDiscount) => {
+  //     addDiscount(discount);
+  //   },
+  //   [addDiscount],
+  // );
+
+  if (shiftLoading || userLoading) {
     return <div>loading...</div>;
+  }
+
+  if (!user || !hasScope(user.scope, ["sale"])) {
+    return (
+      <BlockScreen
+        label="You are not authorized to access this page"
+        link="/"
+      />
+    );
   }
 
   if (!shift) {
@@ -247,7 +273,26 @@ export default function SaleScreen() {
               </>
             )}
           </div>
+          {/* <div
+            className={cn(
+              "w-24 h-full rounded-sm text-sm font-bold center bg-gray-200 border border-gray-300",
+            )}
+            onClick={() => setModalTarget("user-voucher")}
+          >
+            <div>User</div>
+            <div>Voucher</div>
+          </div> */}
           <div
+            className={cn(
+              "w-24 h-full rounded-sm text-sm font-bold center border border-gray-300",
+              discounts.length > 0 ? "bg-green-600 text-white" : "bg-gray-200",
+            )}
+            onClick={() => setModalTarget("discount-list")}
+          >
+            <div>Discounts</div>
+            <div>{`(${discounts.length})`}</div>
+          </div>
+          {/* <div
             className={cn(
               "w-24 h-full rounded-sm text-sm font-bold center bg-gray-200 border border-gray-300",
             )}
@@ -262,7 +307,7 @@ export default function SaleScreen() {
             onClick={() => navigate("/manager/cashio")}
           >
             <div>Cash I/O</div>
-          </div>
+          </div> */}
         </div>
 
         <div className="flex items-center justify-end gap-4">
@@ -296,7 +341,7 @@ export default function SaleScreen() {
         />
 
         {/* Functions */}
-        <div className="w-[600px] h-full flex flex-col divide-y divide-gray-200">
+        <div className="w-[550px] h-full flex flex-col divide-y divide-gray-200">
           <div className="flex-1">
             {selectedLine && (
               <LineFunctionPanel
@@ -322,7 +367,7 @@ export default function SaleScreen() {
           </div>
 
           {/* monitor */}
-          <div className="h-16">
+          <div className="h-24">
             <DocumentMonitor />
           </div>
           <div className="h-20 grid grid-cols-4 gap-2 p-2">
@@ -411,6 +456,7 @@ export default function SaleScreen() {
           clearActiveCart();
           setModalTarget(null);
         }}
+        discounts={discounts}
       />
 
       <MemberSearchModal
@@ -427,6 +473,29 @@ export default function SaleScreen() {
           }
           setModalTarget(null);
         }}
+      />
+
+      {/* <UserVoucherModal
+        open={modalTarget === "user-voucher"}
+        onClose={() => setModalTarget(null)}
+        onSelect={(voucher) => {
+          const newDiscount: SaleStoreDiscount = {
+            lineKey: null,
+            entityType: "voucher",
+            entityId: voucher.id,
+            description: "User Daily Voucher",
+            amount: voucher.left_amount,
+          };
+          handleAddDiscount(newDiscount);
+          setModalTarget(null);
+        }}
+      /> */}
+
+      <DiscountListModal
+        open={modalTarget === "discount-list"}
+        onClose={() => setModalTarget(null)}
+        discounts={discounts}
+        onRemove={removeDiscount}
       />
     </div>
   );
