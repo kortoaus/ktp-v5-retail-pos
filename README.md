@@ -107,6 +107,8 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - Weight items: auto-read on modal open + 500ms polling when `autoPolling` enabled
 - Normal item merge (same item + same price = qty increment)
 - Line functions: change qty, override price, discount $, discount %
+- Document-level discounts: per-cart promotion discounts with add/remove, displayed in monitor
+- Discount list modal with touchscreen paging (page size 5)
 - On-screen keyboard (Korean dubeolsik + English + numpad)
 - Hotkeys: touchscreen 6×6 grid for quick item selection
 
@@ -122,10 +124,12 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 ### Payment
 
 - Credit card surcharge (configurable rate from Store Settings, default 1.5%)
+- Voucher payment: user daily vouchers applied as payment method (not discount), capped to remaining due
+- Voucher deducts balance server-side, creates usage history for audit
 - Server stores `total = sum(payments.amount + payments.surcharge)` (includes surcharge)
 - Client computes `appliedPaymentLines` (change-adjusted) before sending to server
 - Australian 5c rounding (cash payments only)
-- Split cash/credit with committed payment lines
+- Split cash/credit/voucher with committed payment lines
 - Per-line GST allocation via largest-remainder method
 - Tax: `goodsTax = exactDue × taxableRatio ÷ 11`, `surchargeTax = surcharge ÷ 11`
 - All math via `decimal.js`
@@ -145,6 +149,7 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - Open: cash counter (denomination grid, 999 cap) + note
 - Close: server sums invoices + cashios, count actual cash, double-confirm, Z-report auto-print
 - Expected cash = started + salesCash − refundsCash + cashIn − cashOut
+- Shift settlement tracks salesCash, salesCredit, salesVoucher separately
 - All shift money stored in cents (Int)
 
 ### Cash In / Out
