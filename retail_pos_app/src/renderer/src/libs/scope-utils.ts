@@ -2,6 +2,7 @@ export default function hasScope(
   userScopes: string[],
   requiredScopes: string[],
 ) {
+  console.log("userScopes", userScopes);
   if (userScopes.includes("admin")) {
     return true;
   }

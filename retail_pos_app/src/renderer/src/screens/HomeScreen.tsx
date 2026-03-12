@@ -19,7 +19,6 @@ import {
   IoExpandOutline,
   IoTvOutline,
 } from "react-icons/io5";
-import SyncPostButton from "../components/SyncPostButton";
 
 const btn =
   "w-full h-full rounded-xl font-semibold text-sm transition-colors active:scale-[0.98] flex flex-col items-center justify-center gap-1.5";
@@ -120,7 +119,7 @@ export default function HomeScreen() {
             Customer Display
           </button>
         </div>
-        <SyncPostButton />
+        {/* <SyncPostButton /> */}
         {/* <NavBtn to="/manager/hotkey" icon={<IoGridOutline size={24} />} className="bg-amber-50 text-amber-800 hover:bg-amber-100">
           Hotkey Manager
         </NavBtn> */}

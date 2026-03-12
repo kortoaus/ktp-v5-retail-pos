@@ -109,7 +109,12 @@ export function renderShiftSettlementReceipt(
   y += LH;
   row(ctx, "Credit", fmt(shift.salesCredit), y);
   y += LH;
+  row(ctx, "Voucher", fmt(shift.salesVoucher), y);
+  y += LH;
   row(ctx, "GST", fmt(shift.salesTax), y);
+  y += LH;
+  ctx.font = `bold ${FONT}px sans-serif`;
+  row(ctx, "Total Sales", fmt(shift.salesCash + shift.salesCredit + shift.salesVoucher), y);
   y += LH;
 
   /* ── Refunds ── */

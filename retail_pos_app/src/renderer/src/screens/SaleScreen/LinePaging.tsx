@@ -17,7 +17,7 @@ export default function LinePaging({
   setLineOffset: (offset: number) => void;
 }) {
   return (
-    <div className="w-[64px] bg-gray-100 h-full grid grid-rows-4 overflow-hidden divide-y divide-gray-200">
+    <div className="w-[48px] bg-gray-100 h-full grid grid-rows-4 overflow-hidden divide-y divide-gray-200">
       <PageButton
         icon={<FaArrowsUpToLine />}
         disabled={lineOffset <= 0}

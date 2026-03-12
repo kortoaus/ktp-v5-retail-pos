@@ -57,6 +57,7 @@ export default function CloseShiftScreen() {
   const {
     salesCash,
     salesCredit,
+    salesVoucher,
     salesTax,
     refundsCash,
     refundsCredit,
@@ -98,6 +99,7 @@ export default function CloseShiftScreen() {
         endedCashActual: toCents(cashActual),
         salesCash: toCents(salesCash),
         salesCredit: toCents(salesCredit),
+        salesVoucher: toCents(salesVoucher),
         salesTax: toCents(salesTax),
         refundsCash: toCents(refundsCash),
         refundsCredit: toCents(refundsCredit),
@@ -131,6 +133,7 @@ export default function CloseShiftScreen() {
     ["Started Cash", fmt(startedCash)],
     ["Sales (Cash)", fmt(salesCash)],
     ["Sales (Credit)", fmt(salesCredit)],
+    ["Sales (Voucher)", fmt(salesVoucher)],
     ["Sales Tax", fmt(salesTax)],
     ["Refunds (Cash)", `-${fmt(refundsCash)}`],
     ["Refunds (Credit)", `-${fmt(refundsCredit)}`],

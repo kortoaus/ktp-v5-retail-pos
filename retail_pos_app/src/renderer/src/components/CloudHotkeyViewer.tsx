@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CloudHotkey, CloudHotkeyItem, Hotkey } from "../types/models";
+import { CloudHotkey, CloudHotkeyItem } from "../types/models";
 import { cn } from "../libs/cn";
 
 interface CloudHotkeyViewerProps {
@@ -68,14 +68,14 @@ function TabViewer({
 
   return (
     <div className="w-full h-full flex flex-col">
-      <div className="flex-1 grid grid-cols-5 grid-rows-5">
+      <div className="flex-1 grid grid-cols-5 grid-rows-5 p-1">
         {visibleTabs.map((tab) => (
           <div
             onClick={() => onClick(tab.id)}
             key={tab.id}
             className="w-full h-full flex items-center justify-center p-1"
           >
-            <div className="border w-full h-full center">
+            <div className="border w-full h-full center border-gray-500 rounded-md bg-green-600 text-white font-bold text-lg">
               {lang === "en" ? tab.name_en : tab.name_ko}
             </div>
           </div>
@@ -83,7 +83,7 @@ function TabViewer({
       </div>
 
       {/* Paginator */}
-      <div className="h-16 grid grid-cols-3">
+      <div className="h-14 grid grid-cols-3">
         <div
           className={cn(
             "center bg-slate-500 text-white text-xl font-bold",
@@ -145,14 +145,14 @@ function KeyViewer({
 
   return (
     <div className="w-full h-full flex flex-col">
-      <div className="flex-1 grid grid-cols-5 grid-rows-5 border border-black">
+      <div className="flex-1 grid grid-cols-5 grid-rows-5 border border-gray-400">
         {Array.from({ length: SIZE * SIZE }).map((_, i) => {
           const xIdx = i % SIZE;
           const yIdx = Math.floor(i / SIZE);
           const keyItem = currentKeys.find((k) => k.x === xIdx && k.y === yIdx);
           if (!keyItem)
             return (
-              <div key={`${xIdx},${yIdx}`} className="border border-black" />
+              <div key={`${xIdx},${yIdx}`} className="border border-gray-400" />
             );
           return (
             <KeyCell
@@ -166,7 +166,7 @@ function KeyViewer({
       </div>
 
       {/* Paginator */}
-      <div className="h-16 grid grid-cols-3">
+      <div className="h-14 grid grid-cols-3">
         <div
           className={cn(
             "center bg-slate-500 text-white text-xl font-bold",

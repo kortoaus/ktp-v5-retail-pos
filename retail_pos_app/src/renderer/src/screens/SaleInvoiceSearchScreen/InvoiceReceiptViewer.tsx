@@ -185,6 +185,12 @@ export default function InvoiceReceiptViewer({
             </span>
           </div>
         )}
+        {invoice.voucherPaid > 0 && (
+          <div className="flex justify-between">
+            <span>Voucher Paid</span>
+            <span>{fmt(invoice.voucherPaid)}</span>
+          </div>
+        )}
       </div>
 
       <hr className="border-dashed border-gray-400 my-3" />

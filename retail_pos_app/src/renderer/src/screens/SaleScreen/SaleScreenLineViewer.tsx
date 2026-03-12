@@ -28,7 +28,7 @@ export default function SaleScreenLineViewer({
       <div className="text-sm bg-gray-100 border-b border-b-gray-200 h-8 divide-x divide-gray-200 flex *:flex *:justify-center *:items-center">
         <div className="w-12">No.</div>
         <div className="flex-1">Item</div>
-        <div className="w-28">Unit Price</div>
+        <div className="w-24">U. Price</div>
         <div className="w-24">Qty</div>
         <div className="w-24">Total</div>
       </div>
@@ -118,17 +118,17 @@ function LineCaption({
 
       {/* Names */}
       <div className="flex-1 p-1 flex flex-col justify-center">
-        <div className="line-clamp-1 truncate text-base font-medium">
+        <div className="line-clamp-1 truncate text-sm font-medium">
           {name_en}
         </div>
-        <div className="line-clamp-1 truncate text-gray-500 text-sm">
+        <div className="line-clamp-1 truncate text-gray-500 text-xs">
           {name_ko}
         </div>
       </div>
 
       {/* Unit Price */}
-      <div className="flex flex-col items-end justify-center w-28 p-1">
-        <div className="text-lg font-medium">
+      <div className="flex flex-col items-end justify-center w-24 p-1">
+        <div className="text-base font-medium">
           {unit_price_adjusted && <span className="text-red-500">*</span>}
           {displayPrice.toFixed(MONEY_DP)}
         </div>
@@ -141,12 +141,14 @@ function LineCaption({
 
       {/* Qty */}
       <div className="flex flex-col items-end justify-center w-24  p-1">
-        <div className="text-lg font-medium">{displayQty.toFixed(QTY_DP)}</div>
+        <div className="text-base font-medium">
+          {displayQty.toFixed(QTY_DP)}
+        </div>
       </div>
 
       {/* Total */}
       <div className="flex flex-col items-end justify-center w-24  p-1">
-        <div className="text-lg font-medium">
+        <div className="text-base font-medium">
           {taxable && <span className="text-red-500">*</span>}
           {total.toFixed(MONEY_DP)}
         </div>

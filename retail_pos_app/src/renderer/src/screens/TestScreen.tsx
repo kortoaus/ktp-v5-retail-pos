@@ -1,102 +1,201 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { useWeight } from "../hooks/useWeight";
-import { useBarcodeScanner } from "../hooks/useBarcodeScanner";
-import SyncButton from "../components/SyncButton";
-import { QTY_DP } from "../libs/constants";
+import { useCallback, useState } from "react";
+import { User, UserVoucher } from "../types/models";
+import { getPublicUsers } from "../service/user.service";
+import ModalContainer from "../components/ModalContainer";
+import KeyboardInputText from "../components/KeyboardInputText";
+import LoadingOverlay from "../components/LoadingOverlay";
+import {
+  getUserVouchersByUserIds,
+  issueUserDailyVoucher,
+} from "../service/user.voucher.service";
+import { MONEY_DP } from "../libs/constants";
+
+const RESULT_LIMIT = 5;
+
+type UserWithVoucher = User & {
+  voucher: UserVoucher | null;
+};
+
+const searchUserVouchers = async (keyword: string) => {
+  const userRes = await getPublicUsers(
+    `?keyword=${keyword}&limit=${RESULT_LIMIT}`,
+  );
+  if (!userRes.ok || !userRes.result)
+    return {
+      ok: false,
+      result: [],
+      msg: userRes.msg || "Failed to search users",
+    };
+
+  const userIds = userRes.result.map((user) => user.id);
+  const voucherRes = await getUserVouchersByUserIds(userIds);
+  if (!voucherRes.ok || !voucherRes.result)
+    return {
+      ok: false,
+      result: [],
+      msg: voucherRes.msg || "Failed to search user vouchers",
+    };
+
+  const vouchers = voucherRes.result ?? ([] as UserVoucher[]);
+  const userWithVoucher = userRes.result.map((user) => ({
+    ...user,
+    voucher: vouchers.find((voucher) => voucher.userId === user.id) || null,
+  }));
+
+  return {
+    ok: true,
+    result: userWithVoucher,
+  };
+};
 
 export default function TestScreen() {
-  const { weight, connected, connect, disconnect, readWeight } = useWeight();
-  const [lastScanned, setLastScanned] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<UserWithVoucher[]>([]);
+  const [keyword, setKeyword] = useState("");
+  const [lastKeyword, setLastKeyword] = useState("");
 
-  useBarcodeScanner((barcode) => setLastScanned(barcode));
+  const onSearchHandler = useCallback(async () => {
+    if (loading || keyword === lastKeyword || keyword.trim() === "") return;
+    setLoading(true);
+    try {
+      const res = await searchUserVouchers(keyword);
+      if (res.ok && res.result) {
+        setResult(res.result);
+        setLastKeyword(keyword);
+        setKeyword("");
+      } else {
+        setResult([]);
+        window.alert("Failed to search users");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [keyword]);
 
-  const handleConnect = async () => {
-    const ok = await connect();
-    if (!ok) alert("Failed to connect to scale");
-  };
+  const onIssueVoucherHandler = useCallback(
+    async (userId: number) => {
+      if (loading) return;
+
+      const targetIdx = result.findIndex((user) => user.id === userId);
+      if (targetIdx === -1) return;
+
+      const ask = window.confirm(
+        `Are you sure you want to issue voucher to [${result[targetIdx].name}]?`,
+      );
+      if (!ask) return;
+
+      setLoading(true);
+
+      try {
+        const res = await issueUserDailyVoucher(userId);
+        if (res.ok && res.result) {
+          result[targetIdx].voucher = res.result;
+        } else {
+          window.alert(res.msg || "Failed to issue voucher");
+        }
+      } catch (e) {
+        console.error(e);
+        window.alert("Failed to issue voucher");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loading, result],
+  );
 
   return (
-    <div className="h-full bg-gray-50 p-6">
-      <div className="max-w-md mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-900">Device Test</h1>
-          <Link
-            to="/manager/settings"
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-          >
-            Settings
-          </Link>
-          <Link
-            to="/labeling"
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-          >
-            Labeling
-          </Link>
-        </div>
-
-        <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-900">Scale</h2>
-            <span
-              className={`text-xs font-medium px-2 py-1 rounded-full ${connected ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}
+    <div className="bg-gray-100">
+      <ModalContainer
+        open={true}
+        onClose={() => {}}
+        title="Search User Voucher"
+      >
+        <div className="flex-col divide-y divide-gray-200">
+          {loading && <LoadingOverlay label="Searching..." />}
+          {/* Search Header */}
+          <div className="w-full h-16 flex items-center justify-center px-4 gap-2">
+            <div className="flex-1">
+              <KeyboardInputText value={keyword} onChange={setKeyword} />
+            </div>
+            <button
+              disabled={loading}
+              className="h-8 bg-blue-500 text-white px-4 rounded-md"
+              onClick={onSearchHandler}
             >
-              {connected ? "Connected" : "Disconnected"}
-            </span>
+              Search
+            </button>
           </div>
 
-          <div className="flex gap-2">
-            {!connected ? (
-              <button
-                onClick={handleConnect}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-              >
-                Connect
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={readWeight}
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-                >
-                  Read Weight
-                </button>
-                <button
-                  onClick={disconnect}
-                  className="border border-gray-300 hover:border-gray-400 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-                >
-                  Disconnect
-                </button>
-              </>
+          {/* Search Result */}
+          <div>
+            {lastKeyword === "" && (
+              <div className="center py-4 text-gray-500">
+                Please Search User
+              </div>
+            )}
+            {lastKeyword !== "" && result.length === 0 && (
+              <div className="center py-4 text-gray-500">No user found</div>
             )}
           </div>
 
-          <div className="bg-gray-50 rounded-lg p-4 text-center">
-            <div className="text-4xl font-bold tabular-nums text-gray-900">
-              {weight.weight.toFixed(QTY_DP)}
+          {lastKeyword !== "" && result.length > 0 && (
+            <div className="flex flex-col divide-y divide-gray-200">
+              {Array.from({ length: RESULT_LIMIT }).map((_, index) => {
+                const user = result[index];
+                if (!user) return null;
+                return (
+                  <div key={index}>
+                    <UserVoucherItem
+                      user={user}
+                      onIssueVoucher={onIssueVoucherHandler}
+                      onVoucherSelect={console.log}
+                    />
+                  </div>
+                );
+              })}
             </div>
-            <div className="text-sm text-gray-500 mt-1">
-              {weight.unit} · {weight.status}
-              {weight.message && ` · ${weight.message}`}
-            </div>
-          </div>
-        </section>
+          )}
+        </div>
+      </ModalContainer>
+    </div>
+  );
+}
 
-        <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-          <h2 className="text-base font-semibold text-gray-900">
-            Barcode Scanner
-          </h2>
-          <p className="text-xs text-gray-500">
-            Supports Datalogic serial and USB HID scanners.
-          </p>
-          <div className="bg-gray-50 rounded-lg p-4 text-center">
-            <div className="text-lg font-mono font-semibold text-gray-900">
-              {lastScanned ?? "—"}
-            </div>
-          </div>
-        </section>
-      </div>
-      <SyncButton />
+function UserVoucherItem({
+  user,
+  onIssueVoucher,
+  onVoucherSelect,
+}: {
+  user: UserWithVoucher;
+  onIssueVoucher: (userId: number) => void;
+  onVoucherSelect: (voucher: UserVoucher) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between px-4 relative h-14">
+      <div className="text-lg font-medium">{user.name}</div>
+
+      {user.voucher === null && (
+        <div
+          className="h-10 w-24 bg-blue-500 center text-white rounded-md font-bold"
+          onClick={() => onIssueVoucher(user.id)}
+        >
+          Issue
+        </div>
+      )}
+      {user.voucher !== null && (
+        <div
+          className="h-10 w-24 bg-green-600 center text-white rounded-md font-bold"
+          onClick={() => {
+            if (user.voucher && user.voucher.left_amount > 0) {
+              onVoucherSelect(user.voucher);
+            } else {
+              window.alert("No voucher left");
+            }
+          }}
+        >
+          {`$${user.voucher.left_amount.toFixed(MONEY_DP)}`}
+        </div>
+      )}
     </div>
   );
 }

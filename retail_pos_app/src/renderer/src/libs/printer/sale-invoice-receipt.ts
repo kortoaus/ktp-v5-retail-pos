@@ -72,6 +72,7 @@ function estimateHeight(invoice: SaleInvoice, isCopy: boolean): number {
   if (invoice.cashPaid > 0) payLines += 2;
   if (invoice.cashChange > 0) payLines += 1;
   if (invoice.creditPaid > 0) payLines += 1;
+  if (invoice.voucherPaid > 0) payLines += 1;
 
   const footerLines = 6;
 
@@ -266,6 +267,10 @@ export async function renderReceipt(
   if (invoice.creditPaid > 0) {
     const eftposTotal = invoice.creditPaid + invoice.creditSurchargeAmount;
     row(ctx, "Credit Paid", fmt(eftposTotal), y);
+    y += LH;
+  }
+  if (invoice.voucherPaid > 0) {
+    row(ctx, "Voucher Paid", fmt(invoice.voucherPaid), y);
     y += LH;
   }
 

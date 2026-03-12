@@ -29,6 +29,11 @@ const FIELDS = [
     layout: "numpad" as const,
   },
   {
+    key: "user_daily_voucher_default",
+    label: "Daily User Voucher Default",
+    layout: "numpad" as const,
+  },
+  {
     key: "receipt_below_text",
     label: "Receipt Footer",
     layout: "korean" as const,
@@ -57,6 +62,10 @@ function settingToForm(s: StoreSetting): FormState {
       s.credit_surcharge_rate != null
         ? String(+(s.credit_surcharge_rate * 100).toFixed(4))
         : "",
+    user_daily_voucher_default:
+      s.user_daily_voucher_default != null
+        ? String(s.user_daily_voucher_default)
+        : "",
     receipt_below_text: s.receipt_below_text ?? "",
   };
 }
@@ -78,6 +87,10 @@ function formToPayload(form: FormState) {
     // Convert percent back to decimal for server
     credit_surcharge_rate: isNaN(rate) ? undefined : rate / 100,
     receipt_below_text: form.receipt_below_text || undefined,
+    user_daily_voucher_default:
+      form.user_daily_voucher_default != null
+        ? parseInt(form.user_daily_voucher_default)
+        : undefined,
   };
 }
 
