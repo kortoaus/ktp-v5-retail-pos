@@ -17,6 +17,7 @@ interface PaymentSummaryProps {
   effectiveDue: Decimal;
   totalCash: Decimal;
   totalCredit: Decimal;
+  totalVoucher: Decimal;
   taxAmount: Decimal;
   totalDiscountAmount: Decimal;
   totalEftpos: Decimal;
@@ -39,6 +40,7 @@ export default function PaymentSummary({
   effectiveDue,
   totalCash,
   totalCredit,
+  totalVoucher,
   taxAmount,
   totalDiscountAmount,
   totalEftpos,
@@ -92,6 +94,9 @@ export default function PaymentSummary({
           <div className="border-t border-gray-200 pt-3 flex flex-col gap-2">
             <SummaryRow label="Cash" value={fmt(totalCash)} />
             <SummaryRow label="Credit" value={fmt(totalCredit)} />
+            {totalVoucher.gt(0) && (
+              <SummaryRow label="Voucher" value={fmt(totalVoucher)} />
+            )}
           </div>
 
           <div className="border-t border-gray-200 pt-3 flex flex-col gap-2">

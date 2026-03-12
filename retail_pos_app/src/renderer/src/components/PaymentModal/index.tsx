@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Decimal } from "decimal.js";
 import { MONEY_DP } from "../../libs/constants";
 import { cn } from "../../libs/cn";
-import { SaleLineType } from "../../types/sales";
+import { SaleLineType, SaleStoreDiscount } from "../../types/sales";
 import {
   createSaleInvoice,
   getSaleInvoiceById,
@@ -14,6 +14,7 @@ import { Payment, usePaymentCalc } from "./usePaymentCalc";
 import { InputField } from "./PaymentParts";
 import PaymentSummary from "./PaymentSummary";
 import { useStoreSetting } from "../../hooks/useStoreSetting";
+import UserVoucherModal from "../UserVoucherModal";
 
 const NOTES = [100, 50, 20, 10, 5, 2, 1, 0.5];
 
@@ -25,6 +26,7 @@ export default function PaymentModal({
   open,
   onClose,
   lines,
+  discounts,
   memberId,
   memberLevel,
   onComplete,
@@ -32,6 +34,7 @@ export default function PaymentModal({
   open: boolean;
   onClose: () => void;
   lines: SaleLineType[];
+  discounts: SaleStoreDiscount[];
   memberId: string | null;
   memberLevel: number | null;
   onComplete: () => void;
@@ -50,6 +53,7 @@ export default function PaymentModal({
     null,
   );
   const [processing, setProcessing] = useState(false);
+  const [voucherModalOpen, setVoucherModalOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -63,6 +67,7 @@ export default function PaymentModal({
 
   const calc = usePaymentCalc({
     lines,
+    discounts,
     documentDiscountMethod,
     documentDiscountValue,
     committedPayments,
@@ -74,7 +79,7 @@ export default function PaymentModal({
   const stagingCreditEftpos = useMemo(() => {
     if (creditReceived <= 0) return new Decimal(0);
     const amt = new Decimal(creditReceived);
-    const sc = amt.mul(0.015).toDecimalPlaces(MONEY_DP, Decimal.ROUND_HALF_UP);
+    const sc = amt.mul(CREDIT_SURCHARGE_RATE).toDecimalPlaces(MONEY_DP, Decimal.ROUND_HALF_UP);
     return amt.add(sc);
   }, [creditReceived]);
 
@@ -98,7 +103,10 @@ export default function PaymentModal({
       if (target === "cash" && cashReceived === 0 && calc.remaining.gt(0)) {
         const cashRemaining = Decimal.max(
           new Decimal(0),
-          calc.roundedDue.sub(calc.totalCash).sub(calc.totalCredit),
+          calc.roundedDue
+            .sub(calc.totalVoucher)
+            .sub(calc.totalCash)
+            .sub(calc.totalCredit),
         );
         setCashReceived(cashRemaining.toNumber());
         setNumpadVal(Math.round(cashRemaining.toNumber() * 100).toString());
@@ -214,11 +222,17 @@ export default function PaymentModal({
       cashPaid: cashPaid.toNumber(),
       cashChange: calc.changeAmount.toNumber(),
       creditPaid: calc.totalCredit.toNumber(),
+      voucherPaid: calc.totalVoucher.toNumber(),
       totalDiscountAmount: calc.totalDiscountAmount.toNumber(),
       payments: appliedLines.map((l) => ({
         type: l.type,
         amount: l.amount.toNumber(),
         surcharge: l.surcharge.toNumber(),
+        ...(l.type === "voucher" && {
+          entityType: l.entityType,
+          entityId: l.entityId,
+          voucher_balance: l.voucher_balance,
+        }),
       })),
     };
 
@@ -384,6 +398,14 @@ export default function PaymentModal({
               >
                 + Add Payment
               </button>
+
+              <button
+                type="button"
+                onPointerDown={() => setVoucherModalOpen(true)}
+                className="h-12 rounded-xl text-base font-bold bg-purple-500 text-white active:bg-purple-600 transition-colors"
+              >
+                User Voucher
+              </button>
             </div>
           </div>
 
@@ -421,7 +443,11 @@ export default function PaymentModal({
                   key={i}
                   className={cn(
                     "flex items-center justify-between rounded-lg px-3 py-2",
-                    p.type === "cash" ? "bg-green-50" : "bg-blue-50",
+                    p.type === "cash"
+                      ? "bg-green-50"
+                      : p.type === "voucher"
+                        ? "bg-purple-50"
+                        : "bg-blue-50",
                   )}
                 >
                   <div className="flex flex-col min-w-0">
@@ -461,6 +487,7 @@ export default function PaymentModal({
             effectiveDue={calc.effectiveDue}
             totalCash={calc.totalCash}
             totalCredit={calc.totalCredit}
+            totalVoucher={calc.totalVoucher}
             taxAmount={calc.taxAmount}
             totalDiscountAmount={calc.totalDiscountAmount}
             totalEftpos={calc.totalEftpos}
@@ -496,6 +523,39 @@ export default function PaymentModal({
             </div>
           </div>
         )}
+
+        <UserVoucherModal
+          open={voucherModalOpen}
+          onClose={() => setVoucherModalOpen(false)}
+          onSelect={(voucher) => {
+            const rem = Math.max(0, calc.remaining.toNumber());
+            if (rem <= 0) {
+              window.alert("Payment is already fulfilled");
+              setVoucherModalOpen(false);
+              return;
+            }
+            const duplicate = committedPayments.some(
+              (p) => p.type === "voucher" && p.entityId === voucher.id,
+            );
+            if (duplicate) {
+              window.alert("This voucher is already applied");
+              setVoucherModalOpen(false);
+              return;
+            }
+            const amount = Math.min(voucher.left_amount, rem);
+            setCommittedPayments((prev) => [
+              ...prev,
+              {
+                type: "voucher",
+                amount,
+                entityType: "user-voucher",
+                entityId: voucher.id,
+                voucher_balance: voucher.left_amount,
+              },
+            ]);
+            setVoucherModalOpen(false);
+          }}
+        />
       </div>
     </div>
   );

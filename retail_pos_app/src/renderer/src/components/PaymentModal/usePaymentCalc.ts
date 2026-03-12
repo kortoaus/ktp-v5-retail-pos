@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Decimal } from "decimal.js";
 import { MONEY_DP } from "../../libs/constants";
-import { SaleLineType } from "../../types/sales";
+import { SaleLineType, SaleStoreDiscount } from "../../types/sales";
 
 // const CREDIT_SURCHARGE_RATE = 0.015; // 1.5%
 
@@ -10,18 +10,25 @@ const floor2 = (d: Decimal) => d.toDecimalPlaces(MONEY_DP, Decimal.ROUND_FLOOR);
 const r2 = (d: Decimal) => d.toDecimalPlaces(MONEY_DP, Decimal.ROUND_HALF_UP);
 
 export interface Payment {
-  type: "cash" | "credit";
+  type: "cash" | "credit" | "voucher";
   amount: number;
+  entityType?: "user-voucher" | "member-voucher";
+  entityId?: number;
+  voucher_balance?: number;
 }
 export interface PaymentLine {
-  type: "cash" | "credit";
+  type: "cash" | "credit" | "voucher";
   amount: Decimal;
   surcharge: Decimal;
   eftpos: Decimal;
+  entityType?: "user-voucher" | "member-voucher";
+  entityId?: number;
+  voucher_balance?: number;
 }
 
 export interface PaymentCalcInputs {
   lines: SaleLineType[];
+  discounts: SaleStoreDiscount[];
   documentDiscountMethod: "percent" | "amount";
   documentDiscountValue: number;
   committedPayments: Payment[];
@@ -32,6 +39,7 @@ export interface PaymentCalcInputs {
 
 export function usePaymentCalc({
   lines,
+  discounts,
   documentDiscountMethod,
   documentDiscountValue,
   committedPayments,
@@ -41,11 +49,21 @@ export function usePaymentCalc({
 }: PaymentCalcInputs) {
   /* ── Sale-level calculations (unchanged) ───────────── */
 
-  const subTotal = useMemo(() => {
+  const nonVoucherDiscountAmount = useMemo(() => {
+    return discounts
+      .filter((d) => d.entityType !== "user-voucher")
+      .reduce((acc, d) => acc.add(new Decimal(d.amount)), new Decimal(0));
+  }, [discounts]);
+
+  const lineTotal = useMemo(() => {
     return lines.reduce((acc, line) => {
       return acc.add(new Decimal(line.total));
     }, new Decimal(0));
   }, [lines]);
+
+  const subTotal = useMemo(() => {
+    return lineTotal.sub(nonVoucherDiscountAmount);
+  }, [lineTotal, nonVoucherDiscountAmount]);
 
   const taxableRatio = useMemo(() => {
     if (subTotal.isZero()) return new Decimal(0);
@@ -62,6 +80,8 @@ export function usePaymentCalc({
     }
     return new Decimal(documentDiscountValue);
   }, [subTotal, documentDiscountMethod, documentDiscountValue]);
+
+  // voucher priority: user-voucher => member-voucher
 
   const exactDue = useMemo(
     () => subTotal.sub(documentDiscountAmount),
@@ -95,6 +115,17 @@ export function usePaymentCalc({
   const allPaymentLines = useMemo(() => {
     const result: PaymentLine[] = committedPayments.map((p) => {
       const amt = new Decimal(p.amount);
+      if (p.type === "voucher") {
+        return {
+          type: p.type,
+          amount: amt,
+          surcharge: new Decimal(0),
+          eftpos: amt,
+          entityType: p.entityType,
+          entityId: p.entityId,
+          voucher_balance: p.voucher_balance,
+        };
+      }
       if (p.type === "credit") {
         const sc = r2(amt.mul(CREDIT_SURCHARGE_RATE));
         return {
@@ -153,6 +184,14 @@ export function usePaymentCalc({
     [allPaymentLines],
   );
 
+  const totalVoucher = useMemo(
+    () =>
+      allPaymentLines
+        .filter((p) => p.type === "voucher")
+        .reduce((acc, p) => acc.add(p.amount), new Decimal(0)),
+    [allPaymentLines],
+  );
+
   const totalSurcharge = useMemo(
     () =>
       allPaymentLines.reduce((acc, p) => acc.add(p.surcharge), new Decimal(0)),
@@ -181,8 +220,8 @@ export function usePaymentCalc({
   /* ── Remaining / status ────────────────────────────── */
 
   const remaining = useMemo(
-    () => effectiveDue.sub(totalCash).sub(totalCredit),
-    [effectiveDue, totalCash, totalCredit],
+    () => effectiveDue.sub(totalVoucher).sub(totalCash).sub(totalCredit),
+    [effectiveDue, totalVoucher, totalCash, totalCredit],
   );
 
   const isShort = useMemo(() => remaining.gt(0), [remaining]);
@@ -313,6 +352,7 @@ export function usePaymentCalc({
     totalCredit,
     totalSurcharge,
     totalEftpos,
+    totalVoucher,
     hasCash,
     taxAmount,
     remaining,
