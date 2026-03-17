@@ -3,7 +3,7 @@ services:
       image: postgres:17-alpine
       container_name: retail_pos_local_postgres
       ports:
-        - "5438:5432"
+        - "5555:5432"
       environment:
         POSTGRES_USER: ktpv5
         POSTGRES_PASSWORD: 510935
