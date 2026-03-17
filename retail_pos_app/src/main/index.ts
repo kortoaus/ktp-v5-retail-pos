@@ -8,10 +8,10 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1366,
     height: 768,
-    minWidth: 1366,
-    minHeight: 768,
-    maxWidth: 1366,
-    maxHeight: 768,
+    // minWidth: 1366,
+    // minHeight: 768,
+    // maxWidth: 1366,
+    // maxHeight: 768,
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
@@ -47,7 +47,9 @@ function createCustomerWindow(): void {
   });
 
   if (process.env["ELECTRON_RENDERER_URL"]) {
-    customerWindow.loadURL(process.env["ELECTRON_RENDERER_URL"] + "/#/customer-display");
+    customerWindow.loadURL(
+      process.env["ELECTRON_RENDERER_URL"] + "/#/customer-display",
+    );
   } else {
     customerWindow.loadFile(path.join(__dirname, "../renderer/index.html"), {
       hash: "customer-display",
