@@ -56,6 +56,16 @@ export function convertInvoiceToCents(invoice: any) {
     updatedAt: payment.updatedAt,
   }));
 
+  const discounts = invoice.discounts?.map((discount: any) => ({
+    id: discount.id,
+    invoiceId: discount.invoiceId,
+    entityType: discount.entityType,
+    entityId: discount.entityId,
+    title: discount.title,
+    description: discount.description,
+    amount: dollarToCent(discount.amount),
+  }));
+
   return {
     id: invoice.id,
     type: invoice.type,
@@ -97,6 +107,7 @@ export function convertInvoiceToCents(invoice: any) {
     totalDiscountAmount: dollarToCent(invoice.totalDiscountAmount),
     rows: rows.map((r: any) => ({ ...r, id: undefined })),
     payments: payments.map((r: any) => ({ ...r, id: undefined })),
+    discounts: discounts.map((r: any) => ({ ...r, id: undefined })),
   };
 }
 

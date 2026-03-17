@@ -10,6 +10,7 @@ export default function SyncButton() {
     try {
       const { msg } = await migrateDataFromCloudServer();
       window.alert(msg);
+      window.location.reload();
     } catch (e) {
       console.error(e);
       window.alert("Failed to sync data from cloud server");

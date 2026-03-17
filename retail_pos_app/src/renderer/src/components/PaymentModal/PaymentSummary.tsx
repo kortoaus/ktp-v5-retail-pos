@@ -54,7 +54,10 @@ export default function PaymentSummary({
     <div className="w-[300px] flex flex-col">
       <div className="flex-1 overflow-y-auto p-4">
         <div className="flex flex-col gap-3">
-          <SummaryRow label="Subtotal" value={fmt(subTotal)} />
+          <SummaryRow
+            label="Subtotal"
+            value={fmt(subTotal.plus(totalDiscountAmount))}
+          />
           {!lineDiscountAmount.isZero() && (
             <SummaryRow
               label="Line Discounts"

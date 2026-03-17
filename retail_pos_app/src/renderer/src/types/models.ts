@@ -276,6 +276,7 @@ export interface OnPaymentPayload {
   creditPaid: number; // base card charge (excludes surcharge)
   totalDiscountAmount: number; // line discounts + document discount ("You Saved")
   payments: { type: string; amount: number; surcharge: number }[];
+  discounts: SaleInvoiceDiscount[];
 }
 
 export interface Terminal {
@@ -367,6 +368,19 @@ export interface SaleInvoice {
   voucherPaid: number;
   totalDiscountAmount: number;
   payments: SaleInvoicePayment[];
+  discounts: SaleInvoiceDiscount[];
+}
+
+export interface SaleInvoiceDiscount {
+  id: number;
+  invoiceId: number;
+  entityId: number | null;
+  entityType: string;
+  title: string;
+  description: string | null;
+  amount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RefundableRow extends SaleInvoiceRow {
@@ -433,4 +447,34 @@ export interface CloudPostContentType {
   content?: CloudPostContentType[];
   marks?: { type: string; attrs?: Record<string, any> }[];
   text?: string;
+}
+
+export enum PromotionType {
+  BUY_MORE_SAVE_MORE = "BUY_MORE_SAVE_MORE", // eg. 2 for $5
+  MIX_AND_SAVE = "MIX_AND_SAVE", // eg. if A($7)+B($7) for $5 each
+  N_FOR_N_MINUS_ONE = "N_FOR_N_MINUS_ONE", // eg buy 3 get 1 free
+}
+
+export interface Promotion {
+  id: number;
+  type: PromotionType;
+  companyId: number;
+  name_en: string;
+  name_ko: string;
+  desc_en?: string | null;
+  desc_ko?: string | null;
+  startDate: string; // ISO date string
+  endDate: string; // ISO date string
+  archived: boolean;
+  createdAt: string; // ISO date string
+  updatedAt: string; // ISO date string
+
+  requiredItemIds: number[];
+  allowedItemIds: number[];
+
+  minQty: number; // default: 1
+  maxQty?: number | null; // optional
+
+  discountType: "percentage" | "amount";
+  discountAmounts: number[]; // e.g. [10,5] = $10, $5, or 10%, 5%
 }

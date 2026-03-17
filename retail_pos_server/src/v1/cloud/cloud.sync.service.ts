@@ -23,6 +23,7 @@ export async function saleInvoiceSyncService(saleInvoiceId: number) {
         rows: true,
         payments: true,
         terminal: true,
+        discounts: true,
         user: true,
       },
     });

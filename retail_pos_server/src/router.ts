@@ -10,6 +10,7 @@ import saleRouter from "./v1/sale/sale.router";
 import printerRouter from "./v1/printer/printer.router";
 import cashIORouter from "./v1/cashio/cashio.router";
 import storeRouter from "./v1/store/store.router";
+import promotionRouter from "./v1/promotion/promotion.router";
 
 const router = Router();
 
@@ -24,4 +25,5 @@ router.use("/sale", saleRouter);
 router.use("/printer", printerRouter);
 router.use("/cashio", cashIORouter);
 router.use("/store", storeRouter);
+router.use("/promotion", promotionRouter);
 export default router;

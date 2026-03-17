@@ -109,6 +109,24 @@ export default function InvoiceReceiptViewer({
         })}
       </div>
 
+      {invoice.discounts.length > 0 && (
+        <div className="space-y-1 mt-2">
+          {invoice.discounts.map((d) => (
+            <div key={d.id}>
+              <div className="flex justify-between text-red-600">
+                <span>{d.title}</span>
+                <span>-{fmt(d.amount)}</span>
+              </div>
+              {d.description && (
+                <div className="text-xs text-gray-500 pl-2">
+                  {d.description}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       <hr className="border-dashed border-gray-400 my-3" />
 
       <div className="space-y-1">

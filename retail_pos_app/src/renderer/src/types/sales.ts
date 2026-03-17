@@ -38,8 +38,9 @@ export interface SaleLineType extends SaleLineItem {
 
 export interface SaleStoreDiscount {
   lineKey: string | null;
-  entityType: "user-voucher" | "promotion" | "member-voucher";
+  entityType: "promotion";
   entityId: number;
+  title: string;
   description: string;
   amount: number;
 }

@@ -179,6 +179,39 @@ model PromoPrice {
   @@index([itemId])
 }
 
+enum PromotionType {
+  BUY_MORE_SAVE_MORE // eg. 2 for $5
+  MIX_AND_SAVE // eg. if A($7)+B($7) for $5 each
+  N_FOR_N_MINUS_ONE // eg buy 3 get 1 free
+}
+
+model Promotion {
+  id        Int           @id
+  type      PromotionType
+  companyId Int
+  name_en   String
+  name_ko   String
+  desc_en   String?       @db.Text
+  desc_ko   String?       @db.Text
+  startDate DateTime
+  endDate   DateTime
+  archived  Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  //
+  requiredItemIds Int[]
+  allowedItemIds  Int[]
+
+  minQty Int  @default(1)
+  maxQty Int?
+
+  discountType    String  @default("percentage") // percentage or amount 
+  discountAmounts Float[]
+
+  @@index([companyId])
+}
+
 model CloudHotkey {
   id        Int               @id
   companyId Int
@@ -476,15 +509,16 @@ model SaleInvoicePayment {
 }
 
 model SaleInvoiceDiscount {
-  id         Int         @id @default(autoincrement())
-  invoiceId  Int
-  invoice    SaleInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  entityId   Int?
-  entityType String
-  name       String
-  amount     Decimal     @db.Decimal(18, 2)
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  id          Int         @id @default(autoincrement())
+  invoiceId   Int
+  invoice     SaleInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  entityId    Int?
+  entityType  String
+  title       String
+  description String?
+  amount      Decimal     @db.Decimal(18, 2)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 model CashInOut {

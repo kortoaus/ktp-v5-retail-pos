@@ -49,9 +49,9 @@ export function usePaymentCalc({
 }: PaymentCalcInputs) {
   /* ── Sale-level calculations (unchanged) ───────────── */
 
-  const nonVoucherDiscountAmount = useMemo(() => {
+  const promotionDiscountAmount = useMemo(() => {
     return discounts
-      .filter((d) => d.entityType !== "user-voucher")
+      .filter((d) => d.entityType === "promotion")
       .reduce((acc, d) => acc.add(new Decimal(d.amount)), new Decimal(0));
   }, [discounts]);
 
@@ -62,8 +62,8 @@ export function usePaymentCalc({
   }, [lines]);
 
   const subTotal = useMemo(() => {
-    return lineTotal.sub(nonVoucherDiscountAmount);
-  }, [lineTotal, nonVoucherDiscountAmount]);
+    return lineTotal.sub(promotionDiscountAmount);
+  }, [lineTotal, promotionDiscountAmount]);
 
   const taxableRatio = useMemo(() => {
     if (subTotal.isZero()) return new Decimal(0);
@@ -80,8 +80,6 @@ export function usePaymentCalc({
     }
     return new Decimal(documentDiscountValue);
   }, [subTotal, documentDiscountMethod, documentDiscountValue]);
-
-  // voucher priority: user-voucher => member-voucher
 
   const exactDue = useMemo(
     () => subTotal.sub(documentDiscountAmount),

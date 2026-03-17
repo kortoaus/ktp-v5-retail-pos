@@ -1,14 +1,18 @@
 import { create } from "zustand";
-import { SaleLineItem, SaleLineType, SaleStoreDiscount } from "../types/sales";
-import { Decimal } from "decimal.js";
-import { MONEY_DP, QTY_DP } from "../libs/constants";
-import { useShallow } from "zustand/shallow";
-
-interface Cart {
-  lines: SaleLineType[];
-  discounts: SaleStoreDiscount[];
-  member: SaleMember | null;
-}
+import { SaleLineItem, SaleStoreDiscount } from "../types/sales";
+import { Promotion } from "../types/models";
+import {
+  type AddLineOptions,
+  type Cart,
+  type SaleMember,
+  applyPromotions,
+  buildNewLine,
+  createEmptyCart,
+  findMergeTarget,
+  recalculateAllLines,
+  recalculateLine,
+  reindexLines,
+} from "./salesStore.helpers";
 
 const CART_COUNT = 4;
 export const LINE_PAGE_SIZE = 10;
@@ -18,183 +22,26 @@ export const ALLOWED_CHANGE_QTY_TYPES = [
   // "weight-prepacked",
 ];
 
-function createEmptyCart(): Cart {
-  return { lines: [], discounts: [], member: null };
-}
-
-function resolveOriginalPrice(item: SaleLineItem): number {
-  return item.price?.prices[0] ?? 0;
-}
-
-function resolveDiscountedPrice(
-  item: SaleLineItem,
-  memberLevel: number,
-): number | null {
-  const original = item.price?.prices[0] ?? 0;
-  const levelPrice = item.price?.prices[memberLevel] ?? 0;
-  const promoPrice = item.promoPrice?.prices[memberLevel] ?? 0;
-
-  const candidates = [levelPrice, promoPrice].filter(
-    (p) => p > 0 && p < original,
-  );
-  if (candidates.length === 0) return null;
-  return Math.min(...candidates);
-}
-
-function recalculateLine(line: SaleLineType): SaleLineType {
-  const unit_price_effective =
-    line.unit_price_adjusted ??
-    line.unit_price_discounted ??
-    line.unit_price_original;
-  const total = new Decimal(unit_price_effective)
-    .mul(line.qty)
-    .toDecimalPlaces(MONEY_DP)
-    .toNumber();
-  const tax_amount = line.taxable
-    ? new Decimal(total).div(11).toDecimalPlaces(MONEY_DP).toNumber()
-    : 0;
-  const subtotal = new Decimal(total)
-    .sub(tax_amount)
-    .toDecimalPlaces(MONEY_DP)
-    .toNumber();
-  return { ...line, unit_price_effective, total, tax_amount, subtotal };
-}
-
-function reindexLines(lines: SaleLineType[]): SaleLineType[] {
-  return lines.map((line, i) =>
-    line.index === i ? line : { ...line, index: i },
-  );
-}
-
-export interface AddLineOptions {
-  prepackedPrice?: number;
-  qty?: number;
-  measured_weight?: number;
-}
-
-function buildNewLine(
-  item: SaleLineItem,
-  memberLevel: number,
-  index: number,
-  options?: AddLineOptions,
-): SaleLineType {
-  const prepackedPrice = options?.prepackedPrice;
-  const isPrepacked =
-    item.type === "prepacked" || item.type === "weight-prepacked";
-  const defaultPrice = item.price?.prices[0] ?? 0;
-  const isSupplierPrepacked = isPrepacked && defaultPrice <= 0;
-
-  let unit_price_original: number;
-  let unit_price_discounted: number | null;
-  let qty: number;
-
-  if (isPrepacked && prepackedPrice != null) {
-    if (isSupplierPrepacked) {
-      unit_price_original = prepackedPrice;
-      unit_price_discounted = null;
-      qty = 1;
-    } else {
-      unit_price_original = defaultPrice;
-      unit_price_discounted = resolveDiscountedPrice(item, memberLevel);
-      console.log(item.type, prepackedPrice, defaultPrice);
-      qty = new Decimal(prepackedPrice)
-        .div(defaultPrice)
-        .toDecimalPlaces(QTY_DP)
-        .toNumber();
-    }
-  } else {
-    unit_price_original = resolveOriginalPrice(item);
-    unit_price_discounted = resolveDiscountedPrice(item, memberLevel);
-    qty = options?.qty ?? 1;
-  }
-
-  let name_en = item.name_en;
-  if (item.type === "weight-prepacked") {
-    name_en = `${name_en} (Prepacked)`;
-  }
-
-  const line: SaleLineType = {
-    ...item,
-    name_en,
-    lineKey: crypto.randomUUID(),
-    index,
-    original_invoice_id: null,
-    original_invoice_row_id: null,
-    barcode_price:
-      isPrepacked && prepackedPrice != null ? prepackedPrice : null,
-    unit_price_adjusted: null,
-    unit_price_discounted,
-    unit_price_original,
-    unit_price_effective: 0,
-    qty,
-    measured_weight: options?.measured_weight ?? null,
-    total: 0,
-    tax_amount: 0,
-    subtotal: 0,
-    adjustments: [],
-  };
-
-  return recalculateLine(line);
-}
-
-function findMergeTarget(
-  lines: SaleLineType[],
-  item: SaleLineItem,
-  memberLevel: number,
-): number {
-  const unit_price_original = resolveOriginalPrice(item);
-  const unit_price_discounted = resolveDiscountedPrice(item, memberLevel);
-
-  return lines.findIndex(
-    (l) =>
-      l.type === "normal" &&
-      l.itemId === item.itemId &&
-      l.unit_price_adjusted === null &&
-      l.unit_price_discounted === unit_price_discounted &&
-      l.unit_price_original === unit_price_original,
-  );
-}
-
-function recalculateAllLines(carts: Cart[], memberLevel: number): Cart[] {
-  return carts.map((cart) => ({
-    lines: cart.lines.map((line) => {
-      const isPrepacked =
-        line.type === "prepacked" || line.type === "weight-prepacked";
-      const defaultPrice = line.price?.prices[0] ?? 0;
-
-      if (isPrepacked && line.barcode_price != null && defaultPrice <= 0) {
-        return line;
-      }
-
-      const unit_price_discounted = resolveDiscountedPrice(line, memberLevel);
-      return recalculateLine({ ...line, unit_price_discounted });
-    }),
-    member: cart.member,
-    discounts: cart.discounts,
-  }));
-}
-
-export interface SaleMember {
-  id: string;
-  name: string;
-  level: number;
-  phone_last4: string | null;
-}
+export type { AddLineOptions, SaleMember };
 
 interface SalesState {
   activeCartIndex: number;
   carts: Cart[];
   lineOffset: number;
+  promotions: Promotion[];
   addLine: (item: SaleLineItem, options?: AddLineOptions) => void;
   removeLine: (lineKey: string) => void;
   changeLineQty: (lineKey: string, qty: number) => void;
   injectLinePrice: (lineKey: string, price: number | null) => void;
   setMember: (member: SaleMember | null) => void;
+  setPromotions: (promotions: Promotion[]) => void;
   setLineOffset: (offset: number) => void;
   switchCart: (index: number) => void;
   clearActiveCart: () => void;
-  addDiscount: (discount: SaleStoreDiscount) => void;
-  removeDiscount: (entityType: SaleStoreDiscount["entityType"], entityId: number) => void;
+  removeDiscount: (
+    entityType: SaleStoreDiscount["entityType"],
+    entityId: number,
+  ) => void;
   cartCount: number;
 }
 
@@ -202,6 +49,7 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
   activeCartIndex: 0,
   carts: Array.from({ length: CART_COUNT }, createEmptyCart),
   lineOffset: 0,
+  promotions: [],
   cartCount: CART_COUNT,
   addLine: (item, options) => {
     if (item.type === "invalid") return;
@@ -226,7 +74,7 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
         updatedCarts[activeCartIndex] = {
           lines: reindexed,
           member,
-          discounts: cart.discounts,
+          discounts: applyPromotions(reindexed, get().promotions),
         };
         set({
           carts: updatedCarts,
@@ -243,7 +91,7 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     updatedCarts[activeCartIndex] = {
       lines,
       member,
-      discounts: cart.discounts,
+      discounts: applyPromotions(lines, get().promotions),
     };
     set({
       carts: updatedCarts,
@@ -261,7 +109,7 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     updatedCarts[activeCartIndex] = {
       lines: reindexLines(filtered),
       member: cart.member,
-      discounts: cart.discounts,
+      discounts: applyPromotions(filtered, get().promotions),
     };
     set({ carts: updatedCarts });
   },
@@ -289,7 +137,7 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     updatedCarts[activeCartIndex] = {
       lines: reindexLines(lines),
       member: cart.member,
-      discounts: cart.discounts,
+      discounts: applyPromotions(lines, get().promotions),
     };
     set({ carts: updatedCarts });
   },
@@ -318,20 +166,37 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     updatedCarts[activeCartIndex] = {
       lines,
       member: cart.member,
-      discounts: cart.discounts,
+      discounts: applyPromotions(lines, get().promotions),
     };
     set({ carts: updatedCarts });
   },
 
   setMember: (member) => {
-    const { carts, activeCartIndex } = get();
+    const { carts, activeCartIndex, promotions } = get();
     const level = member?.level ?? 0;
     const cart = carts[activeCartIndex];
     const updatedCarts = [...carts];
     updatedCarts[activeCartIndex] = { ...cart, member };
-    set({
-      carts: recalculateAllLines(updatedCarts, level),
-    });
+    const recalculated = recalculateAllLines(updatedCarts, level);
+    recalculated[activeCartIndex] = {
+      ...recalculated[activeCartIndex],
+      discounts: applyPromotions(
+        recalculated[activeCartIndex].lines,
+        promotions,
+      ),
+    };
+    set({ carts: recalculated });
+  },
+
+  setPromotions: (promotions) => {
+    const { carts, activeCartIndex } = get();
+    const cart = carts[activeCartIndex];
+    const updatedCarts = [...carts];
+    updatedCarts[activeCartIndex] = {
+      ...cart,
+      discounts: applyPromotions(cart.lines, promotions),
+    };
+    set({ promotions, carts: updatedCarts });
   },
 
   setLineOffset: (offset) => set({ lineOffset: offset }),
@@ -354,28 +219,6 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     set({ carts: updatedCarts });
   },
 
-  addDiscount: (discount) => {
-    const { activeCartIndex, carts } = get();
-    const cart = carts[activeCartIndex];
-
-    const exists = cart.discounts.some(
-      (d) =>
-        d.entityType === discount.entityType &&
-        d.entityId === discount.entityId,
-    );
-    if (exists) {
-      window.alert("This discount is already applied");
-      return;
-    }
-
-    const updatedCarts = [...carts];
-    updatedCarts[activeCartIndex] = {
-      ...cart,
-      discounts: [...cart.discounts, discount],
-    };
-    set({ carts: updatedCarts });
-  },
-
   removeDiscount: (entityType, entityId) => {
     const { activeCartIndex, carts } = get();
     const cart = carts[activeCartIndex];
@@ -392,41 +235,3 @@ export const useSalesStore = create<SalesState>()((set, get) => ({
     set({ carts: updatedCarts });
   },
 }));
-
-export const useCartTotals = () => {
-  return useSalesStore(
-    useShallow((s) => {
-      const cart = s.carts[s.activeCartIndex];
-      const lines = cart.lines ?? [];
-
-      const itemCount = [...new Set(lines.map((l) => l.itemId))].length;
-      const lineCount = lines.length;
-      const qtyCount = lines.reduce((acc, l) => {
-        if (l.type === "weight" || l.type === "weight-prepacked") {
-          return acc + 1;
-        }
-        return acc + l.qty;
-      }, 0);
-
-      const total = lines.reduce((acc, l) => {
-        return acc.add(new Decimal(l.total));
-      }, new Decimal(0));
-      const tax_amount = lines.reduce((acc, l) => {
-        return acc.add(new Decimal(l.tax_amount));
-      }, new Decimal(0));
-      const subtotal = lines.reduce((acc, l) => {
-        return acc.add(new Decimal(l.subtotal));
-      }, new Decimal(0));
-
-      return {
-        itemCount,
-        lineCount,
-        qtyCount,
-        total: total.toNumber(),
-        tax_amount: tax_amount.toNumber(),
-        subtotal: subtotal.toNumber(),
-        discounts: cart.discounts,
-      };
-    }),
-  );
-};

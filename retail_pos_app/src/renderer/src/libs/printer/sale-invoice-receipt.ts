@@ -63,6 +63,8 @@ function estimateHeight(invoice: SaleInvoice, isCopy: boolean): number {
     itemLines += 1;
   }
 
+  const discountLines = invoice.discounts?.length ?? 0;
+
   let totalLines = 2;
   if (invoice.documentDiscountAmount > 0) totalLines += 1;
   if (invoice.creditSurchargeAmount > 0) totalLines += 1;
@@ -77,7 +79,7 @@ function estimateHeight(invoice: SaleInvoice, isCopy: boolean): number {
   const footerLines = 6;
 
   const total =
-    headerLines + metaLines + itemLines + totalLines + payLines + footerLines;
+    headerLines + metaLines + itemLines + discountLines + totalLines + payLines + footerLines;
   return (
     60 +
     total * LH +
@@ -211,6 +213,16 @@ export async function renderReceipt(
     ctx.fillText(totalStr, W - PAD, y);
     ctx.textAlign = "left";
     y += LH - 6;
+  }
+
+  /* ── Discounts ── */
+  if (invoice.discounts && invoice.discounts.length > 0) {
+    y += 4;
+    ctx.font = `${FONT_SM}px sans-serif`;
+    for (const d of invoice.discounts) {
+      row(ctx, d.title, `-${fmt(d.amount)}`, y);
+      y += LH - 6;
+    }
   }
 
   /* ── Totals ── */

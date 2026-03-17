@@ -79,7 +79,9 @@ export default function PaymentModal({
   const stagingCreditEftpos = useMemo(() => {
     if (creditReceived <= 0) return new Decimal(0);
     const amt = new Decimal(creditReceived);
-    const sc = amt.mul(CREDIT_SURCHARGE_RATE).toDecimalPlaces(MONEY_DP, Decimal.ROUND_HALF_UP);
+    const sc = amt
+      .mul(CREDIT_SURCHARGE_RATE)
+      .toDecimalPlaces(MONEY_DP, Decimal.ROUND_HALF_UP);
     return amt.add(sc);
   }, [creditReceived]);
 
@@ -224,6 +226,17 @@ export default function PaymentModal({
       creditPaid: calc.totalCredit.toNumber(),
       voucherPaid: calc.totalVoucher.toNumber(),
       totalDiscountAmount: calc.totalDiscountAmount.toNumber(),
+      discounts: discounts.map((d) => ({
+        id: 0,
+        invoiceId: 0,
+        createdAt: "",
+        updatedAt: "",
+        entityType: d.entityType,
+        entityId: d.entityId,
+        title: d.title,
+        description: d.description,
+        amount: d.amount,
+      })),
       payments: appliedLines.map((l) => ({
         type: l.type,
         amount: l.amount.toNumber(),

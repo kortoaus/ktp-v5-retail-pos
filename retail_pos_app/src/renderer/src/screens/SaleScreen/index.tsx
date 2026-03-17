@@ -33,6 +33,8 @@ import SyncPostButton from "../../components/SyncPostButton";
 import { useUser } from "../../contexts/UserContext";
 import hasScope from "../../libs/scope-utils";
 import DiscountListModal from "./DiscountListModal";
+import usePromotions from "../../hooks/usePromotions";
+import PrintLatestInvoiceButton from "../../components/PrintLatestInvoiceButton";
 
 type ModalTarget =
   | null
@@ -49,6 +51,7 @@ type ModalTarget =
 
 export default function SaleScreen() {
   const navigate = useNavigate();
+  const { promotionsLoading } = usePromotions();
   const { user, loading: userLoading } = useUser();
   const { shift, loading: shiftLoading } = useShift();
   // const { hotkeys, hotkeysLoading } = useHotkeys();
@@ -60,7 +63,6 @@ export default function SaleScreen() {
   const { readWeight } = useWeight();
   const {
     addLine,
-    addDiscount,
     carts,
     activeCartIndex,
     setMember,
@@ -292,6 +294,7 @@ export default function SaleScreen() {
             <div>Discounts</div>
             <div>{`(${discounts.length})`}</div>
           </div>
+          <PrintLatestInvoiceButton className="w-24 h-full rounded-sm text-sm font-bold bg-gray-200 border border-gray-300" />
           {/* <div
             className={cn(
               "w-24 h-full rounded-sm text-sm font-bold center bg-gray-200 border border-gray-300",

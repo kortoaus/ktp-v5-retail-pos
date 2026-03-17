@@ -99,6 +99,12 @@ export async function getSaleInvoiceWithChildren(
   );
 }
 
+export async function getLatestSaleInvoice(): Promise<
+  ApiResponse<SaleInvoice>
+> {
+  return apiService.get<SaleInvoice>(`/api/sale/invoice/latest`);
+}
+
 export async function getSaleInvoices(params: {
   keyword?: string;
   page?: number;

@@ -54,11 +54,9 @@ export default function DiscountListModal({
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">
-                      {d.description}
+                      {d.title}
                     </div>
-                    <div className="text-xs text-gray-400">
-                      {d.entityType}
-                    </div>
+                    <div className="text-xs text-gray-400">{d.description}</div>
                   </div>
                   <div className="text-green-600 font-bold text-base px-4">
                     -${d.amount.toFixed(MONEY_DP)}
@@ -97,9 +95,7 @@ export default function DiscountListModal({
             </span>
             <button
               type="button"
-              onPointerDown={() =>
-                setOffset(Math.min(maxOffset, offset + 1))
-              }
+              onPointerDown={() => setOffset(Math.min(maxOffset, offset + 1))}
               disabled={offset >= maxOffset}
               className={cn(
                 "w-12 h-12 rounded-lg flex items-center justify-center text-white",

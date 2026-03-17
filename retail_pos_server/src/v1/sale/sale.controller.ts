@@ -38,7 +38,8 @@ export async function getLatestTerminalInvoiceController(
   req: Request,
   res: Response,
 ) {
-  const { terminal } = getAuth(res);
+  const terminal = res.locals.terminal;
+  if (!terminal) throw new NotFoundException("Terminal not found");
   const result = await getLatestTerminalInvoiceService(terminal);
   res.status(200).json(result);
 }

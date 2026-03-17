@@ -1,4 +1,9 @@
-import { Brand, Category, Price } from "../../generated/prisma/browser";
+import {
+  Brand,
+  Category,
+  Price,
+  Promotion,
+} from "../../generated/prisma/browser";
 import {
   CloudHotkey,
   CloudHotkeyItem,
@@ -342,6 +347,55 @@ export async function cloudPromoPriceMigrateService() {
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("cloudPromoPriceMigrateService error:", e);
+    return false;
+  }
+}
+
+export async function cloudPromotionMigrateService() {
+  try {
+    const lastUpdatedAt = await db.promotion
+      .findFirst({
+        select: {
+          updatedAt: true,
+        },
+        orderBy: {
+          updatedAt: "desc",
+        },
+        take: 1,
+      })
+      .then((result) => result?.updatedAt?.getTime() || 0);
+    const { ok, msg, result } = await apiService.post<Promotion[]>(
+      "/device/migrate/promotion",
+      {
+        lastUpdatedAt,
+      },
+    );
+
+    if (!ok || !result) {
+      throw new BadRequestException(
+        msg || "Failed to migrate promotions from cloud",
+      );
+    }
+
+    console.log("Got promotions from cloud:", result.length, "promotions");
+
+    for (const promotion of result) {
+      await db.promotion.upsert({
+        where: { id: promotion.id },
+        update: {
+          ...promotion,
+        },
+        create: {
+          ...promotion,
+        },
+      });
+      console.log("Upserted promotion:", promotion.name_en);
+    }
+
+    return true;
+  } catch (e) {
+    if (e instanceof HttpException) throw e;
+    console.error("cloudItemMigrateService error:", e);
     return false;
   }
 }

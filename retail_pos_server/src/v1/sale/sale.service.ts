@@ -45,6 +45,14 @@ type InvoiceRowDto = {
   tax_amount_included: number;
 };
 
+export interface DiscountDto {
+  entityType: string;
+  entityId: number;
+  title: string;
+  description: string;
+  amount: number;
+}
+
 type CreateSaleInvoiceDto = {
   subtotal: number;
   documentDiscountAmount: number;
@@ -61,6 +69,7 @@ type CreateSaleInvoiceDto = {
   memberLevel: number | null;
   rows: InvoiceRowDto[];
   payments: PaymentDto[];
+  discounts: DiscountDto[];
 };
 
 export async function createSaleInvoiceService(
@@ -157,6 +166,15 @@ export async function createSaleInvoiceService(
               surcharge: p.surcharge,
               entityType: p.entityType,
               entityId: p.entityId,
+            })),
+          },
+          discounts: {
+            create: dto.discounts.map((d) => ({
+              entityType: d.entityType,
+              entityId: d.entityId,
+              title: d.title,
+              description: d.description,
+              amount: d.amount,
             })),
           },
         },
@@ -280,6 +298,7 @@ export async function getSaleInvoicesService(query: FindManyQuery) {
       include: {
         rows: true,
         payments: true,
+        discounts: true,
         terminal: true,
       },
     });
@@ -308,6 +327,7 @@ export async function getSaleInvoiceByIdService(id: number) {
       include: {
         rows: true,
         payments: true,
+        discounts: true,
         terminal: true,
       },
     });
@@ -328,7 +348,7 @@ export async function getSaleInvoiceWithChildrenService(id: number) {
   try {
     const invoice = await db.saleInvoice.findUnique({
       where: { id },
-      include: { rows: true, payments: true, terminal: true },
+      include: { rows: true, payments: true, terminal: true, discounts: true },
     });
     if (!invoice) throw new NotFoundException("Invoice not found");
 
@@ -361,6 +381,7 @@ export async function getLatestTerminalInvoiceService(terminal: Terminal) {
         rows: true,
         payments: true,
         terminal: true,
+        discounts: true,
       },
     });
     return {

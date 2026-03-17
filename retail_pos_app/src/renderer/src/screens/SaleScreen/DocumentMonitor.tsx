@@ -1,7 +1,7 @@
-import { useCartTotals } from "../../store/salesStore";
 import { MONEY_DP } from "../../libs/constants";
 import { useMemo } from "react";
 import { Decimal } from "decimal.js";
+import { useCartTotals } from "../../store/useCartTotals";
 
 export default function DocumentMonitor() {
   const {
@@ -67,7 +67,9 @@ export default function DocumentMonitor() {
 
       {/* Row 2: promo discount */}
       <div className="col-span-7 flex items-center gap-4">
-        <div className="text-xs text-gray-400 font-medium">DISCOUNT ({discounts.length})</div>
+        <div className="text-xs text-gray-400 font-medium">
+          DISCOUNT ({discounts.length})
+        </div>
         <div className="text-yellow-400 font-semibold text-sm">
           {promoSum > 0 ? `-$${promoSum.toFixed(MONEY_DP)}` : "$0.00"}
         </div>
