@@ -25,6 +25,7 @@ export interface ZplNetConfig {
 }
 
 export interface ZplSerialConfig {
+  name: string
   path: string
   language: LabelLanguage
 }
@@ -36,7 +37,7 @@ export interface EscposPrinterConfig {
 
 export interface DeviceConfig {
   scale: ScaleConfig | null
-  zplSerial: ZplSerialConfig | null
+  zplSerial: ZplSerialConfig[]
   zplNet: ZplNetConfig[]
   escposPrinter: EscposPrinterConfig | null
 }

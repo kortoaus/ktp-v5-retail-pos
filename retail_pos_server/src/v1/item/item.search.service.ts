@@ -1,11 +1,18 @@
 import { ItemWhereInput } from "../../generated/prisma/models";
 import db from "../../libs/db";
-import { HttpException, InternalServerException } from "../../libs/exceptions";
+import {
+  HttpException,
+  InternalServerException,
+  NotFoundException,
+} from "../../libs/exceptions";
 import { FindManyQuery } from "../../libs/query";
 import { ItemInclude } from "./item.query.option";
 import { patchItemPriceService } from "./item.service";
 
-export async function searchItemsService(query: FindManyQuery) {
+export async function searchItemsService(
+  query: FindManyQuery,
+  scaleOnly: boolean = false,
+) {
   const { keyword = "", page, limit } = query;
   try {
     const kws = keyword
@@ -15,6 +22,7 @@ export async function searchItemsService(query: FindManyQuery) {
 
     const where: ItemWhereInput = {
       archived: false,
+      ...(scaleOnly ? { isScale: true } : {}),
       AND: kws.map((kw) => ({
         OR: [
           { barcode: { contains: kw, mode: "insensitive" as const } },
@@ -58,6 +66,26 @@ export async function searchItemsService(query: FindManyQuery) {
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("Error searching items:", e);
+    throw new InternalServerException("Internal server error");
+  }
+}
+
+export async function searchItemByIdService(id: number) {
+  try {
+    const item = await db.item.findFirst({
+      where: { id, archived: false },
+      include: ItemInclude,
+    });
+    if (!item) {
+      throw new NotFoundException("Item not found");
+    }
+    const result = await patchItemPriceService([item]).then(
+      (items) => items[0],
+    );
+    return { ok: true, result, msg: "Success" };
+  } catch (e) {
+    if (e instanceof HttpException) throw e;
+    console.error("Error searching item by id:", e);
     throw new InternalServerException("Internal server error");
   }
 }
