@@ -1,16 +1,26 @@
 import { app } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
-import type { AppConfig } from './types'
+import type { AppConfig, ZplSerialConfig } from './types'
 
 const DEFAULT_CONFIG: AppConfig = {
   server: null,
   devices: {
     scale: null,
-    zplSerial: null,
+    zplSerial: [],
     zplNet: [],
     escposPrinter: null
   }
+}
+
+/** Backwards compat: old config stored zplSerial as a single object or null */
+function migrateZplSerial(raw: unknown): ZplSerialConfig[] {
+  if (Array.isArray(raw)) return raw as ZplSerialConfig[]
+  if (raw && typeof raw === 'object' && 'path' in raw) {
+    const old = raw as { path: string; language: 'zpl' | 'slcs'; name?: string }
+    return [{ name: old.name ?? 'Serial', path: old.path, language: old.language }]
+  }
+  return []
 }
 
 function getConfigPath(): string {
@@ -31,7 +41,7 @@ export function loadConfig(): AppConfig {
       server: parsed.server ?? null,
       devices: {
         scale: parsed.devices?.scale ?? null,
-        zplSerial: parsed.devices?.zplSerial ?? null,
+        zplSerial: migrateZplSerial(parsed.devices?.zplSerial),
         zplNet: parsed.devices?.zplNet ?? [],
         escposPrinter: parsed.devices?.escposPrinter ?? null
       }

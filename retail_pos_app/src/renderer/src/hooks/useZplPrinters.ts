@@ -32,12 +32,12 @@ export function useZplPrinters() {
     window.electronAPI.getConfig().then((config) => {
       const list: LabelPrinter[] = []
 
-      if (config.devices.zplSerial) {
+      for (const serial of config.devices.zplSerial) {
         list.push({
           type: 'serial',
-          name: 'Serial',
-          language: config.devices.zplSerial.language,
-          path: config.devices.zplSerial.path
+          name: serial.name || serial.path,
+          language: serial.language,
+          path: serial.path
         })
       }
 

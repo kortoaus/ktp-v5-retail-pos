@@ -72,7 +72,9 @@ function sendSerial(path: string, data: Buffer | string): Promise<void> {
       }
 
       console.log(`[Label:Serial] Port opened`);
-      port.set({ dtr: true, rts: true });
+      port.set({ dtr: true, rts: true }, (setErr) => {
+        if (setErr) console.log(`[Label:Serial] Set DTR/RTS skipped: ${setErr.message}`);
+      });
 
       port.write(data, (writeErr) => {
         if (writeErr) {
