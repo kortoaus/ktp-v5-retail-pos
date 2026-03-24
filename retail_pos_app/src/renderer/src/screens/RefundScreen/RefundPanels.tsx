@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { RefundableInvoice, RefundableRow } from "../../types/models";
 import PagingRowList from "../../components/list/PagingRowList";
-import Decimal from "decimal.js";
+import { QTY_SCALE } from "../../libs/constants";
 import RefundQtyModal from "./RefundQtyModal";
 import RefundableRowCard from "./RefundableRowCard";
 import RefundedRowCard from "./RefundedRowCard";
@@ -30,12 +30,12 @@ export default function RefundPanels({
       return;
     }
 
-    // all or nothing: weight-prepacked, qty=1, or remainingQty=1 (only one possible)
-    if (row.type === "weight-prepacked" || row.qty === 1 || row.remainingQty === 1) {
-      if (row.remainingQty === 0) {
-        window.alert("This line is already fully refunded.");
-        return;
-      }
+    if (row.remainingQty === 0) {
+      window.alert("This line is already fully refunded.");
+      return;
+    }
+
+    if (row.type === "weight-prepacked" || row.qty === QTY_SCALE || row.remainingQty === QTY_SCALE) {
       const newRow: ClientRefundableRow = {
         ...row,
         original_invoice_row_id: row.id,
@@ -49,44 +49,29 @@ export default function RefundPanels({
       return;
     }
 
-    if (row.remainingQty === 0) {
-      window.alert("This line is already fully refunded.");
-      return;
-    }
-
     pendingRowRef.current = row;
     setModalTarget("qty-input");
   }
 
-  function onQtyConfirm(inputQtyNum: number) {
+  function onQtyConfirm(inputQtyInt: number) {
     const row = pendingRowRef.current;
     if (!row) return;
 
-    const inputQty = new Decimal(inputQtyNum);
-    const originalQty = new Decimal(row.qty);
-    const remainingQty = new Decimal(row.remainingQty);
-
-    if (originalQty.isZero()) {
+    if (row.qty === 0) {
       window.alert("Original quantity is 0. Please check the invoice.");
       return;
     }
 
-    if (inputQty.gt(remainingQty)) {
+    if (inputQtyInt > row.remainingQty) {
       window.alert(
         "Input quantity is greater than remaining quantity. Please check the invoice.",
       );
       return;
     }
 
-    const originalTotal = new Decimal(row.total);
-    const appliedEffectiveUnitPrice = originalTotal.div(originalQty);
-    const appliedTotal = appliedEffectiveUnitPrice.mul(inputQty);
-
-    // all rest
-    if (inputQty.eq(remainingQty)) {
+    if (inputQtyInt === row.remainingQty) {
       const newRow: ClientRefundableRow = {
         ...row,
-        unit_price_effective: appliedEffectiveUnitPrice.toNumber(),
         qty: row.remainingQty,
         total: row.remainingTotal,
         tax_amount_included: row.remainingIncludedTaxAmount,
@@ -100,18 +85,16 @@ export default function RefundPanels({
       return;
     }
 
-    const originalTaxAmount = new Decimal(row.tax_amount_included);
-    const ratio = inputQty.div(originalQty);
-    const appliedTaxAmount = originalTaxAmount.mul(ratio);
+    const netTotal = row.total - row.discount_amount;
+    const appliedTotal = Math.round((netTotal * inputQtyInt) / row.qty);
+    const appliedTax = Math.round((row.tax_amount_included * inputQtyInt) / row.qty);
 
-    // partial
     const newRow: ClientRefundableRow = {
       ...row,
-      unit_price_effective: appliedEffectiveUnitPrice.toNumber(),
-      qty: inputQty.toNumber(),
-      total: appliedTotal.toNumber(),
-      tax_amount_included: appliedTaxAmount.toNumber(),
-      applyQty: inputQty.toNumber(),
+      qty: inputQtyInt,
+      total: appliedTotal,
+      tax_amount_included: appliedTax,
+      applyQty: inputQtyInt,
       original_invoice_row_id: row.id,
       original_invoice_id: row.invoiceId,
     };

@@ -3,15 +3,15 @@ import { SaleInvoice } from "../../types/models";
 import { buildPrintBuffer } from "./escpos";
 import { printESCPOS } from "./print.service";
 import dayjsAU from "../dayjsAU";
-import Decimal from "decimal.js";
-import { MONEY_DP } from "../constants";
+import { MONEY_DP, MONEY_SCALE, QTY_DP, QTY_SCALE } from "../constants";
 const W = 576;
 const PAD = 20;
 const LH = 36;
 const FONT = 28;
 const FONT_SM = 24;
 const FONT_LG = 36;
-const fmt = (n: number) => `$${Math.abs(n).toFixed(2)}`;
+const fmt = (cents: number) => `$${(Math.abs(cents) / MONEY_SCALE).toFixed(MONEY_DP)}`;
+const fmtQty = (q: number) => (q / QTY_SCALE).toFixed(QTY_DP);
 
 const NAME_MAX = 40;
 
@@ -189,22 +189,15 @@ export async function renderReceipt(
     if (r.type === "weight-prepacked") {
       qtyStr = `1 @ ${fmt(r.total)}`;
     } else if (r.measured_weight !== null) {
-      qtyStr = `${r.measured_weight}${r.uom} @ ${fmt(r.unit_price_effective)}/${r.uom}`;
+      qtyStr = `${fmtQty(r.measured_weight)}${r.uom} @ ${fmt(r.unit_price_effective)}/${r.uom}`;
     } else {
-      qtyStr = `${r.qty} @ ${fmt(r.unit_price_effective)}`;
+      qtyStr = `${fmtQty(r.qty)} @ ${fmt(r.unit_price_effective)}`;
     }
     let totalStr = fmt(r.total);
     if (priceChanged) {
       qtyStr += ` (${fmt(r.unit_price_original)})`;
-
-      const originalTotal = new Decimal(r.unit_price_original)
-        .mul(r.qty)
-        .toDecimalPlaces(MONEY_DP)
-        .toNumber();
-      const howMuchSaved = new Decimal(originalTotal)
-        .sub(r.total)
-        .toDecimalPlaces(MONEY_DP)
-        .toNumber();
+      const originalTotal = Math.round((r.unit_price_original * r.qty) / QTY_SCALE);
+      const howMuchSaved = originalTotal - r.total;
       totalStr = `(Saved ${fmt(howMuchSaved)}) ` + totalStr;
     }
 
@@ -251,13 +244,7 @@ export async function renderReceipt(
   y += 14;
 
   ctx.font = `bold ${FONT_LG}px sans-serif`;
-  let totalCents = Math.round(invoice.total * 100);
-  // for (const p of invoice.payments) {
-  //   if (p.type === "credit") {
-  //     totalCents += Math.round(p.surcharge * 100);
-  //   }
-  // }
-  row(ctx, "TOTAL", fmt(totalCents / 100), y);
+  row(ctx, "TOTAL", fmt(invoice.total), y);
   y += LH + 4;
 
   /* ── Payments ── */

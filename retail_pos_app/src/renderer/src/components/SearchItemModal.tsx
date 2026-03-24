@@ -4,7 +4,7 @@ import { searchItemsByKeyword } from "../service/item.service";
 import { itemNameParser } from "../libs/item-utils";
 import OnScreenKeyboard from "./OnScreenKeyboard";
 import { PagingType } from "../libs/api";
-import { MONEY_DP } from "../libs/constants";
+import { MONEY_DP, MONEY_SCALE } from "../libs/constants";
 
 const ITEMS_PER_PAGE = 5;
 
@@ -175,7 +175,7 @@ export default function SearchItemModal({
                     </div>
                     <div className="text-right shrink-0 w-20">
                       <div className="font-bold text-sm">
-                        ${price.toFixed(MONEY_DP)}
+                        ${(price / MONEY_SCALE).toFixed(MONEY_DP)}
                       </div>
                     </div>
                   </button>

@@ -7,7 +7,7 @@ import {
 } from "../service/user.voucher.service";
 import OnScreenKeyboard from "./OnScreenKeyboard";
 import LoadingOverlay from "./LoadingOverlay";
-import { MONEY_DP } from "../libs/constants";
+import { MONEY_DP, MONEY_SCALE } from "../libs/constants";
 import { cn } from "../libs/cn";
 
 const RESULT_LIMIT = 5;
@@ -212,7 +212,7 @@ export default function UserVoucherModal({
                             : "bg-gray-400",
                         )}
                       >
-                        {`$${user.voucher.left_amount.toFixed(MONEY_DP)}`}
+                        {`$${(user.voucher.left_amount / MONEY_SCALE).toFixed(MONEY_DP)}`}
                       </button>
                     )}
                   </div>

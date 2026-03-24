@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Decimal from "decimal.js";
 import CashCounter from "../components/CashCounter";
 import KeyboardInputText from "../components/KeyboardInputText";
 import BlockScreen from "../components/BlockScreen";
@@ -10,10 +9,10 @@ import {
   getShiftById,
   type ClosingShiftData,
 } from "../service/shift.service";
-import { MONEY_DP } from "../libs/constants";
+import { MONEY_DP, MONEY_SCALE } from "../libs/constants";
 import { printShiftSettlementReceipt } from "../libs/printer/shift-settlement-receipt";
 
-const fmt = (n: number) => `$${Math.abs(n).toFixed(MONEY_DP)}`;
+const fmt = (cents: number) => `$${(Math.abs(cents) / MONEY_SCALE).toFixed(MONEY_DP)}`;
 
 export default function CloseShiftScreen() {
   const navigate = useNavigate();
@@ -61,30 +60,19 @@ export default function CloseShiftScreen() {
     salesTax,
     refundsCash,
     refundsCredit,
+    refundsVoucher,
     refundsTax,
     cashIn,
     cashOut,
   } = closingData;
 
-  const startedCash = shift.startedCach / 100;
+  const startedCash = shift.startedCach;
+  const cashActualCents = Math.round(cashActual * MONEY_SCALE);
 
-  const expectedCash = new Decimal(startedCash)
-    .add(salesCash)
-    .sub(refundsCash)
-    .add(cashIn)
-    .sub(cashOut)
-    .toNumber();
-
-  const difference = new Decimal(cashActual).sub(expectedCash).toNumber();
-
-  const totalCashIn = new Decimal(startedCash)
-    .add(salesCash)
-    .add(cashIn)
-    .toNumber();
-
-  const totalCashOut = new Decimal(refundsCash).add(cashOut).toNumber();
-
-  const toCents = (n: number) => Math.round(new Decimal(n).mul(100).toNumber());
+  const expectedCash = startedCash + salesCash - refundsCash + cashIn - cashOut;
+  const difference = cashActualCents - expectedCash;
+  const totalCashIn = startedCash + salesCash + cashIn;
+  const totalCashOut = refundsCash + cashOut;
 
   const handleClose = async () => {
     if (!confirmClose) {
@@ -95,19 +83,20 @@ export default function CloseShiftScreen() {
     try {
       const { ok, msg } = await closeShift({
         closedNote: note.trim(),
-        endedCashExpected: toCents(expectedCash),
-        endedCashActual: toCents(cashActual),
-        salesCash: toCents(salesCash),
-        salesCredit: toCents(salesCredit),
-        salesVoucher: toCents(salesVoucher),
-        salesTax: toCents(salesTax),
-        refundsCash: toCents(refundsCash),
-        refundsCredit: toCents(refundsCredit),
-        refundsTax: toCents(refundsTax),
-        cashIn: toCents(cashIn),
-        cashOut: toCents(cashOut),
-        totalCashIn: toCents(totalCashIn),
-        totalCashOut: toCents(totalCashOut),
+        endedCashExpected: expectedCash,
+        endedCashActual: cashActualCents,
+        salesCash,
+        salesCredit,
+        salesVoucher,
+        salesTax,
+        refundsCash,
+        refundsCredit,
+        refundsVoucher,
+        refundsTax,
+        cashIn,
+        cashOut,
+        totalCashIn,
+        totalCashOut,
       });
       if (ok) {
         try {
@@ -137,6 +126,7 @@ export default function CloseShiftScreen() {
     ["Sales Tax", fmt(salesTax)],
     ["Refunds (Cash)", `-${fmt(refundsCash)}`],
     ["Refunds (Credit)", `-${fmt(refundsCredit)}`],
+    ["Refunds (Voucher)", `-${fmt(refundsVoucher)}`],
     ["Refunds Tax", `-${fmt(refundsTax)}`],
     ["Cash In", fmt(cashIn)],
     ["Cash Out", `-${fmt(cashOut)}`],
@@ -147,7 +137,7 @@ export default function CloseShiftScreen() {
       <div className="h-14 flex items-center justify-between px-6 border-b border-gray-200">
         <h1 className="text-xl font-bold">Close Shift</h1>
         <div className="flex items-center gap-3">
-          <span className="text-lg font-medium">Actual: {fmt(cashActual)}</span>
+          <span className="text-lg font-medium">Actual: {fmt(cashActualCents)}</span>
           <button
             onClick={() => navigate(-1)}
             disabled={loading}
@@ -189,7 +179,7 @@ export default function CloseShiftScreen() {
             </div>
             <div className="flex justify-between text-lg font-bold">
               <span>Actual</span>
-              <span>{fmt(cashActual)}</span>
+              <span>{fmt(cashActualCents)}</span>
             </div>
             <div
               className={`flex justify-between text-lg font-bold ${

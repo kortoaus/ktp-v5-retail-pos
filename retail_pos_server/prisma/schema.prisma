@@ -153,7 +153,7 @@ model Price {
   companyId Int
   itemId    Int
   priceType String
-  prices    Float[]
+  prices    Int[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   archived  Boolean  @default(false)
@@ -169,7 +169,7 @@ model PromoPrice {
   name_en   String   @default("Promo Price")
   name_ko   String   @default("프로모션 가격")
   priceType String
-  prices    Float[]
+  prices    Int[]
   validFrom DateTime
   validTo   DateTime
   archived  Boolean  @default(false)
@@ -206,8 +206,9 @@ model Promotion {
   minQty Int  @default(1)
   maxQty Int?
 
-  discountType    String  @default("percentage") // percentage or amount 
-  discountAmounts Float[]
+  discountType           String @default("percentage") // percentage or amount 
+  discountPercentAmounts Int[]
+  discountFlatAmounts    Int[]
 
   @@index([companyId])
 }
@@ -295,9 +296,9 @@ model StoreSetting {
   abn                        String?
   website                    String?
   email                      String?
-  credit_surcharge_rate      Float?   @default(0.015) // 1.5%
+  credit_surcharge_rate      Int?     @default(15)
   receipt_below_text         String?  @default("Thank you!")
-  user_daily_voucher_default Float    @default(20)
+  user_daily_voucher_default Int      @default(2000)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 }
@@ -320,8 +321,8 @@ model UserVoucher {
   id           Int                  @id @default(autoincrement())
   userId       Int
   user         User                 @relation(fields: [userId], references: [id])
-  init_amount  Decimal              @db.Decimal(18, 2)
-  left_amount  Decimal              @default(0) @db.Decimal(18, 2)
+  init_amount  Int
+  left_amount  Int                  @default(0)
   validFrom    DateTime
   validTo      DateTime
   issuedById   Int
@@ -336,7 +337,7 @@ model UserVoucherHistory {
   voucher                 UserVoucher @relation(fields: [voucherId], references: [id])
   userId                  Int
   user                    User        @relation(fields: [userId], references: [id])
-  spent_amount            Decimal     @db.Decimal(18, 2)
+  spent_amount            Int
   saleInvoiceId           Int
   saleInvoiceSerialNumber String
   createdAt               DateTime    @default(now())
@@ -379,8 +380,9 @@ model TerminalShift {
   refundsTax Int @default(0)
 
   // Refunds
-  refundsCash   Int @default(0)
-  refundsCredit Int @default(0)
+  refundsCash    Int @default(0)
+  refundsCredit  Int @default(0)
+  refundsVoucher Int @default(0)
 
   // Cash In Out
   cashIn  Int @default(0)
@@ -435,17 +437,17 @@ model SaleInvoice {
   rows SaleInvoiceRow[]
 
   // Calculated Fields
-  subtotal               Decimal              @db.Decimal(18, 2)
-  documentDiscountAmount Decimal              @db.Decimal(18, 2)
-  creditSurchargeAmount  Decimal              @db.Decimal(18, 2)
-  rounding               Decimal              @db.Decimal(18, 2)
-  total                  Decimal              @db.Decimal(18, 2)
-  taxAmount              Decimal              @db.Decimal(18, 2)
-  cashPaid               Decimal              @db.Decimal(18, 2)
-  cashChange             Decimal              @db.Decimal(18, 2)
-  creditPaid             Decimal              @db.Decimal(18, 2)
-  voucherPaid            Decimal              @default(0) @db.Decimal(18, 2)
-  totalDiscountAmount    Decimal              @db.Decimal(18, 2)
+  subtotal               Int
+  documentDiscountAmount Int
+  creditSurchargeAmount  Int
+  rounding               Int
+  total                  Int
+  taxAmount              Int
+  cashPaid               Int
+  cashChange             Int
+  creditPaid             Int
+  voucherPaid            Int                  @default(0)
+  totalDiscountAmount    Int
   payments               SaleInvoicePayment[]
 
   // Cloud Sync
@@ -470,16 +472,17 @@ model SaleInvoiceRow {
   index   Int
 
   // Price Data
-  barcodePrice          Decimal? @db.Decimal(18, 2)
-  unit_price_original   Decimal  @db.Decimal(18, 2)
-  unit_price_discounted Decimal? @db.Decimal(18, 2)
-  unit_price_adjusted   Decimal? @db.Decimal(18, 2)
-  unit_price_effective  Decimal  @db.Decimal(18, 2)
-  qty                   Decimal  @db.Decimal(18, 3)
-  measured_weight       Decimal? @db.Decimal(18, 3)
-  subtotal              Decimal  @db.Decimal(18, 2)
-  total                 Decimal  @db.Decimal(18, 2)
-  tax_amount_included   Decimal  @default(0) @db.Decimal(18, 2)
+  barcodePrice          Int?
+  unit_price_original   Int
+  unit_price_discounted Int? // promo-price
+  unit_price_adjusted   Int?
+  unit_price_effective  Int
+  discount_amount       Int  @default(0) // promotion discounted
+  qty                   Int
+  measured_weight       Int?
+  subtotal              Int
+  total                 Int
+  tax_amount_included   Int  @default(0)
 
   // Refund Data
   original_invoice_id     Int?
@@ -500,10 +503,10 @@ model SaleInvoicePayment {
   invoiceId  Int
   invoice    SaleInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   type       String // cash, credit, voucher
-  amount     Decimal     @db.Decimal(18, 2)
+  amount     Int
   entityId   Int?
   entityType String? // user-voucher, member-voucher
-  surcharge  Decimal     @db.Decimal(18, 2)
+  surcharge  Int
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 }
@@ -516,7 +519,7 @@ model SaleInvoiceDiscount {
   entityType  String
   title       String
   description String?
-  amount      Decimal     @db.Decimal(18, 2)
+  amount      Int
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 }
@@ -530,7 +533,7 @@ model CashInOut {
   userId     Int
   userName   String
   type       String // in, out
-  amount     Decimal       @db.Decimal(18, 2)
+  amount     Int
   note       String?
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt

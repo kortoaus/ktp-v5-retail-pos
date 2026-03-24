@@ -6,6 +6,7 @@ import {
 import { StoreSetting } from "../../types/models";
 import OnScreenKeyboard from "../../components/OnScreenKeyboard";
 import { cn } from "../../libs/cn";
+import { MONEY_SCALE, PCT_SCALE } from "../../libs/constants";
 import { Link } from "react-router-dom";
 import { useUser } from "../../contexts/UserContext";
 import BlockScreen from "../../components/BlockScreen";
@@ -57,14 +58,13 @@ function settingToForm(s: StoreSetting): FormState {
     abn: s.abn ?? "",
     website: s.website ?? "",
     email: s.email ?? "",
-    // Server stores decimal (0.015), display as percent (1.5)
     credit_surcharge_rate:
       s.credit_surcharge_rate != null
-        ? String(+(s.credit_surcharge_rate * 100).toFixed(4))
+        ? String(s.credit_surcharge_rate * 100 / PCT_SCALE)
         : "",
     user_daily_voucher_default:
       s.user_daily_voucher_default != null
-        ? String(s.user_daily_voucher_default)
+        ? String(s.user_daily_voucher_default / MONEY_SCALE)
         : "",
     receipt_below_text: s.receipt_below_text ?? "",
   };
@@ -84,12 +84,11 @@ function formToPayload(form: FormState) {
     abn: form.abn || undefined,
     website: form.website || undefined,
     email: form.email || undefined,
-    // Convert percent back to decimal for server
-    credit_surcharge_rate: isNaN(rate) ? undefined : rate / 100,
+    credit_surcharge_rate: isNaN(rate) ? undefined : Math.round(rate * PCT_SCALE / 100),
     receipt_below_text: form.receipt_below_text || undefined,
     user_daily_voucher_default:
       form.user_daily_voucher_default != null
-        ? parseInt(form.user_daily_voucher_default)
+        ? Math.round(parseFloat(form.user_daily_voucher_default) * MONEY_SCALE)
         : undefined,
   };
 }

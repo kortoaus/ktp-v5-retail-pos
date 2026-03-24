@@ -1,7 +1,6 @@
 import { Terminal, TerminalShift, User } from "../../generated/prisma/client";
 import { CashInOutWhereInput } from "../../generated/prisma/models";
 import db from "../../libs/db";
-import { numberifyCashInOut } from "../../libs/decimal-utils";
 import {
   HttpException,
   InternalServerException,
@@ -83,7 +82,7 @@ export async function getCashIOsService(query: FindManyQuery) {
         take: limit,
         orderBy: { createdAt: "desc" },
       })
-      .then((r) => r.map(numberifyCashInOut));
+;
 
     return {
       ok: true,

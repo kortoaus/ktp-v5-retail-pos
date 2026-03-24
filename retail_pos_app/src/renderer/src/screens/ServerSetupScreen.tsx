@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 export default function ServerSetupScreen() {
+  const navigate = useNavigate()
   const [host, setHost] = useState('')
   const [port, setPort] = useState(2200)
   const [testing, setTesting] = useState(false)
@@ -55,7 +57,15 @@ export default function ServerSetupScreen() {
   return (
     <div className="flex items-center justify-center h-full bg-gray-50">
       <div className="w-full max-w-sm bg-white rounded-xl border border-gray-200 p-6">
-        <h1 className="text-lg font-bold text-gray-900 mb-1">Server Setup</h1>
+        <div className="flex items-center justify-between mb-1">
+          <h1 className="text-lg font-bold text-gray-900">Server Setup</h1>
+          <button
+            onClick={() => navigate(-1)}
+            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            &larr; Back
+          </button>
+        </div>
         <p className="text-sm text-gray-500 mb-6">Connect to the POS server to get started.</p>
 
         <div className="space-y-4">

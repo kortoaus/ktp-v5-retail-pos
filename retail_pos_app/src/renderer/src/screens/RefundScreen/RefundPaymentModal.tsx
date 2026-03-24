@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import Decimal from "decimal.js";
-import { MONEY_DP } from "../../libs/constants";
+import { MONEY_DP, MONEY_SCALE, PCT_SCALE } from "../../libs/constants";
 import { cn } from "../../libs/cn";
 import { RefundableInvoice } from "../../types/models";
 import {
@@ -10,11 +9,8 @@ import {
 import { printRefundReceipt } from "../../libs/printer/refund-receipt";
 import { kickDrawer } from "../../libs/printer/kick-drawer";
 import MoneyNumpad from "../../components/Numpads/MoneyNumpad";
-import { InputField } from "../../components/PaymentModal/PaymentParts";
-import { SummaryRow } from "../../components/PaymentModal/PaymentParts";
-import { ClientRefundableRow } from "./refund.types";
-
-const fmt = (d: Decimal) => `$${d.toFixed(MONEY_DP)}`;
+import { InputField, SummaryRow } from "../../components/PaymentParts";
+import { ClientRefundableRow, fmt } from "./refund.types";
 
 type NumpadTarget = "cash" | "credit";
 
@@ -36,75 +32,97 @@ export default function RefundPaymentModal({
   const [cashRefund, setCashRefund] = useState(0);
   const [creditRefund, setCreditRefund] = useState(0);
   const [processing, setProcessing] = useState(false);
+  const [voucherRefunds, setVoucherRefunds] = useState<
+    { entityType: string; entityId: number; amount: number }[]
+  >([]);
 
-  // Compute refund totals
+  const availableVouchers = invoice.remainingVouchers ?? [];
+
   const { refundTotal, refundGst } = useMemo(() => {
-    let total = new Decimal(0);
-    let gst = new Decimal(0);
+    let total = 0;
+    let gst = 0;
     for (const row of refundedRows) {
-      total = total.add(row.total);
-      gst = gst.add(row.tax_amount_included);
+      total += row.total;
+      gst += row.tax_amount_included;
     }
     return { refundTotal: total, refundGst: gst };
   }, [refundedRows]);
 
-  // Remaining payment caps from server (accounts for previous refunds)
-  const remainingCashCap = new Decimal(invoice.remainingCash);
-  const remainingCreditCap = new Decimal(invoice.remainingCredit);
+  const remainingCashCap = invoice.remainingCash;
+  const remainingCreditCap = invoice.remainingCredit;
 
-  // Always 5c round — avoids moving target when cash toggles
-  const roundedTotal = refundTotal.toNearest(
-    new Decimal("0.05"),
-    Decimal.ROUND_HALF_UP,
-  );
+  const rem = refundTotal % 5;
+  const roundedTotal = rem === 0 ? refundTotal : refundTotal + (rem >= 3 ? 5 - rem : -rem);
   const effectiveTotal = roundedTotal;
-  const rounding = roundedTotal.sub(refundTotal);
+  const rounding = roundedTotal - refundTotal;
 
-  // Build Decimals from cents to avoid JS float precision drift
-  const cashCents = Math.round(cashRefund * 100);
-  const creditCents = Math.round(creditRefund * 100);
-  const cashDec = new Decimal(cashCents).div(100);
-  const creditDec = new Decimal(creditCents).div(100);
-  const paid = cashDec.add(creditDec);
-  const remaining = effectiveTotal.sub(paid);
-  const isBalanced = remaining.isZero();
-  const isOver = remaining.lt(0);
-  const hasCash = cashCents > 0;
+  const voucherTotal = voucherRefunds.reduce((acc, v) => acc + v.amount, 0);
+  const paid = cashRefund + creditRefund + voucherTotal;
+  const remaining = effectiveTotal - paid;
+  const isBalanced = remaining === 0;
+  const isOver = remaining < 0;
+
+  const voucherCapsValid = voucherRefunds.every((vr) => {
+    const cap = availableVouchers.find(
+      (v) => v.entityId === vr.entityId && v.entityType === vr.entityType,
+    );
+    return cap && vr.amount <= cap.remainingAmount;
+  });
 
   const canConfirm =
     isBalanced &&
     !processing &&
-    cashDec.lte(remainingCashCap) &&
-    creditDec.lte(remainingCreditCap);
+    cashRefund <= remainingCashCap &&
+    creditRefund <= remainingCreditCap &&
+    voucherCapsValid;
 
   function handleNumpadChange(newVal: string) {
     setNumpadVal(newVal);
-    const dollars = parseInt(newVal || "0", 10) / 100;
-    if (numpadTarget === "cash") setCashRefund(dollars);
-    else setCreditRefund(dollars);
+    const cents = parseInt(newVal || "0", 10);
+    if (numpadTarget === "cash") setCashRefund(cents);
+    else setCreditRefund(cents);
   }
 
   function switchTarget(target: NumpadTarget) {
     if (numpadTarget === target) {
-      // Double-tap: auto-fill remaining
-      if (remaining.gt(0)) {
-        const fill = remaining.toNumber();
+      if (remaining > 0) {
+        const fill = remaining;
         if (target === "cash") {
           setCashRefund(cashRefund + fill);
-          setNumpadVal(Math.round((cashRefund + fill) * 100).toString());
+          setNumpadVal((cashRefund + fill).toString());
         } else {
           setCreditRefund(creditRefund + fill);
-          setNumpadVal(Math.round((creditRefund + fill) * 100).toString());
+          setNumpadVal((creditRefund + fill).toString());
         }
       }
       return;
     }
     setNumpadTarget(target);
-    const cents =
-      target === "cash"
-        ? Math.round(cashRefund * 100)
-        : Math.round(creditRefund * 100);
-    setNumpadVal(cents > 0 ? cents.toString() : "");
+    const val = target === "cash" ? cashRefund : creditRefund;
+    setNumpadVal(val > 0 ? val.toString() : "");
+  }
+
+  function toggleVoucher(entityType: string, entityId: number) {
+    const exists = voucherRefunds.find(
+      (v) => v.entityId === entityId && v.entityType === entityType,
+    );
+    if (exists) {
+      setVoucherRefunds((prev) =>
+        prev.filter(
+          (v) => !(v.entityId === entityId && v.entityType === entityType),
+        ),
+      );
+      return;
+    }
+    const cap = availableVouchers.find(
+      (v) => v.entityId === entityId && v.entityType === entityType,
+    );
+    if (!cap || cap.remainingAmount <= 0) return;
+    const fill = Math.min(cap.remainingAmount, Math.max(0, remaining));
+    setVoucherRefunds((prev) => [
+      ...prev,
+      { entityType, entityId, amount: fill },
+    ]);
   }
 
   function resetState() {
@@ -112,6 +130,7 @@ export default function RefundPaymentModal({
     setNumpadVal("");
     setCashRefund(0);
     setCreditRefund(0);
+    setVoucherRefunds([]);
     setProcessing(false);
   }
 
@@ -140,7 +159,7 @@ export default function RefundPaymentModal({
       unit_price_effective: row.unit_price_effective,
       qty: row.applyQty,
       measured_weight: row.measured_weight,
-      subtotal: row.total,
+      subtotal: row.total - row.tax_amount_included,
       total: row.total,
       original_invoice_id: row.original_invoice_id ?? invoice.id,
       original_invoice_row_id: row.original_invoice_row_id ?? row.id,
@@ -148,23 +167,41 @@ export default function RefundPaymentModal({
       tax_amount_included: row.tax_amount_included,
     }));
 
-    const payments: { type: string; amount: number; surcharge: number }[] = [];
+    const payments: {
+      type: string;
+      amount: number;
+      surcharge: number;
+      entityType?: string;
+      entityId?: number;
+    }[] = [];
     if (cashRefund > 0)
       payments.push({ type: "cash", amount: cashRefund, surcharge: 0 });
     if (creditRefund > 0)
       payments.push({ type: "credit", amount: creditRefund, surcharge: 0 });
+    for (const vr of voucherRefunds) {
+      if (vr.amount > 0) {
+        payments.push({
+          type: "voucher",
+          amount: vr.amount,
+          surcharge: 0,
+          entityType: vr.entityType,
+          entityId: vr.entityId,
+        });
+      }
+    }
 
     const { ok, msg, result } = await createRefundInvoice({
       original_invoice_id: invoice.id,
-      subtotal: refundTotal.toNumber(),
+      subtotal: refundTotal,
       documentDiscountAmount: 0,
       creditSurchargeAmount: 0,
-      rounding: rounding.toNumber(),
-      total: effectiveTotal.toNumber(),
-      taxAmount: refundGst.toNumber(),
+      rounding,
+      total: effectiveTotal,
+      taxAmount: refundGst,
       cashPaid: cashRefund,
       cashChange: 0,
       creditPaid: creditRefund,
+      voucherPaid: voucherTotal,
       totalDiscountAmount: 0,
       memberId: invoice.memberId != null ? String(invoice.memberId) : null,
       memberLevel: invoice.memberLevel,
@@ -180,13 +217,8 @@ export default function RefundPaymentModal({
 
     const { result: refundInvoice } = await getSaleInvoiceById(result.id);
 
-    if (cashRefund > 0) {
-      kickDrawer();
-    }
-
-    if (refundInvoice) {
-      printRefundReceipt(refundInvoice);
-    }
+    if (cashRefund > 0) kickDrawer();
+    if (refundInvoice) printRefundReceipt(refundInvoice);
 
     resetState();
     onComplete();
@@ -199,7 +231,7 @@ export default function RefundPaymentModal({
       className="fixed inset-0 bg-black/60 flex items-center justify-center"
       style={{ zIndex: 999 }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden w-[700px] h-[580px]">
+      <div className="bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden w-[780px] h-[620px]">
         <div className="flex items-center justify-between px-6 h-12 border-b border-gray-200">
           <h2 className="text-xl font-bold">Refund Payment</h2>
           <button
@@ -212,18 +244,17 @@ export default function RefundPaymentModal({
         </div>
 
         <div className="flex-1 flex overflow-hidden divide-x divide-gray-200">
-          {/* Left: inputs + summary */}
           <div className="flex-1 flex flex-col p-4 gap-3 overflow-y-auto">
             <div className="flex flex-col gap-1">
               <SummaryRow label="Refund Total" value={fmt(refundTotal)} bold />
               <SummaryRow label="GST Included" value={fmt(refundGst)} />
-              {!rounding.isZero() && (
+              {rounding !== 0 && (
                 <SummaryRow
                   label="Rounding"
-                  value={`${rounding.gt(0) ? "+" : ""}${fmt(rounding)}`}
+                  value={`${rounding > 0 ? "+" : ""}${fmt(rounding)}`}
                 />
               )}
-              {hasCash && (
+              {cashRefund > 0 && (
                 <SummaryRow
                   label="Cash Total"
                   value={fmt(effectiveTotal)}
@@ -235,6 +266,11 @@ export default function RefundPaymentModal({
             <div className="border-t border-gray-200 pt-3 flex flex-col gap-1 text-base font-bold text-red-400">
               <span>Remaining Cash Cap: {fmt(remainingCashCap)}</span>
               <span>Remaining Credit Cap: {fmt(remainingCreditCap)}</span>
+              {availableVouchers.length > 0 && (
+                <span>
+                  Remaining Voucher Cap: {fmt(invoice.remainingVoucher ?? 0)}
+                </span>
+              )}
             </div>
 
             <InputField
@@ -243,9 +279,9 @@ export default function RefundPaymentModal({
               onActivate={() => switchTarget("cash")}
             >
               <span className="text-2xl font-bold font-mono">
-                ${cashRefund.toFixed(MONEY_DP)}
+                {fmt(cashRefund)}
               </span>
-              {cashDec.gt(remainingCashCap) && (
+              {cashRefund > remainingCashCap && (
                 <span className="text-xs text-red-600">
                   Exceeds original cash
                 </span>
@@ -258,25 +294,72 @@ export default function RefundPaymentModal({
               onActivate={() => switchTarget("credit")}
             >
               <span className="text-2xl font-bold font-mono">
-                ${creditRefund.toFixed(MONEY_DP)}
+                {fmt(creditRefund)}
               </span>
-              {creditDec.gt(remainingCreditCap) && (
+              {creditRefund > remainingCreditCap && (
                 <span className="text-xs text-red-600">
                   Exceeds original credit
                 </span>
               )}
             </InputField>
 
+            {availableVouchers.length > 0 && (
+              <div className="border-t border-gray-200 pt-3 flex flex-col gap-2">
+                <span className="text-base font-bold text-gray-400 uppercase">
+                  Voucher Refund
+                </span>
+                {availableVouchers.map((v) => {
+                  const selected = voucherRefunds.find(
+                    (vr) =>
+                      vr.entityId === v.entityId &&
+                      vr.entityType === v.entityType,
+                  );
+                  const isActive = !!selected;
+                  return (
+                    <div
+                      key={`${v.entityType}-${v.entityId}`}
+                      onPointerDown={() =>
+                        toggleVoucher(v.entityType ?? "", v.entityId ?? 0)
+                      }
+                      className={cn(
+                        "flex items-center justify-between rounded-lg px-3 py-2 cursor-pointer transition-colors",
+                        isActive
+                          ? "bg-purple-100 ring-2 ring-purple-500"
+                          : "bg-gray-50 active:bg-gray-100",
+                      )}
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-gray-500">
+                          Voucher #{v.entityId}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          Cap: {fmt(v.remainingAmount)}
+                        </span>
+                      </div>
+                      <span
+                        className={cn(
+                          "text-lg font-bold font-mono",
+                          isActive ? "text-purple-700" : "text-gray-400",
+                        )}
+                      >
+                        {isActive ? fmt(selected.amount) : fmt(0)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="flex-1" />
 
-            {remaining.gt(0) && (
+            {remaining > 0 && (
               <div className="text-center text-red-600 font-bold">
                 SHORT {fmt(remaining)}
               </div>
             )}
             {isOver && (
               <div className="text-center text-red-600 font-bold">
-                OVER {fmt(remaining.abs())}
+                OVER {fmt(-remaining)}
               </div>
             )}
             {isBalanced && (
@@ -302,7 +385,6 @@ export default function RefundPaymentModal({
             </button>
           </div>
 
-          {/* Right: numpad */}
           <div className="w-[280px] p-2 flex flex-col">
             <div className="flex-1">
               <MoneyNumpad val={numpadVal} setVal={handleNumpadChange} />

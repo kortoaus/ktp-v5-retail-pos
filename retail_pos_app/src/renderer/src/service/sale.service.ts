@@ -134,11 +134,18 @@ export type RefundInvoicePayload = {
   cashPaid: number;
   cashChange: number;
   creditPaid: number;
+  voucherPaid: number;
   totalDiscountAmount: number;
   memberId: string | null;
   memberLevel: number | null;
   rows: InvoiceRowPayload[];
-  payments: { type: string; amount: number; surcharge: number }[];
+  payments: {
+    type: string;
+    amount: number;
+    surcharge: number;
+    entityType?: string;
+    entityId?: number;
+  }[];
 };
 
 export async function createRefundInvoice(

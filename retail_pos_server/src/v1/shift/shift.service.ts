@@ -1,4 +1,3 @@
-import { Decimal } from "@prisma/client/runtime/client";
 import { Company, Terminal, User } from "../../generated/prisma/client";
 import momentAU from "../../libs/date-utils";
 import db from "../../libs/db";
@@ -129,16 +128,16 @@ export async function getClosingTerminalShiftDataService(terminalId: number) {
 
     const sum = (
       arr: {
-        cashPaid: Decimal;
-        creditPaid: Decimal;
-        taxAmount: Decimal;
-        voucherPaid: Decimal;
+        cashPaid: number;
+        creditPaid: number;
+        taxAmount: number;
+        voucherPaid: number;
       }[],
     ) => ({
-      cash: arr.reduce((acc, i) => acc.add(i.cashPaid), new Decimal(0)),
-      credit: arr.reduce((acc, i) => acc.add(i.creditPaid), new Decimal(0)),
-      voucher: arr.reduce((acc, i) => acc.add(i.voucherPaid), new Decimal(0)),
-      tax: arr.reduce((acc, i) => acc.add(i.taxAmount), new Decimal(0)),
+      cash: arr.reduce((acc, i) => acc + i.cashPaid, 0),
+      credit: arr.reduce((acc, i) => acc + i.creditPaid, 0),
+      voucher: arr.reduce((acc, i) => acc + i.voucherPaid, 0),
+      tax: arr.reduce((acc, i) => acc + i.taxAmount, 0),
     });
 
     const sales = sum(invoices.filter((i) => i.type === "sale"));
@@ -146,24 +145,25 @@ export async function getClosingTerminalShiftDataService(terminalId: number) {
 
     const cashInTotal = cashios
       .filter((c) => c.type === "in")
-      .reduce((acc, c) => acc.add(c.amount), new Decimal(0));
+      .reduce((acc, c) => acc + c.amount, 0);
     const cashOutTotal = cashios
       .filter((c) => c.type === "out")
-      .reduce((acc, c) => acc.add(c.amount), new Decimal(0));
+      .reduce((acc, c) => acc + c.amount, 0);
 
     return {
       ok: true,
       result: {
         shift,
-        salesCash: sales.cash.toNumber(),
-        salesCredit: sales.credit.toNumber(),
-        salesVoucher: sales.voucher.toNumber(),
-        salesTax: sales.tax.toNumber(),
-        refundsCash: refunds.cash.toNumber(),
-        refundsCredit: refunds.credit.toNumber(),
-        refundsTax: refunds.tax.toNumber(),
-        cashIn: cashInTotal.toNumber(),
-        cashOut: cashOutTotal.toNumber(),
+        salesCash: sales.cash,
+        salesCredit: sales.credit,
+        salesVoucher: sales.voucher,
+        salesTax: sales.tax,
+        refundsCash: refunds.cash,
+        refundsCredit: refunds.credit,
+        refundsVoucher: refunds.voucher,
+        refundsTax: refunds.tax,
+        cashIn: cashInTotal,
+        cashOut: cashOutTotal,
       },
       msg: "Success",
     };
@@ -184,6 +184,7 @@ type CloseShiftDTO = {
   salesTax: number;
   refundsCash: number;
   refundsCredit: number;
+  refundsVoucher: number;
   refundsTax: number;
   cashIn: number;
   cashOut: number;
@@ -225,6 +226,7 @@ export async function closeTerminalShiftService(
         salesTax: dto.salesTax,
         refundsCash: dto.refundsCash,
         refundsCredit: dto.refundsCredit,
+        refundsVoucher: dto.refundsVoucher,
         refundsTax: dto.refundsTax,
         cashIn: dto.cashIn,
         cashOut: dto.cashOut,

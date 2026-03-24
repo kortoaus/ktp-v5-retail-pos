@@ -4,7 +4,7 @@ import CashCounter from "../components/CashCounter";
 import OnScreenKeyboard from "../components/OnScreenKeyboard";
 import BlockScreen from "../components/BlockScreen";
 import { useShift } from "../contexts/ShiftContext";
-import { MONEY_DP } from "../libs/constants";
+import { MONEY_DP, MONEY_SCALE } from "../libs/constants";
 
 export default function OpenShiftScreen() {
   const navigate = useNavigate();
@@ -22,7 +22,7 @@ export default function OpenShiftScreen() {
     try {
       const { ok, msg } = await openShift({
         openedNote: note.trim(),
-        cashInDrawer: Math.round(cashInDrawer * 100),
+        cashInDrawer: Math.round(cashInDrawer * MONEY_SCALE),
         getBackItemIds: [],
         getBackOptionIds: [],
         isPublicHoliday: false,

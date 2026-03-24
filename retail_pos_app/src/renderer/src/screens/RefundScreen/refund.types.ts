@@ -1,9 +1,9 @@
-import Decimal from "decimal.js";
 import { RefundableRow } from "../../types/models";
-import { MONEY_DP } from "../../libs/constants";
+import { MONEY_DP, MONEY_SCALE } from "../../libs/constants";
 
 export interface ClientRefundableRow extends RefundableRow {
   applyQty: number;
 }
 
-export const fmt = (d: Decimal) => `$${d.toFixed(MONEY_DP)}`;
+export const fmt = (cents: number) =>
+  `$${(Math.abs(cents) / MONEY_SCALE).toFixed(MONEY_DP)}`;

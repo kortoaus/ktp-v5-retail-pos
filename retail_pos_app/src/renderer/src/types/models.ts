@@ -240,6 +240,7 @@ export interface TerminalShift {
   // Refunds
   refundsCash: number;
   refundsCredit: number;
+  refundsVoucher: number;
   refundsTax: number;
 
   // Cash In/Out
@@ -288,6 +289,14 @@ export interface Terminal {
   updatedAt: string;
 }
 
+// ─── SaleInvoiceRow ─────────────────────────────────────────
+// All prices: Int cents (×100). qty/weight: Int (×1000).
+// Tax is INCLUDED in all prices — Australian GST model.
+// total = unit_price_effective × qty / QTY_SCALE (tax-inclusive)
+// tax_amount_included = extracted from total (total / 11 for 10% GST)
+// subtotal = total - tax_amount_included
+// discount_amount = allocated share of document-level discounts (promo + manual)
+//   → used in refund: net_total = total - discount_amount
 export interface SaleInvoiceRow {
   id: number;
   invoiceId: number;
@@ -300,15 +309,16 @@ export interface SaleInvoiceRow {
   barcode: string;
   index: number;
   barcodePrice: number | null;
-  unit_price_original: number;
-  unit_price_discounted: number | null;
-  unit_price_adjusted: number | null;
-  unit_price_effective: number;
-  qty: number;
-  measured_weight: number | null;
-  subtotal: number;
-  total: number;
-  tax_amount_included: number;
+  unit_price_original: number;    // base price (cents, tax-incl)
+  unit_price_discounted: number | null; // member/promo level price (cents, tax-incl)
+  unit_price_adjusted: number | null;   // manual override or markdown (cents, tax-incl)
+  unit_price_effective: number;   // resolved: adjusted ?? discounted ?? original
+  qty: number;                    // ×1000 (1ea = 1000, 1.234kg = 1234)
+  measured_weight: number | null; // ×1000 (weight items only)
+  subtotal: number;               // total - tax_amount_included (cents) — NOT same as SaleInvoice.subtotal
+  total: number;                  // effective × qty / QTY_SCALE (cents, tax-incl)
+  tax_amount_included: number;    // GST extracted from total (cents) — display/reporting only
+  discount_amount: number;        // allocated document-level discount (cents)
   original_invoice_id: number | null;
   original_invoice_row_id: number | null;
   refunded: boolean;
@@ -316,23 +326,41 @@ export interface SaleInvoiceRow {
   createdAt: string;
 }
 
+// ─── SaleInvoicePayment ─────────────────────────────────────
+// amount: what the customer paid via this method (cents)
+// surcharge: credit card surcharge added on top (cents)
+// actual EFTPOS charge = amount + surcharge
 export interface SaleInvoicePayment {
   id: number;
   invoiceId: number;
-  type: string;
-  amount: number;
-  surcharge: number;
+  type: string;       // "cash" | "credit" | "voucher"
+  amount: number;     // cents — payment toward the due amount
+  surcharge: number;  // cents — credit surcharge (0 for cash/voucher)
   createdAt: string;
-  entityType: string | null;
-  entityId: number | null;
+  entityType: string | null;  // "user-voucher" for voucher payments
+  entityId: number | null;    // voucher ID
   updatedAt: string;
 }
 
+// ─── SaleInvoice ────────────────────────────────────────────
+// All money fields: Int cents (×100). Tax-inclusive pricing model.
+//
+// subtotal = Σ(row.total) - promotionDiscountAmount
+//   → NOT the same as SaleInvoiceRow.subtotal (that's row.total - row.tax)
+//   → this is "line totals after promotions, before manual discount"
+// documentDiscountAmount = manual discount entered at payment (cents)
+// total = subtotal - documentDiscountAmount + rounding + creditSurchargeAmount
+//   → what the customer ACTUALLY pays (includes surcharge)
+//   → = Σ(payment.amount + payment.surcharge)
+// taxAmount = goodsTax + surchargeTax (extracted, for reporting)
+// totalDiscountAmount = lineDiscount + documentDiscount (영수증 "You Saved")
+//   → lineDiscount = Σ(original × qty / QTY_SCALE) - subtotal
+//   → includes member discounts, price overrides, promotions, manual discount
 export interface SaleInvoice {
   id: number;
-  type: string;
+  type: string;                           // "sale" | "refund"
   serialNumber: string | null;
-  original_invoice_id: number | null;
+  original_invoice_id: number | null;     // refund only — parent sale invoice
   original_invoice_serialNumber: string | null;
   companyId: number;
   companyName: string;
@@ -346,7 +374,7 @@ export interface SaleInvoice {
   phone: string | null;
   email: string | null;
   website: string | null;
-  memberId: number | null;
+  memberId: string | null;
   memberLevel: number | null;
   terminalId: number;
   terminal: Terminal;
@@ -356,29 +384,34 @@ export interface SaleInvoice {
   createdAt: string;
   updatedAt: string;
   rows: SaleInvoiceRow[];
-  subtotal: number;
-  documentDiscountAmount: number;
-  creditSurchargeAmount: number;
-  rounding: number;
-  total: number;
-  taxAmount: number;
-  cashPaid: number;
-  cashChange: number;
-  creditPaid: number;
-  voucherPaid: number;
-  totalDiscountAmount: number;
+  subtotal: number;               // cents — after promo, before manual discount
+  documentDiscountAmount: number; // cents — manual discount at payment
+  creditSurchargeAmount: number;  // cents — Σ(credit surcharge)
+  rounding: number;               // cents — 5c cash rounding (0 if no cash)
+  total: number;                  // cents — customer pays (subtotal - docDiscount + rounding + surcharge)
+  taxAmount: number;              // cents — extracted GST (goods + surcharge), reporting only
+  cashPaid: number;               // cents — net cash (received - change)
+  cashChange: number;             // cents — change given back
+  creditPaid: number;             // cents — credit card amount (excl surcharge)
+  voucherPaid: number;            // cents — voucher amount
+  totalDiscountAmount: number;    // cents — total savings shown on receipt
   payments: SaleInvoicePayment[];
   discounts: SaleInvoiceDiscount[];
 }
 
+// ─── SaleInvoiceDiscount ────────────────────────────────────
+// Document-level discount record (promotion applied to this sale).
+// amount = total discount from this promotion (cents).
+// This is stored for audit/display — the actual per-line allocation
+// is in SaleInvoiceRow.discount_amount.
 export interface SaleInvoiceDiscount {
   id: number;
   invoiceId: number;
   entityId: number | null;
-  entityType: string;
+  entityType: string;           // "promotion"
   title: string;
   description: string | null;
-  amount: number;
+  amount: number;               // cents — total discount from this entity
   createdAt: string;
   updatedAt: string;
 }
@@ -389,11 +422,20 @@ export interface RefundableRow extends SaleInvoiceRow {
   remainingIncludedTaxAmount: number;
 }
 
+export interface RefundableVoucherCap {
+  entityType: string | null;
+  entityId: number | null;
+  originalAmount: number;
+  remainingAmount: number;
+}
+
 export interface RefundableInvoice extends Omit<SaleInvoice, "rows"> {
   rows: RefundableRow[];
   refundedInvoices: SaleInvoice[];
   remainingCash: number;
   remainingCredit: number;
+  remainingVoucher: number;
+  remainingVouchers: RefundableVoucherCap[];
 }
 
 export interface CashInOut {
@@ -476,5 +518,6 @@ export interface Promotion {
   maxQty?: number | null; // optional
 
   discountType: "percentage" | "amount";
-  discountAmounts: number[]; // e.g. [10,5] = $10, $5, or 10%, 5%
+  discountPercentAmounts: number[];
+  discountFlatAmounts: number[];
 }

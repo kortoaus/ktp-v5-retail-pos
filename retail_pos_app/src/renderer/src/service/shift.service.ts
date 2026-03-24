@@ -29,6 +29,7 @@ export type ClosingShiftData = {
   salesTax: number;
   refundsCash: number;
   refundsCredit: number;
+  refundsVoucher: number;
   refundsTax: number;
   cashIn: number;
   cashOut: number;
@@ -50,6 +51,7 @@ export type CloseShiftDTO = {
   salesTax: number;
   refundsCash: number;
   refundsCredit: number;
+  refundsVoucher: number;
   refundsTax: number;
   cashIn: number;
   cashOut: number;

@@ -14,9 +14,15 @@ import {
   PromoPrice,
 } from "../../generated/prisma/client";
 import { getNormalizedBarcode } from "../../libs/barcode-utils";
+import { MONEY_SCALE, PCT_SCALE, QTY_SCALE } from "../../libs/constants";
 import apiService, { itemApiService } from "../../libs/cloud.api";
 import db from "../../libs/db";
 import { BadRequestException, HttpException } from "../../libs/exceptions";
+
+const dollarsToInt = (v: number) => Math.round(v * MONEY_SCALE);
+const percentToInt = (v: number) => Math.round((v * PCT_SCALE) / 100);
+
+const tag = "[cloud-migrate]";
 
 type ItemWithRelations = Item & {
   scaleData: ItemScaleData | null;
@@ -27,20 +33,15 @@ export async function cloudItemMigrateService() {
   try {
     const lastUpdatedAt = await db.item
       .findFirst({
-        select: {
-          updatedAt: true,
-        },
-        orderBy: {
-          updatedAt: "desc",
-        },
+        select: { updatedAt: true },
+        orderBy: { updatedAt: "desc" },
         take: 1,
       })
-      .then((result) => result?.updatedAt?.getTime() || 0);
+      .then((r) => r?.updatedAt?.getTime() || 0);
+
     const { ok, msg, result } = await itemApiService.post<ItemWithRelations[]>(
       "/device/migrate/item",
-      {
-        lastUpdatedAt,
-      },
+      { lastUpdatedAt },
     );
 
     if (!ok || !result) {
@@ -49,19 +50,14 @@ export async function cloudItemMigrateService() {
       );
     }
 
-    console.log("Got items from cloud:", result.length, "items");
+    console.log(`${tag} items: ${result.length} received`);
 
-    // upsert items first.
     for (const item of result) {
       const { scaleData, categories, ...itemData } = item;
-
-      const { barcode } = item;
-      const { type, gtin14, plu } = getNormalizedBarcode(barcode);
+      const { type, gtin14, plu } = getNormalizedBarcode(item.barcode);
 
       await db.item.upsert({
-        where: {
-          id: item.id,
-        },
+        where: { id: item.id },
         update: {
           ...itemData,
           parentId: null,
@@ -79,55 +75,35 @@ export async function cloudItemMigrateService() {
       });
 
       if (scaleData) {
-        // remove before
-
-        await db.itemScaleData.deleteMany({
-          where: {
-            itemId: item.id,
-          },
-        });
-
+        await db.itemScaleData.deleteMany({ where: { itemId: item.id } });
         await db.itemScaleData.create({
-          data: {
-            ...scaleData,
-            itemId: item.id,
-          },
+          data: { ...scaleData, itemId: item.id },
         });
       }
 
       if (categories && categories.length > 0) {
-        await db.itemCategory.deleteMany({
-          where: {
-            itemId: item.id,
-          },
-        });
+        await db.itemCategory.deleteMany({ where: { itemId: item.id } });
         await db.itemCategory.createMany({
-          data: categories.map((category) => ({
+          data: categories.map((c) => ({
             itemId: item.id,
-            categoryId: category.categoryId,
+            categoryId: c.categoryId,
           })),
         });
       }
-      console.log("Upserted item:", item.name_en);
     }
 
-    // connect parent items.
     for (const item of result) {
       await db.item.update({
-        where: {
-          id: item.id,
-        },
-        data: {
-          parentId: item.parentId,
-        },
+        where: { id: item.id },
+        data: { parentId: item.parentId },
       });
-      console.log("Connected parent item:", item.name_en, "to", item.parentId);
     }
 
+    console.log(`${tag} items: ${result.length} synced`);
     return true;
   } catch (e) {
     if (e instanceof HttpException) throw e;
-    console.error("cloudItemMigrateService error:", e);
+    console.error(`${tag} items: error`, e);
     return false;
   }
 }
@@ -136,68 +112,47 @@ export async function cloudCategoryMigrateService() {
   try {
     const lastUpdatedAt = await db.category
       .findFirst({
-        select: {
-          updatedAt: true,
-        },
-        orderBy: {
-          updatedAt: "desc",
-        },
+        select: { updatedAt: true },
+        orderBy: { updatedAt: "desc" },
         take: 1,
       })
-      .then((result) => result?.updatedAt?.getTime() || 0);
+      .then((r) => r?.updatedAt?.getTime() || 0);
+
     const { ok, msg, result } = await itemApiService.post<Category[]>(
       "/device/migrate/category",
-      {
-        lastUpdatedAt,
-      },
+      { lastUpdatedAt },
     );
 
     if (!ok || !result) {
       throw new BadRequestException(
-        msg || "Failed to migrate items from cloud",
+        msg || "Failed to migrate categories from cloud",
       );
     }
 
-    console.log("Got categories from cloud:", result.length, "categories");
+    const parents = result.filter((c) => !c.parentId);
+    const children = result.filter((c) => c.parentId);
 
-    const parentCategories = result.filter((category) => !category.parentId);
-    const childCategories = result.filter((category) => category.parentId);
-
-    for (const category of parentCategories) {
+    for (const category of parents) {
       await db.category.upsert({
         where: { id: category.id },
-        update: {
-          ...category,
-          parentId: null,
-        },
-        create: {
-          ...category,
-          parentId: null,
-        },
+        update: { ...category, parentId: null },
+        create: { ...category, parentId: null },
       });
-      console.log("Upserted parent category:", category.name_en);
     }
 
-    for (const category of childCategories) {
+    for (const category of children) {
       await db.category.upsert({
         where: { id: category.id },
-        update: {
-          ...category,
-          parentId: category.parentId,
-        },
-        create: {
-          ...category,
-          parentId: category.parentId,
-        },
+        update: { ...category },
+        create: { ...category },
       });
-
-      console.log("Upserted child category:", category.name_en);
     }
 
+    console.log(`${tag} categories: ${result.length} synced`);
     return true;
   } catch (e) {
     if (e instanceof HttpException) throw e;
-    console.error("cloudItemMigrateService error:", e);
+    console.error(`${tag} categories: error`, e);
     return false;
   }
 }
@@ -206,20 +161,15 @@ export async function cloudBrandMigrateService() {
   try {
     const lastUpdatedAt = await db.brand
       .findFirst({
-        select: {
-          updatedAt: true,
-        },
-        orderBy: {
-          updatedAt: "desc",
-        },
+        select: { updatedAt: true },
+        orderBy: { updatedAt: "desc" },
         take: 1,
       })
-      .then((result) => result?.updatedAt?.getTime() || 0);
+      .then((r) => r?.updatedAt?.getTime() || 0);
+
     const { ok, msg, result } = await itemApiService.post<Brand[]>(
       "/device/migrate/brand",
-      {
-        lastUpdatedAt,
-      },
+      { lastUpdatedAt },
     );
 
     if (!ok || !result) {
@@ -228,25 +178,19 @@ export async function cloudBrandMigrateService() {
       );
     }
 
-    console.log("Got brands from cloud:", result.length, "brands");
-
     for (const brand of result) {
       await db.brand.upsert({
         where: { id: brand.id },
-        update: {
-          ...brand,
-        },
-        create: {
-          ...brand,
-        },
+        update: { ...brand },
+        create: { ...brand },
       });
-      console.log("Upserted brand:", brand.name_en);
     }
 
+    console.log(`${tag} brands: ${result.length} synced`);
     return true;
   } catch (e) {
     if (e instanceof HttpException) throw e;
-    console.error("cloudItemMigrateService error:", e);
+    console.error(`${tag} brands: error`, e);
     return false;
   }
 }
@@ -255,21 +199,15 @@ export async function cloudPriceMigrateService() {
   try {
     const lastUpdatedAt = await db.price
       .findFirst({
-        select: {
-          updatedAt: true,
-        },
-        orderBy: {
-          updatedAt: "desc",
-        },
+        select: { updatedAt: true },
+        orderBy: { updatedAt: "desc" },
         take: 1,
       })
-      .then((result) => result?.updatedAt?.getTime() || 0);
+      .then((r) => r?.updatedAt?.getTime() || 0);
 
     const { ok, msg, result } = await apiService.post<Price[]>(
       "/device/migrate/price",
-      {
-        lastUpdatedAt,
-      },
+      { lastUpdatedAt },
     );
 
     if (!ok || !result) {
@@ -278,25 +216,20 @@ export async function cloudPriceMigrateService() {
       );
     }
 
-    console.log("Got prices from cloud:", result.length, "prices");
-
-    for (const price of result) {
+    for (const { prices, ...rest } of result) {
+      const data = { ...rest, prices: prices.map(dollarsToInt) };
       await db.price.upsert({
-        where: { id: price.id },
-        update: {
-          ...price,
-        },
-        create: {
-          ...price,
-        },
+        where: { id: rest.id },
+        update: data,
+        create: data,
       });
-      console.log("Upserted price:", price.id);
     }
 
+    console.log(`${tag} prices: ${result.length} synced`);
     return true;
   } catch (e) {
     if (e instanceof HttpException) throw e;
-    console.error("cloudPriceMigrateService error:", e);
+    console.error(`${tag} prices: error`, e);
     return false;
   }
 }
@@ -305,21 +238,15 @@ export async function cloudPromoPriceMigrateService() {
   try {
     const lastUpdatedAt = await db.promoPrice
       .findFirst({
-        select: {
-          updatedAt: true,
-        },
-        orderBy: {
-          updatedAt: "desc",
-        },
+        select: { updatedAt: true },
+        orderBy: { updatedAt: "desc" },
         take: 1,
       })
-      .then((result) => result?.updatedAt?.getTime() || 0);
+      .then((r) => r?.updatedAt?.getTime() || 0);
 
     const { ok, msg, result } = await apiService.post<PromoPrice[]>(
       "/device/migrate/promo-price",
-      {
-        lastUpdatedAt,
-      },
+      { lastUpdatedAt },
     );
 
     if (!ok || !result) {
@@ -328,47 +255,44 @@ export async function cloudPromoPriceMigrateService() {
       );
     }
 
-    console.log("Got promo prices from cloud:", result.length, "promo prices");
-
-    for (const price of result) {
+    for (const { prices, ...rest } of result) {
+      const data = { ...rest, prices: prices.map(dollarsToInt) };
       await db.promoPrice.upsert({
-        where: { id: price.id },
-        update: {
-          ...price,
-        },
-        create: {
-          ...price,
-        },
+        where: { id: rest.id },
+        update: data,
+        create: data,
       });
-      console.log("Upserted promo price:", price.id);
     }
 
+    console.log(`${tag} promo-prices: ${result.length} synced`);
     return true;
   } catch (e) {
     if (e instanceof HttpException) throw e;
-    console.error("cloudPromoPriceMigrateService error:", e);
+    console.error(`${tag} promo-prices: error`, e);
     return false;
   }
 }
+
+type CloudPromotion = Omit<
+  Promotion,
+  "discountPercentAmounts" | "discountFlatAmounts"
+> & {
+  discountAmounts: number[];
+};
 
 export async function cloudPromotionMigrateService() {
   try {
     const lastUpdatedAt = await db.promotion
       .findFirst({
-        select: {
-          updatedAt: true,
-        },
-        orderBy: {
-          updatedAt: "desc",
-        },
+        select: { updatedAt: true },
+        orderBy: { updatedAt: "desc" },
         take: 1,
       })
-      .then((result) => result?.updatedAt?.getTime() || 0);
-    const { ok, msg, result } = await apiService.post<Promotion[]>(
+      .then((r) => r?.updatedAt?.getTime() || 0);
+
+    const { ok, msg, result } = await apiService.post<CloudPromotion[]>(
       "/device/migrate/promotion",
-      {
-        lastUpdatedAt,
-      },
+      { lastUpdatedAt },
     );
 
     if (!ok || !result) {
@@ -377,25 +301,30 @@ export async function cloudPromotionMigrateService() {
       );
     }
 
-    console.log("Got promotions from cloud:", result.length, "promotions");
+    for (const { discountAmounts, ...rest } of result) {
+      const isPercent = rest.discountType === "percentage";
+      const data = {
+        ...rest,
+        minQty: rest.minQty * QTY_SCALE,
+        maxQty: rest.maxQty != null ? rest.maxQty * QTY_SCALE : null,
+        discountPercentAmounts: isPercent
+          ? discountAmounts.map(percentToInt)
+          : [],
+        discountFlatAmounts: isPercent ? [] : discountAmounts.map(dollarsToInt),
+      };
 
-    for (const promotion of result) {
       await db.promotion.upsert({
-        where: { id: promotion.id },
-        update: {
-          ...promotion,
-        },
-        create: {
-          ...promotion,
-        },
+        where: { id: rest.id },
+        update: data,
+        create: data,
       });
-      console.log("Upserted promotion:", promotion.name_en);
     }
 
+    console.log(`${tag} promotions: ${result.length} synced`);
     return true;
   } catch (e) {
     if (e instanceof HttpException) throw e;
-    console.error("cloudItemMigrateService error:", e);
+    console.error(`${tag} promotions: error`, e);
     return false;
   }
 }
@@ -407,7 +336,7 @@ export async function cloudCompanyMigrateService() {
     );
     if (!ok || !result) {
       throw new BadRequestException(
-        msg || "Failed to migrate companies from cloud",
+        msg || "Failed to migrate company from cloud",
       );
     }
 
@@ -445,9 +374,7 @@ export async function cloudCompanyMigrateService() {
     });
 
     await db.storeSetting.upsert({
-      where: {
-        id: 1,
-      },
+      where: { id: 1 },
       create: {
         id: 1,
         companyId: result.cloudId,
@@ -469,10 +396,11 @@ export async function cloudCompanyMigrateService() {
       },
     });
 
+    console.log(`${tag} company: synced`);
     return true;
   } catch (e) {
     if (e instanceof HttpException) throw e;
-    console.error("cloudCompanyMigrateService error:", e);
+    console.error(`${tag} company: error`, e);
     return false;
   }
 }
@@ -483,23 +411,17 @@ export async function cloudHotkeyMigrateService() {
   try {
     const lastUpdatedAt = await db.cloudHotkey
       .findFirst({
-        select: {
-          updatedAt: true,
-        },
-        orderBy: {
-          updatedAt: "desc",
-        },
+        select: { updatedAt: true },
+        orderBy: { updatedAt: "desc" },
         take: 1,
       })
-      .then((result) => result?.updatedAt?.getTime() || 0);
+      .then((r) => r?.updatedAt?.getTime() || 0);
 
     const { ok, msg, result } = await apiService.post<CloudHotkeyWithKeys[]>(
       "/device/migrate/hotkey",
-      {
-        lastUpdatedAt,
-      },
+      { lastUpdatedAt },
     );
-    console.log("Got hotkeys from cloud:", ok, msg, result);
+
     if (!ok || !result) {
       throw new BadRequestException(
         msg || "Failed to migrate hotkeys from cloud",
@@ -508,24 +430,15 @@ export async function cloudHotkeyMigrateService() {
 
     for (const hotkey of result) {
       const { keys, ...rest } = hotkey;
-      console.log("Upserting hotkey:", hotkey.name_en);
       const updatedHotkey = await db.cloudHotkey.upsert({
         where: { id: hotkey.id },
-        create: {
-          ...rest,
-        },
-        update: {
-          ...rest,
-        },
-        select: {
-          id: true,
-        },
+        create: { ...rest },
+        update: { ...rest },
+        select: { id: true },
       });
 
       await db.cloudHotkeyItem.deleteMany({
-        where: {
-          hotkeyId: updatedHotkey.id,
-        },
+        where: { hotkeyId: updatedHotkey.id },
       });
 
       await db.cloudHotkeyItem.createMany({
@@ -534,57 +447,40 @@ export async function cloudHotkeyMigrateService() {
           hotkeyId: updatedHotkey.id,
         })),
       });
-      console.log("Upserted hotkey:", hotkey.name_en);
     }
 
+    console.log(`${tag} hotkeys: ${result.length} synced`);
     return true;
   } catch (e) {
     if (e instanceof HttpException) throw e;
-    console.error("cloudHotkeyMigrateService error:", e);
+    console.error(`${tag} hotkeys: error`, e);
     return false;
   }
 }
 
 export async function normalizeBarcodesService() {
   try {
-    const totalCount = await db.item.count({
-      where: {
-        barcodePLU: null,
-        barcodeGTIN: null,
-      },
-    });
-    console.log(`Total items to normalize: ${totalCount}`);
     const items = await db.item.findMany({
-      where: {
-        barcodePLU: null,
-        barcodeGTIN: null,
-      },
-      select: {
-        id: true,
-        barcode: true,
-      },
+      where: { barcodePLU: null, barcodeGTIN: null },
+      select: { id: true, barcode: true },
     });
 
-    let count = 0;
+    let normalized = 0;
     for (const item of items) {
-      console.log("--------------------------------");
       const { type, gtin14, plu } = getNormalizedBarcode(item.barcode);
-      if (gtin14 || plu) {
-        count++;
-      }
-      console.log(item.barcode);
-      console.log(type, gtin14, plu);
+      if (gtin14 || plu) normalized++;
 
       await db.item.update({
         where: { id: item.id },
         data: { barcodeType: type, barcodeGTIN: gtin14, barcodePLU: plu },
       });
     }
-    console.log(`${count}/${items.length} items updated`);
+
+    console.log(`${tag} barcodes: ${normalized}/${items.length} normalized`);
     return true;
   } catch (e) {
     if (e instanceof HttpException) throw e;
-    console.error("normalizeBarcodesService error:", e);
+    console.error(`${tag} barcodes: error`, e);
     return false;
   }
 }

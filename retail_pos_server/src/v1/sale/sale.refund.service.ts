@@ -7,7 +7,6 @@ import {
   InternalServerException,
   NotFoundException,
 } from "../../libs/exceptions";
-import { Decimal } from "@prisma/client/runtime/index-browser";
 import { saleInvoiceSyncService } from "../cloud/cloud.sync.service";
 
 type RefundRowDto = {
@@ -32,6 +31,7 @@ type RefundRowDto = {
   original_invoice_row_id: number;
   adjustments: string[];
   tax_amount_included: number;
+  discount_amount: number;
 };
 
 type CreateRefundInvoiceDto = {
@@ -45,11 +45,18 @@ type CreateRefundInvoiceDto = {
   cashPaid: number;
   cashChange: number;
   creditPaid: number;
+  voucherPaid: number;
   totalDiscountAmount: number;
   memberId: string | null;
   memberLevel: number | null;
   rows: RefundRowDto[];
-  payments: { type: string; amount: number; surcharge: number }[];
+  payments: {
+    type: string;
+    amount: number;
+    surcharge: number;
+    entityType?: string;
+    entityId?: number;
+  }[];
 };
 
 export async function createRefundInvoiceService(
@@ -73,7 +80,6 @@ export async function createRefundInvoiceService(
     }
 
     const result = await db.$transaction(async (tx) => {
-      // 1. Fetch original invoice
       const originalInvoice = await tx.saleInvoice.findFirst({
         where: { id: dto.original_invoice_id, type: "sale" },
         include: { rows: true, payments: true },
@@ -82,14 +88,12 @@ export async function createRefundInvoiceService(
         throw new NotFoundException("Original sale invoice not found");
       }
 
-      // 2. Fetch all existing refunds for this invoice
       const existingRefunds = await tx.saleInvoice.findMany({
         where: { type: "refund", original_invoice_id: originalInvoice.id },
         include: { rows: true, payments: true },
       });
       const existingRefundRows = existingRefunds.flatMap((r) => r.rows);
 
-      // 3. Validate each row: qty does not exceed remaining
       for (const row of dto.rows) {
         const originalRow = originalInvoice.rows.find(
           (r) => r.id === row.original_invoice_row_id,
@@ -102,50 +106,78 @@ export async function createRefundInvoiceService(
 
         const alreadyRefundedQty = existingRefundRows
           .filter((r) => r.original_invoice_row_id === originalRow.id)
-          .reduce((acc, r) => acc.plus(r.qty), new Decimal(0));
+          .reduce((acc, r) => acc + r.qty, 0);
 
-        const remainingQty = originalRow.qty.minus(alreadyRefundedQty);
-        if (new Decimal(row.qty).gt(remainingQty)) {
+        const remainingQty = originalRow.qty - alreadyRefundedQty;
+        if (row.qty > remainingQty) {
           throw new BadRequestException(
-            `Row ${row.original_invoice_row_id}: refund qty ${row.qty} exceeds remaining ${remainingQty.toNumber()}`,
+            `Row ${row.original_invoice_row_id}: refund qty ${row.qty} exceeds remaining ${remainingQty}`,
           );
         }
       }
 
-      // 4. Validate payment caps
       const originalCashPaid = originalInvoice.payments
         .filter((p) => p.type === "cash")
-        .reduce((acc, p) => acc.plus(p.amount), new Decimal(0));
+        .reduce((acc, p) => acc + p.amount, 0);
       const originalCreditPaid = originalInvoice.payments
         .filter((p) => p.type === "credit")
-        .reduce((acc, p) => acc.plus(p.amount), new Decimal(0));
+        .reduce((acc, p) => acc + p.amount, 0);
 
       const alreadyRefundedCash = existingRefunds
         .flatMap((r) => r.payments)
         .filter((p) => p.type === "cash")
-        .reduce((acc, p) => acc.plus(p.amount), new Decimal(0));
+        .reduce((acc, p) => acc + p.amount, 0);
       const alreadyRefundedCredit = existingRefunds
         .flatMap((r) => r.payments)
         .filter((p) => p.type === "credit")
-        .reduce((acc, p) => acc.plus(p.amount), new Decimal(0));
+        .reduce((acc, p) => acc + p.amount, 0);
 
-      const remainingCashCap = originalCashPaid.minus(alreadyRefundedCash);
-      const remainingCreditCap = originalCreditPaid.minus(
-        alreadyRefundedCredit,
+      const remainingCashCap = originalCashPaid - alreadyRefundedCash;
+      const remainingCreditCap = originalCreditPaid - alreadyRefundedCredit;
+
+      if (dto.cashPaid > remainingCashCap) {
+        throw new BadRequestException(
+          `Cash refund ${dto.cashPaid} exceeds remaining cash cap ${remainingCashCap}`,
+        );
+      }
+      if (dto.creditPaid > remainingCreditCap) {
+        throw new BadRequestException(
+          `Credit refund ${dto.creditPaid} exceeds remaining credit cap ${remainingCreditCap}`,
+        );
+      }
+
+      const originalVoucherPayments = originalInvoice.payments.filter(
+        (p) => p.type === "voucher",
       );
+      const alreadyRefundedVoucherPayments = existingRefunds
+        .flatMap((r) => r.payments)
+        .filter((p) => p.type === "voucher");
 
-      if (new Decimal(dto.cashPaid).gt(remainingCashCap)) {
-        throw new BadRequestException(
-          `Cash refund $${dto.cashPaid} exceeds remaining cash cap $${remainingCashCap.toNumber()}`,
+      const dtoVoucherPayments = dto.payments.filter(
+        (p) => p.type === "voucher",
+      );
+      for (const vp of dtoVoucherPayments) {
+        const originalVp = originalVoucherPayments.find(
+          (p) => p.entityId === vp.entityId && p.entityType === vp.entityType,
         );
-      }
-      if (new Decimal(dto.creditPaid).gt(remainingCreditCap)) {
-        throw new BadRequestException(
-          `Credit refund $${dto.creditPaid} exceeds remaining credit cap $${remainingCreditCap.toNumber()}`,
-        );
+        if (!originalVp) {
+          throw new BadRequestException(
+            `Voucher entity ${vp.entityType}:${vp.entityId} not found on original invoice`,
+          );
+        }
+        const alreadyRefunded = alreadyRefundedVoucherPayments
+          .filter(
+            (p) => p.entityId === vp.entityId && p.entityType === vp.entityType,
+          )
+          .reduce((acc, p) => acc + p.amount, 0);
+        const remainingVoucherCap = originalVp.amount - alreadyRefunded;
+        if (vp.amount > remainingVoucherCap) {
+          throw new BadRequestException(
+            `Voucher ${vp.entityType}:${vp.entityId} refund ${vp.amount} exceeds remaining cap ${remainingVoucherCap}`,
+          );
+        }
       }
 
-      // 5. Create refund invoice
       const invoice = await tx.saleInvoice.create({
         data: {
           type: "refund",
@@ -177,6 +209,7 @@ export async function createRefundInvoiceService(
           cashPaid: dto.cashPaid,
           cashChange: dto.cashChange,
           creditPaid: dto.creditPaid,
+          voucherPaid: dto.voucherPaid ?? 0,
           totalDiscountAmount: dto.totalDiscountAmount,
           rows: {
             create: dto.rows.map((row) => ({
@@ -201,6 +234,7 @@ export async function createRefundInvoiceService(
               original_invoice_row_id: row.original_invoice_row_id,
               adjustments: row.adjustments,
               tax_amount_included: row.tax_amount_included,
+              discount_amount: row.discount_amount ?? 0,
             })),
           },
           payments: {
@@ -208,18 +242,52 @@ export async function createRefundInvoiceService(
               type: p.type,
               amount: p.amount,
               surcharge: p.surcharge,
+              entityType: p.entityType,
+              entityId: p.entityId,
             })),
           },
         },
         select: { id: true },
       });
 
-      // 6. Serial number
       const serialNumber = `${company.id}-${shift.id}-${terminal.id}-${invoice.id}`;
       await tx.saleInvoice.update({
         where: { id: invoice.id },
         data: { serialNumber },
       });
+
+      const refundVoucherPayments = dto.payments.filter(
+        (p) =>
+          p.type === "voucher" &&
+          p.entityType === "user-voucher" &&
+          typeof p.entityId === "number",
+      );
+
+      for (const p of refundVoucherPayments) {
+        const targetVoucher = await tx.userVoucher.findUnique({
+          where: { id: p.entityId },
+          select: { id: true, left_amount: true, userId: true },
+        });
+
+        if (!targetVoucher) throw new NotFoundException("Voucher not found");
+
+        await tx.userVoucher.update({
+          where: { id: p.entityId },
+          data: {
+            left_amount: targetVoucher.left_amount + p.amount,
+          },
+        });
+
+        await tx.userVoucherHistory.create({
+          data: {
+            voucherId: targetVoucher.id,
+            userId: targetVoucher.userId,
+            spent_amount: -p.amount,
+            saleInvoiceId: invoice.id,
+            saleInvoiceSerialNumber: serialNumber,
+          },
+        });
+      }
 
       return invoice;
     });

@@ -20,7 +20,8 @@ export type LabelElement =
       text?: boolean;
       format: BarcodeFormat;
     }
-  | { type: "datamatrix"; x: number; y: number; data: string; size: number };
+  | { type: "datamatrix"; x: number; y: number; data: string; size: number }
+  | { type: "qrcode"; x: number; y: number; data: string; size: number };
 
 export interface SLCSPart {
   type: "raw" | "euc-kr";
@@ -61,6 +62,11 @@ export class LabelBuilder {
 
   datamatrix(x: number, y: number, data: string, size = 6) {
     this.elements.push({ type: "datamatrix", x, y, data, size });
+    return this;
+  }
+
+  qrcode(x: number, y: number, data: string, size = 4) {
+    this.elements.push({ type: "qrcode", x, y, data, size });
     return this;
   }
 
@@ -139,6 +145,9 @@ export class LabelBuilder {
       } else if (el.type === "datamatrix") {
         const slcsSize = Math.max(1, Math.min(el.size, 10));
         raw(`B2${el.x},${el.y},D,${slcsSize},N,'${el.data}'`);
+      } else if (el.type === "qrcode") {
+        const slcsSize = Math.max(1, Math.min(el.size, 10));
+        raw(`B2${el.x},${el.y},Q,2,M,${slcsSize},0,'${el.data}'`);
       }
     }
 

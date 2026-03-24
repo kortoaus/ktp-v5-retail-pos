@@ -1,4 +1,4 @@
-import Decimal from "decimal.js";
+import { QTY_SCALE } from "../../libs/constants";
 import { cn } from "../../libs/cn";
 import { ClientRefundableRow, fmt } from "./refund.types";
 
@@ -23,11 +23,11 @@ export default function RefundedRowCard({
         <div className="truncate font-medium">{row.name_en}</div>
         <div className="text-[10px] text-gray-400 truncate">{row.barcode}</div>
       </div>
-      <div className="w-14 center">{row.applyQty}</div>
+      <div className="w-14 center">{row.applyQty / QTY_SCALE}</div>
       <div className="w-20 center flex flex-col">
-        <span className="font-medium">{fmt(new Decimal(row.total))}</span>
+        <span className="font-medium">{fmt(row.total)}</span>
         <span className="text-[10px] text-gray-400">
-          GST {fmt(new Decimal(row.tax_amount_included))}
+          GST {fmt(row.tax_amount_included)}
         </span>
       </div>
     </div>

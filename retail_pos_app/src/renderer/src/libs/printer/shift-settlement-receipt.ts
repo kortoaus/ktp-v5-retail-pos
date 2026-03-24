@@ -130,6 +130,8 @@ export function renderShiftSettlementReceipt(
   y += LH;
   row(ctx, "Credit", fmt(shift.refundsCredit), y);
   y += LH;
+  row(ctx, "Voucher", fmt(shift.refundsVoucher), y);
+  y += LH;
   row(ctx, "GST", fmt(shift.refundsTax), y);
   y += LH;
 

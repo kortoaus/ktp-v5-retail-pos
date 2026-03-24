@@ -1,13 +1,13 @@
 import { Request, Response } from "express";
 import { NotFoundException } from "../../libs/exceptions";
+import { createSaleInvoiceService } from "./sale.create.service";
 import {
-  createSaleInvoiceService,
   getLatestTerminalInvoiceService,
   getRefundableSaleInvoiceByIdService,
   getSaleInvoiceByIdService,
   getSaleInvoiceWithChildrenService,
   getSaleInvoicesService,
-} from "./sale.service";
+} from "./sale.query.service";
 import { parseIntId, parseFindManyQuery } from "../../libs/query";
 
 function getAuth(res: Response) {

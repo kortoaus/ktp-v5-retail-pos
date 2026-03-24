@@ -26,7 +26,8 @@ import DateRangeSelector from "./DateRangeSelector";
 import MemberSearchModal from "./MemberSearchModal";
 
 const PAGE_SIZE = 10;
-const fmt = (n: number) => `$${Math.abs(n).toFixed(2)}`;
+import { MONEY_DP, MONEY_SCALE } from "../libs/constants";
+const fmt = (cents: number) => `$${(Math.abs(cents) / MONEY_SCALE).toFixed(MONEY_DP)}`;
 
 interface InvoiceSearchPanelProps {
   headerLeft: React.ReactNode;

@@ -28,8 +28,8 @@ export async function getUserVouchersByUserIdsService(userIds: number[]) {
     const result = vouchers.map((v) => ({
       id: v.id,
       userId: v.userId,
-      init_amount: v.init_amount.toNumber(),
-      left_amount: v.left_amount.toNumber(),
+      init_amount: v.init_amount,
+      left_amount: v.left_amount,
       validFrom: v.validFrom,
       validTo: v.validTo,
     }));
@@ -99,8 +99,8 @@ export async function issueDailyVoucherService(issuedBy: User, userId: number) {
     const result = {
       id: voucher.id,
       userId: voucher.userId,
-      init_amount: voucher.init_amount.toNumber(),
-      left_amount: voucher.left_amount.toNumber(),
+      init_amount: voucher.init_amount,
+      left_amount: voucher.left_amount,
       validFrom: voucher.validFrom,
       validTo: voucher.validTo,
       issuedById: voucher.issuedById,

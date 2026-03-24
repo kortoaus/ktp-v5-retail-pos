@@ -18,22 +18,28 @@ export type LineAdjustment =
   | "QTY_OVERRIDE"
   | "DISCOUNT_OVERRIDE";
 
+export interface PPMarkdown {
+  discountType: "pct" | "amt";
+  discountAmount: number;
+}
+
 export interface SaleLineType extends SaleLineItem {
   original_invoice_id: number | null;
   original_invoice_row_id: number | null;
   lineKey: string;
   index: number;
-  barcode_price: number | null; // original barcode-embedded price (prepacked/weight-prepacked only)
-  unit_price_adjusted: number | null; // user injected price priority:0
-  unit_price_discounted: number | null; // from promo price priority:1
-  unit_price_original: number; // from price priority:2
-  unit_price_effective: number; // resolved: adjusted ?? discounted ?? original
+  barcode_price: number | null;
+  unit_price_adjusted: number | null;
+  unit_price_discounted: number | null;
+  unit_price_original: number;
+  unit_price_effective: number;
   qty: number;
   measured_weight: number | null;
-  total: number; // effective unit price * qty
-  tax_amount: number; // price is tax included, must be calculated from price and tax_rate
-  subtotal: number; // total - tax_amount
+  total: number;
+  tax_amount: number;
+  subtotal: number;
   adjustments: LineAdjustment[];
+  ppMarkdown: PPMarkdown | null;
 }
 
 export interface SaleStoreDiscount {
@@ -43,4 +49,5 @@ export interface SaleStoreDiscount {
   title: string;
   description: string;
   amount: number;
+  targetItemIds: number[];
 }

@@ -10,7 +10,7 @@ import { buildPriceTag60x30 } from "../libs/label-templates";
 import { ean13CheckDigit, fiveDigitFloat } from "../libs/barcode-utils";
 import { embededPriceParser } from "../libs/scan-utils";
 import { BarcodeFormat } from "../libs/label-builder";
-import { MONEY_DP, QTY_DP } from "../libs/constants";
+import { MONEY_DP, MONEY_SCALE, QTY_DP } from "../libs/constants";
 import SearchItemModal from "../components/SearchItemModal";
 
 type ModalTarget = null | "item-search";
@@ -30,6 +30,7 @@ export default function LabelingScreen() {
   } | null>(null);
   const [readingScale, setReadingScale] = useState(false);
   const [polling, setPolling] = useState(false);
+  const [priceOverride, setPriceOverride] = useState("");
   const pollingRef = useRef(false);
 
   const { printers, printLabel } = useZplPrinters();
@@ -48,6 +49,7 @@ export default function LabelingScreen() {
     setItem(newItem);
     setRawBarcode(barcode);
     setWeightKg(null);
+    setPriceOverride("");
     setModalTarget(null);
   }
 
@@ -135,13 +137,17 @@ export default function LabelingScreen() {
     return getItemType(item);
   }, [item]);
 
+  const overrideDollars = parseFloat(priceOverride);
+  const hasOverride = priceOverride !== "" && !isNaN(overrideDollars) && overrideDollars >= 0;
+
   const labelData = useMemo(() => {
     if (!item || !item.price) return null;
 
     const { name_en, name_ko } = itemNameParser(item);
     const type = getItemType(item);
-    const unitPrice = item.price.prices[0] || 0;
+    const unitPrice = (item.price.prices[0] || 0) / MONEY_SCALE;
     const plu = item.barcodePLU || item.barcode;
+    const canOverride = type === "prepacked" || type === "weight-prepacked" || type === "weight";
 
     let price: number;
     let barcode: string;
@@ -149,7 +155,12 @@ export default function LabelingScreen() {
 
     const isWP = type === "weight" && isEAN13WithEmbeddedPrice(rawBarcode);
 
-    if (isWP) {
+    if (canOverride && hasOverride) {
+      price = overrideDollars;
+      const barcode12 = `${plu}${fiveDigitFloat(price)}`;
+      barcode = `${barcode12}${ean13CheckDigit(barcode12)}`;
+      barcodeFormat = "EAN13";
+    } else if (isWP) {
       const raw13 = rawBarcode.length === 12 ? "0" + rawBarcode : rawBarcode;
       price = embededPriceParser(raw13);
       barcode = raw13;
@@ -186,9 +197,10 @@ export default function LabelingScreen() {
       barcode,
       barcodeFormat,
       unitPrice,
+      canOverride,
       weightKg: type === "weight" && !isWP ? weightKg : null,
     };
-  }, [item, rawBarcode, weightKg]);
+  }, [item, rawBarcode, weightKg, hasOverride, overrideDollars]);
 
   // ── Render ────────────────────────────────────────────────────
 
@@ -250,6 +262,30 @@ export default function LabelingScreen() {
                   </span>
                 )}
               </div>
+
+              {labelData.canOverride && (
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-600">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Override price"
+                    value={priceOverride}
+                    onChange={(e) => setPriceOverride(e.target.value)}
+                    className="flex-1 h-10 px-3 rounded-lg border border-gray-300 text-lg font-bold tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                  {priceOverride && (
+                    <button
+                      type="button"
+                      onPointerDown={() => setPriceOverride("")}
+                      className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 active:bg-gray-200 text-sm"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
 
               <div className="mt-2 text-xs text-gray-400 font-mono">
                 {labelData.barcode} ({labelData.barcodeFormat})

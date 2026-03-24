@@ -4,13 +4,16 @@ import { buildPrintBuffer } from "./escpos";
 import { printESCPOS } from "./print.service";
 import dayjsAU from "../dayjsAU";
 
+import { MONEY_DP, MONEY_SCALE, QTY_DP, QTY_SCALE } from "../constants";
+
 const W = 576;
 const PAD = 20;
 const LH = 36;
 const FONT = 28;
 const FONT_SM = 24;
 const FONT_LG = 36;
-const fmt = (n: number) => `$${Math.abs(n).toFixed(2)}`;
+const fmt = (cents: number) => `$${(Math.abs(cents) / MONEY_SCALE).toFixed(MONEY_DP)}`;
+const fmtQty = (q: number) => (q / QTY_SCALE).toFixed(QTY_DP);
 
 const NAME_MAX = 40;
 
@@ -60,7 +63,7 @@ function estimateHeight(invoice: SaleInvoice): number {
   }
 
   const totalLines = 3;
-  const payLines = 2;
+  const payLines = 3;
   const footerLines = 5;
 
   const total =
@@ -160,7 +163,7 @@ export async function renderRefundReceipt(
       y += LH;
     }
     ctx.font = `${FONT_SM}px sans-serif`;
-    const qtyStr = `${r.qty} @ ${fmt(r.unit_price_effective)}`;
+    const qtyStr = `${fmtQty(r.qty)} @ ${fmt(r.unit_price_effective)}`;
     ctx.fillText("  " + qtyStr, PAD, y);
     ctx.textAlign = "right";
     ctx.fillText(fmt(r.total), W - PAD, y);
@@ -200,6 +203,10 @@ export async function renderRefundReceipt(
   }
   if (invoice.creditPaid > 0) {
     row(ctx, "Credit Refunded", fmt(invoice.creditPaid), y);
+    y += LH;
+  }
+  if (invoice.voucherPaid > 0) {
+    row(ctx, "Voucher Refunded", fmt(invoice.voucherPaid), y);
     y += LH;
   }
 

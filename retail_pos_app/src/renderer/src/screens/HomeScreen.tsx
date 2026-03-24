@@ -18,6 +18,7 @@ import {
   IoFlaskOutline,
   IoExpandOutline,
   IoTvOutline,
+  IoScaleOutline,
 } from "react-icons/io5";
 
 const btn =
@@ -100,6 +101,13 @@ export default function HomeScreen() {
           className="bg-amber-50 text-amber-800 hover:bg-amber-100"
         >
           Labeling
+        </NavBtn>
+        <NavBtn
+          to="/weight-label"
+          icon={<IoScaleOutline size={24} />}
+          className="bg-amber-50 text-amber-800 hover:bg-amber-100"
+        >
+          PP Label
         </NavBtn>
         <div className="flex-1 min-w-0">
           <button

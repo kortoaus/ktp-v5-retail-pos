@@ -1,9 +1,9 @@
 import { SaleInvoice } from "../../types/models";
 import dayjsAU from "../../libs/dayjsAU";
-import Decimal from "decimal.js";
-import { MONEY_DP } from "../../libs/constants";
+import { MONEY_DP, MONEY_SCALE, QTY_DP, QTY_SCALE } from "../../libs/constants";
 
-const fmt = (n: number) => `$${Math.abs(n).toFixed(2)}`;
+const fmt = (cents: number) => `$${(Math.abs(cents) / MONEY_SCALE).toFixed(MONEY_DP)}`;
+const fmtQty = (q: number) => (q / QTY_SCALE).toFixed(QTY_DP);
 
 export default function InvoiceReceiptViewer({
   invoice,
@@ -16,7 +16,7 @@ export default function InvoiceReceiptViewer({
     .filter(Boolean)
     .join(" ");
 
-  let totalCents = Math.round(invoice.total * 100);
+  const totalCents = invoice.total;
 
   return (
     <div className="max-w-[380px] mx-auto bg-white p-6 font-mono text-sm leading-relaxed">
@@ -77,21 +77,15 @@ export default function InvoiceReceiptViewer({
           if (r.type === "weight-prepacked") {
             qtyStr = `1 @ ${fmt(r.total)}`;
           } else if (r.measured_weight && r.measured_weight > 0) {
-            qtyStr = `${r.measured_weight}${r.uom} @ ${fmt(r.unit_price_effective)}/${r.uom}`;
+            qtyStr = `${fmtQty(r.measured_weight)}${r.uom} @ ${fmt(r.unit_price_effective)}/${r.uom}`;
           } else {
-            qtyStr = `${r.qty} @ ${fmt(r.unit_price_effective)}`;
+            qtyStr = `${fmtQty(r.qty)} @ ${fmt(r.unit_price_effective)}`;
           }
           let totalStr = fmt(r.total);
           if (priceChanged) {
             qtyStr += ` (${fmt(r.unit_price_original)})`;
-            const originalTotal = new Decimal(r.unit_price_original)
-              .mul(r.qty)
-              .toDecimalPlaces(MONEY_DP)
-              .toNumber();
-            const howMuchSaved = new Decimal(originalTotal)
-              .sub(r.total)
-              .toDecimalPlaces(MONEY_DP)
-              .toNumber();
+            const originalTotal = Math.round((r.unit_price_original * r.qty) / QTY_SCALE);
+            const howMuchSaved = originalTotal - r.total;
             totalStr = `(Saved ${fmt(howMuchSaved)}) ` + totalStr;
           }
           return (
@@ -161,7 +155,7 @@ export default function InvoiceReceiptViewer({
 
       <div className="flex justify-between text-lg font-bold">
         <span>{isRefund ? "REFUND TOTAL" : "TOTAL"}</span>
-        <span>{fmt(totalCents / 100)}</span>
+        <span>{fmt(totalCents)}</span>
       </div>
 
       <hr className="border-dashed border-gray-400 my-3" />

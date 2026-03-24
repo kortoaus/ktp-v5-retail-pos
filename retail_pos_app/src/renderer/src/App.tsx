@@ -4,7 +4,8 @@ import { TerminalProvider } from "./contexts/TerminalContext";
 import ManagerLayout from "./layouts/ManagerLayout";
 import InterfaceSettingsScreen from "./screens/InterfaceSettingsScreen";
 import LabelingScreen from "./screens/LabelingScreen";
-import SaleScreen from "./screens/SaleScreen";
+import WeightLabelScreen from "./screens/WeightLabelScreen";
+import NewSaleScreen from "./screens/NewSaleScreen";
 import TestScreen from "./screens/TestScreen";
 import HomeScreen from "./screens/HomeScreen";
 import HotkeyManagerScreen from "./screens/HotkeyManagerScreen";
@@ -46,10 +47,11 @@ function MainApp() {
             <Route path="/" element={<HomeScreen />} />
 
             <Route path="/labeling" element={<LabelingScreen />} />
+            <Route path="/weight-label" element={<WeightLabelScreen />} />
             <Route path="/server-setup" element={<ServerSetupScreen />} />
 
             <Route path="/sale" element={<ManagerLayout />}>
-              <Route path="" element={<SaleScreen />} />
+              <Route path="" element={<NewSaleScreen />} />
             </Route>
             <Route path="/manager" element={<ManagerLayout />}>
               <Route path="settings" element={<InterfaceSettingsScreen />} />

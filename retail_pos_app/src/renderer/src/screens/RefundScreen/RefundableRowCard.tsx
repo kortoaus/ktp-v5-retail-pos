@@ -1,5 +1,5 @@
-import Decimal from "decimal.js";
 import { RefundableRow } from "../../types/models";
+import { QTY_SCALE } from "../../libs/constants";
 import { cn } from "../../libs/cn";
 import { fmt } from "./refund.types";
 
@@ -14,12 +14,10 @@ export default function RefundableRowCard({
   onClick: () => void;
   appliedQty: number;
 }) {
-  let qtyStr = `${row.remainingQty}/${row.qty}`;
+  let qtyStr = `${row.remainingQty / QTY_SCALE}/${row.qty / QTY_SCALE}`;
   if (row.type === "weight-prepacked") {
     qtyStr = row.remainingQty === row.qty ? "1/1" : "0/1";
   }
-
-  const unitPrice = new Decimal(row.total).div(new Decimal(row.qty));
 
   return (
     <div
@@ -35,12 +33,21 @@ export default function RefundableRowCard({
         <div className="truncate font-medium">{row.name_en}</div>
         <div className="text-[10px] text-gray-400 truncate">{row.barcode}</div>
       </div>
-      <div className="w-20 center">{fmt(unitPrice)}</div>
+      <div className="w-20 center">
+        {fmt(row.discount_amount > 0
+          ? Math.round((row.total - row.discount_amount) * QTY_SCALE / row.qty)
+          : row.unit_price_effective)}
+      </div>
       <div className="w-14 center">{qtyStr}</div>
       <div className="w-20 center flex flex-col">
-        <span className="font-medium">{fmt(new Decimal(row.total))}</span>
+        <span className="font-medium">{fmt(row.total - row.discount_amount)}</span>
+        {row.discount_amount > 0 && (
+          <span className="text-[10px] text-red-400 line-through">
+            {fmt(row.total)}
+          </span>
+        )}
         <span className="text-[10px] text-gray-400">
-          GST {fmt(new Decimal(row.tax_amount_included))}
+          GST {fmt(row.tax_amount_included)}
         </span>
       </div>
     </div>

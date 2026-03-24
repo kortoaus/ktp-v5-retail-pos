@@ -17,9 +17,9 @@ type StoreSettingDTO = {
   abn?: string;
   website?: string;
   email?: string;
-  credit_surcharge_rate?: number; // 1.5% default (0.015) handled elsewhere
+  credit_surcharge_rate?: number; // permille (15 = 1.5%)
   receipt_below_text?: string;
-  user_daily_voucher_default?: number;
+  user_daily_voucher_default?: number; // cents (2000 = $20)
 };
 
 export const updateStoreSettingService = async (dto: StoreSettingDTO) => {

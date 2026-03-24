@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { RefundableRow } from "../../types/models";
+import { QTY_DP, QTY_SCALE } from "../../libs/constants";
 import Numpad from "../../components/Numpads/Numpad";
 import ModalContainer from "../../components/ModalContainer";
+
+const fmtQty = (q: number) => (q / QTY_SCALE).toFixed(QTY_DP);
 
 interface RefundQtyModalProps {
   open: boolean;
   onClose: () => void;
   row: RefundableRow | null;
-  onConfirm: (qty: number) => void;
+  onConfirm: (qtyInt: number) => void;
 }
 
 export default function RefundQtyModal({
@@ -22,16 +25,15 @@ export default function RefundQtyModal({
     if (!open) setVal("");
   }, [open]);
 
-  const handleConfirm = useCallback(() => {
-    if (!row) return;
-    const qty = parseFloat(val);
-    if (isNaN(qty) || qty <= 0 || qty > row.remainingQty) return;
-    onConfirm(qty);
-  }, [row, val, onConfirm]);
-
   const parsed = parseFloat(val);
+  const qtyInt = Math.round(parsed * QTY_SCALE);
   const isValid =
-    !isNaN(parsed) && parsed > 0 && row != null && parsed <= row.remainingQty;
+    !isNaN(parsed) && parsed > 0 && row != null && qtyInt <= row.remainingQty;
+
+  const handleConfirm = useCallback(() => {
+    if (!row || !isValid) return;
+    onConfirm(qtyInt);
+  }, [row, isValid, qtyInt, onConfirm]);
 
   return (
     <ModalContainer open={open} onClose={onClose} title="Refund Quantity">
@@ -40,7 +42,7 @@ export default function RefundQtyModal({
           <div className="mb-2">
             <div className="text-sm text-gray-500 truncate">{row.name_en}</div>
             <div className="text-xs text-gray-400">
-              Remaining: {row.remainingQty} / {row.qty}
+              Remaining: {fmtQty(row.remainingQty)} / {fmtQty(row.qty)}
             </div>
           </div>
         )}
