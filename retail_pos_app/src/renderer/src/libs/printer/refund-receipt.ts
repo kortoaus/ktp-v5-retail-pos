@@ -163,7 +163,9 @@ export async function renderRefundReceipt(
       y += LH;
     }
     ctx.font = `${FONT_SM}px sans-serif`;
-    const qtyStr = `${fmtQty(r.qty)} @ ${fmt(r.unit_price_effective)}`;
+    const qtyStr = r.measured_weight != null && r.measured_weight > 0
+      ? `${fmtQty(r.measured_weight)}${r.uom} @ ${fmt(r.unit_price_effective)}/${r.uom}`
+      : `${fmtQty(r.qty)} @ ${fmt(r.unit_price_effective)}`;
     ctx.fillText("  " + qtyStr, PAD, y);
     ctx.textAlign = "right";
     ctx.fillText(fmt(r.total), W - PAD, y);

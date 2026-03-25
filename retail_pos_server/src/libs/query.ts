@@ -16,11 +16,13 @@ export type FindManyQuery = {
   from?: number;
   to?: number;
   memberId?: string;
+  brandId?: number;
   archived: boolean;
 };
 
 export function parseFindManyQuery(req: Request): FindManyQuery {
-  const { keyword, page, limit, from, to, archived, memberId } = req.query;
+  const { keyword, page, limit, from, to, archived, memberId, brandId } =
+    req.query;
 
   let parsedPage = 1;
   if (page) {
@@ -62,5 +64,7 @@ export function parseFindManyQuery(req: Request): FindManyQuery {
     to: parsedTo,
     memberId: typeof memberId === "string" ? memberId : undefined,
     archived: archived === "true",
+    brandId:
+      typeof brandId === "string" ? parseInt(brandId) || undefined : undefined,
   };
 }

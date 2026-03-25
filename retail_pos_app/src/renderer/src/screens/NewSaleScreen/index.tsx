@@ -10,7 +10,7 @@ import { embededPriceParser } from "../../libs/scan-utils";
 import { isPPBarcode, parsePPBarcode, calcMarkdownPrice } from "../../libs/pp-barcode";
 import type { AddLineOptions } from "../../store/newSalesStore.helper";
 import { useNewSalesStore, LINE_PAGE_SIZE } from "../../store/newSalesStore";
-import { MONEY_SCALE, QTY_SCALE } from "../../libs/constants";
+import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../../libs/constants";
 import { useWeight } from "../../hooks/useWeight";
 import { cn } from "../../libs/cn";
 import SearchItemModal from "../../components/SearchItemModal";
@@ -196,6 +196,19 @@ export default function NewSaleScreen() {
       return;
     }
 
+    if (data.type === "weight-prepacked" || data.type === "prepacked") {
+      const raw13 = rawBarcode.length === 12 ? "0" + rawBarcode : rawBarcode;
+      const dollars = embededPriceParser(raw13);
+      const prepackedPriceCents = Math.round(dollars * MONEY_SCALE);
+      addLine(data, {
+        qty: QTY_SCALE,
+        adjustedPrice: prepackedPriceCents,
+      });
+      setSelectedLineKey(null);
+      setModalTarget(null);
+      return;
+    }
+
     addLine(data);
     setSelectedLineKey(null);
     setModalTarget(null);
@@ -223,13 +236,22 @@ export default function NewSaleScreen() {
 
     const options: AddLineOptions = {};
 
-    if (pp.weight != null) {
-      data.type = "weight-prepacked";
-      options.qty = QTY_SCALE;
-      options.measured_weight = pp.weight;
+    if (pp.discountType && pp.discountAmount > 0) {
+      const tag = pp.discountType === "pct"
+        ? `[${pp.discountAmount / 10}% OFF]`
+        : `[$${(pp.discountAmount / MONEY_SCALE).toFixed(MONEY_DP)} OFF]`;
+      data.name_en = `${tag} ${data.name_en}`;
     }
 
-    if (pp.discountType && pp.discountAmount > 0) {
+    if (pp.weight != null) {
+      data.type = "weight-prepacked";
+      options.qty = pp.weight;
+      options.measured_weight = pp.weight;
+      if (pp.discountType === "pct" && pp.discountAmount > 0) {
+        options.adjustedPrice = calcMarkdownPrice(effectivePrice, "pct", pp.discountAmount);
+        options.ppMarkdown = { discountType: "pct", discountAmount: pp.discountAmount };
+      }
+    } else if (pp.discountType && pp.discountAmount > 0) {
       options.adjustedPrice = calcMarkdownPrice(effectivePrice, pp.discountType, pp.discountAmount);
       options.ppMarkdown = { discountType: pp.discountType, discountAmount: pp.discountAmount };
     }

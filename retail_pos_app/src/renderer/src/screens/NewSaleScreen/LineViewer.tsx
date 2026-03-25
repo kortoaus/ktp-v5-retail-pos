@@ -86,12 +86,8 @@ function LineCaption({
 
   const priceNotMatched = unit_price_original !== unit_price_effective;
 
-  let displayQty = qty;
-  let displayPrice = unit_price_effective;
-  if (type === "weight-prepacked") {
-    displayQty = QTY_SCALE;
-    displayPrice = total;
-  }
+  const displayQty = qty;
+  const displayPrice = unit_price_effective;
 
   return (
     <div
@@ -110,7 +106,11 @@ function LineCaption({
         <div className="line-clamp-1 truncate text-gray-500 text-xs">
           {name_ko}
         </div>
-        <div>{measured_weight}</div>
+        {measured_weight != null && measured_weight > 0 && (
+          <div className="text-xs text-gray-400">
+            {fmtQty(measured_weight)}kg × {fmtMoney(line.unit_price_discounted ?? unit_price_original)}/kg
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col items-end justify-center w-24 p-1">

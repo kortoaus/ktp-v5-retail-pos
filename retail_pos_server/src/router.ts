@@ -11,6 +11,7 @@ import printerRouter from "./v1/printer/printer.router";
 import cashIORouter from "./v1/cashio/cashio.router";
 import storeRouter from "./v1/store/store.router";
 import promotionRouter from "./v1/promotion/promotion.router";
+import brandRouter from "./v1/brand/brand.router";
 
 const router = Router();
 
@@ -18,6 +19,7 @@ router.use("/cloud", cloudRouter);
 router.use("/terminal", terminalRouter);
 router.use("/shift", shiftRouter);
 router.use("/item", itemRouter);
+router.use("/brand", brandRouter);
 router.use("/hotkey", hotkeyRouter);
 router.use("/crm", crmRouter);
 router.use("/user", userRouter);

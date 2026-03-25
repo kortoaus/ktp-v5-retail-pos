@@ -35,7 +35,11 @@ export default function RefundPanels({
       return;
     }
 
-    if (row.type === "weight-prepacked" || row.qty === QTY_SCALE || row.remainingQty === QTY_SCALE) {
+    if (
+      row.type === "weight-prepacked" ||
+      row.qty === QTY_SCALE ||
+      row.remainingQty === QTY_SCALE
+    ) {
       const newRow: ClientRefundableRow = {
         ...row,
         original_invoice_row_id: row.id,
@@ -87,7 +91,9 @@ export default function RefundPanels({
 
     const netTotal = row.total - row.discount_amount;
     const appliedTotal = Math.round((netTotal * inputQtyInt) / row.qty);
-    const appliedTax = Math.round((row.tax_amount_included * inputQtyInt) / row.qty);
+    const appliedTax = Math.round(
+      (row.tax_amount_included * inputQtyInt) / row.qty,
+    );
 
     const newRow: ClientRefundableRow = {
       ...row,
@@ -173,7 +179,7 @@ export default function RefundPanels({
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col">
+      <div className="w-[400px] flex flex-col shrink-0">
         <div className="bg-blue-500 text-white h-14 center">Summary</div>
         <div className="flex-1">
           <RefundDocumentMonitor

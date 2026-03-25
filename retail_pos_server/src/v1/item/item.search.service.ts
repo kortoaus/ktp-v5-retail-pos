@@ -13,7 +13,7 @@ export async function searchItemsService(
   query: FindManyQuery,
   scaleOnly: boolean = false,
 ) {
-  const { keyword = "", page, limit } = query;
+  const { keyword = "", page, limit, brandId } = query;
   try {
     const kws = keyword
       .split(" ")
@@ -23,6 +23,7 @@ export async function searchItemsService(
     const where: ItemWhereInput = {
       archived: false,
       ...(scaleOnly ? { isScale: true } : {}),
+      ...(typeof brandId === "number" ? { brandId } : {}),
       AND: kws.map((kw) => ({
         OR: [
           { barcode: { contains: kw, mode: "insensitive" as const } },

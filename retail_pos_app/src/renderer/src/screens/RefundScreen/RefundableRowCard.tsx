@@ -30,7 +30,7 @@ export default function RefundableRowCard({
     >
       <div className="w-10 center">{index + 1}</div>
       <div className="flex-1 flex flex-col justify-center px-2 min-w-0">
-        <div className="truncate font-medium">{row.name_en}</div>
+        <div className="text-xs font-medium line-clamp-2">{row.name_en}</div>
         <div className="text-[10px] text-gray-400 truncate">{row.barcode}</div>
       </div>
       <div className="w-20 center">

@@ -186,9 +186,7 @@ export async function renderReceipt(
     }
     ctx.font = `${FONT_SM}px sans-serif`;
     let qtyStr: string;
-    if (r.type === "weight-prepacked") {
-      qtyStr = `1 @ ${fmt(r.total)}`;
-    } else if (r.measured_weight !== null) {
+    if (r.measured_weight != null && r.measured_weight > 0) {
       qtyStr = `${fmtQty(r.measured_weight)}${r.uom} @ ${fmt(r.unit_price_effective)}/${r.uom}`;
     } else {
       qtyStr = `${fmtQty(r.qty)} @ ${fmt(r.unit_price_effective)}`;
@@ -198,7 +196,7 @@ export async function renderReceipt(
       qtyStr += ` (${fmt(r.unit_price_original)})`;
       const originalTotal = Math.round((r.unit_price_original * r.qty) / QTY_SCALE);
       const howMuchSaved = originalTotal - r.total;
-      totalStr = `(Saved ${fmt(howMuchSaved)}) ` + totalStr;
+      totalStr = `(!${fmt(howMuchSaved)}) ` + totalStr;
     }
 
     ctx.fillText("  " + qtyStr, PAD, y);

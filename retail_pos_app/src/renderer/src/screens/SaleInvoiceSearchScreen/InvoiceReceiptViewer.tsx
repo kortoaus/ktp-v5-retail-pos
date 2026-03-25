@@ -74,9 +74,7 @@ export default function InvoiceReceiptViewer({
           const priceChanged = r.unit_price_effective !== r.unit_price_original;
           const prefix = (priceChanged ? "^" : "") + (r.taxable ? "#" : "");
           let qtyStr: string;
-          if (r.type === "weight-prepacked") {
-            qtyStr = `1 @ ${fmt(r.total)}`;
-          } else if (r.measured_weight && r.measured_weight > 0) {
+          if (r.measured_weight && r.measured_weight > 0) {
             qtyStr = `${fmtQty(r.measured_weight)}${r.uom} @ ${fmt(r.unit_price_effective)}/${r.uom}`;
           } else {
             qtyStr = `${fmtQty(r.qty)} @ ${fmt(r.unit_price_effective)}`;
@@ -86,7 +84,7 @@ export default function InvoiceReceiptViewer({
             qtyStr += ` (${fmt(r.unit_price_original)})`;
             const originalTotal = Math.round((r.unit_price_original * r.qty) / QTY_SCALE);
             const howMuchSaved = originalTotal - r.total;
-            totalStr = `(Saved ${fmt(howMuchSaved)}) ` + totalStr;
+            totalStr = `(!${fmt(howMuchSaved)}) ` + totalStr;
           }
           return (
             <div key={r.id}>
