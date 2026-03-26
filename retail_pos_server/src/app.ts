@@ -26,20 +26,20 @@ app.get("/health", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok" });
 });
 
-// app.get("/clear", async (_req: Request, res: Response) => {
-//   await db.userVoucherHistory.deleteMany({}); // ← history 먼저
-//   await db.userVoucher.deleteMany({});
-//   await db.price.deleteMany({});
-//   await db.promoPrice.deleteMany({});
-//   await db.promotion.deleteMany({});
-//   await db.saleInvoiceDiscount.deleteMany({});
-//   await db.saleInvoiceRow.deleteMany({});
-//   await db.saleInvoicePayment.deleteMany({});
-//   await db.cashInOut.deleteMany({});
-//   await db.saleInvoice.deleteMany({});
-//   await db.terminalShift.deleteMany({});
-//   res.status(200).json({ status: "ok" });
-// });
+app.get("/clear", async (_req: Request, res: Response) => {
+  await db.userVoucherHistory.deleteMany({}); // ← history 먼저
+  await db.userVoucher.deleteMany({});
+  await db.price.deleteMany({});
+  await db.promoPrice.deleteMany({});
+  await db.promotion.deleteMany({});
+  await db.saleInvoiceDiscount.deleteMany({});
+  await db.saleInvoiceRow.deleteMany({});
+  await db.saleInvoicePayment.deleteMany({});
+  await db.cashInOut.deleteMany({});
+  await db.saleInvoice.deleteMany({});
+  await db.terminalShift.deleteMany({});
+  res.status(200).json({ status: "ok" });
+});
 
 app.get("/ok", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok" });
