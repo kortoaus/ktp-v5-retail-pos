@@ -37,7 +37,7 @@ export default function PagingRowList<T>({
         {Array.from({ length: pageSize }).map((_, i) => {
           const item = visibleRows[i];
           return (
-            <div key={i}>
+            <div key={i} className="min-w-0">
               {item != null && Renderer({ item, index: offset + i })}
             </div>
           );

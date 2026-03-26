@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 import type { LabelOutput } from '../libs/label-builder'
 
 type LabelLanguage = 'zpl' | 'slcs'
+type MediaSize = '7030' | '7090'
 
 interface LabelPrinterSerial {
   type: 'serial'
   name: string
   language: LabelLanguage
+  mediaSize?: MediaSize
   path: string
 }
 
@@ -14,6 +16,7 @@ interface LabelPrinterNet {
   type: 'net'
   name: string
   language: LabelLanguage
+  mediaSize?: MediaSize
   host: string
   port: number
 }
@@ -37,6 +40,7 @@ export function useZplPrinters() {
           type: 'serial',
           name: serial.name || serial.path,
           language: serial.language,
+          mediaSize: serial.mediaSize,
           path: serial.path
         })
       }
@@ -46,6 +50,7 @@ export function useZplPrinters() {
           type: 'net',
           name: net.name || net.host,
           language: net.language,
+          mediaSize: net.mediaSize,
           host: net.host,
           port: net.port
         })

@@ -18,11 +18,13 @@ interface ScaleForm {
 }
 
 type LabelLanguage = "zpl" | "slcs";
+type MediaSize = "7030" | "7090";
 
 interface ZplSerialEntry {
   name: string;
   path: string;
   language: LabelLanguage;
+  mediaSize?: MediaSize;
 }
 
 interface ZplNetEntry {
@@ -30,6 +32,7 @@ interface ZplNetEntry {
   host: string;
   port: number;
   language: LabelLanguage;
+  mediaSize?: MediaSize;
 }
 
 interface EscposForm {
@@ -118,13 +121,34 @@ export default function InterfaceSettingsScreen() {
               parity: scale.parity,
             }
           : null,
-        zplSerial: zplSerial.filter((e) => e.path.trim() !== ""),
-        zplNet: zplNet.filter((e) => e.host.trim() !== ""),
+        zplSerial: zplSerial
+          .filter((e) => e.path.trim() !== "")
+          .map((e) => ({
+            name: e.name,
+            path: e.path,
+            language: e.language,
+            ...(e.mediaSize ? { mediaSize: e.mediaSize } : {}),
+          })),
+        zplNet: zplNet
+          .filter((e) => e.host.trim() !== "")
+          .map((e) => ({
+            name: e.name,
+            host: e.host,
+            port: e.port,
+            language: e.language,
+            ...(e.mediaSize ? { mediaSize: e.mediaSize } : {}),
+          })),
         escposPrinter: escpos.enabled
           ? { host: escpos.host, port: escpos.port }
           : null,
       },
     });
+
+    await window.electronAPI.scaleDisconnect();
+    if (scale.enabled) {
+      await window.electronAPI.scaleConnect();
+    }
+
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -139,7 +163,7 @@ export default function InterfaceSettingsScreen() {
   const updateZplSerial = (
     index: number,
     field: keyof ZplSerialEntry,
-    value: string,
+    value: string | undefined,
   ) => {
     setZplSerial((prev) =>
       prev.map((e, i) => (i === index ? { ...e, [field]: value } : e)),
@@ -160,7 +184,7 @@ export default function InterfaceSettingsScreen() {
   const updateZplNet = (
     index: number,
     field: keyof ZplNetEntry,
-    value: string | number,
+    value: string | number | undefined,
   ) => {
     setZplNet((prev) =>
       prev.map((e, i) => (i === index ? { ...e, [field]: value } : e)),
@@ -341,6 +365,24 @@ export default function InterfaceSettingsScreen() {
                       <option value="slcs">SLCS</option>
                     </select>
                   </div>
+                  <div className="w-24">
+                    <label className={labelClass}>Media Size</label>
+                    <select
+                      className={selectClass}
+                      value={entry.mediaSize ?? ""}
+                      onChange={(e) =>
+                        updateZplSerial(
+                          i,
+                          "mediaSize",
+                          e.target.value || undefined,
+                        )
+                      }
+                    >
+                      <option value="">None</option>
+                      <option value="7030">70×30</option>
+                      <option value="7090">70×90</option>
+                    </select>
+                  </div>
                   <div className="flex-1">
                     <label className={labelClass}>Name</label>
                     <input
@@ -413,6 +455,24 @@ export default function InterfaceSettingsScreen() {
                     >
                       <option value="zpl">ZPL</option>
                       <option value="slcs">SLCS</option>
+                    </select>
+                  </div>
+                  <div className="w-24">
+                    <label className={labelClass}>Media Size</label>
+                    <select
+                      className={selectClass}
+                      value={entry.mediaSize ?? ""}
+                      onChange={(e) =>
+                        updateZplNet(
+                          i,
+                          "mediaSize",
+                          e.target.value || undefined,
+                        )
+                      }
+                    >
+                      <option value="">None</option>
+                      <option value="7030">70×30</option>
+                      <option value="7090">70×90</option>
                     </select>
                   </div>
                   <div className="flex-1">

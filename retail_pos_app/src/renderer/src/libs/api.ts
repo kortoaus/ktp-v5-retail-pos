@@ -89,6 +89,10 @@ class ApiService {
     this.instance.defaults.baseURL = url.replace(/\/+$/, "");
   }
 
+  getBaseURL(): string {
+    return this.instance.defaults.baseURL ?? "";
+  }
+
   setHeader(key: string, value: string): void {
     this.instance.defaults.headers.common[key] = value;
   }

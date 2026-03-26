@@ -1,10 +1,40 @@
-import React, { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { io, Socket } from "socket.io-client";
 import { migrateDataFromCloudServer } from "../service/cloud.service";
+import apiService from "../libs/api";
 
 export default function SyncButton() {
   const [loading, setLoading] = useState(false);
+  const [stale, setStale] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
+
+  useEffect(() => {
+    const baseURL = apiService.getBaseURL();
+    if (!baseURL) return;
+
+    const socket = io(baseURL, { transports: ["websocket", "polling"] });
+    socketRef.current = socket;
+
+    socket.on("cloud-sync-completed", () => {
+      // window.alert(
+      //   "Server data is up to date. Please refresh the page to see the latest data.",
+      // );
+      setStale(true);
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, []);
+
   const handleSync = async () => {
     if (loading) return;
+
+    if (stale) {
+      window.location.reload();
+      return;
+    }
 
     setLoading(true);
     try {
@@ -18,6 +48,7 @@ export default function SyncButton() {
       setLoading(false);
     }
   };
+
   return (
     <>
       {loading && (
@@ -30,9 +61,13 @@ export default function SyncButton() {
       <button
         onClick={handleSync}
         disabled={loading}
-        className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+        className={
+          stale
+            ? "bg-red-500 hover:bg-red-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors animate-pulse"
+            : "bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+        }
       >
-        Sync
+        {stale ? "Refresh" : "Sync"}
       </button>
     </>
   );

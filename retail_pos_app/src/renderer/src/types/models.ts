@@ -139,6 +139,8 @@ export interface PromoPrice {
   archived: boolean;
   createdAt: string;
   updatedAt: string;
+  name_en: string;
+  name_ko: string;
 }
 
 export interface Staff {
@@ -309,16 +311,16 @@ export interface SaleInvoiceRow {
   barcode: string;
   index: number;
   barcodePrice: number | null;
-  unit_price_original: number;    // base price (cents, tax-incl)
+  unit_price_original: number; // base price (cents, tax-incl)
   unit_price_discounted: number | null; // member/promo level price (cents, tax-incl)
-  unit_price_adjusted: number | null;   // manual override or markdown (cents, tax-incl)
-  unit_price_effective: number;   // resolved: adjusted ?? discounted ?? original
-  qty: number;                    // ×1000 (1ea = 1000, 1.234kg = 1234)
+  unit_price_adjusted: number | null; // manual override or markdown (cents, tax-incl)
+  unit_price_effective: number; // resolved: adjusted ?? discounted ?? original
+  qty: number; // ×1000 (1ea = 1000, 1.234kg = 1234)
   measured_weight: number | null; // ×1000 (weight items only)
-  subtotal: number;               // total - tax_amount_included (cents) — NOT same as SaleInvoice.subtotal
-  total: number;                  // effective × qty / QTY_SCALE (cents, tax-incl)
-  tax_amount_included: number;    // GST extracted from total (cents) — display/reporting only
-  discount_amount: number;        // allocated document-level discount (cents)
+  subtotal: number; // total - tax_amount_included (cents) — NOT same as SaleInvoice.subtotal
+  total: number; // effective × qty / QTY_SCALE (cents, tax-incl)
+  tax_amount_included: number; // GST extracted from total (cents) — display/reporting only
+  discount_amount: number; // allocated document-level discount (cents)
   original_invoice_id: number | null;
   original_invoice_row_id: number | null;
   refunded: boolean;
@@ -333,12 +335,12 @@ export interface SaleInvoiceRow {
 export interface SaleInvoicePayment {
   id: number;
   invoiceId: number;
-  type: string;       // "cash" | "credit" | "voucher"
-  amount: number;     // cents — payment toward the due amount
-  surcharge: number;  // cents — credit surcharge (0 for cash/voucher)
+  type: string; // "cash" | "credit" | "voucher"
+  amount: number; // cents — payment toward the due amount
+  surcharge: number; // cents — credit surcharge (0 for cash/voucher)
   createdAt: string;
-  entityType: string | null;  // "user-voucher" for voucher payments
-  entityId: number | null;    // voucher ID
+  entityType: string | null; // "user-voucher" for voucher payments
+  entityId: number | null; // voucher ID
   updatedAt: string;
 }
 
@@ -358,9 +360,9 @@ export interface SaleInvoicePayment {
 //   → includes member discounts, price overrides, promotions, manual discount
 export interface SaleInvoice {
   id: number;
-  type: string;                           // "sale" | "refund"
+  type: string; // "sale" | "refund"
   serialNumber: string | null;
-  original_invoice_id: number | null;     // refund only — parent sale invoice
+  original_invoice_id: number | null; // refund only — parent sale invoice
   original_invoice_serialNumber: string | null;
   companyId: number;
   companyName: string;
@@ -384,17 +386,17 @@ export interface SaleInvoice {
   createdAt: string;
   updatedAt: string;
   rows: SaleInvoiceRow[];
-  subtotal: number;               // cents — after promo, before manual discount
+  subtotal: number; // cents — after promo, before manual discount
   documentDiscountAmount: number; // cents — manual discount at payment
-  creditSurchargeAmount: number;  // cents — Σ(credit surcharge)
-  rounding: number;               // cents — 5c cash rounding (0 if no cash)
-  total: number;                  // cents — customer pays (subtotal - docDiscount + rounding + surcharge)
-  taxAmount: number;              // cents — extracted GST (goods + surcharge), reporting only
-  cashPaid: number;               // cents — net cash (received - change)
-  cashChange: number;             // cents — change given back
-  creditPaid: number;             // cents — credit card amount (excl surcharge)
-  voucherPaid: number;            // cents — voucher amount
-  totalDiscountAmount: number;    // cents — total savings shown on receipt
+  creditSurchargeAmount: number; // cents — Σ(credit surcharge)
+  rounding: number; // cents — 5c cash rounding (0 if no cash)
+  total: number; // cents — customer pays (subtotal - docDiscount + rounding + surcharge)
+  taxAmount: number; // cents — extracted GST (goods + surcharge), reporting only
+  cashPaid: number; // cents — net cash (received - change)
+  cashChange: number; // cents — change given back
+  creditPaid: number; // cents — credit card amount (excl surcharge)
+  voucherPaid: number; // cents — voucher amount
+  totalDiscountAmount: number; // cents — total savings shown on receipt
   payments: SaleInvoicePayment[];
   discounts: SaleInvoiceDiscount[];
 }
@@ -408,10 +410,10 @@ export interface SaleInvoiceDiscount {
   id: number;
   invoiceId: number;
   entityId: number | null;
-  entityType: string;           // "promotion"
+  entityType: string; // "promotion"
   title: string;
   description: string | null;
-  amount: number;               // cents — total discount from this entity
+  amount: number; // cents — total discount from this entity
   createdAt: string;
   updatedAt: string;
 }

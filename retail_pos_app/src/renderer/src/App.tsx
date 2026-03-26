@@ -3,10 +3,7 @@ import Gateway from "./components/Gateway";
 import { TerminalProvider } from "./contexts/TerminalContext";
 import ManagerLayout from "./layouts/ManagerLayout";
 import InterfaceSettingsScreen from "./screens/InterfaceSettingsScreen";
-import LabelingScreen from "./screens/LabelingScreen";
-import WeightLabelScreen from "./screens/WeightLabelScreen";
 import NewSaleScreen from "./screens/NewSaleScreen";
-import TestScreen from "./screens/TestScreen";
 import HomeScreen from "./screens/HomeScreen";
 import HotkeyManagerScreen from "./screens/HotkeyManagerScreen";
 import UserManageScreen from "./screens/UserManageScreen";
@@ -24,6 +21,7 @@ import { useStoreSetting } from "./hooks/useStoreSetting";
 import { getCloudPosts } from "./service/cloud.service";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CloudPost } from "./types/models";
+import PriceTagScreen from "./screens/PriceTagScreen";
 
 function App(): React.JSX.Element {
   return (
@@ -46,8 +44,7 @@ function MainApp() {
           <Routes>
             <Route path="/" element={<HomeScreen />} />
 
-            <Route path="/labeling" element={<LabelingScreen />} />
-            <Route path="/weight-label" element={<WeightLabelScreen />} />
+            <Route path="/price-tag" element={<PriceTagScreen />} />
             <Route path="/server-setup" element={<ServerSetupScreen />} />
 
             <Route path="/sale" element={<ManagerLayout />}>
@@ -55,7 +52,6 @@ function MainApp() {
             </Route>
             <Route path="/manager" element={<ManagerLayout />}>
               <Route path="settings" element={<InterfaceSettingsScreen />} />
-              <Route path="test" element={<TestScreen />} />
               <Route path="hotkey" element={<HotkeyManagerScreen />} />
               <Route path="user" element={<UserManageScreen />} />
               <Route path="invoices" element={<SaleInvoiceSearchScreen />} />

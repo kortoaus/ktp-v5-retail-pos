@@ -14,6 +14,7 @@ import {
   syncAllSaleInvoicesService,
   syncAllTerminalShiftsService,
 } from "./cloud.sync.service";
+import { getIO } from "../../libs/socket";
 
 export async function cloudItemMigrateController(req: Request, res: Response) {
   const categoryResult = await cloudCategoryMigrateService();
@@ -119,4 +120,6 @@ export async function cloudItemMigrateController(req: Request, res: Response) {
     ok: true,
     msg: "Migrated all data from cloud",
   });
+
+  getIO().emit("cloud-sync-completed");
 }

@@ -9,16 +9,13 @@ import {
   IoCashOutline,
   IoArrowUndoOutline,
   IoReceiptOutline,
-  IoBarcodeOutline,
-  IoGridOutline,
   IoSettingsOutline,
   IoPeopleOutline,
   IoStorefrontOutline,
   IoServerOutline,
-  IoFlaskOutline,
   IoExpandOutline,
   IoTvOutline,
-  IoScaleOutline,
+  IoPrintOutline,
 } from "react-icons/io5";
 
 const btn =
@@ -96,18 +93,11 @@ export default function HomeScreen() {
       {/* Tools */}
       <Section label="Tools">
         <NavBtn
-          to="/labeling"
-          icon={<IoBarcodeOutline size={24} />}
+          to="/price-tag"
+          icon={<IoPrintOutline size={24} />}
           className="bg-amber-50 text-amber-800 hover:bg-amber-100"
         >
-          Labeling
-        </NavBtn>
-        <NavBtn
-          to="/weight-label"
-          icon={<IoScaleOutline size={24} />}
-          className="bg-amber-50 text-amber-800 hover:bg-amber-100"
-        >
-          PP Label
+          Price Tag
         </NavBtn>
         <div className="flex-1 min-w-0">
           <button
@@ -162,13 +152,6 @@ export default function HomeScreen() {
           className="bg-gray-100 text-gray-700 hover:bg-gray-200"
         >
           Server Setup
-        </NavBtn>
-        <NavBtn
-          to="/manager/test"
-          icon={<IoFlaskOutline size={24} />}
-          className="bg-gray-100 text-gray-700 hover:bg-gray-200"
-        >
-          Test
         </NavBtn>
       </Section>
     </div>

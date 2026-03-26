@@ -7,7 +7,11 @@ import { useBarcodeScanner } from "../../hooks/useBarcodeScanner";
 import { generateSaleLineItem } from "../../libs/item-utils";
 import { SaleLineItem } from "../../types/sales";
 import { embededPriceParser } from "../../libs/scan-utils";
-import { isPPBarcode, parsePPBarcode, calcMarkdownPrice } from "../../libs/pp-barcode";
+import {
+  isPPBarcode,
+  parsePPBarcode,
+  calcMarkdownPrice,
+} from "../../libs/pp-barcode";
 import type { AddLineOptions } from "../../store/newSalesStore.helper";
 import { useNewSalesStore, LINE_PAGE_SIZE } from "../../store/newSalesStore";
 import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../../libs/constants";
@@ -79,7 +83,7 @@ export default function NewSaleScreen() {
   const selectedLine = useMemo(
     () =>
       selectedLineKey
-        ? lines.find((l) => l.lineKey === selectedLineKey) ?? null
+        ? (lines.find((l) => l.lineKey === selectedLineKey) ?? null)
         : null,
     [lines, selectedLineKey],
   );
@@ -145,6 +149,7 @@ export default function NewSaleScreen() {
       try {
         setLoading(true);
         const { ok, msg, result } = await searchItemByBarcode(rawBarcode);
+
         if (ok) {
           if (result) {
             addLineGateway(result, rawBarcode);
@@ -185,6 +190,8 @@ export default function NewSaleScreen() {
   function addLineGateway(item: Item, rawBarcode: string) {
     const data = generateSaleLineItem(item, rawBarcode);
 
+    console.log(data);
+
     if (data.type === "invalid") {
       window.alert("Invalid item");
       return;
@@ -194,6 +201,15 @@ export default function NewSaleScreen() {
       pendingWeightLineRef.current = data;
       setModalTarget("weight");
       return;
+    }
+
+    if (rawBarcode.startsWith("02") && rawBarcode.length === 7) {
+      if (data.type === "prepacked") {
+        addLine(data);
+        setSelectedLineKey(null);
+        setModalTarget(null);
+        return;
+      }
     }
 
     if (data.type === "weight-prepacked" || data.type === "prepacked") {
@@ -223,23 +239,47 @@ export default function NewSaleScreen() {
     }
 
     data.price = data.price ? { ...data.price, prices: pp.prices } : null;
-    data.promoPrice = pp.promoPrices.length > 0
-      ? { ...(data.promoPrice ?? { id: 0, companyId: 0, itemId: item.id, name_en: "", name_ko: "", priceType: "promo", prices: [], startDate: "", endDate: "", archived: false, createdAt: "", updatedAt: "" }), prices: pp.promoPrices }
-      : null;
+    data.promoPrice =
+      pp.promoPrices.length > 0
+        ? {
+            ...(data.promoPrice ?? {
+              id: 0,
+              companyId: 0,
+              itemId: item.id,
+              name_en: "",
+              name_ko: "",
+              priceType: "promo",
+              prices: [],
+              validFrom: new Date().toISOString(),
+              validTo: new Date().toISOString(),
+              archived: false,
+              createdAt: "",
+              updatedAt: "",
+            }),
+            prices: pp.promoPrices,
+          }
+        : null;
 
-    const memberLevel = useNewSalesStore.getState().carts[useNewSalesStore.getState().activeCartIndex]?.member?.level ?? 0;
+    const memberLevel =
+      useNewSalesStore.getState().carts[
+        useNewSalesStore.getState().activeCartIndex
+      ]?.member?.level ?? 0;
     const original = pp.prices[0] ?? 0;
     const levelPrice = pp.prices[memberLevel] ?? 0;
     const promoPrice = pp.promoPrices[memberLevel] ?? 0;
-    const candidates = [levelPrice, promoPrice].filter((p) => p > 0 && p < original);
-    const effectivePrice = candidates.length > 0 ? Math.min(...candidates) : original;
+    const candidates = [levelPrice, promoPrice].filter(
+      (p) => p > 0 && p < original,
+    );
+    const effectivePrice =
+      candidates.length > 0 ? Math.min(...candidates) : original;
 
     const options: AddLineOptions = {};
 
     if (pp.discountType && pp.discountAmount > 0) {
-      const tag = pp.discountType === "pct"
-        ? `[${pp.discountAmount / 10}% OFF]`
-        : `[$${(pp.discountAmount / MONEY_SCALE).toFixed(MONEY_DP)} OFF]`;
+      const tag =
+        pp.discountType === "pct"
+          ? `[${pp.discountAmount / 10}% OFF]`
+          : `[$${(pp.discountAmount / MONEY_SCALE).toFixed(MONEY_DP)} OFF]`;
       data.name_en = `${tag} ${data.name_en}`;
     }
 
@@ -248,12 +288,26 @@ export default function NewSaleScreen() {
       options.qty = pp.weight;
       options.measured_weight = pp.weight;
       if (pp.discountType === "pct" && pp.discountAmount > 0) {
-        options.adjustedPrice = calcMarkdownPrice(effectivePrice, "pct", pp.discountAmount);
-        options.ppMarkdown = { discountType: "pct", discountAmount: pp.discountAmount };
+        options.adjustedPrice = calcMarkdownPrice(
+          effectivePrice,
+          "pct",
+          pp.discountAmount,
+        );
+        options.ppMarkdown = {
+          discountType: "pct",
+          discountAmount: pp.discountAmount,
+        };
       }
     } else if (pp.discountType && pp.discountAmount > 0) {
-      options.adjustedPrice = calcMarkdownPrice(effectivePrice, pp.discountType, pp.discountAmount);
-      options.ppMarkdown = { discountType: pp.discountType, discountAmount: pp.discountAmount };
+      options.adjustedPrice = calcMarkdownPrice(
+        effectivePrice,
+        pp.discountType,
+        pp.discountAmount,
+      );
+      options.ppMarkdown = {
+        discountType: pp.discountType,
+        discountAmount: pp.discountAmount,
+      };
     }
 
     addLine(data, Object.keys(options).length > 0 ? options : undefined);
@@ -350,7 +404,9 @@ export default function NewSaleScreen() {
             <div
               className="bg-red-500 text-white font-bold rounded-lg flex items-center justify-center"
               onClick={() => {
-                if (window.confirm("Are you sure you want to clear the cart?")) {
+                if (
+                  window.confirm("Are you sure you want to clear the cart?")
+                ) {
                   clearActiveCart();
                   setSelectedLineKey(null);
                 }
@@ -471,5 +527,3 @@ function TopBarButton({
     </div>
   );
 }
-
-

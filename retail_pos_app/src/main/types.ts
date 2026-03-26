@@ -15,18 +15,21 @@ export interface ScaleConfig {
 }
 
 export type LabelLanguage = "zpl" | "slcs";
+export type MediaSize = "7030" | "7090";
 
 export interface ZplNetConfig {
   name: string;
   host: string;
   port: number;
   language: LabelLanguage;
+  mediaSize?: MediaSize;
 }
 
 export interface ZplSerialConfig {
   name: string;
   path: string;
   language: LabelLanguage;
+  mediaSize?: MediaSize;
 }
 
 export interface EscposPrinterConfig {

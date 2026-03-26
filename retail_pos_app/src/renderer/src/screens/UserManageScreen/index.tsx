@@ -152,6 +152,7 @@ export default function UserManageScreen() {
       <div className="flex-1 overflow-y-auto">
         {showForm ? (
           <UserForm
+            key={editingUser ? editingUser.id : "new"}
             origin={editingUser}
             onSave={handleSave}
             onCancel={handleCancel}

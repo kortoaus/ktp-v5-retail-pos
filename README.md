@@ -2,11 +2,6 @@
 
 Retail point-of-sale system for Australian supermarkets. Monorepo with two projects: Electron desktop app + Express REST API server.
 
-### User Manual
-
-- [User Manual (English)](./manual/index.md)
-- [User Manual (Korean)](./manual_ko/index.md)
-
 ## Architecture
 
 ```
@@ -68,7 +63,7 @@ Retail point-of-sale system for Australian supermarkets. Monorepo with two proje
 | `/server-setup`     | ServerSetupScreen       | —     | —         | Configure server connection |
 | `/shift/open`       | OpenShiftScreen         | No    | shift     | Open shift with cash count  |
 | `/shift/close`      | CloseShiftScreen        | Yes   | shift     | Close shift with Z-report   |
-| `/manager/settings` | InterfaceSettingsScreen  | —     | interface | App settings                |
+| `/manager/settings` | InterfaceSettingsScreen | —     | interface | App settings                |
 | `/manager/test`     | TestScreen              | —     | —         | Hardware testing            |
 | `/manager/hotkey`   | HotkeyManagerScreen     | —     | hotkey    | Quick-select grid CRUD      |
 | `/manager/user`     | UserManageScreen        | —     | user      | User account management     |
@@ -76,25 +71,25 @@ Retail point-of-sale system for Australian supermarkets. Monorepo with two proje
 | `/manager/refund`   | RefundScreen            | Yes   | refund    | Refund against sale invoice |
 | `/manager/cashio`   | CashIOManageScreen      | Yes   | cashio    | Cash in/out management      |
 | `/manager/store`    | StoreSettingScreen      | —     | store     | Store settings              |
-| `/customer-display` | CustomerScreen          | —     | —         | Customer-facing display      |
+| `/customer-display` | CustomerScreen          | —     | —         | Customer-facing display     |
 
 ## Server API Routes
 
 All routes prefixed with `/api`. Terminal middleware identifies terminal + company + store settings + current shift by IP address.
 
-| Prefix      | Module   | Auth               | Purpose                              |
-| ----------- | -------- | ------------------ | ------------------------------------ |
-| `/terminal` | Terminal | —                  | Terminal registration, `/me`         |
-| `/shift`    | Shift    | user + shift       | Open/close shifts, closing data      |
-| `/item`     | Item     | —                  | Item search, barcode lookup          |
-| `/hotkey`   | Hotkey   | —                  | Quick-select grid CRUD               |
-| `/crm`      | CRM      | —                  | Member lookup (by phone, by ID)    |
-| `/user`     | User     | user + user        | User CRUD, auth by code              |
-| `/sale`     | Sale     | user + refund      | Create (user auth) & query invoices|
-| `/printer`  | Printer  | —                  | Server-side print (raw data)         |
-| `/cloud`    | Cloud    | —                  | Sync with cloud system               |
-| `/cashio`   | CashIO   | user + cashio      | Cash in/out CRUD with search         |
-| `/store`    | Store    | user + store       | Store settings (GET/POST)            |
+| Prefix      | Module   | Auth          | Purpose                             |
+| ----------- | -------- | ------------- | ----------------------------------- |
+| `/terminal` | Terminal | —             | Terminal registration, `/me`        |
+| `/shift`    | Shift    | user + shift  | Open/close shifts, closing data     |
+| `/item`     | Item     | —             | Item search, barcode lookup         |
+| `/hotkey`   | Hotkey   | —             | Quick-select grid CRUD              |
+| `/crm`      | CRM      | —             | Member lookup (by phone, by ID)     |
+| `/user`     | User     | user + user   | User CRUD, auth by code             |
+| `/sale`     | Sale     | user + refund | Create (user auth) & query invoices |
+| `/printer`  | Printer  | —             | Server-side print (raw data)        |
+| `/cloud`    | Cloud    | —             | Sync with cloud system              |
+| `/cashio`   | CashIO   | user + cashio | Cash in/out CRUD with search        |
+| `/store`    | Store    | user + store  | Store settings (GET/POST)           |
 
 ## Features
 
@@ -180,16 +175,16 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 
 ### Inter-Window Communication (BroadcastChannel)
 
-| Channel              | Direction          | Payload                        | Trigger                          |
-| -------------------- | ------------------ | ------------------------------ | -------------------------------- |
-| `pos-cart`           | Main → Customer    | `{ carts, activeCartIndex, lineOffset }` | Real-time cart state changes     |
-| `pos-refresh`        | Customer/Button → Main | `"refresh"` (signal only)    | Mount, 10 min poll, manual sync  |
-| `pos-customer-data`  | Main → Customer    | `{ storeSetting, posts }`      | On refresh signal or data change |
+| Channel             | Direction              | Payload                                  | Trigger                          |
+| ------------------- | ---------------------- | ---------------------------------------- | -------------------------------- |
+| `pos-cart`          | Main → Customer        | `{ carts, activeCartIndex, lineOffset }` | Real-time cart state changes     |
+| `pos-refresh`       | Customer/Button → Main | `"refresh"` (signal only)                | Mount, 10 min poll, manual sync  |
+| `pos-customer-data` | Main → Customer        | `{ storeSetting, posts }`                | On refresh signal or data change |
 
 ### Receipts
 
 - **Sale**: store header, items (^=price changed, #=GST), "Saved $X" on discounted items, totals, payments, QR code (`receipt%%%serial`), footer
-- **Refund**: "*** REFUND ***" banner, links original serial, StoreSetting data, QR code (`receipt%%%serial`)
+- **Refund**: "**_ REFUND _**" banner, links original serial, StoreSetting data, QR code (`receipt%%%serial`)
 - **Z-report**: shift settlement (sales/refunds/cashio, drawer expected vs actual)
 - All: 576px canvas → ESC/POS thermal print
 - Touchscreen tap-through guard: ModalContainer keeps invisible backdrop 100ms after close
@@ -208,16 +203,16 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 
 ## Permissions
 
-| Scope     | Allows                                        |
-| --------- | --------------------------------------------- |
-| admin     | Full access, bypasses all scope checks        |
-| interface | Interface/display settings                    |
-| user      | User account CRUD                             |
-| hotkey    | Hotkey grid CRUD                              |
-| refund    | Process refunds                               |
-| cashio    | Cash in/out records                            |
-| store     | Store settings                                |
-| shift     | Open and close shifts                         |
+| Scope     | Allows                                 |
+| --------- | -------------------------------------- |
+| admin     | Full access, bypasses all scope checks |
+| interface | Interface/display settings             |
+| user      | User account CRUD                      |
+| hotkey    | Hotkey grid CRUD                       |
+| refund    | Process refunds                        |
+| cashio    | Cash in/out records                    |
+| store     | Store settings                         |
+| shift     | Open and close shifts                  |
 
 ## Commands
 
