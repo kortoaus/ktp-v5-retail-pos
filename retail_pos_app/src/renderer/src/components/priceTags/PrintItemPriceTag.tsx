@@ -9,6 +9,7 @@ import {
   buildPriceTag7030,
   buildPriceTag7090,
 } from "../../libs/label-templates";
+import { mergeLabelOutputs } from "../../libs/label-builder";
 import { LabelPrinter, useZplPrinters } from "../../hooks/useZplPrinters";
 
 const QUEUE_PAGE_SIZE = 10;
@@ -43,24 +44,18 @@ export default function PrintItemPriceTag() {
 
   const handlePrintLabel7030 = (printer: LabelPrinter) => {
     if (queue.length === 0) return;
-
-    const filteredQueue = queue;
-
-    for (const item of filteredQueue) {
-      const label = buildPriceTag7030("slcs", item);
-      printLabel(printer, label);
-    }
+    const merged = mergeLabelOutputs(
+      queue.map((item) => buildPriceTag7030(printer.language, item)),
+    );
+    if (merged) printLabel(printer, merged);
   };
 
   const handlePrintLabel7090 = (printer: LabelPrinter) => {
     if (queue.length === 0) return;
-
-    const filteredQueue = queue;
-
-    for (const item of filteredQueue) {
-      const label = buildPriceTag7090("slcs", item);
-      printLabel(printer, label);
-    }
+    const merged = mergeLabelOutputs(
+      queue.map((item) => buildPriceTag7090(printer.language, item)),
+    );
+    if (merged) printLabel(printer, merged);
   };
 
   const handleSelect = (item: Item) => {

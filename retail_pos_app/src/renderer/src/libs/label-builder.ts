@@ -32,6 +32,28 @@ export type LabelOutput =
   | { language: "zpl"; data: string }
   | { language: "slcs"; parts: SLCSPart[] };
 
+export function mergeLabelOutputs(labels: LabelOutput[]): LabelOutput | null {
+  if (labels.length === 0) return null;
+  if (labels.length === 1) return labels[0];
+
+  const first = labels[0];
+  if (first.language === "zpl") {
+    return {
+      language: "zpl",
+      data: (labels as { language: "zpl"; data: string }[])
+        .map((l) => l.data)
+        .join(""),
+    };
+  }
+
+  return {
+    language: "slcs",
+    parts: (labels as { language: "slcs"; parts: SLCSPart[] }[]).flatMap(
+      (l) => l.parts,
+    ),
+  };
+}
+
 export class LabelBuilder {
   private width = 800;
   private height = 1200;
