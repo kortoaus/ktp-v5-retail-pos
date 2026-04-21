@@ -1,9 +1,4 @@
-import {
-  Brand,
-  Category,
-  Price,
-  Promotion,
-} from "../../generated/prisma/browser";
+import { Brand, Category, Price } from "../../generated/prisma/browser";
 import {
   CloudHotkey,
   CloudHotkeyItem,
@@ -14,13 +9,9 @@ import {
   PromoPrice,
 } from "../../generated/prisma/client";
 import { getNormalizedBarcode } from "../../libs/barcode-utils";
-import { MONEY_SCALE, PCT_SCALE, QTY_SCALE } from "../../libs/constants";
-import apiService, { itemApiService } from "../../libs/cloud.api";
+import apiService from "../../libs/cloud.api";
 import db from "../../libs/db";
 import { BadRequestException, HttpException } from "../../libs/exceptions";
-
-const dollarsToInt = (v: number) => Math.round(v * MONEY_SCALE);
-const percentToInt = (v: number) => Math.round((v * PCT_SCALE) / 100);
 
 const tag = "[cloud-migrate]";
 
@@ -39,7 +30,7 @@ export async function cloudItemMigrateService() {
       })
       .then((r) => r?.updatedAt?.getTime() || 0);
 
-    const { ok, msg, result } = await itemApiService.post<ItemWithRelations[]>(
+    const { ok, msg, result } = await apiService.post<ItemWithRelations[]>(
       "/device/migrate/item",
       { lastUpdatedAt },
     );
@@ -118,10 +109,12 @@ export async function cloudCategoryMigrateService() {
       })
       .then((r) => r?.updatedAt?.getTime() || 0);
 
-    const { ok, msg, result } = await itemApiService.post<Category[]>(
+    const { ok, msg, result } = await apiService.post<Category[]>(
       "/device/migrate/category",
       { lastUpdatedAt },
     );
+
+    console.log(result);
 
     if (!ok || !result) {
       throw new BadRequestException(
@@ -167,7 +160,7 @@ export async function cloudBrandMigrateService() {
       })
       .then((r) => r?.updatedAt?.getTime() || 0);
 
-    const { ok, msg, result } = await itemApiService.post<Brand[]>(
+    const { ok, msg, result } = await apiService.post<Brand[]>(
       "/device/migrate/brand",
       { lastUpdatedAt },
     );
@@ -206,7 +199,7 @@ export async function cloudPriceMigrateService() {
       .then((r) => r?.updatedAt?.getTime() || 0);
 
     const { ok, msg, result } = await apiService.post<Price[]>(
-      "/device/migrate/price",
+      "/device/migrate/price/retail",
       { lastUpdatedAt },
     );
 
@@ -217,7 +210,7 @@ export async function cloudPriceMigrateService() {
     }
 
     for (const { prices, ...rest } of result) {
-      const data = { ...rest, prices: prices.map(dollarsToInt) };
+      const data = { ...rest, prices };
       await db.price.upsert({
         where: { id: rest.id },
         update: data,
@@ -245,7 +238,7 @@ export async function cloudPromoPriceMigrateService() {
       .then((r) => r?.updatedAt?.getTime() || 0);
 
     const { ok, msg, result } = await apiService.post<PromoPrice[]>(
-      "/device/migrate/promo-price",
+      "/device/migrate/promo-price/retail",
       { lastUpdatedAt },
     );
 
@@ -256,7 +249,7 @@ export async function cloudPromoPriceMigrateService() {
     }
 
     for (const { prices, ...rest } of result) {
-      const data = { ...rest, prices: prices.map(dollarsToInt) };
+      const data = { ...rest, prices };
       await db.promoPrice.upsert({
         where: { id: rest.id },
         update: data,
@@ -273,65 +266,9 @@ export async function cloudPromoPriceMigrateService() {
   }
 }
 
-type CloudPromotion = Omit<
-  Promotion,
-  "discountPercentAmounts" | "discountFlatAmounts"
-> & {
-  discountAmounts: number[];
-};
-
-export async function cloudPromotionMigrateService() {
-  try {
-    const lastUpdatedAt = await db.promotion
-      .findFirst({
-        select: { updatedAt: true },
-        orderBy: { updatedAt: "desc" },
-        take: 1,
-      })
-      .then((r) => r?.updatedAt?.getTime() || 0);
-
-    const { ok, msg, result } = await apiService.post<CloudPromotion[]>(
-      "/device/migrate/promotion",
-      { lastUpdatedAt },
-    );
-
-    if (!ok || !result) {
-      throw new BadRequestException(
-        msg || "Failed to migrate promotions from cloud",
-      );
-    }
-
-    for (const { discountAmounts, ...rest } of result) {
-      const isPercent = rest.discountType === "percentage";
-      const data = {
-        ...rest,
-        minQty: rest.minQty * QTY_SCALE,
-        maxQty: rest.maxQty != null ? rest.maxQty * QTY_SCALE : null,
-        discountPercentAmounts: isPercent
-          ? discountAmounts.map(percentToInt)
-          : [],
-        discountFlatAmounts: isPercent ? [] : discountAmounts.map(dollarsToInt),
-      };
-
-      await db.promotion.upsert({
-        where: { id: rest.id },
-        update: data,
-        create: data,
-      });
-    }
-
-    console.log(`${tag} promotions: ${result.length} synced`);
-    return true;
-  } catch (e) {
-    if (e instanceof HttpException) throw e;
-    console.error(`${tag} promotions: error`, e);
-    return false;
-  }
-}
-
 export async function cloudCompanyMigrateService() {
   try {
-    const { ok, msg, result } = await apiService.get<Company>(
+    const { ok, msg, result } = await apiService.post<Company>(
       "/device/migrate/company",
     );
     if (!ok || !result) {
@@ -418,7 +355,7 @@ export async function cloudHotkeyMigrateService() {
       .then((r) => r?.updatedAt?.getTime() || 0);
 
     const { ok, msg, result } = await apiService.post<CloudHotkeyWithKeys[]>(
-      "/device/migrate/hotkey",
+      "/device/migrate/hotkey/retail",
       { lastUpdatedAt },
     );
 

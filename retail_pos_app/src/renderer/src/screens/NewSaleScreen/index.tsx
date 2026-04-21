@@ -28,9 +28,7 @@ import DiscountPercentModal from "./DiscountPercentModal";
 import MemberSearchModal from "../../components/MemberSearchModal";
 import WeightModal from "../../components/WeightModal";
 import useNewPromotions from "../../hooks/useNewPromotions";
-import useCartDiscounts from "../../hooks/useCartDiscounts";
 import DocumentMonitor from "./DocumentMonitor";
-import DiscountListModal from "./DiscountListModal";
 import NewPaymentModal from "./NewPaymentModal";
 import CloudHotkeyViewer from "../../components/CloudHotkeyViewer";
 import useCloudHotkeys from "../../hooks/useCloudHotkeys";
@@ -71,8 +69,6 @@ export default function NewSaleScreen() {
   const pendingWeightLineRef = useRef<SaleLineItem | null>(null);
   const { readWeight } = useWeight();
   const { cloudHotkeys, cloudHotkeysLoading } = useCloudHotkeys();
-  useNewPromotions();
-  const cartDiscounts = useCartDiscounts();
 
   const lines = useMemo(
     () => carts[activeCartIndex]?.lines ?? [],
@@ -335,11 +331,7 @@ export default function NewSaleScreen() {
               }
             }}
           />
-          <TopBarButton
-            label="Discounts"
-            active={cartDiscounts.length > 0}
-            onClick={() => setModalTarget("discount-list")}
-          />
+
           <PrintLatestInvoiceButton className="w-24 h-full rounded-sm text-sm font-bold bg-gray-200 border border-gray-300" />
           <TopBarButton label="Kick Drawer" onClick={() => kickDrawer()} />
         </div>
@@ -396,7 +388,7 @@ export default function NewSaleScreen() {
 
           {/* Document Monitor — subtotal, discount, due */}
           <div className="h-24">
-            <DocumentMonitor discounts={cartDiscounts} />
+            <DocumentMonitor />
           </div>
 
           {/* Action Bar — Clear + Pay */}
@@ -484,16 +476,12 @@ export default function NewSaleScreen() {
           setModalTarget(null);
         }}
       />
-      <DiscountListModal
-        open={modalTarget === "discount-list"}
-        onClose={() => setModalTarget(null)}
-        discounts={cartDiscounts}
-      />
+
       <NewPaymentModal
         open={modalTarget === "payment"}
         onClose={() => setModalTarget(null)}
         lines={lines}
-        discounts={cartDiscounts}
+        discounts={[]}
         memberId={member?.id ?? null}
         memberLevel={member?.level ?? null}
         onComplete={() => {

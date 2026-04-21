@@ -520,6 +520,6 @@ export interface Promotion {
   maxQty?: number | null; // optional
 
   discountType: "percentage" | "amount";
-  discountPercentAmounts: number[];
-  discountFlatAmounts: number[];
+  discountAmounts: number[];
+  discountPercents: number[];
 }

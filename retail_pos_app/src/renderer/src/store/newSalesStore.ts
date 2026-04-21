@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { Promotion } from "../types/models";
+
 import { SaleLineItem } from "../types/sales";
 import { QTY_SCALE } from "../libs/constants";
 import {
@@ -25,13 +25,11 @@ interface NewSalesStoreState {
   activeCartIndex: number;
   carts: Cart[];
   lineOffset: number;
-  promotions: Promotion[];
   addLine: (item: SaleLineItem, options?: AddLineOptions) => void;
   removeLine: (lineKey: string) => void;
   changeLineQty: (lineKey: string, qty: number) => void;
   injectLinePrice: (lineKey: string, price: number | null) => void;
   setMember: (member: SaleMember | null) => void;
-  setPromotions: (promotions: Promotion[]) => void;
   setLineOffset: (offset: number) => void;
   switchCart: (index: number) => void;
   clearActiveCart: () => void;
@@ -42,7 +40,6 @@ export const useNewSalesStore = create<NewSalesStoreState>()((set, get) => ({
   activeCartIndex: 0,
   carts: Array.from({ length: CART_COUNT }, createEmptyCart),
   lineOffset: 0,
-  promotions: [],
   cartCount: CART_COUNT,
   addLine: (item, options) => {
     if (item.type === "invalid") return;
@@ -158,10 +155,6 @@ export const useNewSalesStore = create<NewSalesStoreState>()((set, get) => ({
     updatedCarts[activeCartIndex] = { ...cart, member };
     const recalculated = recalculateAllLines(updatedCarts, level);
     set({ carts: recalculated });
-  },
-
-  setPromotions: (promotions) => {
-    set({ promotions });
   },
 
   setLineOffset: (offset) => set({ lineOffset: offset }),

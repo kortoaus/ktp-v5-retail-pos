@@ -2,7 +2,8 @@ import { MONEY_DP, MONEY_SCALE, PCT_SCALE } from "../../libs/constants";
 import { cn } from "../../libs/cn";
 import { SummaryRow } from "../../components/PaymentParts";
 
-const fmtMoney = (cents: number) => `$${(cents / MONEY_SCALE).toFixed(MONEY_DP)}`;
+const fmtMoney = (cents: number) =>
+  `$${(cents / MONEY_SCALE).toFixed(MONEY_DP)}`;
 
 interface PaymentSummaryProps {
   subTotal: number;
@@ -25,6 +26,7 @@ interface PaymentSummaryProps {
   canPay: boolean;
   onPay: () => void;
   surchargeRate: number;
+  processing: boolean;
 }
 
 export default function PaymentSummary({
@@ -48,14 +50,22 @@ export default function PaymentSummary({
   canPay,
   onPay,
   surchargeRate,
+  processing,
 }: PaymentSummaryProps) {
   return (
     <div className="w-[350px] flex flex-col">
       <div className="flex-1 overflow-y-auto p-4">
         <div className="flex flex-col gap-3">
-          <SummaryRow label="Subtotal" value={fmtMoney(subTotal + totalDiscountAmount)} />
+          <SummaryRow
+            label="Subtotal"
+            value={fmtMoney(subTotal + totalDiscountAmount)}
+          />
           {lineDiscountAmount > 0 && (
-            <SummaryRow label="Line Discounts" value={`-${fmtMoney(lineDiscountAmount)}`} className="text-red-600" />
+            <SummaryRow
+              label="Line Discounts"
+              value={`-${fmtMoney(lineDiscountAmount)}`}
+              className="text-red-600"
+            />
           )}
           {documentDiscountAmount > 0 && (
             <SummaryRow
@@ -65,27 +75,47 @@ export default function PaymentSummary({
             />
           )}
           {totalSurcharge > 0 && (
-            <SummaryRow label={`Card Surcharge (${(surchargeRate / PCT_SCALE * 100).toFixed(2)}%)`} value={`+${fmtMoney(totalSurcharge)}`} />
+            <SummaryRow
+              label={`Card Surcharge (${((surchargeRate / PCT_SCALE) * 100).toFixed(2)}%)`}
+              value={`+${fmtMoney(totalSurcharge)}`}
+            />
           )}
           {rounding !== 0 && (
-            <SummaryRow label="Rounding" value={`${rounding > 0 ? "+" : ""}${fmtMoney(rounding)}`} />
+            <SummaryRow
+              label="Rounding"
+              value={`${rounding > 0 ? "+" : ""}${fmtMoney(rounding)}`}
+            />
           )}
 
           <div className="border-t border-gray-300 pt-3 flex flex-col gap-2">
-            <SummaryRow label="Total" value={fmtMoney(effectiveDue + totalSurcharge)} bold />
-            <SummaryRow label="Cash Total" value={fmtMoney(roundedDue)} className="text-gray-500" />
+            <SummaryRow
+              label="Total"
+              value={fmtMoney(effectiveDue + totalSurcharge)}
+              bold
+            />
+            <SummaryRow
+              label="Cash Total"
+              value={fmtMoney(roundedDue)}
+              className="text-gray-500"
+            />
           </div>
 
           <div className="border-t border-gray-200 pt-3 flex flex-col gap-2">
             <SummaryRow label="Cash" value={fmtMoney(totalCash)} />
             <SummaryRow label="Credit" value={fmtMoney(totalCredit)} />
-            {totalVoucher > 0 && <SummaryRow label="Voucher" value={fmtMoney(totalVoucher)} />}
+            {totalVoucher > 0 && (
+              <SummaryRow label="Voucher" value={fmtMoney(totalVoucher)} />
+            )}
           </div>
 
           <div className="border-t border-gray-200 pt-3 flex flex-col gap-2">
             <SummaryRow label="GST Included" value={fmtMoney(taxAmount)} />
             {totalDiscountAmount > 0 && (
-              <SummaryRow label="You Saved" value={fmtMoney(totalDiscountAmount)} className="text-green-600" />
+              <SummaryRow
+                label="You Saved"
+                value={fmtMoney(totalDiscountAmount)}
+                className="text-green-600"
+              />
             )}
           </div>
         </div>
@@ -101,16 +131,20 @@ export default function PaymentSummary({
         {isOverpaid && (
           <div className="flex justify-between items-center text-lg font-bold text-green-600">
             <span>Change</span>
-            <span className="font-mono">{fmtMoney(Math.min(changeAmount, totalCash))}</span>
+            <span className="font-mono">
+              {fmtMoney(Math.min(changeAmount, totalCash))}
+            </span>
           </div>
         )}
         <button
           type="button"
-          disabled={!canPay}
+          disabled={!canPay || processing}
           onPointerDown={onPay}
           className={cn(
             "w-full h-14 rounded-xl text-lg font-bold transition-colors",
-            canPay ? "bg-blue-600 text-white active:bg-blue-700" : "bg-gray-200 text-gray-400 cursor-not-allowed",
+            canPay
+              ? "bg-blue-600 text-white active:bg-blue-700"
+              : "bg-gray-200 text-gray-400 cursor-not-allowed",
           )}
         >
           Pay {fmtMoney(effectiveDue + totalSurcharge)}

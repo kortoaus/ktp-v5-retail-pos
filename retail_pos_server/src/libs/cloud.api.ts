@@ -21,6 +21,7 @@ class ApiService {
       headers: {
         "Content-Type": "application/json",
         "device-api-key": API_KEY,
+        Authorization: `Bearer dk_${API_KEY}`,
       },
     });
   }
@@ -103,7 +104,6 @@ class ApiService {
 }
 
 export const apiService = new ApiService(API_URL);
-export const itemApiService = new ApiService(ITEM_URL);
 export const crmApiService = new ApiService(CRM_URL);
 
 export default apiService;

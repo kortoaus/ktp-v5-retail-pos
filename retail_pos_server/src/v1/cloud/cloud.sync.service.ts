@@ -12,7 +12,7 @@ type ServerSyncResponse = {
   result: any;
 };
 
-const baseURL = `/retail/sync`;
+const baseURL = `/device/sync/retail`;
 
 export async function saleInvoiceSyncService(saleInvoiceId: number) {
   try {
@@ -38,7 +38,16 @@ export async function saleInvoiceSyncService(saleInvoiceId: number) {
       };
     }
 
-    const { terminal, user, synced: _, syncedAt: _sa, rows, payments, discounts, ...invoice } = saleInvoice;
+    const {
+      terminal,
+      user,
+      synced: _,
+      syncedAt: _sa,
+      rows,
+      payments,
+      discounts,
+      ...invoice
+    } = saleInvoice;
     const data = {
       ...invoice,
       terminalName: terminal.name,
@@ -48,30 +57,32 @@ export async function saleInvoiceSyncService(saleInvoiceId: number) {
       discounts: discounts.map(({ id: _id, ...discount }) => discount),
     };
 
-    const { ok, msg, result } = await apiService.post<ServerSyncResponse>(
+    const { ok, msg } = await apiService.post<ServerSyncResponse>(
       `${baseURL}/sale-invoice`,
       { data },
     );
 
-    if (!ok || !result) {
+    if (!ok) {
       console.log(msg || "Failed to sync sale invoice");
-      return { ok: false, msg: msg || "Failed to sync sale invoice", result: null };
+      return {
+        ok: false,
+        msg: msg || "Failed to sync sale invoice",
+        result: null,
+      };
     }
 
-    const { ok: ok2, msg: msg2 } = result;
-
-    if (!ok2) {
-      return { ok: false, msg: msg2 || "Failed to sync sale invoice", result: null };
-    }
-
-    if (ok && ok2) {
+    if (ok) {
       await db.saleInvoice.update({
         where: { id: saleInvoiceId },
         data: { syncedAt: new Date(), synced: true },
       });
     }
 
-    return { ok: true, msg: "Sale invoice synced", result: { id: saleInvoiceId } };
+    return {
+      ok: true,
+      msg: "Sale invoice synced",
+      result: { id: saleInvoiceId },
+    };
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("saleInvoiceSyncService error:", e);
@@ -90,7 +101,11 @@ export async function terminalShiftSyncService(shiftId: number) {
     }
 
     if (shift.synced) {
-      return { ok: true, msg: "Terminal shift already synced", result: { id: shiftId } };
+      return {
+        ok: true,
+        msg: "Terminal shift already synced",
+        result: { id: shiftId },
+      };
     }
 
     const { id, terminal, synced: _s, syncedAt: _sa, ...rest } = shift;
@@ -100,23 +115,21 @@ export async function terminalShiftSyncService(shiftId: number) {
       ...rest,
     };
 
-    const { ok, msg, result } = await apiService.post<ServerSyncResponse>(
+    const { ok, msg } = await apiService.post<ServerSyncResponse>(
       `${baseURL}/terminal-shift`,
       { data },
     );
 
-    if (!ok || !result) {
+    if (!ok) {
       console.log(msg || "Failed to sync terminal shift");
-      return { ok: false, msg: msg || "Failed to sync terminal shift", result: null };
+      return {
+        ok: false,
+        msg: msg || "Failed to sync terminal shift",
+        result: null,
+      };
     }
 
-    const { ok: ok2, msg: msg2 } = result;
-
-    if (!ok2) {
-      return { ok: false, msg: msg2 || "Failed to sync terminal shift", result: null };
-    }
-
-    if (ok && ok2) {
+    if (ok) {
       await db.terminalShift.update({
         where: { id: shiftId },
         data: { syncedAt: new Date(), synced: true },
@@ -144,7 +157,11 @@ export async function syncAllTerminalShiftsService() {
       await terminalShiftSyncService(shiftId);
     }
 
-    return { ok: true, msg: "All terminal shifts synced", result: { count: unsyncedShiftIds.length } };
+    return {
+      ok: true,
+      msg: "All terminal shifts synced",
+      result: { count: unsyncedShiftIds.length },
+    };
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("syncAllTerminalShiftsService error:", e);
@@ -165,7 +182,11 @@ export async function syncAllSaleInvoicesService() {
       await saleInvoiceSyncService(invoiceId);
     }
 
-    return { ok: true, msg: "All sale invoices synced", result: { count: unsyncedInvoiceIds.length } };
+    return {
+      ok: true,
+      msg: "All sale invoices synced",
+      result: { count: unsyncedInvoiceIds.length },
+    };
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("syncAllSaleInvoicesService error:", e);

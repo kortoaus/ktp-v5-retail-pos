@@ -11,7 +11,6 @@ export function useCartBroadcast(): void {
         carts: state.carts,
         activeCartIndex: state.activeCartIndex,
         lineOffset: state.lineOffset,
-        promotions: state.promotions,
       });
     });
     return () => {

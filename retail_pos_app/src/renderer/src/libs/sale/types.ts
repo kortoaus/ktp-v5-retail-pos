@@ -2,7 +2,6 @@ import { SaleLineType, SaleStoreDiscount } from "../../types/sales";
 
 export interface SaleTotals {
   lineTotal: number;
-  promotionDiscountAmount: number;
   subTotal: number;
   lineDiscountAmount: number;
 }

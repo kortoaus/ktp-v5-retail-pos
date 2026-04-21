@@ -7,7 +7,6 @@ import {
   cloudItemMigrateService,
   cloudPriceMigrateService,
   cloudPromoPriceMigrateService,
-  cloudPromotionMigrateService,
   normalizeBarcodesService,
 } from "./cloud.migrate.service";
 import {
@@ -71,20 +70,12 @@ export async function cloudItemMigrateController(req: Request, res: Response) {
     });
     return;
   }
+
   const normalizeBarcodesResult = await normalizeBarcodesService();
   if (!normalizeBarcodesResult) {
     res.status(500).json({
       ok: false,
       msg: "Failed to normalize barcodes",
-    });
-    return;
-  }
-
-  const promotionResult = await cloudPromotionMigrateService();
-  if (!promotionResult) {
-    res.status(500).json({
-      ok: false,
-      msg: "Failed to migrate promotions",
     });
     return;
   }

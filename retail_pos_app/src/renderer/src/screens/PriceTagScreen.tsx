@@ -3,9 +3,8 @@ import { Link } from "react-router-dom";
 import { cn } from "../libs/cn";
 import SyncButton from "../components/SyncButton";
 import PrintItemPriceTag from "../components/priceTags/PrintItemPriceTag";
-import PrintPromotionTag from "../components/priceTags/PrintPromotionTag";
 
-type Mode = "item" | "promotion";
+type Mode = "item";
 
 export default function PriceTagScreen() {
   const [mode, setMode] = useState<Mode>("item");
@@ -32,17 +31,6 @@ export default function PriceTagScreen() {
           >
             Item
           </button>
-          <button
-            onPointerDown={() => setMode("promotion")}
-            className={cn(
-              "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-              mode === "promotion"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700",
-            )}
-          >
-            Promotion
-          </button>
         </div>
 
         <div className="flex-1 flex justify-end">
@@ -52,7 +40,6 @@ export default function PriceTagScreen() {
 
       <div className="flex-1 bg-gray-100">
         {mode === "item" && <PrintItemPriceTag />}
-        {mode === "promotion" && <PrintPromotionTag />}
       </div>
     </div>
   );

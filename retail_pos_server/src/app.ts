@@ -31,7 +31,6 @@ app.get("/clear", async (_req: Request, res: Response) => {
   await db.userVoucher.deleteMany({});
   await db.price.deleteMany({});
   await db.promoPrice.deleteMany({});
-  await db.promotion.deleteMany({});
   await db.saleInvoiceDiscount.deleteMany({});
   await db.saleInvoiceRow.deleteMany({});
   await db.saleInvoicePayment.deleteMany({});

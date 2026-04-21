@@ -5,11 +5,7 @@ import { SaleStoreDiscount } from "../../types/sales";
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 
-export default function DocumentMonitor({
-  discounts,
-}: {
-  discounts: SaleStoreDiscount[];
-}) {
+export default function DocumentMonitor({}: {}) {
   const lines = useNewSalesStore(
     (s) => s.carts[s.activeCartIndex]?.lines ?? [],
   );
@@ -19,7 +15,8 @@ export default function DocumentMonitor({
       const itemCount = [...new Set(lines.map((l) => l.itemId))].length;
       const lineCount = lines.length;
       const qtyCount = lines.reduce((acc, l) => {
-        if (l.type === "weight" || l.type === "weight-prepacked") return acc + 1;
+        if (l.type === "weight" || l.type === "weight-prepacked")
+          return acc + 1;
         return acc + l.qty / QTY_SCALE;
       }, 0);
       const total = lines.reduce((acc, l) => acc + l.total, 0);
@@ -28,12 +25,7 @@ export default function DocumentMonitor({
       return { itemCount, lineCount, qtyCount, total, tax_amount, subtotal };
     }, [lines]);
 
-  const promoSum = useMemo(
-    () => discounts.reduce((acc, d) => acc + d.amount, 0),
-    [discounts],
-  );
-
-  const due = total - promoSum;
+  const due = total;
 
   return (
     <div className="grid grid-cols-12 grid-rows-2 bg-zinc-900 h-full px-4 py-2 gap-x-2">
@@ -47,7 +39,9 @@ export default function DocumentMonitor({
       </div>
       <div className="flex flex-col justify-center gap-1">
         <div className="text-xs text-gray-400 font-medium">QTY</div>
-        <div className="text-white font-semibold text-base">{Math.round(qtyCount)}</div>
+        <div className="text-white font-semibold text-base">
+          {Math.round(qtyCount)}
+        </div>
       </div>
       <div className="flex flex-col justify-center gap-1 col-span-2">
         <div className="text-xs text-gray-400 font-medium">SUBTOTAL</div>
@@ -66,15 +60,6 @@ export default function DocumentMonitor({
         <div className="text-lg text-white font-medium">DUE</div>
         <div className="text-green-400 text-3xl font-bold">
           ${fmtMoney(due)}
-        </div>
-      </div>
-
-      <div className="col-span-7 flex items-center gap-4">
-        <div className="text-xs text-gray-400 font-medium">
-          DISCOUNT ({discounts.length})
-        </div>
-        <div className="text-yellow-400 font-semibold text-sm">
-          {promoSum > 0 ? `-$${fmtMoney(promoSum)}` : "$0.00"}
         </div>
       </div>
     </div>

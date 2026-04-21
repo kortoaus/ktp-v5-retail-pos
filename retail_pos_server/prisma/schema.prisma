@@ -106,9 +106,6 @@ model Item {
   // Prices
   taxable          Boolean @default(false)
   wholesaleTaxable Boolean @default(false)
-  // prices           ItemPrice[]
-  // markup           Float   @default(1)
-  // wholesaleMarkup  Float   @default(1)
 
   // Scale & Label Data
   scaleData ItemScaleData?
@@ -157,7 +154,7 @@ model Price {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   archived  Boolean  @default(false)
-  markup    Float    @default(1)
+  markup    Float    @default(1) // not used
 
   @@index([itemId])
 }
@@ -177,40 +174,6 @@ model PromoPrice {
   updatedAt DateTime @updatedAt
 
   @@index([itemId])
-}
-
-enum PromotionType {
-  BUY_MORE_SAVE_MORE // eg. 2 for $5
-  MIX_AND_SAVE // eg. if A($7)+B($7) for $5 each
-  N_FOR_N_MINUS_ONE // eg buy 3 get 1 free
-}
-
-model Promotion {
-  id        Int           @id
-  type      PromotionType
-  companyId Int
-  name_en   String
-  name_ko   String
-  desc_en   String?       @db.Text
-  desc_ko   String?       @db.Text
-  startDate DateTime
-  endDate   DateTime
-  archived  Boolean       @default(false)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-
-  //
-  requiredItemIds Int[]
-  allowedItemIds  Int[]
-
-  minQty Int  @default(1)
-  maxQty Int?
-
-  discountType           String @default("percentage") // percentage or amount 
-  discountPercentAmounts Int[]
-  discountFlatAmounts    Int[]
-
-  @@index([companyId])
 }
 
 model CloudHotkey {
@@ -474,10 +437,10 @@ model SaleInvoiceRow {
   // Price Data
   barcodePrice          Int?
   unit_price_original   Int
-  unit_price_discounted Int? // promo-price
+  unit_price_discounted Int?
   unit_price_adjusted   Int?
   unit_price_effective  Int
-  discount_amount       Int  @default(0) // promotion discounted
+  discount_amount       Int  @default(0)
   qty                   Int
   measured_weight       Int?
   subtotal              Int
@@ -487,9 +450,6 @@ model SaleInvoiceRow {
   // Refund Data
   original_invoice_id     Int?
   original_invoice_row_id Int?
-  // remaining_qty                 Decimal? @default(0) @db.Decimal(18, 3)
-  // remaining_total               Decimal? @default(0) @db.Decimal(18, 2)
-  // remaining_included_tax_amount Decimal? @default(0) @db.Decimal(18, 2)
 
   // Metadata
   adjustments String[]
