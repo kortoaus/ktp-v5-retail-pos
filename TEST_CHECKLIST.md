@@ -84,14 +84,13 @@
 
 ---
 
-## 6. 프로모션
+## 6. 아이템 레벨 프로모 가격 (PromoPrice)
 
-- [ ] BUY_MORE_SAVE_MORE 조건 충족 → useCartDiscounts에 할인 표시
-- [ ] Discounts 버튼 하이라이트
-- [ ] DiscountListModal 열림, 할인 내역 표시
-- [ ] DocumentMonitor DUE = lineTotal - promotionDiscount
-- [ ] 조건 미충족 시 할인 자동 제거
-- [ ] 커스터머 화면에 할인 표시
+- [ ] 유효기간 내 PromoPrice 있는 아이템 스캔 → `prices[level]`과 `promoPrice[level]` 중 최저가 적용
+- [ ] 유효기간 밖이면 promoPrice 무시
+- [ ] 멤버 레벨 변경 시 라인 재계산에 반영
+
+> Note: 카트/문서 레벨 프로모션(BUY_MORE_SAVE_MORE 등)은 제거됨. 결제 모달의 수동 Discount %/$ 만 남아있음.
 
 ---
 
@@ -200,11 +199,11 @@
 
 ## 12. 기타
 
-- [ ] LabelingScreen — 가격 표시 정상 (cents → dollars)
-- [ ] LabelingScreen — 가격 오버라이드 입력
+- [ ] PriceTagScreen — 아이템 가격 태그 인쇄
 - [ ] StoreSettingScreen — surchargeRate permille, voucherDefault cents
 - [ ] InvoiceSearchPanel — 목록 total 정확
 - [ ] Reprint 버튼 → 최근 영수증 인쇄
 - [ ] Kick Drawer 버튼
-- [ ] Sync 버튼 → 클라우드 다운로드 + 업로드
+- [ ] Sync 버튼 (파란색) → 클라우드 다운로드 + 업로드
+- [ ] Sync 버튼 (빨간색) → 다른 터미널이 sync 완료 시 표시, 클릭하면 새로고침
 - [ ] Back 버튼 → 홈으로

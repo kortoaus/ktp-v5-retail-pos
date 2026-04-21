@@ -2,7 +2,6 @@ import { Request, Response } from "express";
 import {
   openTerminalShiftService,
   getCurrentTerminalShiftService,
-  getClosingTerminalShiftDataService,
   closeTerminalShiftService,
   getShiftByIdService,
 } from "./shift.service";
@@ -38,16 +37,6 @@ export async function getCurrentTerminalShiftController(
   const terminal = res.locals.terminal;
   if (!terminal) throw new NotFoundException("Terminal not found");
   const result = await getCurrentTerminalShiftService(terminal.id);
-  res.status(200).json(result);
-}
-
-export async function getClosingTerminalShiftDataController(
-  req: Request,
-  res: Response,
-) {
-  const terminal = res.locals.terminal;
-  if (!terminal) throw new NotFoundException("Terminal not found");
-  const result = await getClosingTerminalShiftDataService(terminal.id);
   res.status(200).json(result);
 }
 

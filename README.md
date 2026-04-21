@@ -59,7 +59,7 @@ Retail point-of-sale system for Australian supermarkets. Monorepo with two proje
 | ------------------- | ----------------------- | ----- | --------- | --------------------------- |
 | `/`                 | HomeScreen              | —     | —         | Landing / navigation        |
 | `/sale`             | SaleScreen              | Yes   | —         | Main POS register           |
-| `/labeling`         | LabelingScreen          | —     | —         | Scan → print labels         |
+| `/price-tag`        | PriceTagScreen          | —     | —         | Print item price tags       |
 | `/server-setup`     | ServerSetupScreen       | —     | —         | Configure server connection |
 | `/shift/open`       | OpenShiftScreen         | No    | shift     | Open shift with cash count  |
 | `/shift/close`      | CloseShiftScreen        | Yes   | shift     | Close shift with Z-report   |
@@ -102,15 +102,14 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - Weight items: auto-read on modal open + 500ms polling when `autoPolling` enabled
 - Normal item merge (same item + same price = qty increment)
 - Line functions: change qty, override price, discount $, discount %
-- Document-level discounts: per-cart promotion discounts with add/remove, displayed in monitor
-- Discount list modal with touchscreen paging (page size 5)
+- Manual document discount at payment (percent or amount), allocated per-line via largest-remainder
 - On-screen keyboard (Korean dubeolsik + English + numpad)
 - Hotkeys: touchscreen 6×6 grid for quick item selection
 
 ### Pricing
 
 - Price arrays indexed by member level: `prices[0]` = base, `prices[N]` = level N
-- Promo prices with valid date range, same array structure
+- Item-level promo prices (`PromoPrice`) with valid date range, same array structure — kept intentionally; cart-level document promotions have been removed
 - Effective price = `adjusted ?? discounted ?? original`
 - Discounted = lowest of `prices[level]` and `promoPrice[level]`, only if < original
 - Prepacked: qty = barcodePrice ÷ unit price

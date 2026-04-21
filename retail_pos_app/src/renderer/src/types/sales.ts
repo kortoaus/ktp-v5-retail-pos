@@ -41,13 +41,3 @@ export interface SaleLineType extends SaleLineItem {
   adjustments: LineAdjustment[];
   ppMarkdown: PPMarkdown | null;
 }
-
-export interface SaleStoreDiscount {
-  lineKey: string | null;
-  entityType: "promotion";
-  entityId: number;
-  title: string;
-  description: string;
-  amount: number;
-  targetItemIds: number[];
-}

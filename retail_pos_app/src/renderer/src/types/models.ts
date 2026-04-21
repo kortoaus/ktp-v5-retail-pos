@@ -269,7 +269,7 @@ export const SCOPES = [
 
 export interface OnPaymentPayload {
   subtotal: number; // Σ line.total
-  documentDiscountAmount: number; // document-level discount applied
+  documentDiscountAmount: number; // manual discount entered at payment (cents)
   creditSurchargeAmount: number; // 1.5% surcharge on credit payment
   rounding: number; // 5c rounding adjustment (+/-)
   total: number; // sale amount = subtotal - discount + rounding (excludes surcharge)
@@ -279,7 +279,6 @@ export interface OnPaymentPayload {
   creditPaid: number; // base card charge (excludes surcharge)
   totalDiscountAmount: number; // line discounts + document discount ("You Saved")
   payments: { type: string; amount: number; surcharge: number }[];
-  discounts: SaleInvoiceDiscount[];
 }
 
 export interface Terminal {
@@ -297,7 +296,7 @@ export interface Terminal {
 // total = unit_price_effective × qty / QTY_SCALE (tax-inclusive)
 // tax_amount_included = extracted from total (total / 11 for 10% GST)
 // subtotal = total - tax_amount_included
-// discount_amount = allocated share of document-level discounts (promo + manual)
+// discount_amount = allocated share of the manual document discount (cents)
 //   → used in refund: net_total = total - discount_amount
 export interface SaleInvoiceRow {
   id: number;
@@ -320,7 +319,7 @@ export interface SaleInvoiceRow {
   subtotal: number; // total - tax_amount_included (cents) — NOT same as SaleInvoice.subtotal
   total: number; // effective × qty / QTY_SCALE (cents, tax-incl)
   tax_amount_included: number; // GST extracted from total (cents) — display/reporting only
-  discount_amount: number; // allocated document-level discount (cents)
+  discount_amount: number; // allocated manual document discount (cents)
   original_invoice_id: number | null;
   original_invoice_row_id: number | null;
   refunded: boolean;
@@ -347,9 +346,8 @@ export interface SaleInvoicePayment {
 // ─── SaleInvoice ────────────────────────────────────────────
 // All money fields: Int cents (×100). Tax-inclusive pricing model.
 //
-// subtotal = Σ(row.total) - promotionDiscountAmount
+// subtotal = Σ(row.total)
 //   → NOT the same as SaleInvoiceRow.subtotal (that's row.total - row.tax)
-//   → this is "line totals after promotions, before manual discount"
 // documentDiscountAmount = manual discount entered at payment (cents)
 // total = subtotal - documentDiscountAmount + rounding + creditSurchargeAmount
 //   → what the customer ACTUALLY pays (includes surcharge)
@@ -357,7 +355,7 @@ export interface SaleInvoicePayment {
 // taxAmount = goodsTax + surchargeTax (extracted, for reporting)
 // totalDiscountAmount = lineDiscount + documentDiscount (영수증 "You Saved")
 //   → lineDiscount = Σ(original × qty / QTY_SCALE) - subtotal
-//   → includes member discounts, price overrides, promotions, manual discount
+//   → includes member/item-level promo prices, price overrides, PP markdowns, manual discount
 export interface SaleInvoice {
   id: number;
   type: string; // "sale" | "refund"
@@ -398,24 +396,6 @@ export interface SaleInvoice {
   voucherPaid: number; // cents — voucher amount
   totalDiscountAmount: number; // cents — total savings shown on receipt
   payments: SaleInvoicePayment[];
-  discounts: SaleInvoiceDiscount[];
-}
-
-// ─── SaleInvoiceDiscount ────────────────────────────────────
-// Document-level discount record (promotion applied to this sale).
-// amount = total discount from this promotion (cents).
-// This is stored for audit/display — the actual per-line allocation
-// is in SaleInvoiceRow.discount_amount.
-export interface SaleInvoiceDiscount {
-  id: number;
-  invoiceId: number;
-  entityId: number | null;
-  entityType: string; // "promotion"
-  title: string;
-  description: string | null;
-  amount: number; // cents — total discount from this entity
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface RefundableRow extends SaleInvoiceRow {

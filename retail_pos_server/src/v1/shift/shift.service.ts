@@ -7,7 +7,6 @@ import {
   InternalServerException,
   NotFoundException,
 } from "../../libs/exceptions";
-import { terminalShiftSyncService } from "../cloud/cloud.sync.service";
 
 type OpenShiftDTO = {
   openedNote: string;
@@ -103,77 +102,6 @@ export async function getShiftByIdService(shiftId: number) {
   }
 }
 
-export async function getClosingTerminalShiftDataService(terminalId: number) {
-  try {
-    const shift = await db.terminalShift.findFirst({
-      where: {
-        terminalId: terminalId,
-        closedAt: null,
-      },
-    });
-    if (!shift) throw new NotFoundException("Shift not found");
-
-    const invoices = await db.saleInvoice.findMany({
-      where: {
-        terminalId: terminalId,
-        shiftId: shift.id,
-      },
-    });
-
-    const cashios = await db.cashInOut.findMany({
-      where: {
-        shiftId: shift.id,
-      },
-    });
-
-    const sum = (
-      arr: {
-        cashPaid: number;
-        creditPaid: number;
-        taxAmount: number;
-        voucherPaid: number;
-      }[],
-    ) => ({
-      cash: arr.reduce((acc, i) => acc + i.cashPaid, 0),
-      credit: arr.reduce((acc, i) => acc + i.creditPaid, 0),
-      voucher: arr.reduce((acc, i) => acc + i.voucherPaid, 0),
-      tax: arr.reduce((acc, i) => acc + i.taxAmount, 0),
-    });
-
-    const sales = sum(invoices.filter((i) => i.type === "sale"));
-    const refunds = sum(invoices.filter((i) => i.type === "refund"));
-
-    const cashInTotal = cashios
-      .filter((c) => c.type === "in")
-      .reduce((acc, c) => acc + c.amount, 0);
-    const cashOutTotal = cashios
-      .filter((c) => c.type === "out")
-      .reduce((acc, c) => acc + c.amount, 0);
-
-    return {
-      ok: true,
-      result: {
-        shift,
-        salesCash: sales.cash,
-        salesCredit: sales.credit,
-        salesVoucher: sales.voucher,
-        salesTax: sales.tax,
-        refundsCash: refunds.cash,
-        refundsCredit: refunds.credit,
-        refundsVoucher: refunds.voucher,
-        refundsTax: refunds.tax,
-        cashIn: cashInTotal,
-        cashOut: cashOutTotal,
-      },
-      msg: "Success",
-    };
-  } catch (e) {
-    if (e instanceof HttpException) throw e;
-    console.error("getClosingTerminalShiftDataService error:", e);
-    throw new InternalServerException();
-  }
-}
-
 type CloseShiftDTO = {
   closedNote: string;
   endedCashExpected: number;
@@ -234,8 +162,6 @@ export async function closeTerminalShiftService(
         totalCashOut: dto.totalCashOut,
       },
     });
-
-    await terminalShiftSyncService(shift.id);
 
     return {
       ok: true,

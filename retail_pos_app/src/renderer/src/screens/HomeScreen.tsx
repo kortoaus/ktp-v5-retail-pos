@@ -81,13 +81,13 @@ export default function HomeScreen() {
             </NavBtn>
           </>
         )}
-        <NavBtn
+        {/* <NavBtn
           to="/manager/invoices"
           icon={<IoReceiptOutline size={24} />}
           className="bg-blue-50 text-blue-700 hover:bg-blue-100"
         >
           Invoice Search
-        </NavBtn>
+        </NavBtn> */}
       </Section>
 
       {/* Tools */}

@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { useNewSalesStore } from "../../store/newSalesStore";
 import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../../libs/constants";
-import { SaleStoreDiscount } from "../../types/sales";
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 

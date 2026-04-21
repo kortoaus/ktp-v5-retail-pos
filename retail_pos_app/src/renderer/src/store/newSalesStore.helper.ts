@@ -1,6 +1,5 @@
-import { SaleLineItem, SaleLineType, SaleStoreDiscount } from "../types/sales";
-import { Promotion, PromotionType } from "../types/models";
-import { QTY_SCALE, PCT_SCALE } from "../libs/constants";
+import { SaleLineItem, SaleLineType } from "../types/sales";
+import { QTY_SCALE } from "../libs/constants";
 import { calcMarkdownPrice } from "../libs/pp-barcode";
 
 export interface Cart {

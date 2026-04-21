@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { searchMemberById } from "../../service/crm.service";
-import { Item, Member } from "../../types/models";
+import { Item } from "../../types/models";
 import { searchItemByBarcode } from "../../service/item.service";
 import { useBarcodeScanner } from "../../hooks/useBarcodeScanner";
 import { generateSaleLineItem } from "../../libs/item-utils";
@@ -27,9 +27,7 @@ import DiscountAmountModal from "./DiscountAmountModal";
 import DiscountPercentModal from "./DiscountPercentModal";
 import MemberSearchModal from "../../components/MemberSearchModal";
 import WeightModal from "../../components/WeightModal";
-import useNewPromotions from "../../hooks/useNewPromotions";
 import DocumentMonitor from "./DocumentMonitor";
-import NewPaymentModal from "./NewPaymentModal";
 import CloudHotkeyViewer from "../../components/CloudHotkeyViewer";
 import useCloudHotkeys from "../../hooks/useCloudHotkeys";
 import LinePaging from "./LinePaging";
@@ -48,8 +46,7 @@ type ModalTarget =
   | "discount-percent"
   | "member-search"
   | "payment"
-  | "user-voucher"
-  | "discount-list";
+  | "user-voucher";
 
 export default function NewSaleScreen() {
   const navigate = useNavigate();
@@ -473,20 +470,6 @@ export default function NewSaleScreen() {
             level: m.level,
             phone_last4: m.phone_last4,
           });
-          setModalTarget(null);
-        }}
-      />
-
-      <NewPaymentModal
-        open={modalTarget === "payment"}
-        onClose={() => setModalTarget(null)}
-        lines={lines}
-        discounts={[]}
-        memberId={member?.id ?? null}
-        memberLevel={member?.level ?? null}
-        onComplete={() => {
-          clearActiveCart();
-          setSelectedLineKey(null);
           setModalTarget(null);
         }}
       />

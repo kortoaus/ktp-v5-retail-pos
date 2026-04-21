@@ -2,7 +2,6 @@ import { Router } from "express";
 import {
   openTerminalShiftController,
   getCurrentTerminalShiftController,
-  getClosingTerminalShiftDataController,
   closeTerminalShiftController,
   getShiftByIdController,
 } from "./shift.controller";
@@ -19,12 +18,7 @@ router.post(
   openTerminalShiftController,
 );
 
-router.post(
-  "/close/data",
-  userMiddleware,
-  scopeMiddleware("shift"),
-  getClosingTerminalShiftDataController,
-);
+router.post("/close/data", userMiddleware, scopeMiddleware("shift"));
 
 router.post(
   "/close",

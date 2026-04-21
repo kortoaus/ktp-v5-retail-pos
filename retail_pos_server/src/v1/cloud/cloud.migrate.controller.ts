@@ -9,10 +9,7 @@ import {
   cloudPromoPriceMigrateService,
   normalizeBarcodesService,
 } from "./cloud.migrate.service";
-import {
-  syncAllSaleInvoicesService,
-  syncAllTerminalShiftsService,
-} from "./cloud.sync.service";
+
 import { getIO } from "../../libs/socket";
 
 export async function cloudItemMigrateController(req: Request, res: Response) {
@@ -85,24 +82,6 @@ export async function cloudItemMigrateController(req: Request, res: Response) {
     res.status(500).json({
       ok: false,
       msg: "Failed to migrate hotkeys",
-    });
-    return;
-  }
-
-  const syncAllTerminalShiftsResult = await syncAllTerminalShiftsService();
-  if (!syncAllTerminalShiftsResult) {
-    res.status(500).json({
-      ok: false,
-      msg: "Failed to sync all terminal shifts",
-    });
-    return;
-  }
-
-  const syncAllSaleInvoicesResult = await syncAllSaleInvoicesService();
-  if (!syncAllSaleInvoicesResult) {
-    res.status(500).json({
-      ok: false,
-      msg: "Failed to sync all sale invoices",
     });
     return;
   }

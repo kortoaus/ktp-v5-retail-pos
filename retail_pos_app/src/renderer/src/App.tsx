@@ -9,9 +9,7 @@ import HotkeyManagerScreen from "./screens/HotkeyManagerScreen";
 import UserManageScreen from "./screens/UserManageScreen";
 import ServerSetupScreen from "./screens/ServerSetupScreen";
 import OpenShiftScreen from "./screens/OpenShiftScreen";
-import SaleInvoiceSearchScreen from "./screens/SaleInvoiceSearchScreen";
 import { ShiftProvider } from "./contexts/ShiftContext";
-import RefundScreen from "./screens/RefundScreen";
 import CashIOManageScreen from "./screens/CashIOManageScreen";
 import StoreSettingScreen from "./screens/StoreSettingScreen";
 import CloseShiftScreen from "./screens/CloseShiftScreen";
@@ -54,8 +52,8 @@ function MainApp() {
               <Route path="settings" element={<InterfaceSettingsScreen />} />
               <Route path="hotkey" element={<HotkeyManagerScreen />} />
               <Route path="user" element={<UserManageScreen />} />
-              <Route path="invoices" element={<SaleInvoiceSearchScreen />} />
-              <Route path="refund" element={<RefundScreen />} />
+              {/* <Route path="invoices" element={<SaleInvoiceSearchScreen />} />
+              <Route path="refund" element={<RefundScreen />} /> */}
               <Route path="cashio" element={<CashIOManageScreen />} />
               <Route path="store" element={<StoreSettingScreen />} />
             </Route>

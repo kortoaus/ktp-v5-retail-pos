@@ -221,7 +221,6 @@ model Terminal {
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   shifts    TerminalShift[]
-  invoices  SaleInvoice[]
   cashIos   CashInOut[]
 }
 
@@ -267,43 +266,14 @@ model StoreSetting {
 }
 
 model User {
-  id              Int                  @id @default(autoincrement())
-  name            String
-  code            String
-  scope           String[]
-  archived        Boolean              @default(false)
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @default(now()) @updatedAt
-  invoices        SaleInvoice[]
-  cashIos         CashInOut[]
-  vouchers        UserVoucher[]
-  voucher_history UserVoucherHistory[]
-}
-
-model UserVoucher {
-  id           Int                  @id @default(autoincrement())
-  userId       Int
-  user         User                 @relation(fields: [userId], references: [id])
-  init_amount  Int
-  left_amount  Int                  @default(0)
-  validFrom    DateTime
-  validTo      DateTime
-  issuedById   Int
-  issuedByName String
-  createdAt    DateTime             @default(now())
-  history      UserVoucherHistory[]
-}
-
-model UserVoucherHistory {
-  id                      Int         @id @default(autoincrement())
-  voucherId               Int
-  voucher                 UserVoucher @relation(fields: [voucherId], references: [id])
-  userId                  Int
-  user                    User        @relation(fields: [userId], references: [id])
-  spent_amount            Int
-  saleInvoiceId           Int
-  saleInvoiceSerialNumber String
-  createdAt               DateTime    @default(now())
+  id        Int         @id @default(autoincrement())
+  name      String
+  code      String
+  scope     String[]
+  archived  Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @default(now()) @updatedAt
+  cashIos   CashInOut[]
 }
 
 model TerminalShift {
@@ -353,135 +323,8 @@ model TerminalShift {
 
   // Cloud Sync
   syncedAt DateTime?
-  synced   Boolean       @default(false)
-  invoices SaleInvoice[]
+  synced   Boolean     @default(false)
   cashIos  CashInOut[]
-}
-
-model SaleInvoice {
-  // document data
-  id                            Int     @id @default(autoincrement())
-  type                          String  @default("sale") // sale, refund,
-  serialNumber                  String? @unique
-  original_invoice_id           Int?
-  original_invoice_serialNumber String?
-
-  // Company
-  companyId   Int
-  companyName String
-  abn         String?
-  address1    String?
-  address2    String?
-  suburb      String?
-  state       String?
-  postcode    String?
-  country     String?
-  phone       String?
-  email       String?
-  website     String?
-
-  // membership data
-  memberId    String?
-  memberLevel Int?
-
-  // Terminal & Shift & User
-  terminalId Int
-  terminal   Terminal      @relation(fields: [terminalId], references: [id])
-  shiftId    Int
-  shift      TerminalShift @relation(fields: [shiftId], references: [id])
-  userId     Int
-  user       User          @relation(fields: [userId], references: [id])
-
-  // Metadataoda
-  issuedAt  DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  rows SaleInvoiceRow[]
-
-  // Calculated Fields
-  subtotal               Int
-  documentDiscountAmount Int
-  creditSurchargeAmount  Int
-  rounding               Int
-  total                  Int
-  taxAmount              Int
-  cashPaid               Int
-  cashChange             Int
-  creditPaid             Int
-  voucherPaid            Int                  @default(0)
-  totalDiscountAmount    Int
-  payments               SaleInvoicePayment[]
-
-  // Cloud Sync
-  syncedAt  DateTime?
-  synced    Boolean               @default(false)
-  discounts SaleInvoiceDiscount[]
-}
-
-model SaleInvoiceRow {
-  id        Int         @id @default(autoincrement())
-  invoiceId Int
-  invoice   SaleInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-
-  // Item Data
-  type    String
-  itemId  Int
-  name_en String
-  name_ko String
-  taxable Boolean
-  uom     String
-  barcode String
-  index   Int
-
-  // Price Data
-  barcodePrice          Int?
-  unit_price_original   Int
-  unit_price_discounted Int?
-  unit_price_adjusted   Int?
-  unit_price_effective  Int
-  discount_amount       Int  @default(0)
-  qty                   Int
-  measured_weight       Int?
-  subtotal              Int
-  total                 Int
-  tax_amount_included   Int  @default(0)
-
-  // Refund Data
-  original_invoice_id     Int?
-  original_invoice_row_id Int?
-
-  // Metadata
-  adjustments String[]
-  createdAt   DateTime @default(now())
-
-  @@index([original_invoice_row_id])
-}
-
-model SaleInvoicePayment {
-  id         Int         @id @default(autoincrement())
-  invoiceId  Int
-  invoice    SaleInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  type       String // cash, credit, voucher
-  amount     Int
-  entityId   Int?
-  entityType String? // user-voucher, member-voucher
-  surcharge  Int
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-}
-
-model SaleInvoiceDiscount {
-  id          Int         @id @default(autoincrement())
-  invoiceId   Int
-  invoice     SaleInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  entityId    Int?
-  entityType  String
-  title       String
-  description String?
-  amount      Int
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
 }
 
 model CashInOut {

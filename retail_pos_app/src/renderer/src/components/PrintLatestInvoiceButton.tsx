@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { getLatestSaleInvoice } from "../service/sale.service";
-import { printSaleInvoiceReceipt } from "../libs/printer/sale-invoice-receipt";
+// import { getLatestSaleInvoice } from "../service/sale.service";
+
 import { cn } from "../libs/cn";
 
 export default function PrintLatestInvoiceButton({
@@ -10,25 +10,7 @@ export default function PrintLatestInvoiceButton({
 }) {
   const [loading, setLoading] = useState(false);
 
-  async function handlePrint() {
-    if (loading) return;
-    setLoading(true);
-    try {
-      const { ok, msg, result } = await getLatestSaleInvoice();
-      console.log(result);
-      if (!ok || !result) {
-        window.alert(msg || "No invoice found");
-        return;
-      }
-
-      await printSaleInvoiceReceipt(result, true);
-    } catch (e) {
-      console.error(e);
-      window.alert("Failed to print latest invoice");
-    } finally {
-      setLoading(false);
-    }
-  }
+  async function handlePrint() {}
 
   return (
     <div
