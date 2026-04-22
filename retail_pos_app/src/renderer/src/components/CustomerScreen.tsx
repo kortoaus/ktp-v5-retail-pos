@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNewSalesStore, LINE_PAGE_SIZE } from "../store/newSalesStore";
+import { useSalesStore, LINE_PAGE_SIZE } from "../store/SalesStore";
 import { CloudPost, StoreSetting } from "../types/models";
 import CustomerIdleScreen from "./CustomerIdleScreen";
-import LineViewer from "../screens/NewSaleScreen/LineViewer";
-import DocumentMonitor from "../screens/NewSaleScreen/DocumentMonitor";
+import LineViewer from "../screens/SaleScreen/LineViewer";
+import DocumentMonitor from "../screens/SaleScreen/DocumentMonitor";
 import { MONEY_DP, MONEY_SCALE } from "../libs/constants";
 
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
@@ -16,7 +16,7 @@ export default function CustomerScreen() {
     const cartChannel = new BroadcastChannel("pos-cart");
     cartChannel.onmessage = (event) => {
       const { carts, activeCartIndex, lineOffset } = event.data;
-      useNewSalesStore.setState({
+      useSalesStore.setState({
         carts,
         activeCartIndex,
         lineOffset,
@@ -46,7 +46,7 @@ export default function CustomerScreen() {
     };
   }, []);
 
-  const { carts, activeCartIndex, lineOffset } = useNewSalesStore();
+  const { carts, activeCartIndex, lineOffset } = useSalesStore();
   const lines = useMemo(() => {
     return carts[activeCartIndex]?.lines ?? [];
   }, [carts, activeCartIndex]);

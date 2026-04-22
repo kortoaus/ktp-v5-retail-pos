@@ -12,8 +12,8 @@ import {
   parsePPBarcode,
   calcMarkdownPrice,
 } from "../../libs/pp-barcode";
-import type { AddLineOptions } from "../../store/newSalesStore.helper";
-import { useNewSalesStore, LINE_PAGE_SIZE } from "../../store/newSalesStore";
+import type { AddLineOptions } from "../../store/SalesStore.helper";
+import { useSalesStore, LINE_PAGE_SIZE } from "../../store/SalesStore";
 import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../../libs/constants";
 import { useWeight } from "../../hooks/useWeight";
 import { cn } from "../../libs/cn";
@@ -35,6 +35,7 @@ import PrintLatestInvoiceButton from "../../components/PrintLatestInvoiceButton"
 import { kickDrawer } from "../../libs/printer/kick-drawer";
 import SyncButton from "../../components/SyncButton";
 import SyncPostButton from "../../components/SyncPostButton";
+import PaymentModal from "./PaymentModal";
 
 type ModalTarget =
   | null
@@ -45,10 +46,9 @@ type ModalTarget =
   | "discount-amount"
   | "discount-percent"
   | "member-search"
-  | "payment"
-  | "user-voucher";
+  | "payment";
 
-export default function NewSaleScreen() {
+export default function SaleScreen() {
   const navigate = useNavigate();
   const {
     carts,
@@ -58,7 +58,7 @@ export default function NewSaleScreen() {
     lineOffset,
     setLineOffset,
     clearActiveCart,
-  } = useNewSalesStore();
+  } = useSalesStore();
   const [loading, setLoading] = useState(false);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [selectedLineKey, setSelectedLineKey] = useState<string | null>(null);
@@ -254,9 +254,8 @@ export default function NewSaleScreen() {
         : null;
 
     const memberLevel =
-      useNewSalesStore.getState().carts[
-        useNewSalesStore.getState().activeCartIndex
-      ]?.member?.level ?? 0;
+      useSalesStore.getState().carts[useSalesStore.getState().activeCartIndex]
+        ?.member?.level ?? 0;
     const original = pp.prices[0] ?? 0;
     const levelPrice = pp.prices[memberLevel] ?? 0;
     const promoPrice = pp.promoPrices[memberLevel] ?? 0;
@@ -473,6 +472,13 @@ export default function NewSaleScreen() {
           setModalTarget(null);
         }}
       />
+      {modalTarget === "payment" && (
+        <PaymentModal
+          onCancel={() => {
+            setModalTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }

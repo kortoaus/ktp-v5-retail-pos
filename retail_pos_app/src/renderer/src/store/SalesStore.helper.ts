@@ -53,8 +53,8 @@ export function recalculateLine(line: SaleLineType): SaleLineType {
     line.unit_price_original;
   const total = Math.round((unit_price_effective * line.qty) / QTY_SCALE);
   const tax_amount = line.taxable ? Math.round(total / 11) : 0;
-  const subtotal = total - tax_amount;
-  return { ...line, unit_price_effective, total, tax_amount, subtotal };
+  const net = total - tax_amount;
+  return { ...line, unit_price_effective, total, tax_amount, net };
 }
 
 export function reindexLines(lines: SaleLineType[]): SaleLineType[] {
@@ -85,7 +85,6 @@ export function buildNewLine(
     index,
     original_invoice_id: null,
     original_invoice_row_id: null,
-    barcode_price: null,
     unit_price_adjusted: options?.adjustedPrice ?? null,
     unit_price_discounted,
     unit_price_original,
@@ -94,7 +93,7 @@ export function buildNewLine(
     measured_weight: options?.measured_weight ?? null,
     total: 0,
     tax_amount: 0,
-    subtotal: 0,
+    net: 0,
     adjustments: options?.adjustedPrice != null ? ["PRICE_OVERRIDE"] : [],
     ppMarkdown: options?.ppMarkdown ?? null,
   };
@@ -120,32 +119,30 @@ export function findMergeTarget(
   );
 }
 
-export function recalculateAllLines(
-  carts: Cart[],
+export function recalculateCartLines(
+  cart: Cart,
   memberLevel: number,
-): Cart[] {
-  return carts.map((cart) => ({
-    lines: cart.lines.map((line) => {
-      if (line.unit_price_adjusted != null && !line.ppMarkdown) return line;
+): Cart {
+  const lines = cart.lines.map((line) => {
+    if (line.unit_price_adjusted != null && !line.ppMarkdown) return line;
 
-      const unit_price_discounted = resolveDiscountedPrice(line, memberLevel);
-      const effective = unit_price_discounted ?? line.unit_price_original;
+    const unit_price_discounted = resolveDiscountedPrice(line, memberLevel);
+    const effective = unit_price_discounted ?? line.unit_price_original;
 
-      if (line.ppMarkdown) {
-        const adjusted = calcMarkdownPrice(
-          effective,
-          line.ppMarkdown.discountType,
-          line.ppMarkdown.discountAmount,
-        );
-        return recalculateLine({
-          ...line,
-          unit_price_discounted,
-          unit_price_adjusted: adjusted,
-        });
-      }
+    if (line.ppMarkdown) {
+      const adjusted = calcMarkdownPrice(
+        effective,
+        line.ppMarkdown.discountType,
+        line.ppMarkdown.discountAmount,
+      );
+      return recalculateLine({
+        ...line,
+        unit_price_discounted,
+        unit_price_adjusted: adjusted,
+      });
+    }
 
-      return recalculateLine({ ...line, unit_price_discounted });
-    }),
-    member: cart.member,
-  }));
+    return recalculateLine({ ...line, unit_price_discounted });
+  });
+  return { lines, member: cart.member };
 }

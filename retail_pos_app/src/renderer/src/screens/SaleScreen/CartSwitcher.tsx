@@ -1,8 +1,8 @@
-import { useNewSalesStore } from "../../store/newSalesStore";
+import { useSalesStore } from "../../store/SalesStore";
 import { cn } from "../../libs/cn";
 
 export default function CartSwitcher() {
-  const { activeCartIndex, switchCart, cartCount } = useNewSalesStore();
+  const { activeCartIndex, switchCart, cartCount } = useSalesStore();
 
   return (
     <div className="grid grid-cols-4 gap-2">

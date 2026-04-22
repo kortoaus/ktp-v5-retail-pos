@@ -32,6 +32,9 @@ ALTER TABLE "UserVoucherHistory" DROP CONSTRAINT "UserVoucherHistory_userId_fkey
 -- DropForeignKey
 ALTER TABLE "UserVoucherHistory" DROP CONSTRAINT "UserVoucherHistory_voucherId_fkey";
 
+-- DropForeignKey (shadow DB replay fix — SaleInvoiceDiscount FK blocks SaleInvoice drop)
+ALTER TABLE "SaleInvoiceDiscount" DROP CONSTRAINT "SaleInvoiceDiscount_invoiceId_fkey";
+
 -- DropTable
 DROP TABLE "SaleInvoice";
 

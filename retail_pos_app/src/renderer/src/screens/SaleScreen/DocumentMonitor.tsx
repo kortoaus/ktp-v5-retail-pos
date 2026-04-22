@@ -1,15 +1,13 @@
 import { useMemo } from "react";
-import { useNewSalesStore } from "../../store/newSalesStore";
+import { useSalesStore } from "../../store/SalesStore";
 import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../../libs/constants";
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 
 export default function DocumentMonitor({}: {}) {
-  const lines = useNewSalesStore(
-    (s) => s.carts[s.activeCartIndex]?.lines ?? [],
-  );
+  const lines = useSalesStore((s) => s.carts[s.activeCartIndex]?.lines ?? []);
 
-  const { itemCount, lineCount, qtyCount, total, tax_amount, subtotal } =
+  const { itemCount, lineCount, qtyCount, total, tax_amount, net } =
     useMemo(() => {
       const itemCount = [...new Set(lines.map((l) => l.itemId))].length;
       const lineCount = lines.length;
@@ -20,8 +18,8 @@ export default function DocumentMonitor({}: {}) {
       }, 0);
       const total = lines.reduce((acc, l) => acc + l.total, 0);
       const tax_amount = lines.reduce((acc, l) => acc + l.tax_amount, 0);
-      const subtotal = lines.reduce((acc, l) => acc + l.subtotal, 0);
-      return { itemCount, lineCount, qtyCount, total, tax_amount, subtotal };
+      const net = lines.reduce((acc, l) => acc + l.net, 0);
+      return { itemCount, lineCount, qtyCount, total, tax_amount, net };
     }, [lines]);
 
   const due = total;
@@ -43,9 +41,9 @@ export default function DocumentMonitor({}: {}) {
         </div>
       </div>
       <div className="flex flex-col justify-center gap-1 col-span-2">
-        <div className="text-xs text-gray-400 font-medium">SUBTOTAL</div>
+        <div className="text-xs text-gray-400 font-medium">NET</div>
         <div className="text-white font-semibold text-base">
-          {fmtMoney(subtotal)}
+          {fmtMoney(net)}
         </div>
       </div>
       <div className="flex flex-col justify-center gap-1 col-span-2">

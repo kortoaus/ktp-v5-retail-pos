@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { cn } from "../../libs/cn";
 import { SaleLineType } from "../../types/sales";
 import { MONEY_DP, MONEY_SCALE, QTY_DP, QTY_SCALE } from "../../libs/constants";
-import { LINE_PAGE_SIZE } from "../../store/newSalesStore";
+import { LINE_PAGE_SIZE } from "../../store/SalesStore";
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 const fmtQty = (q: number) => (q / QTY_SCALE).toFixed(QTY_DP);
@@ -108,7 +108,8 @@ function LineCaption({
         </div>
         {measured_weight != null && measured_weight > 0 && (
           <div className="text-xs text-gray-400">
-            {fmtQty(measured_weight)}kg × {fmtMoney(line.unit_price_discounted ?? unit_price_original)}/kg
+            {fmtQty(measured_weight)}kg ×{" "}
+            {fmtMoney(line.unit_price_discounted ?? unit_price_original)}/kg
           </div>
         )}
       </div>

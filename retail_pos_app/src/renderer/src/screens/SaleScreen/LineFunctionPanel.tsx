@@ -1,8 +1,8 @@
 import { SaleLineType } from "../../types/sales";
 import {
   ALLOWED_CHANGE_QTY_TYPES,
-  useNewSalesStore,
-} from "../../store/newSalesStore";
+  useSalesStore,
+} from "../../store/SalesStore";
 import { QTY_SCALE } from "../../libs/constants";
 import { cn } from "../../libs/cn";
 
@@ -23,7 +23,7 @@ export default function LineFunctionPanel({
   onOpenDiscountAmount,
   onOpenDiscountPercent,
 }: LineFunctionPanelProps) {
-  const { changeLineQty, injectLinePrice, removeLine } = useNewSalesStore();
+  const { changeLineQty, injectLinePrice, removeLine } = useSalesStore();
 
   if (line == null) return null;
 

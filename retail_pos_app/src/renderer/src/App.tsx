@@ -3,7 +3,7 @@ import Gateway from "./components/Gateway";
 import { TerminalProvider } from "./contexts/TerminalContext";
 import ManagerLayout from "./layouts/ManagerLayout";
 import InterfaceSettingsScreen from "./screens/InterfaceSettingsScreen";
-import NewSaleScreen from "./screens/NewSaleScreen";
+
 import HomeScreen from "./screens/HomeScreen";
 import HotkeyManagerScreen from "./screens/HotkeyManagerScreen";
 import UserManageScreen from "./screens/UserManageScreen";
@@ -20,6 +20,9 @@ import { getCloudPosts } from "./service/cloud.service";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CloudPost } from "./types/models";
 import PriceTagScreen from "./screens/PriceTagScreen";
+import SaleScreen from "./screens/SaleScreen";
+import SaleInvoiceSearchScreen from "./screens/SaleInvoiceSearchScreen";
+import SaleRefundDetailScreen from "./screens/SaleRefundDetailScreen";
 
 function App(): React.JSX.Element {
   return (
@@ -46,14 +49,18 @@ function MainApp() {
             <Route path="/server-setup" element={<ServerSetupScreen />} />
 
             <Route path="/sale" element={<ManagerLayout />}>
-              <Route path="" element={<NewSaleScreen />} />
+              <Route path="" element={<SaleScreen />} />
             </Route>
             <Route path="/manager" element={<ManagerLayout />}>
               <Route path="settings" element={<InterfaceSettingsScreen />} />
               <Route path="hotkey" element={<HotkeyManagerScreen />} />
               <Route path="user" element={<UserManageScreen />} />
-              {/* <Route path="invoices" element={<SaleInvoiceSearchScreen />} />
-              <Route path="refund" element={<RefundScreen />} /> */}
+              <Route path="invoices" element={<SaleInvoiceSearchScreen />} />
+              <Route
+                path="refund"
+                element={<SaleRefundDetailScreen invoiceId={25} />}
+              />
+              {/* <Route path="refund" element={<RefundScreen />} /> */}
               <Route path="cashio" element={<CashIOManageScreen />} />
               <Route path="store" element={<StoreSettingScreen />} />
             </Route>

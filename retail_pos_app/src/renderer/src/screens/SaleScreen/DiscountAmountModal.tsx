@@ -1,40 +1,44 @@
 import { useCallback, useEffect, useState } from "react";
 import { SaleLineType } from "../../types/sales";
-import { useNewSalesStore } from "../../store/newSalesStore";
+import { useSalesStore } from "../../store/SalesStore";
 import { MONEY_DP, MONEY_SCALE } from "../../libs/constants";
 import Numpad from "../../components/Numpads/Numpad";
 import ModalContainer from "../../components/ModalContainer";
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 
-interface InjectPriceModalProps {
+interface DiscountAmountModalProps {
   open: boolean;
   onClose: () => void;
   line: SaleLineType | null;
 }
 
-export default function InjectPriceModal({
+export default function DiscountAmountModal({
   open,
   onClose,
   line,
-}: InjectPriceModalProps) {
+}: DiscountAmountModalProps) {
   const [val, setVal] = useState("");
-  const { injectLinePrice } = useNewSalesStore();
+  const { injectLinePrice } = useSalesStore();
 
   useEffect(() => {
     if (!open) setVal("");
   }, [open]);
 
+  const discountDollars = parseFloat(val || "0");
+  const discountCents = Math.round(discountDollars * MONEY_SCALE);
+  const original = line?.unit_price_original ?? 0;
+  const adjusted = original - discountCents;
+  const isValid = val !== "" && discountCents > 0 && adjusted >= 0;
+
   const handleConfirm = useCallback(() => {
-    if (!line) return;
-    const dollars = parseFloat(val);
-    if (isNaN(dollars) || dollars < 0) return;
-    injectLinePrice(line.lineKey, Math.round(dollars * MONEY_SCALE));
+    if (!line || !isValid) return;
+    injectLinePrice(line.lineKey, adjusted);
     onClose();
-  }, [line, val, injectLinePrice, onClose]);
+  }, [line, isValid, adjusted, injectLinePrice, onClose]);
 
   return (
-    <ModalContainer open={open} onClose={onClose} title="Override Price">
+    <ModalContainer open={open} onClose={onClose} title="Discount by Amount">
       <div className="px-4 py-4">
         {line && (
           <div className="text-sm text-gray-500 mb-2 truncate">
@@ -43,8 +47,8 @@ export default function InjectPriceModal({
         )}
         {line && (
           <div className="flex gap-4 text-lg text-red-500 mb-3">
-            <span>Original: ${fmtMoney(line.unit_price_original)}</span>
-            <span>Current: ${fmtMoney(line.unit_price_effective)}</span>
+            <span>Original: ${fmtMoney(original)}</span>
+            <span>Result: ${isValid ? fmtMoney(adjusted) : "—"}</span>
           </div>
         )}
         <Numpad val={val} setVal={setVal} useDot={true} maxDp={2} />
@@ -59,7 +63,7 @@ export default function InjectPriceModal({
           <button
             type="button"
             onPointerDown={handleConfirm}
-            disabled={!val || isNaN(parseFloat(val)) || parseFloat(val) < 0}
+            disabled={!isValid}
             className="flex-1 py-3 rounded-xl bg-blue-600 text-white active:bg-blue-700 disabled:opacity-30 font-medium text-base"
           >
             Confirm

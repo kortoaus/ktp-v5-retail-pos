@@ -9,10 +9,10 @@ import {
   buildNewLine,
   createEmptyCart,
   findMergeTarget,
-  recalculateAllLines,
+  recalculateCartLines,
   recalculateLine,
   reindexLines,
-} from "./newSalesStore.helper";
+} from "./SalesStore.helper";
 
 const CART_COUNT = 4;
 export const LINE_PAGE_SIZE = 10;
@@ -21,7 +21,7 @@ export const ALLOWED_CHANGE_QTY_TYPES = [
   // "prepacked",
   // "weight-prepacked",
 ];
-interface NewSalesStoreState {
+interface SalesStoreState {
   activeCartIndex: number;
   carts: Cart[];
   lineOffset: number;
@@ -36,7 +36,7 @@ interface NewSalesStoreState {
   cartCount: number;
 }
 
-export const useNewSalesStore = create<NewSalesStoreState>()((set, get) => ({
+export const useSalesStore = create<SalesStoreState>()((set, get) => ({
   activeCartIndex: 0,
   carts: Array.from({ length: CART_COUNT }, createEmptyCart),
   lineOffset: 0,
@@ -150,11 +150,13 @@ export const useNewSalesStore = create<NewSalesStoreState>()((set, get) => ({
   setMember: (member) => {
     const { carts, activeCartIndex } = get();
     const level = member?.level ?? 0;
-    const cart = carts[activeCartIndex];
+    const updatedCart = recalculateCartLines(
+      { ...carts[activeCartIndex], member },
+      level,
+    );
     const updatedCarts = [...carts];
-    updatedCarts[activeCartIndex] = { ...cart, member };
-    const recalculated = recalculateAllLines(updatedCarts, level);
-    set({ carts: recalculated });
+    updatedCarts[activeCartIndex] = updatedCart;
+    set({ carts: updatedCarts });
   },
 
   setLineOffset: (offset) => set({ lineOffset: offset }),

@@ -85,7 +85,8 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 | `/hotkey`   | Hotkey   | —             | Quick-select grid CRUD              |
 | `/crm`      | CRM      | —             | Member lookup (by phone, by ID)     |
 | `/user`     | User     | user + user   | User CRUD, auth by code             |
-| `/sale`     | Sale     | user + refund | Create (user auth) & query invoices |
+| `/sale`     | Sale     | user + sale   | Create / spend / query / latest     |
+| `/voucher`  | Voucher  | user + sale   | Staff daily voucher list / issue    |
 | `/printer`  | Printer  | —             | Server-side print (raw data)        |
 | `/cloud`    | Cloud    | —             | Sync with cloud system              |
 | `/cashio`   | CashIO   | user + cashio | Cash in/out CRUD with search        |
@@ -96,54 +97,57 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 ### Sales
 
 - 4 independent carts with per-cart member assignment
-- Barcode scan → GTIN → PLU → raw lookup chain
+- Barcode scan → GTIN → PLU → raw lookup chain (한글 IME 무관 — `e.code` 기반)
 - QR scan: `member%%%{id}` assigns member, `receipt%%%{serial}` searches invoice
 - Item types: normal, prepacked, weight, weight-prepacked
 - Weight items: auto-read on modal open + 500ms polling when `autoPolling` enabled
 - Normal item merge (same item + same price = qty increment)
-- Line functions: change qty, override price, discount $, discount %
-- Manual document discount at payment (percent or amount), allocated per-line via largest-remainder
+- Line functions: change qty, override price, discount $, discount % (모두 line-level
+  `unit_price_adjusted` 로 반영 — document-level discount 는 D-17 에서 제거)
+- SPEND toggle (internal consumption): PaymentModal 안에서 toggle ON → cart 를
+  type=SPEND invoice 로 기록 (payments 없음, 금액 0). D-14~16, D-29.
 - On-screen keyboard (Korean dubeolsik + English + numpad)
 - Hotkeys: touchscreen 6×6 grid for quick item selection
 
 ### Pricing
 
 - Price arrays indexed by member level: `prices[0]` = base, `prices[N]` = level N
-- Item-level promo prices (`PromoPrice`) with valid date range, same array structure — kept intentionally; cart-level document promotions have been removed
+- Item-level promo prices (`PromoPrice`) with valid date range, same array structure — kept intentionally; cart-level/rule-based promotions removed (D-17)
 - Effective price = `adjusted ?? discounted ?? original`
 - Discounted = lowest of `prices[level]` and `promoPrice[level]`, only if < original
-- Prepacked: qty = barcodePrice ÷ unit price
+- Prepacked: embedded price from PP barcode → `unit_price_adjusted`
 - Member change recalculates all lines in active cart
 
 ### Payment
 
-- Credit card surcharge (configurable rate from Store Settings, default 1.5%)
-- Voucher payment: user daily vouchers applied as payment method (not discount), capped to remaining due
-- Voucher deducts balance server-side, creates usage history for audit
-- Server stores `total = sum(payments.amount + payments.surcharge)` (includes surcharge)
-- Client computes `appliedPaymentLines` (change-adjusted) before sending to server
-- Australian 5c rounding (cash payments only)
-- Split cash/credit/voucher with committed payment lines
-- Per-line GST allocation via largest-remainder method
-- Tax: `goodsTax = exactDue × taxableRatio ÷ 11`, `surchargeTax = surcharge ÷ 11`
-- All math via `decimal.js`
+- Credit card surcharge (configurable rate from Store Settings, default 1.5%). `payment.amount` for CREDIT is EFTPOS keyed-in value (includes surcharge, D-10)
+- Tenders: CASH / CREDIT / VOUCHER (user-voucher / customer-voucher) / GIFTCARD. GIFTCARD = "CREDIT without surcharge" (D-24)
+- Staff daily voucher: cashier issues on-spot from Search modal; balance decrements via `VoucherEvent REDEEM` on sale
+- `total = linesTotal + rounding + creditSurchargeAmount`, `Σ payments.amount == total` (D-12)
+- Tax: `lineTax = Σ row.tax_amount`, `surchargeTax = round(creditSurchargeAmount / 11)` (D-27). `invoice.lineTax` / `invoice.surchargeTax` 두 컬럼
+- AU 5¢ rounding: cash-only mode (nonCashBill == 0 && cashIntent ≥ roundedCashTarget) 만 (D-30). Mixed / card-only 는 exact
+- Split cash / credit / voucher / giftcard. Staged draft 가 active 면 `Complete Sale` 시 자동 포함 (1-step flow)
+- `payment.amount` CASH 는 split 여부 무관 단일 payment 로 집약 (amount = cashApplied, change 는 invoice.cashChange, D-32)
+- Serial: `{shift.id}-{YYYYMMDD}-{S|R|P}{seq6}` via `DocCounter` atomic increment (D-28)
+- Server 가 invariant 검증 + row 별 `surcharge_share` 비례 배분 저장 + voucher REDEEM 트랜잭션 처리
 
-### Refunds
+### Refunds (in progress — service / UI 미구현)
 
 - Refund against any completed sale invoice (shift required)
-- Full or partial refund by item and quantity
-- Cash/credit capped at original payment method amounts (server-enforced)
-- No surcharge on refunds, 5c rounding applied
-- Refund receipt uses StoreSetting data (consistent with sale)
-- Refund inherits memberId/memberLevel from original invoice
+- Full or partial refund per row (per-row cap = `qty - refunded_qty`)
+- **Surcharge 비례 환불** (D-26, revised) — GST 대칭 / EFTPOS 정산 대칭 / 소비자 공정
+- Per-row refund math: `refund_row.total = round((row.total + row.surcharge_share) × refund_qty / row.qty)`
+- `rounding_share` 는 없음. Refund invoice 가 자체 cash rounding 재계산 (tender 가 CASH 일 때만)
+- Cash/credit/voucher/giftcard 모두 원본 tender 로 환불. Voucher 는 `VoucherEvent REFUND` + balance increment
+- Customer voucher 포함 invoice 는 CRM 오프라인 시 환불 거부 (D-21)
 
 ### Shift Management
 
 - One shift per terminal at a time
 - Open: cash counter (denomination grid, 999 cap) + note
-- Close: server sums invoices + cashios, count actual cash, double-confirm, Z-report auto-print
-- Expected cash = started + salesCash − refundsCash + cashIn − cashOut
-- Shift settlement tracks salesCash, salesCredit, salesVoucher separately
+- Close: server sums invoices + cashios (D-34 — no increment cache, always re-aggregate via `SUM()`), count actual cash, double-confirm, Z-report auto-print
+- Expected cash = `startedCash + salesCash − refundsCash + totalCashIn − totalCashOut`
+- Shift tracks per-tender: `salesCash / salesCredit / salesVoucher / salesGiftcard` + refunds mirror, plus `salesCreditSurcharge / refundsCreditSurcharge / salesTax / refundsTax` (D-27, D-33)
 - All shift money stored in cents (Int)
 
 ### Cash In / Out
@@ -182,10 +186,11 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 
 ### Receipts
 
-- **Sale**: store header, items (^=price changed, #=GST), "Saved $X" on discounted items, totals, payments, QR code (`receipt%%%serial`), footer
-- **Refund**: "**_ REFUND _**" banner, links original serial, StoreSetting data, QR code (`receipt%%%serial`)
-- **Z-report**: shift settlement (sales/refunds/cashio, drawer expected vs actual)
-- All: 576px canvas → ESC/POS thermal print
+- **Sale**: store header, items (`^` = price changed, `#` = GST applicable, `!` = saved), totals, tender-by-tender payments, GST Included, You Saved, Vouchers Used (entityLabel list), QR code (`receipt%%%serial`), footer
+- **Refund**: "*** REFUND ***" banner, links original invoice id, same row/payment structure with "Refunded" labels
+- **Spend**: "*** INTERNAL ***" banner, rows only (prices `-`), no totals/payments, footer "Internal consumption - no payment"
+- **Z-report**: shift settlement (tender별 sales/refunds, cashio, drawer expected vs actual)
+- All: 576px canvas → ESC/POS thermal print. `** COPY **` marker on reprint
 - Touchscreen tap-through guard: ModalContainer keeps invisible backdrop 100ms after close
 
 ### Hardware
@@ -239,9 +244,14 @@ npx prisma db push       # Push schema to database
 
 ## What's Next
 
-- [ ] Reprint last receipt (one-tap from sale screen)
-- [x] Cloud sync (invoices, shifts → cloud on create/close, cloud posts display)
+- [x] Reprint last receipt (`PrintLatestInvoiceButton`)
+- [x] Server-side payment validation (row totals / taxes / payment sum — `sale.create.service.ts`)
+- [ ] Refund service + `RefundScreen` (D-26 surcharge 비례 환불)
+- [ ] Shift close re-aggregation rewrite (D-34)
+- [ ] Cloud sync push (invoice / shift → cloud)
+- [ ] Linkly EFTPOS + GiftCard provider API (Phase 4)
 - [ ] More label templates
-- [ ] Re-enable server-side payment validation (row totals ≈ subtotal, payment ≈ total)
 
 Reports and analytics are handled by the cloud app — the POS does not store reporting data locally.
+
+Domain decisions log: `docs/sale-domain.md` (D-1 … D-36).

@@ -204,14 +204,6 @@ model CloudHotkeyItem {
 // Cloud Sync Data End
 
 // Local Data Start
-model Staff {
-  id        Int      @id @default(autoincrement())
-  code      String   @unique
-  name      String
-  scopes    String[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
 
 model Terminal {
   id        Int             @id @default(autoincrement())
@@ -222,6 +214,7 @@ model Terminal {
   updatedAt DateTime        @updatedAt
   shifts    TerminalShift[]
   cashIos   CashInOut[]
+  invoices  SaleInvoice[] // Applied backref
 }
 
 model Hotkey {
@@ -266,14 +259,16 @@ model StoreSetting {
 }
 
 model User {
-  id        Int         @id @default(autoincrement())
+  id        Int           @id @default(autoincrement())
   name      String
   code      String
   scope     String[]
-  archived  Boolean     @default(false)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @default(now()) @updatedAt
+  archived  Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @default(now()) @updatedAt
   cashIos   CashInOut[]
+  vouchers  Voucher[] // Applied backref — staff 가 보유한 voucher
+  invoices  SaleInvoice[] // Applied backref — 이 staff 가 처리한 invoice (cashier)
 }
 
 model TerminalShift {
@@ -294,37 +289,48 @@ model TerminalShift {
   closedAt     DateTime?
   closedNote   String?
 
-  // Money in Drawer
-  startedCach       Int @default(0)
+  // ── Money in Drawer ──
+  startedCash       Int @default(0) // shift 시작 시 현금 (오타 수정: startedCach → startedCash)
   endedCashExpected Int @default(0)
   endedCashActual   Int @default(0)
 
-  // Sales
-  salesCash    Int @default(0)
-  salesCredit  Int @default(0)
-  salesVoucher Int @default(0)
+  // ── Sales (tender 별, cents, 항상 양수) ──
+  // CREDIT / GIFTCARD 는 payment.amount 가 EFTPOS 키인 금액 (D-10, D-24) 이라
+  // 여기 누적치도 surcharge 포함한 "실제 단말 정산액".
+  salesCash     Int @default(0)
+  salesCredit   Int @default(0) // surcharge 포함 (EFTPOS 단말 정산액)
+  salesVoucher  Int @default(0)
+  salesGiftcard Int @default(0) // D-24 — CREDIT 과 별개 tender
 
-  // cash in out
+  // ── Sales (분석 / BAS 용) ──
+  // salesCreditSurcharge 는 salesCredit 안에 이미 포함된 surcharge 부분만 따로
+  // 추적 (매출 중 surcharge 비중 분석용, 중복 아님).
+  // salesTax 는 전체 GST 합 (lineTax + surchargeTax). surchargeTax 분리
+  // 필요하면 runtime 에 round(salesCreditSurcharge / 11) 로 계산.
+  salesCreditSurcharge Int @default(0)
+  salesTax             Int @default(0)
+
+  // ── Refunds (tender 별) ──
+  // Surcharge 는 비례 환불 정책 — refundsCredit 에도 환불된 surcharge 포함.
+  refundsCash     Int @default(0)
+  refundsCredit   Int @default(0) // surcharge 포함 환불 (EFTPOS 키인 금액)
+  refundsVoucher  Int @default(0)
+  refundsGiftcard Int @default(0)
+
+  // ── Refunds (분석용) ──
+  refundsCreditSurcharge Int @default(0) // 환불된 surcharge 합 (refundsCredit 내)
+  refundsTax             Int @default(0)
+
+  // ── Cash In/Out (shift 내 drawer 입출금 합) ──
+  // (기존 cashIn/cashOut 필드 삭제 — totalCashIn/totalCashOut 과 역할 중복)
   totalCashIn  Int @default(0)
   totalCashOut Int @default(0)
 
-  // tax
-  salesTax   Int @default(0)
-  refundsTax Int @default(0)
-
-  // Refunds
-  refundsCash    Int @default(0)
-  refundsCredit  Int @default(0)
-  refundsVoucher Int @default(0)
-
-  // Cash In Out
-  cashIn  Int @default(0)
-  cashOut Int @default(0)
-
-  // Cloud Sync
+  // ── Cloud Sync ──
   syncedAt DateTime?
-  synced   Boolean     @default(false)
+  synced   Boolean       @default(false)
   cashIos  CashInOut[]
+  invoices SaleInvoice[] // Applied backref — 이 shift 에서 발생한 모든 invoice
 }
 
 model CashInOut {
@@ -341,6 +347,420 @@ model CashInOut {
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
   user       User          @relation(fields: [userId], references: [id])
+}
+
+// ──────────────────────────────────────────────────────────────
+// Applied: Sale domain (money-related only — full schema TBD)
+//
+// INVARIANT (the thing that must never get confused again):
+//
+//   Invoice.total  =  linesTotal
+//                  +  rounding
+//                  +  creditSurchargeAmount
+//
+//   Invoice.total  ≡  "customer가 실제로 낸 돈" (surcharge 포함, 거스름 제외)
+//
+//   Σ payments.amount  ==  Invoice.total
+//
+// ★ DOCUMENT-LEVEL DISCOUNT 는 존재하지 않음 (D-17).
+//   모든 할인은 line 에 녹아들어감. "직원 10%" 같은 매장 정책은
+//   apply 시점에 모든 라인의 unit_price_adjusted 를 업데이트.
+//   linesTotal 에 이미 할인이 반영돼 있음 → invariant 에서 별도 항 없음.
+//
+// ★ payment.amount 는 ALREADY surcharge 포함. 특히 credit 의 경우:
+//   payment.amount  ==  EFTPOS 기계에 키인한 금액 그 자체
+//   즉 EOD 정산은 SUM(amount WHERE type='credit') 한 번으로 끝.
+//   creditSurchargeAmount 를 다시 더할 필요 없음.
+//
+// SURCHARGE 는 딱 한 곳에만 산다: Invoice.creditSurchargeAmount
+// (분석용 — "surcharge 로 얼마 벌었나?" 질문 전용)
+// SaleInvoicePayment 에 surcharge 컬럼 **없음**. payment.amount 는
+// "이 tender 로 이동한 돈" 하나의 의미만 가진다 (surcharge 포함).
+//
+// ★ SIGN CONVENTION — amount 는 절대 음수가 아님.
+//   Refund 는 별도 문서 (Invoice.type = 'refund'). 모든 금액 / qty / surcharge
+//   필드는 항상 양수. 방향(매출 vs 환불)은 문서 타입으로만 판단.
+//   분석 시 필요하면 view 로 sign 을 붙여 씀:
+//     CASE WHEN invoice.type = 'refund' THEN -amount ELSE amount END
+// ──────────────────────────────────────────────────────────────
+
+// Applied
+enum PaymentType {
+  CASH
+  CREDIT
+  VOUCHER
+  GIFTCARD // 3rd-party gift card — "surcharge 없는 CREDIT" 취급 (D-24).
+  // EFTPOS 기계에서 수동 처리, POS 는 금액만 기록.
+  // payment.amount = 카드에 긁힌 금액 그대로. creditSurchargeAmount 에 기여 X.
+  // entityType/entityId/entityLabel = null (참조 엔티티 없음).
+  // TODO(phase-4): GiftCardTransaction 테이블 + Linkly-style provider API 연동.
+}
+
+// Applied
+enum InvoiceType {
+  SALE
+  REFUND
+  SPEND // 매장 내부 소비 (kitchen/cafe/office)
+}
+
+// Applied — row classification (Q7 locked: 4 values, underscore for weight-prepacked)
+enum SaleInvoiceRowType {
+  NORMAL
+  PREPACKED
+  WEIGHT
+  WEIGHT_PREPACKED
+}
+
+// Applied — line adjustment audit tags (D-6: 현재 PRICE_OVERRIDE 만 사용)
+enum LineAdjustment {
+  PRICE_OVERRIDE
+  // QTY_OVERRIDE       — reserved, currently unused
+  // DISCOUNT_OVERRIDE  — reserved, currently unused
+}
+
+// Applied
+model SaleInvoice {
+  id        Int @id @default(autoincrement())
+  companyId Int // 단일 법인 전제 (=1)
+
+  // ── Serial & date indexing ──────────────────────────────
+  serial String? @unique // {company}-{shift}-{terminal}-{seq} — Phase 2 에서 two-phase write (insert → serial backfill)
+  dayStr String // "2026-04-21" — 일자별 집계 편의
+
+  // ── Document type (SALE / REFUND / SPEND) ───────────────
+  type InvoiceType @default(SALE)
+
+  // ── Refund linkage (REFUND 문서 → 원본 SALE) ─────────────
+  originalInvoiceId Int?
+  originalInvoice   SaleInvoice?  @relation("InvoiceRefunds", fields: [originalInvoiceId], references: [id])
+  refunds           SaleInvoice[] @relation("InvoiceRefunds")
+
+  // ── Actor linkage (shift, terminal, cashier) ─────────────
+  shiftId    Int
+  shift      TerminalShift @relation(fields: [shiftId], references: [id])
+  terminalId Int
+  terminal   Terminal      @relation(fields: [terminalId], references: [id])
+  userId     Int // cashier
+  user       User          @relation(fields: [userId], references: [id])
+
+  // ── Store snapshot (Q1/Q2/Q6 — StoreSetting 에서 스냅샷) ──
+  companyName String // StoreSetting.name (NOT Company.name — Q1)
+  abn         String?
+  phone       String?
+  address1    String
+  address2    String?
+  suburb      String
+  state       String
+  postcode    String
+  country     String // StoreSetting.country (Q2)
+
+  // ── Terminal / User snapshot (Q6 — rename 대응) ──────────
+  terminalName String? // Terminal.name 스냅샷
+  userName     String? // User.name 스냅샷 (cashier 이름)
+
+  // ── Member snapshot (optional — 고객이 attach 된 경우만) ──
+  memberId         String? // CRM member id (external ref, FK 아님)
+  memberName       String?
+  memberLevel      Int? // 할인 해석 시점의 레벨 스냅샷
+  memberPhoneLast4 String?
+
+  // ── Money (cents, 항상 양수 — 방향은 type 이 결정) ────────
+  linesTotal            Int // Σ rows.total (tax-incl, items만). 모든 할인 반영됨. 과거 subtotal
+  rounding              Int @default(0) // AU 5¢ rounding
+  creditSurchargeAmount Int @default(0) // ★ surcharge 유일한 출처. Sale: EFTPOS 키인 금액 중 surcharge 부분. Refund: 환불된 surcharge 합 (비례 환불 정책).
+  lineTax               Int @default(0) // Σ rows.tax_amount snapshot. BAS / shift 집계 시 row 조인 안 하려고 invoice-level 에 캐시.
+  surchargeTax          Int @default(0) // round(creditSurchargeAmount / 11). Surcharge 에 포함된 GST (ATO: surcharge 는 supply 의 일부).
+  total                 Int // = linesTotal + rounding + creditSurchargeAmount (D-12 invariant)
+  cashChange            Int @default(0) // 거스름돈 (total invariant 와 무관, 감사용 기록)
+
+  // ── Receipt / operational ────────────────────────────────
+  receiptCount Int     @default(0) // 영수증 재출력 횟수 (감사)
+  note         String?
+
+  // ── Cloud sync ──────────────────────────────────────────
+  synced   Boolean   @default(false)
+  syncedAt DateTime?
+  cloudId  Int? // CRM 이 assign 한 id (sync 성공 후)
+
+  // ── Relations ───────────────────────────────────────────
+  rows     SaleInvoiceRow[]
+  payments SaleInvoicePayment[]
+
+  // ── Timestamps ──────────────────────────────────────────
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shiftId])
+  @@index([terminalId])
+  @@index([userId])
+  @@index([dayStr])
+  @@index([type, dayStr])
+  @@index([synced])
+  @@index([memberId])
+  @@index([originalInvoiceId])
+}
+
+// Applied
+model SaleInvoicePayment {
+  id          Int         @id @default(autoincrement())
+  invoiceId   Int
+  invoice     SaleInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  type        PaymentType // cash | credit | voucher | giftcard
+  amount      Int // cents, 이 tender 로 이동한 돈 (credit 의 경우 surcharge 포함 — EFTPOS 키인 금액 그대로). Σ == Invoice.total
+  // NOTE: surcharge 컬럼 없음. payment.amount 가 이미 surcharge 를 포함함.
+  // creditSurchargeAmount 는 Invoice 에 분석용으로만 존재.
+  entityType  String? // "user-voucher" | "customer-voucher" | null (D-20)
+  //  GIFTCARD 는 참조 엔티티 없음 → null (D-24)
+  entityId    Int? // user-voucher: Voucher.id | customer-voucher: CRM id (FK-by-convention)
+  entityLabel String? // 영수증 표시용 snapshot — voucher tender 에서만 씀 (Q11)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([invoiceId])
+  @@index([type, createdAt]) // EOD 정산 — tender 별 일자 범위 SUM(amount) 쿼리용
+}
+
+// ══════════════════════════════════════════════════════════════
+// Applied: SaleInvoiceRow
+//
+// ── ROW-LEVEL INVARIANTS ──
+// (recalculateLine in SalesStore.helper.ts 가 불변식 보장)
+//
+//   unit_price_effective  =  unit_price_adjusted
+//                         ??  unit_price_discounted
+//                         ??  unit_price_original
+//
+//   total        =  round(unit_price_effective × qty / QTY_SCALE)
+//                   (tax-inclusive, 항상 양수)
+//   tax_amount   =  taxable ? round(total / 11) : 0       (AU GST 10% 포함가)
+//   net          =  total - tax_amount                     (ex-tax, D-5)
+//
+// ══════════════════════════════════════════════════════════════
+// ── REFUND MATH ── row-local 연산만 (drilling 방지)
+//
+//   refund_row.total =
+//     round((row.total + row.surcharge_share) × refund_qty / row.qty)
+//
+//   ★ Surcharge 는 비례 환불한다 (원칙). row 에 저장된 surcharge_share 를
+//     refund_qty 비율로 가져감. 이유:
+//       - GST 대칭   : surcharge 에 GST 가 붙어있어서 환불도 같이 가야
+//                       BAS 집계가 일치
+//       - EFTPOS 정산: payment.amount = EFTPOS 키인 금액 (D-10). refund 도
+//                       EFTPOS 에 surcharge 포함해서 키인해야
+//                       Σ(sale) - Σ(refund) 가 단말 정산과 일치
+//       - 소비자 공정: supply 의 일부이므로 cancel 시 같이 환불
+//
+//   ★ Rounding 은 refund 에 반영하지 않는다. Refund invoice 가 독립적으로
+//     own — refund tender 가 CASH 면 refund invoice.rounding 을 자체 재계산.
+//     원본 row 에 rounding 몫을 pre-compute 하지 않음 (금액 2¢ 수준이라
+//     row 별 배분 의미 없음 + refund 시점과 sale 시점의 cash rounding 은
+//     별개 사건).
+//
+//   ★ discount_share 는 없다 (D-17 — documentDiscount 자체 제거, 모든 할인은
+//     이미 row.total 에 녹아있음).
+//
+// ══════════════════════════════════════════════════════════════
+// ── surcharge_share 단위 (★ 100년 뒤 자신에게) ──
+//
+//   surcharge_share 는 "이 row 전체가 가져간 surcharge 금액" (cents, 양수).
+//   **row-total 단위**. unit 단위 아님. row.total 과 같은 축이라 위 수식에서
+//   바로 더할 수 있음.
+//
+//   sale 생성 시 pre-compute (서버 sale.create.service):
+//     for each row:
+//       row.surcharge_share =
+//         round(invoice.creditSurchargeAmount × row.total / invoice.linesTotal)
+//     마지막 row 에서 Σ surcharge_share != invoice.creditSurchargeAmount
+//     drift 를 흡수 (정수 round 누적 오차).
+//
+//   왜 row-total 단위인가:
+//     - unit 단위면 (total/qty) 로 저장 → qty 많은 row 에서 cents 정밀도 손해
+//       (예: surcharge $0.45, qty 3 → unit 당 $0.15 OK. 하지만 surcharge $0.05,
+//       qty 10 → unit 당 $0.005 → 0 또는 1 drift)
+//     - row.total 도 row-total 단위. 단위 일치로 refund 수식이 한 줄.
+//     - allocation drift 를 "마지막 row 에 absorb" 관례가 row-total 단위에서
+//       깔끔.
+//
+// ══════════════════════════════════════════════════════════════
+// ── SPEND rows (D-16) ──
+//
+//   unit_price_adjusted = 0, unit_price_effective = 0, adjustments = []
+//   adjustments 태그는 캐셔 action 전용. SPEND 은 invoice.type 이 discriminator.
+// ══════════════════════════════════════════════════════════════
+
+// Applied
+model SaleInvoiceRow {
+  id Int @id @default(autoincrement())
+
+  // ── Linkage ─────────────────────────────────────────────
+  invoiceId Int
+  invoice   SaleInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  index     Int // 영수증 출력 순서 (0-based)
+
+  // ── Row classification ──────────────────────────────────
+  type SaleInvoiceRowType
+
+  // ── Item snapshot (flat columns — 마스터 변경 무관하게 재출력 가능) ──
+  itemId  Int
+  name_en String
+  name_ko String
+  barcode String
+  uom     String
+  taxable Boolean
+
+  // ── Price snapshot (cents) ──────────────────────────────
+  unit_price_original   Int // 마스터 공개가 snapshot
+  unit_price_discounted Int? // 멤버/promo (null = 할인 없음)
+  unit_price_adjusted   Int? // 수동 override / PP markdown / SPEND 0 강제
+  unit_price_effective  Int // = adjusted ?? discounted ?? original
+
+  // ── Qty ─────────────────────────────────────────────────
+  qty             Int // QTY_SCALE ×1000
+  measured_weight Int? // 저울 원본 중량 (weight / weight_prepacked 만)
+
+  // ── Money totals (cents, 항상 양수 — 방향은 invoice.type) ──
+  total      Int // tax-incl 라인 토탈
+  tax_amount Int // GST
+  net        Int // = total - tax_amount (캐시, D-5)
+
+  // ── Adjustments / markdown metadata ─────────────────────
+  adjustments      LineAdjustment[] // 캐셔 line-level 조작. SPEND 은 빈 배열
+  ppMarkdownType   String? // "pct" | "amt" | null
+  ppMarkdownAmount Int? // pct: tenths-of-percent, amt: cents
+
+  // ── Refund linkage (REFUND invoice rows 만 사용) ─────────
+  originalInvoiceId    Int? // null 이면 SALE / SPEND row
+  originalInvoiceRowId Int? // 환불 원본 row (같은 row 에 여러 refund 가능)
+
+  // ── Refund pre-compute (SALE rows 만 — 미래 refund 가 소비) ──
+  //
+  // refunded_qty    : 누적 환불된 qty. 다음 refund 상한 = qty - refunded_qty.
+  //                   원본 row 의 counter 로 upsert.
+  //
+  // surcharge_share : 이 row 전체가 가져간 Invoice.creditSurchargeAmount 몫
+  //                   (cents, 양수, ROW-TOTAL 단위 — unit 단위 아님).
+  //                   sale create 시 `round(invoice.creditSurchargeAmount
+  //                   × row.total / invoice.linesTotal)` 로 비례 배분,
+  //                   마지막 row 에 drift 흡수. refund 수식:
+  //                     refund_row.total =
+  //                       round((row.total + row.surcharge_share)
+  //                             × refund_qty / row.qty)
+  //                   상세는 위 블록 주석 참고.
+  //
+  // rounding_share  없음 — rounding 은 refund invoice 가 독립 own
+  //                          (refund CASH tender 시 자체 재계산).
+  // discount_share  없음 — D-17 (documentDiscount 자체 제거).
+  refunded_qty    Int @default(0)
+  surcharge_share Int @default(0)
+
+  // ── Timestamps ──────────────────────────────────────────
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([invoiceId])
+  @@index([itemId])
+  @@index([originalInvoiceId]) // refund 조회 — "원본 invoice 의 모든 refund row"
+  @@index([originalInvoiceRowId])
+}
+
+// ──────────────────────────────────────────────────────────────
+// Applied: Voucher domain (staff vouchers only — D-19)
+//
+// Local DB 에는 STAFF (User) voucher 만 저장. Customer (CRM member) voucher
+// 는 CRM 서버에 있음. POS 는 redemption 시점에 CRM API 호출만 함.
+//
+// ★ BALANCE INVARIANT (캐시된 값, 단조 유지):
+//
+//   Voucher.balance  ==  Σ VoucherEvent.amount  (같은 voucherId 범위)
+//
+//   이벤트 부호 규칙:
+//     ISSUE   → +initAmount  (발행 시 단 1회)
+//     REDEEM  → -amount       (결제 시 차감)
+//     REFUND  → +amount       (환불 시 복구)
+//     EXPIRE  → -balance      (만료 시 잔액 zero 로)
+//     ADJUST  → ±amount       (수동 조정, 관리자 scope)
+//
+// ★ USE RESTRICTION 없음 (D-19).
+//   Voucher 는 범용 $ 잔액. 아이템/카테고리/브랜드 enforcement 안 함.
+//   kind 필드는 label 용이지 enforcement 용이 아님.
+//
+// ★ CRM OFFLINE POLICY (D-21):
+//   Customer voucher (이 테이블에 없음) redemption/refund 는 CRM 살아있어야만
+//   가능. 오프라인 시 양쪽 모두 refuse. 수기 기록 + 24h SLA.
+// ──────────────────────────────────────────────────────────────
+
+// Applied
+enum VoucherStatus {
+  ACTIVE
+  EXPIRED
+  ARCHIVED
+}
+
+// Applied
+enum VoucherEventType {
+  ISSUE
+  REDEEM
+  REFUND
+  EXPIRE
+  ADJUST
+}
+
+// Applied — staff (User) voucher 전용. Customer voucher 는 CRM 저장.
+model Voucher {
+  id Int @id @default(autoincrement())
+
+  // Owner — staff 만 (ownerType enum 없음, D-19)
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  // Classification (label 용, enforcement X)
+  kind String // "staff-daily" | "goodwill" | ... 자유 문자열
+
+  // Money (cents)
+  initAmount Int // 발행 시 금액
+  balance    Int // 캐시. 불변식: balance == Σ events.amount
+
+  // Validity
+  validFrom DateTime
+  validTo   DateTime
+  status    VoucherStatus @default(ACTIVE)
+
+  // Misc
+  metadata  Json? // 자유 attribute (표시용. enforcement 아님)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events VoucherEvent[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+// Applied — append-only event log. Balance 는 이 로그의 합과 항상 일치.
+model VoucherEvent {
+  id        Int     @id @default(autoincrement())
+  voucherId Int
+  voucher   Voucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+
+  type   VoucherEventType
+  amount Int // signed (위 주석 블록의 부호 규칙 참조)
+
+  // Linkage (redeem/refund 일 때만 populate)
+  invoiceId Int? // FK-by-convention to SaleInvoice.id
+  userId    Int // 이벤트 발생시킨 staff (issue/redeem/refund/expire/adjust 모두)
+
+  reason String? // 옵션 — "daily issue", "manager adjust: damaged", 등
+
+  createdAt DateTime @default(now())
+
+  @@index([voucherId])
+  @@index([invoiceId])
+}
+
+model DocCounter {
+  id      Int      @id @default(autoincrement())
+  date    DateTime @unique // counter resets when date changes (e.g. daily for sale orders) 
+  counter Int      @default(0)
 }
 
 // Local Data End

@@ -62,10 +62,10 @@ Entry is `src/renderer/src/App.tsx`. Routing uses `HashRouter` (required so Elec
 
 - `/customer-display` renders `CustomerScreen` standalone (no providers, no gateway).
 - All other routes mount under `<TerminalProvider><ShiftProvider><Gateway>`. `Gateway` enforces server-setup + terminal registration + shift scope. Manager routes are wrapped in `ManagerLayout`.
-- Cart state is a single Zustand store (`src/renderer/src/store/newSalesStore.ts`) with 4 independent carts, each with its own member and lines. Line math helpers (merge detection, recompute after member change, reindex) live in `newSalesStore.helper.ts`.
+- Cart state is a single Zustand store (`src/renderer/src/store/SalesStore.ts`) with 4 independent carts, each with its own member and lines. Line math helpers (merge detection, recompute after member change, reindex) live in `SalesStore.helper.ts`.
 - Money/qty/percent all use integer-scaled representations: `MONEY_SCALE = 100`, `QTY_SCALE = 1000`, `PCT_SCALE = 1000` (see `libs/constants.ts`). Never use raw floats; use `decimal.js` for anything beyond add/subtract of pre-scaled ints.
-- Sale math pipeline in `libs/sale/`: `calc-sale-totals.ts` → `finalize-lines.ts` → `calc-payments.ts` → `build-payload.ts`. AU 5¢ rounding happens in `calcDocumentAdjustments`.
-- Discount model: **item-level** (PromoPrice with validity window, lowest-of-{level,promo} picked during pricing) + **manual document discount** entered in the payment modal (% or $). Cart-level/rule-based promotions (BUY_MORE_SAVE_MORE etc.) were removed in commit 9c0eaf5 along with the `SaleInvoiceDiscount` table (migration `20260421134529_drop_sale_invoice_discount`). Don't reintroduce a `discounts: […]` array on SaleInvoice/OnPaymentPayload — it was ripped out intentionally.
+- Sale math pipeline: `PaymentModal/usePaymentCal.ts` is the central hook (lines + payments → invariants, tax breakdown, cash allocation, paid/remaining/change). `libs/sale/build-payload.ts` turns cart + payment state into `SaleCreatePayload` for `POST /api/sale` / `POST /api/sale/spend`. AU 5¢ rounding applies only in cash-only mode (`round5` helper).
+- Discount model: **item-level only** (PromoPrice with validity window, lowest-of-{level,promo} picked during pricing). Cart-level/rule-based promotions and `documentDiscountAmount` were removed (D-17). Don't reintroduce a `discounts: […]` array on SaleInvoice / payload.
 - Receipt rendering in `libs/printer/` composes a 576px canvas and sends ESC/POS to the receipt printer. Cash-drawer kick is a separate ESC/POS command. Label printing (ZPL + SLCS/Bixolon) goes through `libs/label-builder.ts` + `label-templates.ts`.
 - HTTP client is a single axios singleton (`libs/api.ts`) with a bearer-token interceptor and a fixed `{ ok, result, paging, msg }` response envelope. `setBaseURL()` is called at setup; `setHeader('ip-address', …)` is set by the terminal context so the server's middleware can identify the terminal.
 
@@ -106,5 +106,6 @@ The server is a LAN-local cache/proxy of a cloud system. Data flows:
 - All shift and invoice monetary fields are stored **in cents** (Int). Convert at the UI boundary only.
 - Dates use `dayjs` in the renderer (via `dayjsAU.ts`) and `moment-timezone` (AU/Sydney) on the server. Don't mix libraries in the same module.
 - Korean + English are first-class: model fields use `name_en` / `name_ko` pairs. The on-screen keyboard supports dubeolsik Hangul via `es-hangul`.
-- POS math and cart mutations are centralized in the Zustand store + `libs/sale/` helpers. Do not duplicate totals/tax/rounding logic in components.
+- POS math and cart mutations are centralized in `SalesStore` (cart/line) + `PaymentModal/usePaymentCal` (payment/invariants) + `libs/sale/build-payload` (payload). Do not duplicate totals/tax/rounding logic in components.
+- Sale domain decisions live in `docs/sale-domain.md` (D-1 … D-36). Read before changing any invoice / payment / voucher / refund logic.
 - When users write in Korean, reply in English (per global instruction).

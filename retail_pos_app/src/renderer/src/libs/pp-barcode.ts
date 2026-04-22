@@ -58,7 +58,10 @@ export function calcMarkdownPrice(
   discountAmount: number,
 ): number {
   if (discountType === "pct") {
-    return Math.round((effectivePrice * (1000 - discountAmount)) / 1000);
+    return Math.max(
+      0,
+      Math.round((effectivePrice * (1000 - discountAmount)) / 1000),
+    );
   }
-  return effectivePrice - discountAmount;
+  return Math.max(0, effectivePrice - discountAmount);
 }

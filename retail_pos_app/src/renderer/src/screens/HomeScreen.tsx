@@ -7,8 +7,6 @@ import {
   IoStopCircleOutline,
   IoCartOutline,
   IoCashOutline,
-  IoArrowUndoOutline,
-  IoReceiptOutline,
   IoSettingsOutline,
   IoPeopleOutline,
   IoStorefrontOutline,
@@ -16,6 +14,7 @@ import {
   IoExpandOutline,
   IoTvOutline,
   IoPrintOutline,
+  IoReceiptOutline,
 } from "react-icons/io5";
 
 const btn =
@@ -72,22 +71,22 @@ export default function HomeScreen() {
             >
               Cash In / Out
             </NavBtn>
-            <NavBtn
-              to="/manager/refund"
-              icon={<IoArrowUndoOutline size={24} />}
-              className="bg-blue-50 text-blue-700 hover:bg-blue-100"
-            >
-              Refund
-            </NavBtn>
           </>
         )}
-        {/* <NavBtn
+        <NavBtn
           to="/manager/invoices"
           icon={<IoReceiptOutline size={24} />}
           className="bg-blue-50 text-blue-700 hover:bg-blue-100"
         >
           Invoice Search
-        </NavBtn> */}
+        </NavBtn>
+        <NavBtn
+          to="/manager/refund"
+          icon={<IoReceiptOutline size={24} />}
+          className="bg-blue-50 text-blue-700 hover:bg-blue-100"
+        >
+          Refund
+        </NavBtn>
       </Section>
 
       {/* Tools */}

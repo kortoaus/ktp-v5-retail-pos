@@ -1,35 +1,34 @@
 import { useCallback, useEffect, useState } from "react";
 import { SaleLineType } from "../../types/sales";
-import { useNewSalesStore } from "../../store/newSalesStore";
+import { useSalesStore } from "../../store/SalesStore";
 import { MONEY_DP, MONEY_SCALE } from "../../libs/constants";
 import Numpad from "../../components/Numpads/Numpad";
 import ModalContainer from "../../components/ModalContainer";
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 
-interface DiscountAmountModalProps {
+interface DiscountPercentModalProps {
   open: boolean;
   onClose: () => void;
   line: SaleLineType | null;
 }
 
-export default function DiscountAmountModal({
+export default function DiscountPercentModal({
   open,
   onClose,
   line,
-}: DiscountAmountModalProps) {
+}: DiscountPercentModalProps) {
   const [val, setVal] = useState("");
-  const { injectLinePrice } = useNewSalesStore();
+  const { injectLinePrice } = useSalesStore();
 
   useEffect(() => {
     if (!open) setVal("");
   }, [open]);
 
-  const discountDollars = parseFloat(val || "0");
-  const discountCents = Math.round(discountDollars * MONEY_SCALE);
+  const percent = parseFloat(val || "0");
   const original = line?.unit_price_original ?? 0;
-  const adjusted = original - discountCents;
-  const isValid = val !== "" && discountCents > 0 && adjusted >= 0;
+  const adjusted = Math.round(original * (1 - percent / 100));
+  const isValid = val !== "" && percent > 0 && percent <= 100 && adjusted >= 0;
 
   const handleConfirm = useCallback(() => {
     if (!line || !isValid) return;
@@ -38,7 +37,7 @@ export default function DiscountAmountModal({
   }, [line, isValid, adjusted, injectLinePrice, onClose]);
 
   return (
-    <ModalContainer open={open} onClose={onClose} title="Discount by Amount">
+    <ModalContainer open={open} onClose={onClose} title="Discount by %">
       <div className="px-4 py-4">
         {line && (
           <div className="text-sm text-gray-500 mb-2 truncate">
@@ -48,7 +47,10 @@ export default function DiscountAmountModal({
         {line && (
           <div className="flex gap-4 text-lg text-red-500 mb-3">
             <span>Original: ${fmtMoney(original)}</span>
-            <span>Result: ${isValid ? fmtMoney(adjusted) : "—"}</span>
+            <span>
+              Result: ${isValid ? fmtMoney(adjusted) : "—"}
+              {isValid && ` (−${percent}%)`}
+            </span>
           </div>
         )}
         <Numpad val={val} setVal={setVal} useDot={true} maxDp={2} />
