@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   getSaleInvoiceById,
   SaleInvoiceDetail,
@@ -6,6 +6,9 @@ import {
 import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../libs/constants";
 import dayjsAU from "../libs/dayjsAU";
 import { printSaleInvoiceReceipt } from "../libs/printer/sale-invoice-receipt";
+import { canRepay } from "../libs/sale/can-repay";
+import { useShift } from "../contexts/ShiftContext";
+import PaymentModalForRepay from "./PaymentModalForRepay";
 
 // 80mm thermal receipt 레이아웃. Direct-print 가능한 밀도/폭으로 구성.
 // 한 줄 width ≈ 380px (thermal 48-char 기준), font-mono, dashed separator.
@@ -37,6 +40,17 @@ export default function SaleInvoiceViewer({ invoiceId, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [printing, setPrinting] = useState(false);
+  const [repayOpen, setRepayOpen] = useState(false);
+
+  const { shift } = useShift();
+
+  // 10분 타이머용 tick — invoice 가 repay 가능한 상태일 때만 작동 시키면 되지만
+  // 간단히 항상 1초마다 갱신. 컴포넌트 mount 중일 때만.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   async function handlePrint() {
     if (!invoice || printing) return;
@@ -52,6 +66,12 @@ export default function SaleInvoiceViewer({ invoiceId, onClose }: Props) {
     }
   }
 
+  async function reloadInvoice() {
+    if (invoiceId == null) return;
+    const res = await getSaleInvoiceById(invoiceId);
+    if (res.ok && res.result) setInvoice(res.result);
+  }
+
   useEffect(() => {
     if (invoiceId == null) return;
     setInvoice(null);
@@ -64,9 +84,16 @@ export default function SaleInvoiceViewer({ invoiceId, onClose }: Props) {
     });
   }, [invoiceId]);
 
+  // Repay 적격 여부 — 조건 불만족 시 버튼 아예 숨김 (R4).
+  const repayCheck = useMemo(() => {
+    if (!invoice) return { ok: false as const };
+    return canRepay(invoice, shift?.id, now);
+  }, [invoice, shift?.id, now]);
+
   if (invoiceId == null) return null;
 
   return (
+    <>
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center p-4"
       style={{ zIndex: 1500 }}
@@ -79,6 +106,15 @@ export default function SaleInvoiceViewer({ invoiceId, onClose }: Props) {
         <div className="sticky top-0 bg-white border-b border-gray-200 flex items-center justify-between px-3 h-12 z-10">
           <h2 className="font-bold text-sm">Invoice</h2>
           <div className="flex items-center gap-2">
+            {repayCheck.ok && (
+              <button
+                type="button"
+                onPointerDown={() => setRepayOpen(true)}
+                className="h-9 px-3 rounded-lg bg-amber-500 text-white text-sm font-bold active:bg-amber-600"
+              >
+                Repay
+              </button>
+            )}
             <button
               type="button"
               disabled={!invoice || printing}
@@ -110,6 +146,21 @@ export default function SaleInvoiceViewer({ invoiceId, onClose }: Props) {
         {invoice && <Receipt invoice={invoice} />}
       </div>
     </div>
+    {/* Repay 모달은 viewer 의 backdrop 밖 (sibling) — backdrop onPointerDown 으로
+        인한 pointerdown 버블링 전파 방지. 모달 자체도 fixed inset-0 이라 위치 동일. */}
+    {invoice && repayOpen && repayCheck.ok && repayCheck.expiresAt != null && (
+      <PaymentModalForRepay
+        invoice={invoice}
+        expiresAt={repayCheck.expiresAt}
+        onClose={() => setRepayOpen(false)}
+        onSuccess={() => {
+          // 원본 invoice 에 refund 자식이 추가됨 → reload 로 "FULLY REFUNDED"
+          // 배너 + Repay 버튼 자동 숨김.
+          void reloadInvoice();
+        }}
+      />
+    )}
+    </>
   );
 }
 
@@ -117,7 +168,9 @@ export default function SaleInvoiceViewer({ invoiceId, onClose }: Props) {
 // children serial 리스트. 영수증 자체에는 안 들어감 (print 는 receipt 만).
 function RefundStatusBar({ invoice }: { invoice: SaleInvoiceDetail }) {
   if (invoice.type !== "SALE") return null;
-  const refunds = invoice.refunds ?? [];
+  // Defensive: repay-생성 SALE 이 같은 originalInvoiceId 를 공유 → 이 배너에
+  // 끼면 "REFUNDED" 로 오인. 서버 필터가 있지만 타입 가드로 한 번 더.
+  const refunds = (invoice.refunds ?? []).filter((r) => r.type === "REFUND");
   if (refunds.length === 0) return null;
 
   const totalQty = invoice.rows.reduce((s, r) => s + r.qty, 0);

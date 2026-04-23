@@ -45,7 +45,10 @@ export function priorRefundOfRow(
   let surcharge = 0;
   let qty = 0;
   if (!refunds) return { product, surcharge, qty };
+  // Defensive: repay 로 생성된 새 SALE 이 같은 originalInvoiceId 공유 →
+  // 서버 필터를 우회해 들어와도 drift 계산에 섞이지 않도록 여기서 한 번 더.
   for (const child of refunds) {
+    if (child.type !== "REFUND") continue;
     for (const r of child.rows) {
       if (r.originalInvoiceRowId === row.id) {
         product += r.total;
@@ -219,7 +222,10 @@ export function computeTenderCaps(
   }
 
   const priorMap = new Map<string, number>();
+  // Defensive: repay-생성 SALE 이 같은 originalInvoiceId 공유 → tender cap
+  // 계산에 섞이지 않도록 type 필터. 서버도 필터하지만 belt-and-braces.
   for (const child of invoice.refunds ?? []) {
+    if (child.type !== "REFUND") continue;
     for (const p of child.payments) {
       const k = paymentKey(p);
       if (!k) continue;

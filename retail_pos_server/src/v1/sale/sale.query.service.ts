@@ -107,6 +107,10 @@ export async function getSaleInvoicesService(q: FindManyQuery) {
 // 단일 invoice 조회 — receipt reprint / refund 시작 지점.
 // refunds (children REFUND invoices) 까지 include — refund UI 가
 // per-tender / per-voucher-entity 남은 cap 을 client 에서 실시간 계산.
+//
+// ★ `refunds` 는 **REFUND type 만** 반환한다. Repay 로 생성되는 새 SALE 은
+//   같은 originalInvoiceId 를 공유하므로, 명시적 type 필터 없이는
+//   refund cap 계산/배너/drift 에 잘못 섞인다. 서버에서 source filter.
 export async function getSaleInvoiceByIdService(id: number) {
   try {
     const invoice = await db.saleInvoice.findUnique({
@@ -116,6 +120,7 @@ export async function getSaleInvoiceByIdService(id: number) {
         payments: true,
         terminal: true,
         refunds: {
+          where: { type: "REFUND" },
           include: {
             rows: { orderBy: { index: "asc" } },
             payments: true,

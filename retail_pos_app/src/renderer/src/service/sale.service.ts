@@ -25,6 +25,7 @@ export interface SaleInvoiceListItem {
   serial: string | null;
   dayStr: string;
   type: InvoiceTypeWire;
+  shiftId: number; // repay eligibility (same-shift check) 에 사용
   companyName: string;
   terminalName: string | null;
   userName: string | null;
@@ -73,6 +74,34 @@ export async function createRefundInvoice(
   payload: RefundCreatePayload,
 ): Promise<ApiResponse<SaleInvoiceCreated>> {
   return apiService.post<SaleInvoiceCreated>("/api/sale/refund", payload);
+}
+
+// Repay — 원본 전량 환불 + 새 tender 로 새 SALE 을 한 transaction 에 원자적
+// 생성. 서버가 조건 재검증 (type=SALE / refunds=0 / shift / <10분 /
+// customer-voucher 없음). 응답: { refund, newSale } — 영수증 두 장 + drawer
+// kick 은 client 에서 처리.
+export interface RepayPayload {
+  originalInvoiceId: number;
+  payments: {
+    type: PaymentTypeWire;
+    amount: number;
+    entityType?: "user-voucher" | "customer-voucher";
+    entityId?: number;
+    entityLabel?: string;
+  }[];
+  cashChange: number;
+  note?: string;
+}
+
+export interface RepayResponse {
+  refund: SaleInvoiceCreated;
+  newSale: SaleInvoiceCreated;
+}
+
+export async function repayInvoice(
+  payload: RepayPayload,
+): Promise<ApiResponse<RepayResponse>> {
+  return apiService.post<RepayResponse>("/api/sale/repay", payload);
 }
 
 export async function searchSaleInvoices(
@@ -134,8 +163,15 @@ export interface SaleInvoicePaymentItem {
 }
 
 // Refund child — invoice 가 SALE 일 때 그 아래 REFUND 자식들. Cap 계산용.
+//
+// ★ `type` 은 **항상 "REFUND"** — 서버의 getSaleInvoiceByIdService 가
+//   `where: { type: "REFUND" }` 로 source 필터링함. Repay 로 생성되는 새 SALE
+//   은 원본과 같은 originalInvoiceId 를 공유하므로 명시적 필터 없이 include 하면
+//   여기 섞여 들어와 cap 계산을 망친다. 타입에 `type` 을 노출해두는 이유:
+//   클라 defensive 필터가 타입 안전하게 가능하도록.
 export interface SaleInvoiceRefundChild {
   id: number;
+  type: InvoiceTypeWire;
   serial: string | null;
   createdAt: string;
   linesTotal: number;

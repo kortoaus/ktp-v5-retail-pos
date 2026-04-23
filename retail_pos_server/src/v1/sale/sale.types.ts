@@ -82,3 +82,24 @@ export interface RefundCreatePayload {
   payments: PaymentPayload[];
   note?: string;
 }
+
+// ── REPAY payload ─────────────────────────────────────────────
+// "같은 거래, tender 만 재지정". 서버가 원자적으로:
+//   (a) 원본 전량 환불 (REFUND invoice 생성, voucher 복구)
+//   (b) 원본 rows 복사하여 new SALE invoice 생성 (새 payments 로)
+//   (c) new SALE.originalInvoiceId = 원본 SALE.id (추적)
+//
+// 조건 (서버가 재검증, 실패 시 전체 rollback):
+//   - 원본 type === SALE, refunds(type=REFUND) 자식 없음
+//   - orig.shiftId === current shift
+//   - now - orig.createdAt < 10분
+//   - 원본 payments 에 customer-voucher 없음 (D-21)
+//
+// Client 는 "의도" 만 보냄 — linesTotal/rounding/creditSurcharge/tax 등 총합은
+// 서버가 원본 rows + 새 payments + storeSetting.credit_surcharge_rate 로 재계산.
+export interface RepayPayload {
+  originalInvoiceId: number;
+  payments: PaymentPayload[]; // 새 tender mix. CASH.amount = cashApplied.
+  cashChange: number; // 새 결제의 cash 거스름돈 (cashIntent - cashApplied)
+  note?: string;
+}

@@ -3,13 +3,18 @@ import { BadRequestException } from "../../libs/exceptions";
 import { createSaleService } from "./sale.create.service";
 import { createSpendService } from "./spend.create.service";
 import { createRefundService } from "./sale.refund.service";
+import { createRepayService } from "./sale.repay.service";
 import {
   FindManyQuery,
   getLatestInvoiceForTerminalService,
   getSaleInvoiceByIdService,
   getSaleInvoicesService,
 } from "./sale.query.service";
-import { RefundCreatePayload, SaleCreatePayload } from "./sale.types";
+import {
+  RefundCreatePayload,
+  RepayPayload,
+  SaleCreatePayload,
+} from "./sale.types";
 import { InvoiceType } from "../../generated/prisma/enums";
 
 export async function createSaleController(req: Request, res: Response) {
@@ -54,6 +59,22 @@ export async function createRefundController(req: Request, res: Response) {
 
   const payload = req.body as RefundCreatePayload;
   const result = await createRefundService(payload, {
+    terminal,
+    storeSetting,
+    user,
+    shift,
+  });
+  res.json(result);
+}
+
+export async function createRepayController(req: Request, res: Response) {
+  const { terminal, storeSetting, shift, user } = res.locals;
+  if (!shift) {
+    throw new BadRequestException("No open shift — repay cannot be created");
+  }
+
+  const payload = req.body as RepayPayload;
+  const result = await createRepayService(payload, {
     terminal,
     storeSetting,
     user,

@@ -1,4 +1,3 @@
-import moment from "moment-timezone";
 import db from "../../libs/db";
 import {
   BadRequestException,
@@ -13,6 +12,8 @@ import {
   UserModel,
 } from "../../generated/prisma/models";
 import { SaleCreatePayload } from "./sale.types";
+import type { Prisma } from "../../generated/prisma/client";
+import { nowAnchor } from "./sale.refund.service";
 
 // ──────────────────────────────────────────────────────────────
 // Sale create — 순서:
@@ -47,7 +48,15 @@ export interface SaleContext {
 //
 // user-voucher payment 마다 DB 조회해서 유효성 + 잔액 확인. 중복 선택은 클라
 // 측 UI 가 막지만 서버도 "같은 voucher 복수 payment" 를 거부 (합계 대비 잔액).
-async function validateVouchers(payload: SaleCreatePayload) {
+//
+// tx 파라미터: Repay 가 refund step 에서 voucher balance 를 복구한 뒤
+//   같은 tx 안에서 새 SALE 의 redeem 을 검증해야 정확하다. 따라서 tx client 를
+//   받아서 조회해야 post-refund balance 가 보인다. 일반 createSaleService 도
+//   동일 경로로 통합 (tx 비용 미미).
+export async function validateVouchers(
+  tx: Prisma.TransactionClient,
+  payload: Pick<SaleCreatePayload, "payments">,
+) {
   const userVouchers = payload.payments.filter(
     (p) => p.type === "VOUCHER" && p.entityType === "user-voucher",
   );
@@ -64,7 +73,7 @@ async function validateVouchers(payload: SaleCreatePayload) {
   }
 
   const ids = userVouchers.map((p) => p.entityId!);
-  const vouchers = await db.voucher.findMany({ where: { id: { in: ids } } });
+  const vouchers = await tx.voucher.findMany({ where: { id: { in: ids } } });
   const byId = new Map(vouchers.map((v) => [v.id, v]));
 
   const now = new Date();
@@ -88,7 +97,7 @@ async function validateVouchers(payload: SaleCreatePayload) {
 }
 
 // ── 2. 금액 검증 ────────────────────────────────────────────
-function validateAmounts(p: SaleCreatePayload) {
+export function validateAmounts(p: SaleCreatePayload) {
   if (p.rows.length === 0)
     throw new BadRequestException("rows must not be empty");
   if (p.payments.length === 0)
@@ -166,7 +175,7 @@ function validateAmounts(p: SaleCreatePayload) {
 // ── surcharge_share 비례 배분 ──────────────────────────────
 // row.surcharge_share = round(creditSurcharge × row.total / linesTotal).
 // 마지막 row 에 drift 를 흡수해 Σ == creditSurcharge 보장.
-function allocateSurchargeShares(
+export function allocateSurchargeShares(
   creditSurcharge: number,
   rows: SaleCreatePayload["rows"],
   linesTotal: number,
@@ -185,7 +194,154 @@ function allocateSurchargeShares(
   return shares;
 }
 
-// ── 3. 저장 (transaction) ──────────────────────────────────
+// ── buildSaleInTx — transaction 내부 쓰기 로직 ──────────────────────────────
+// *이미 검증된* (금액) 입력으로 SALE 또는 SPEND invoice 를 생성한다.
+//
+// 포함 동작:
+//  - validateVouchers(tx) — user-voucher 존재/유효성/잔액 확인. (repay 는
+//    이 함수 이전에 refund step 이 balance 를 복구했으므로 post-refund 상태에서
+//    검증됨)
+//  - DocCounter upsert → serial 발급 ({shiftId}-{YYYYMMDD}-{S|P}{seq6})
+//  - Invoice nested create (rows + payments). surcharge_share 비례 배분.
+//  - user-voucher redeem — VoucherEvent.REDEEM + Voucher.balance 감소
+//  - Shift 집계 increment 안 함 (D-34)
+//
+// opts.originalInvoiceId — repay 로 만들어진 새 SALE 이 원본 SALE 에 역참조.
+//   일반 sale 은 null/undefined.
+export interface BuildSaleInTxOpts {
+  payload: SaleCreatePayload;
+  context: SaleContext;
+  dayStr: string;
+  yyyymmdd: string;
+  dayStart: Date;
+  originalInvoiceId?: number | null;
+}
+
+export async function buildSaleInTx(
+  tx: Prisma.TransactionClient,
+  opts: BuildSaleInTxOpts,
+) {
+  const { payload, context, dayStr, yyyymmdd, dayStart, originalInvoiceId } =
+    opts;
+  const { terminal, storeSetting, user, shift } = context;
+
+  // Voucher 검증 (tx 범위 — repay 의 경우 refund step 이 이미 balance 를 복구한
+  // 상태에서 새 redeem 을 검증).
+  await validateVouchers(tx, payload);
+
+  // Surcharge 비례 배분
+  const shares = allocateSurchargeShares(
+    payload.creditSurchargeAmount,
+    payload.rows,
+    payload.linesTotal,
+  );
+
+  // Serial
+  const doc = await tx.docCounter.upsert({
+    where: { date: dayStart },
+    update: { counter: { increment: 1 } },
+    create: { date: dayStart, counter: 1 },
+  });
+  const seq = String(doc.counter).padStart(6, "0");
+  const typePrefix = payload.type === "SPEND" ? "P" : "S";
+  const serial = `${shift.id}-${yyyymmdd}-${typePrefix}${seq}`;
+
+  const inv = await tx.saleInvoice.create({
+    data: {
+      serial,
+      companyId: storeSetting.companyId,
+      dayStr,
+      type: payload.type,
+      // Repay: 새 SALE 이 원본 SALE 을 역참조. 일반 sale/spend 은 null.
+      originalInvoiceId: originalInvoiceId ?? null,
+      shiftId: shift.id,
+      terminalId: terminal.id,
+      userId: user.id,
+      companyName: storeSetting.companyName,
+      abn: storeSetting.abn,
+      phone: storeSetting.phone,
+      address1: storeSetting.address1,
+      address2: storeSetting.address2,
+      suburb: storeSetting.suburb,
+      state: storeSetting.state,
+      postcode: storeSetting.postcode,
+      country: storeSetting.country,
+      terminalName: terminal.name,
+      userName: user.name,
+      memberId: payload.member?.id ?? null,
+      memberName: payload.member?.name ?? null,
+      memberLevel: payload.member?.level ?? null,
+      memberPhoneLast4: payload.member?.phoneLast4 ?? null,
+      linesTotal: payload.linesTotal,
+      rounding: payload.rounding,
+      creditSurchargeAmount: payload.creditSurchargeAmount,
+      lineTax: payload.lineTax,
+      surchargeTax: payload.surchargeTax,
+      total: payload.total,
+      cashChange: payload.cashChange,
+      note: payload.note ?? null,
+      rows: {
+        create: payload.rows.map((r, idx) => ({
+          index: r.index,
+          type: r.type,
+          itemId: r.itemId,
+          name_en: r.name_en,
+          name_ko: r.name_ko,
+          barcode: r.barcode,
+          uom: r.uom,
+          taxable: r.taxable,
+          unit_price_original: r.unit_price_original,
+          unit_price_discounted: r.unit_price_discounted,
+          unit_price_adjusted: r.unit_price_adjusted,
+          unit_price_effective: r.unit_price_effective,
+          qty: r.qty,
+          measured_weight: r.measured_weight,
+          total: r.total,
+          tax_amount: r.tax_amount,
+          net: r.net,
+          adjustments: r.adjustments,
+          ppMarkdownType: r.ppMarkdownType,
+          ppMarkdownAmount: r.ppMarkdownAmount,
+          surcharge_share: shares[idx],
+        })),
+      },
+      payments: {
+        create: payload.payments.map((pm) => ({
+          type: pm.type,
+          amount: pm.amount,
+          entityType: pm.entityType ?? null,
+          entityId: pm.entityId ?? null,
+          entityLabel: pm.entityLabel ?? null,
+        })),
+      },
+    },
+  });
+
+  // user-voucher redeem (balance decrement + VoucherEvent REDEEM)
+  for (const pm of payload.payments) {
+    if (pm.type !== "VOUCHER" || pm.entityType !== "user-voucher") continue;
+    const voucherId = pm.entityId!;
+    await tx.voucher.update({
+      where: { id: voucherId },
+      data: { balance: { decrement: pm.amount } },
+    });
+    await tx.voucherEvent.create({
+      data: {
+        voucherId,
+        type: "REDEEM",
+        amount: -pm.amount,
+        invoiceId: inv.id,
+        userId: user.id,
+        reason: "sale",
+      },
+    });
+  }
+
+  // Shift 집계 increment 안 함 — close 시 재집계 (D-34).
+  return inv;
+}
+
+// ── 3. Main service ─────────────────────────────────────────
 export async function createSaleService(
   payload: SaleCreatePayload,
   context: SaleContext,
@@ -194,151 +350,23 @@ export async function createSaleService(
     if (payload.type !== "SALE")
       throw new BadRequestException(`unexpected payload.type: ${payload.type}`);
 
-    // 1. Voucher 검증
-    await validateVouchers(payload);
-
-    // 2. 금액 검증
+    // 금액 검증은 순수 함수 — tx 밖에서 fail-fast.
     validateAmounts(payload);
 
-    // 3. 저장
-    const shares = allocateSurchargeShares(
-      payload.creditSurchargeAmount,
-      payload.rows,
-      payload.linesTotal,
-    );
-
-    const { terminal, storeSetting, user, shift } = context;
-
-    // Time anchor — tx 시작 전 한 번 고정 (dayStr / yyyymmdd / dayStart 공통).
-    const nowM = moment.tz("Australia/Sydney");
-    const dayStr = nowM.format("YYYY-MM-DD");
-    const yyyymmdd = nowM.format("YYYYMMDD");
-    const dayStart = nowM.clone().startOf("day").toDate();
+    const { dayStr, yyyymmdd, dayStart } = nowAnchor();
 
     const invoice = await db.$transaction(async (tx) => {
-      // ── Serial 발급 ──
-      // DocCounter upsert — date 기준 atomic increment. 날짜 바뀌면 자연스럽게
-      // 새 row 생성되며 counter 가 1 부터 시작. 모든 InvoiceType (SALE/REFUND/SPEND)
-      // 이 동일 counter 공유 (cloud 는 prefix 로 구분).
-      // Format: {shiftId}-{YYYYMMDD}-{typePrefix}{seq6}
-      //   예) 12-20260422-S000001
-      // (cloud 단위 global uniqueness 는 cloud sync 측에서 처리 — local 범위에서는
-      //  serial 이 unique 하면 충분.)
-      const doc = await tx.docCounter.upsert({
-        where: { date: dayStart },
-        update: { counter: { increment: 1 } },
-        create: { date: dayStart, counter: 1 },
+      return buildSaleInTx(tx, {
+        payload,
+        context,
+        dayStr,
+        yyyymmdd,
+        dayStart,
       });
-      const seq = String(doc.counter).padStart(6, "0");
-      const serial = `${shift.id}-${yyyymmdd}-S${seq}`;
-
-      // 3a. Invoice + rows + payments (nested create)
-      const inv = await tx.saleInvoice.create({
-        data: {
-          serial,
-          companyId: storeSetting.companyId,
-          dayStr,
-          type: "SALE",
-          // Actor linkage
-          shiftId: shift.id,
-          terminalId: terminal.id,
-          userId: user.id,
-          // Store snapshot (Q1/Q2)
-          companyName: storeSetting.companyName,
-          abn: storeSetting.abn,
-          phone: storeSetting.phone,
-          address1: storeSetting.address1,
-          address2: storeSetting.address2,
-          suburb: storeSetting.suburb,
-          state: storeSetting.state,
-          postcode: storeSetting.postcode,
-          country: storeSetting.country,
-          // Terminal / User snapshot (Q6)
-          terminalName: terminal.name,
-          userName: user.name,
-          // Member snapshot
-          memberId: payload.member?.id ?? null,
-          memberName: payload.member?.name ?? null,
-          memberLevel: payload.member?.level ?? null,
-          memberPhoneLast4: payload.member?.phoneLast4 ?? null,
-          // Money
-          linesTotal: payload.linesTotal,
-          rounding: payload.rounding,
-          creditSurchargeAmount: payload.creditSurchargeAmount,
-          lineTax: payload.lineTax,
-          surchargeTax: payload.surchargeTax,
-          total: payload.total,
-          cashChange: payload.cashChange,
-          note: payload.note ?? null,
-          // Rows
-          rows: {
-            create: payload.rows.map((r, idx) => ({
-              index: r.index,
-              type: r.type,
-              itemId: r.itemId,
-              name_en: r.name_en,
-              name_ko: r.name_ko,
-              barcode: r.barcode,
-              uom: r.uom,
-              taxable: r.taxable,
-              unit_price_original: r.unit_price_original,
-              unit_price_discounted: r.unit_price_discounted,
-              unit_price_adjusted: r.unit_price_adjusted,
-              unit_price_effective: r.unit_price_effective,
-              qty: r.qty,
-              measured_weight: r.measured_weight,
-              total: r.total,
-              tax_amount: r.tax_amount,
-              net: r.net,
-              adjustments: r.adjustments,
-              ppMarkdownType: r.ppMarkdownType,
-              ppMarkdownAmount: r.ppMarkdownAmount,
-              surcharge_share: shares[idx],
-            })),
-          },
-          // Payments
-          payments: {
-            create: payload.payments.map((pm) => ({
-              type: pm.type,
-              amount: pm.amount,
-              entityType: pm.entityType ?? null,
-              entityId: pm.entityId ?? null,
-              entityLabel: pm.entityLabel ?? null,
-            })),
-          },
-        },
-      });
-
-      // 3b. user-voucher redeem (balance decrement + VoucherEvent REDEEM)
-      for (const pm of payload.payments) {
-        if (pm.type !== "VOUCHER" || pm.entityType !== "user-voucher") continue;
-        const voucherId = pm.entityId!;
-        await tx.voucher.update({
-          where: { id: voucherId },
-          data: { balance: { decrement: pm.amount } },
-        });
-        await tx.voucherEvent.create({
-          data: {
-            voucherId,
-            type: "REDEEM",
-            amount: -pm.amount,
-            invoiceId: inv.id,
-            userId: user.id,
-            reason: "sale",
-          },
-        });
-      }
-
-      // Shift 누적 집계 (salesCash/Credit/...) 는 여기서 increment 하지 않음.
-      // CloseShift 시점에 SUM(payment.amount) / SUM(tax) 로 일괄 재집계
-      // (invoice 쿼리에 @@index([shiftId]) 있어 비용 무시 수준). 증분 캐시는
-      // drift 위험 + 성능 이득 없음 → source-of-truth 기반으로만 관리.
-
-      return inv;
     });
 
-    // 4. TODO: cloud sync push (sale.invoice → cloud POST)
-    //    현재는 synced=false 상태로 저장만. 별도 scheduler/cron 에서 push.
+    // TODO: cloud sync push (sale.invoice → cloud POST)
+    //   현재는 synced=false 상태로 저장만. 별도 scheduler/cron 에서 push.
 
     return { ok: true, result: invoice };
   } catch (e) {

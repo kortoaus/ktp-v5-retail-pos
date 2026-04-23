@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createRefundController,
+  createRepayController,
   createSaleController,
   createSpendController,
   getLatestInvoiceController,
@@ -37,6 +38,18 @@ saleRouter.post(
   userMiddleware,
   scopeMiddleware("refund"),
   createRefundController,
+);
+
+// POST /api/sale/repay — 원본 전량 환불 + 원본 rows 로 새 SALE 을 한 tx 에
+// 원자적으로 생성. Body: RepayPayload. 조건 (서버 재검증):
+//   - orig.type=SALE, refunds.length=0, orig.shiftId=current, <10분,
+//     customer-voucher 없음 (D-21)
+// 응답: { refund, newSale } — 영수증 두 장 + drawer kick 은 client 에서.
+saleRouter.post(
+  "/repay",
+  userMiddleware,
+  scopeMiddleware("refund"),
+  createRepayController,
 );
 
 // GET /api/sale — 리스트 조회 (keyword / 날짜 / 금액 / member / type 필터).

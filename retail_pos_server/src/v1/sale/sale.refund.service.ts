@@ -17,6 +17,7 @@ import type {
   RefundRowPayload,
 } from "./sale.types";
 import { PaymentType } from "../../generated/prisma/enums";
+import type { Prisma } from "../../generated/prisma/client";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Sale refund — REFUND invoice 생성 서비스
@@ -99,7 +100,7 @@ export interface RefundContext {
 }
 
 // ── Basic payload sanity ─────────────────────────────────────────────────────
-function validatePayloadShape(p: RefundCreatePayload) {
+export function validatePayloadShape(p: RefundCreatePayload) {
   if (!Number.isFinite(p.originalInvoiceId))
     throw new BadRequestException("originalInvoiceId required");
   if (!Array.isArray(p.rows) || p.rows.length === 0)
@@ -128,13 +129,20 @@ function validatePayloadShape(p: RefundCreatePayload) {
 }
 
 // ── Load + eligibility ───────────────────────────────────────────────────────
-async function loadOriginalOrThrow(originalInvoiceId: number) {
+export async function loadOriginalOrThrow(originalInvoiceId: number) {
   const orig = await db.saleInvoice.findUnique({
     where: { id: originalInvoiceId },
     include: {
       rows: true,
       payments: true,
-      refunds: { include: { rows: true, payments: true } },
+      // `refunds` relation = children whose originalInvoiceId points here.
+      // Repay (planned) creates a new SALE with the same linkage, so we must
+      // explicitly filter to REFUND — otherwise drift/tender-cap computations
+      // below would treat a repay-SALE's rows/payments as prior-refund data.
+      refunds: {
+        where: { type: "REFUND" },
+        include: { rows: true, payments: true },
+      },
     },
   });
   if (!orig) throw new NotFoundException("Original invoice not found");
@@ -155,12 +163,12 @@ async function loadOriginalOrThrow(originalInvoiceId: number) {
   return orig;
 }
 
-type OrigInvoice = Awaited<ReturnType<typeof loadOriginalOrThrow>>;
+export type OrigInvoice = Awaited<ReturnType<typeof loadOriginalOrThrow>>;
 type OrigRow = OrigInvoice["rows"][number];
 
 // ── Drift-absorbing per-row computation ──────────────────────────────────────
 // 각 요청된 refund row 에 대해 {originalRow, refundQty, refund_row 값들} 을 반환.
-interface ComputedRefundRow {
+export interface ComputedRefundRow {
   origRow: OrigRow;
   refund_qty: number;
   total: number; // product portion
@@ -169,7 +177,7 @@ interface ComputedRefundRow {
   net: number; // total - tax_amount
 }
 
-function computeRefundRows(
+export function computeRefundRows(
   orig: OrigInvoice,
   requested: RefundRowPayload[],
 ): ComputedRefundRow[] {
@@ -250,7 +258,7 @@ function computeRefundRows(
 }
 
 // ── Rounding (D-30 — cash-only mode only) ───────────────────────────────────
-function computeRefundRounding(
+export function computeRefundRounding(
   subtotalBeforeRounding: number,
   payments: RefundCreatePayload["payments"],
 ): number {
@@ -284,7 +292,7 @@ function paymentTenderKey(p: {
   return null;
 }
 
-function validateTenderCaps(
+export function validateTenderCaps(
   orig: OrigInvoice,
   refundPayments: RefundCreatePayload["payments"],
 ) {
@@ -326,6 +334,211 @@ function validateTenderCaps(
   }
 }
 
+// ── Invoice-level aggregation (pure) ────────────────────────────────────────
+export interface RefundAggregates {
+  linesTotal: number;
+  creditSurchargeAmount: number;
+  lineTax: number;
+  surchargeTax: number;
+  rounding: number;
+  total: number;
+}
+
+export function aggregateRefund(
+  computed: ComputedRefundRow[],
+  payments: RefundCreatePayload["payments"],
+): RefundAggregates {
+  const linesTotal = computed.reduce((s, r) => s + r.total, 0);
+  const creditSurchargeAmount = computed.reduce(
+    (s, r) => s + r.surcharge_share,
+    0,
+  );
+  const lineTax = computed.reduce((s, r) => s + r.tax_amount, 0);
+  const surchargeTax = Math.round(creditSurchargeAmount / 11);
+  const subtotalBeforeRounding = linesTotal + creditSurchargeAmount;
+  const rounding = computeRefundRounding(subtotalBeforeRounding, payments);
+  const total = subtotalBeforeRounding + rounding;
+  return {
+    linesTotal,
+    creditSurchargeAmount,
+    lineTax,
+    surchargeTax,
+    rounding,
+    total,
+  };
+}
+
+// ── buildRefundInTx — transaction 내부 쓰기 로직 ─────────────────────────────
+// 이 함수는 *이미 검증된* 입력으로 REFUND invoice 를 생성한다. 검증/계산은
+// createRefundService (또는 repay service) 가 수행 후 호출.
+//
+// 포함 동작:
+//  - DocCounter upsert → serial 발급 ({shiftId}-{YYYYMMDD}-R{seq6})
+//  - REFUND invoice nested create (rows + payments)
+//  - 원본 rows 의 refunded_qty increment
+//  - user-voucher 결제분마다 VoucherEvent.REFUND + Voucher.balance += amount
+//    (validTo / status 불변 — D-21 확장)
+//  - Shift 집계 increment 안 함 (D-34)
+export interface BuildRefundInTxOpts {
+  orig: OrigInvoice;
+  computed: ComputedRefundRow[];
+  aggregates: RefundAggregates;
+  payments: RefundCreatePayload["payments"];
+  note: string | null;
+  context: RefundContext;
+  dayStr: string;
+  yyyymmdd: string;
+  dayStart: Date;
+}
+
+export async function buildRefundInTx(
+  tx: Prisma.TransactionClient,
+  opts: BuildRefundInTxOpts,
+) {
+  const {
+    orig,
+    computed,
+    aggregates,
+    payments,
+    note,
+    context,
+    dayStr,
+    yyyymmdd,
+    dayStart,
+  } = opts;
+  const { terminal, storeSetting, user, shift } = context;
+
+  const doc = await tx.docCounter.upsert({
+    where: { date: dayStart },
+    update: { counter: { increment: 1 } },
+    create: { date: dayStart, counter: 1 },
+  });
+  const seq = String(doc.counter).padStart(6, "0");
+  const serial = `${shift.id}-${yyyymmdd}-R${seq}`;
+
+  const inv = await tx.saleInvoice.create({
+    data: {
+      serial,
+      companyId: storeSetting.companyId,
+      dayStr,
+      type: "REFUND",
+      originalInvoiceId: orig.id,
+      // Actor — refund 는 current shift/terminal/user (원본 아님)
+      shiftId: shift.id,
+      terminalId: terminal.id,
+      userId: user.id,
+      // Store snapshot — 환불 시점 값으로 새로 스냅샷
+      companyName: storeSetting.companyName,
+      abn: storeSetting.abn,
+      phone: storeSetting.phone,
+      address1: storeSetting.address1,
+      address2: storeSetting.address2,
+      suburb: storeSetting.suburb,
+      state: storeSetting.state,
+      postcode: storeSetting.postcode,
+      country: storeSetting.country,
+      terminalName: terminal.name,
+      userName: user.name,
+      // Member — 원본에서 이어 받음
+      memberId: orig.memberId,
+      memberName: orig.memberName,
+      memberLevel: orig.memberLevel,
+      memberPhoneLast4: orig.memberPhoneLast4,
+      // Money
+      linesTotal: aggregates.linesTotal,
+      rounding: aggregates.rounding,
+      creditSurchargeAmount: aggregates.creditSurchargeAmount,
+      lineTax: aggregates.lineTax,
+      surchargeTax: aggregates.surchargeTax,
+      total: aggregates.total,
+      cashChange: 0,
+      note,
+      rows: {
+        create: computed.map((c, idx) => ({
+          index: idx,
+          type: c.origRow.type,
+          itemId: c.origRow.itemId,
+          name_en: c.origRow.name_en,
+          name_ko: c.origRow.name_ko,
+          barcode: c.origRow.barcode,
+          uom: c.origRow.uom,
+          taxable: c.origRow.taxable,
+          unit_price_original: c.origRow.unit_price_original,
+          unit_price_discounted: c.origRow.unit_price_discounted,
+          unit_price_adjusted: c.origRow.unit_price_adjusted,
+          unit_price_effective: c.origRow.unit_price_effective,
+          qty: c.refund_qty,
+          measured_weight: null,
+          total: c.total,
+          tax_amount: c.tax_amount,
+          net: c.net,
+          adjustments: c.origRow.adjustments,
+          ppMarkdownType: c.origRow.ppMarkdownType,
+          ppMarkdownAmount: c.origRow.ppMarkdownAmount,
+          originalInvoiceId: orig.id,
+          originalInvoiceRowId: c.origRow.id,
+          refunded_qty: 0,
+          surcharge_share: c.surcharge_share,
+        })),
+      },
+      payments: {
+        create: payments.map((pm) => ({
+          type: pm.type,
+          amount: pm.amount,
+          entityType: pm.entityType ?? null,
+          entityId: pm.entityId ?? null,
+          entityLabel: pm.entityLabel ?? null,
+        })),
+      },
+    },
+  });
+
+  // 원본 row refunded_qty 증가
+  for (const c of computed) {
+    await tx.saleInvoiceRow.update({
+      where: { id: c.origRow.id },
+      data: { refunded_qty: { increment: c.refund_qty } },
+    });
+  }
+
+  // user-voucher refund — VoucherEvent.REFUND + Voucher.balance 증가
+  for (const pm of payments) {
+    if (pm.type !== "VOUCHER" || pm.entityType !== "user-voucher") continue;
+    const voucherId = pm.entityId!;
+    await tx.voucher.update({
+      where: { id: voucherId },
+      data: { balance: { increment: pm.amount } },
+    });
+    await tx.voucherEvent.create({
+      data: {
+        voucherId,
+        type: "REFUND",
+        amount: pm.amount,
+        invoiceId: inv.id,
+        userId: user.id,
+        reason: "refund",
+      },
+    });
+  }
+
+  // Shift 집계 increment 안 함 — close 시 재집계 (D-34).
+  return inv;
+}
+
+// ── Time anchor helper ──────────────────────────────────────────────────────
+export function nowAnchor(): {
+  dayStr: string;
+  yyyymmdd: string;
+  dayStart: Date;
+} {
+  const nowM = moment.tz("Australia/Sydney");
+  return {
+    dayStr: nowM.format("YYYY-MM-DD"),
+    yyyymmdd: nowM.format("YYYYMMDD"),
+    dayStart: nowM.clone().startOf("day").toDate(),
+  };
+}
+
 // ── Main service ────────────────────────────────────────────────────────────
 export async function createRefundService(
   payload: RefundCreatePayload,
@@ -336,163 +549,32 @@ export async function createRefundService(
 
     const orig = await loadOriginalOrThrow(payload.originalInvoiceId);
 
-    // Row 계산 (drift absorbing)
     const computed = computeRefundRows(orig, payload.rows);
-
-    // Invoice-level 집계
-    const linesTotal = computed.reduce((s, r) => s + r.total, 0);
-    const creditSurchargeAmount = computed.reduce(
-      (s, r) => s + r.surcharge_share,
-      0,
-    );
-    const lineTax = computed.reduce((s, r) => s + r.tax_amount, 0);
-    const surchargeTax = Math.round(creditSurchargeAmount / 11);
-    const subtotalBeforeRounding = linesTotal + creditSurchargeAmount;
-    const rounding = computeRefundRounding(
-      subtotalBeforeRounding,
-      payload.payments,
-    );
-    const total = subtotalBeforeRounding + rounding;
+    const aggregates = aggregateRefund(computed, payload.payments);
 
     // 결제 합 == total 검증
     const paySum = payload.payments.reduce((s, p) => s + p.amount, 0);
-    if (paySum !== total)
+    if (paySum !== aggregates.total)
       throw new BadRequestException(
-        `payments sum ${paySum} !== refund total ${total}`,
+        `payments sum ${paySum} !== refund total ${aggregates.total}`,
       );
 
-    // Per-tender / per-voucher-entity cap
     validateTenderCaps(orig, payload.payments);
 
-    // ── Time anchor + transaction ────────────────────────────────────────
-    const nowM = moment.tz("Australia/Sydney");
-    const dayStr = nowM.format("YYYY-MM-DD");
-    const yyyymmdd = nowM.format("YYYYMMDD");
-    const dayStart = nowM.clone().startOf("day").toDate();
-
-    const { terminal, storeSetting, user, shift } = context;
+    const { dayStr, yyyymmdd, dayStart } = nowAnchor();
 
     const invoice = await db.$transaction(async (tx) => {
-      // Serial
-      const doc = await tx.docCounter.upsert({
-        where: { date: dayStart },
-        update: { counter: { increment: 1 } },
-        create: { date: dayStart, counter: 1 },
+      return buildRefundInTx(tx, {
+        orig,
+        computed,
+        aggregates,
+        payments: payload.payments,
+        note: payload.note ?? null,
+        context,
+        dayStr,
+        yyyymmdd,
+        dayStart,
       });
-      const seq = String(doc.counter).padStart(6, "0");
-      const serial = `${shift.id}-${yyyymmdd}-R${seq}`;
-
-      // REFUND invoice nested create
-      const inv = await tx.saleInvoice.create({
-        data: {
-          serial,
-          companyId: storeSetting.companyId,
-          dayStr,
-          type: "REFUND",
-          originalInvoiceId: orig.id,
-          // Actor — refund 는 current shift/terminal/user (원본 아님)
-          shiftId: shift.id,
-          terminalId: terminal.id,
-          userId: user.id,
-          // Store snapshot — 환불 시점 값으로 새로 스냅샷
-          companyName: storeSetting.companyName,
-          abn: storeSetting.abn,
-          phone: storeSetting.phone,
-          address1: storeSetting.address1,
-          address2: storeSetting.address2,
-          suburb: storeSetting.suburb,
-          state: storeSetting.state,
-          postcode: storeSetting.postcode,
-          country: storeSetting.country,
-          terminalName: terminal.name,
-          userName: user.name,
-          // Member — 원본에서 이어 받음 (refund 도 동일 member 에 귀속)
-          memberId: orig.memberId,
-          memberName: orig.memberName,
-          memberLevel: orig.memberLevel,
-          memberPhoneLast4: orig.memberPhoneLast4,
-          // Money
-          linesTotal,
-          rounding,
-          creditSurchargeAmount,
-          lineTax,
-          surchargeTax,
-          total,
-          cashChange: 0,
-          note: payload.note ?? null,
-          rows: {
-            create: computed.map((c, idx) => ({
-              index: idx,
-              type: c.origRow.type,
-              itemId: c.origRow.itemId,
-              name_en: c.origRow.name_en,
-              name_ko: c.origRow.name_ko,
-              barcode: c.origRow.barcode,
-              uom: c.origRow.uom,
-              taxable: c.origRow.taxable,
-              unit_price_original: c.origRow.unit_price_original,
-              unit_price_discounted: c.origRow.unit_price_discounted,
-              unit_price_adjusted: c.origRow.unit_price_adjusted,
-              unit_price_effective: c.origRow.unit_price_effective,
-              qty: c.refund_qty,
-              measured_weight: null,
-              total: c.total,
-              tax_amount: c.tax_amount,
-              net: c.net,
-              adjustments: c.origRow.adjustments,
-              ppMarkdownType: c.origRow.ppMarkdownType,
-              ppMarkdownAmount: c.origRow.ppMarkdownAmount,
-              originalInvoiceId: orig.id,
-              originalInvoiceRowId: c.origRow.id,
-              // REFUND row 는 더 이상 환불되지 않음 — counter / share 0
-              refunded_qty: 0,
-              surcharge_share: c.surcharge_share,
-            })),
-          },
-          payments: {
-            create: payload.payments.map((pm) => ({
-              type: pm.type,
-              amount: pm.amount,
-              entityType: pm.entityType ?? null,
-              entityId: pm.entityId ?? null,
-              entityLabel: pm.entityLabel ?? null,
-            })),
-          },
-        },
-      });
-
-      // 원본 row refunded_qty 증가
-      for (const c of computed) {
-        await tx.saleInvoiceRow.update({
-          where: { id: c.origRow.id },
-          data: { refunded_qty: { increment: c.refund_qty } },
-        });
-      }
-
-      // user-voucher refund — VoucherEvent.REFUND + Voucher.balance 증가
-      // validTo / status 는 건드리지 않음 (expired 여도 balance 복구만).
-      for (const pm of payload.payments) {
-        if (pm.type !== "VOUCHER" || pm.entityType !== "user-voucher") continue;
-        const voucherId = pm.entityId!;
-        await tx.voucher.update({
-          where: { id: voucherId },
-          data: { balance: { increment: pm.amount } },
-        });
-        await tx.voucherEvent.create({
-          data: {
-            voucherId,
-            type: "REFUND",
-            amount: pm.amount, // +값
-            invoiceId: inv.id,
-            userId: user.id,
-            reason: "refund",
-          },
-        });
-      }
-
-      // Shift 집계 increment 하지 않음 — close 시 재집계 (D-34).
-
-      return inv;
     });
 
     return { ok: true, result: invoice };
