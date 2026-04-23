@@ -1,15 +1,12 @@
-// SaleInvoiceSearchScreen — 매니저 진입 invoice 검색 화면.
-// 필터/리스트는 SaleInvoiceSearchPanel 로 분리됨. 이 screen 은 row 클릭 시
-// Viewer modal 을 여는 래퍼.
+// SaleRefundPickerScreen — `/manager/refund` entry.
+// SALE invoice 를 골라서 `/manager/refund/:invoiceId` 로 이동시키는 래퍼.
+// QR 스캔 / row 클릭 모두 onSelect 에서 navigate.
 
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SaleInvoiceSearchPanel from "../components/SaleInvoiceSearchPanel";
-import SaleInvoiceViewer from "../components/SaleInvoiceViewer";
 
-export default function SaleInvoiceSearchScreen() {
+export default function SaleRefundPickerScreen() {
   const navigate = useNavigate();
-  const [viewerId, setViewerId] = useState<number | null>(null);
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -22,19 +19,19 @@ export default function SaleInvoiceSearchScreen() {
         >
           ← Back
         </button>
-        <h1 className="text-lg font-bold">Invoices</h1>
+        <h1 className="text-lg font-bold">Refund — Select Invoice</h1>
+        <div className="text-xs text-gray-400">
+          SALE invoice 만 환불 가능 (SPEND / REFUND 제외)
+        </div>
       </div>
 
       <div className="flex-1 min-h-0">
         <SaleInvoiceSearchPanel
-          onSelect={(inv) => setViewerId(inv.id)}
+          onSelect={(inv) => navigate(`/manager/refund/${inv.id}`)}
+          lockedTypeFilter="SALE"
+          emptyLabel="No sale invoices"
         />
       </div>
-
-      <SaleInvoiceViewer
-        invoiceId={viewerId}
-        onClose={() => setViewerId(null)}
-      />
     </div>
   );
 }

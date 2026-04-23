@@ -66,3 +66,19 @@ export interface SaleCreatePayload {
   payments: PaymentPayload[];
   note?: string;
 }
+
+// ── REFUND payload ─────────────────────────────────────────────
+// Refund 의도만 받음. 서버가 D-26 분리 저장 + drift-absorbing 수식으로
+// refund_row.total / surcharge_share / tax / invoice 합계 / rounding / serial
+// 전부 canonical 재계산 (sale.refund.service.ts 헤더 주석 참조).
+export interface RefundRowPayload {
+  originalInvoiceRowId: number; // 원본 SALE row.id
+  refund_qty: number; // ×1000 (QTY_SCALE)
+}
+
+export interface RefundCreatePayload {
+  originalInvoiceId: number;
+  rows: RefundRowPayload[];
+  payments: PaymentPayload[];
+  note?: string;
+}

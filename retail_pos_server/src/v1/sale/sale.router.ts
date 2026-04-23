@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  createRefundController,
   createSaleController,
   createSpendController,
   getLatestInvoiceController,
@@ -26,6 +27,16 @@ saleRouter.post(
   userMiddleware,
   scopeMiddleware("sale"),
   createSpendController,
+);
+
+// POST /api/sale/refund — REFUND invoice 생성. Body: RefundCreatePayload.
+// 서버가 drift-absorbing 수식 + tender cap + CRM 차단 검증 전부 canonical 수행.
+// sale.refund.service.ts 헤더 주석 참조.
+saleRouter.post(
+  "/refund",
+  userMiddleware,
+  scopeMiddleware("refund"),
+  createRefundController,
 );
 
 // GET /api/sale — 리스트 조회 (keyword / 날짜 / 금액 / member / type 필터).

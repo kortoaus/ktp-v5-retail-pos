@@ -393,34 +393,75 @@ tender is unavailable (see CRM offline section — D-21).
 3. **소비자 공정성** — surcharge 는 supply 의 일부 (ATO 해석). Supply 취소되면
    같이 환불.
 
-### Per-row refund amount (no drilling)
+### Storage — Interpretation A (split), not combined
 
-Each SALE row carries:
-- `total` — tax-inclusive 상품 총액
-- `surcharge_share` — row-total 단위, 이 row 가 가져간 invoice.creditSurchargeAmount 몫
-
-Refunding `refund_qty` of this row:
+D-12 invariant (`total = linesTotal + rounding + creditSurchargeAmount`) 을
+SALE / REFUND 에서 **동일 의미** 로 유지하기 위해, refund_row 저장 컬럼은 SALE
+과 같은 축을 쓴다:
 
 ```
-refund_row.total = round((row.total + row.surcharge_share) × refund_qty / row.qty)
+refund_row.total           = 상품 부분만 (tax-inclusive, surcharge 제외)
+refund_row.surcharge_share = 이 row 가 돌려받는 surcharge 몫 (cents)
 ```
 
-Row-local 연산만. `rounding_share` 는 없음 (D-26) — rounding 은 refund invoice
-가 독립 own (refund tender 가 CASH 면 자체 재계산).
+→ Invoice 레벨에서:
+- `linesTotal            = Σ refund_row.total`           (상품 합)
+- `creditSurchargeAmount = Σ refund_row.surcharge_share` (surcharge 합)
+- `total                 = linesTotal + rounding + creditSurchargeAmount` (D-12)
 
-### refund_row.tax_amount (GST) — taxable 분기
+초기 §6 문구의 `refund_row.total = round((row.total + surcharge_share) × qty / row.qty)`
+는 "per-row refund 금액 개념값" (receipt 에 보이는 합) 의 표현이었다.
+저장 레이어는 product / surcharge 를 **분리 저장** 하고, receipt / cashier 에
+보이는 per-row 환불 금액은 두 컬럼의 합으로 표시.
 
-`row.taxable` 에 따라:
-- **taxable**: `refund_row.tax_amount = round(refund_row.total / 11)` — 한 줄.
-  상품 GST + surcharge GST 가 같은 `/11` 공식에 섞여 정확히 나옴 (tax-inclusive).
-- **non-taxable** (비과세 상품 + 과세 surcharge): 상품 부분 GST 없음, surcharge
-  부분만 추출:
-  ```
-  refund_row.tax_amount = round((row.surcharge_share × refund_qty / row.qty) / 11)
-  ```
+B 해석 (합산 저장) 의 비용이 너무 크다 — 모든 SUM / report / receipt / cloud
+sync 가 `WHERE type='REFUND'` 분기 필요 + row.total 컬럼 의미가 SALE/REFUND
+간 비대칭. 영구 부채.
 
-오차: 각 round 에서 ±0.5¢ → row 당 최대 ±1~2¢, N row refund 시 누적 ~√N.
-BAS 허용 오차 내.
+### Per-row refund amount — drift-absorbing
+
+Naive `round(row.surcharge_share × refund_qty / row.qty)` 는 같은 row 를 여러
+번 나눠 환불하면 rounding drift 누적 → 합이 원본과 ±n¢ 어긋남.
+
+예: row.qty=3, surcharge=50¢ 을 1개씩 3번 환불 시 17+17+17 = 51¢ (1¢ over).
+
+**해결: remaining-based 계산 + row 별 마지막 환불이 drift 흡수.**
+
+각 원본 row 에 대해:
+
+```
+priorRefundProduct   = Σ (이 row 를 참조하는 prior refund row).total
+priorRefundSurcharge = Σ (이 row 를 참조하는 prior refund row).surcharge_share
+remainingQty         = origRow.qty - origRow.refunded_qty
+remainingProduct     = origRow.total           - priorRefundProduct
+remainingSurcharge   = origRow.surcharge_share - priorRefundSurcharge
+
+if (refund_qty === remainingQty):                   // 이 row 의 마지막 환불
+  refund_row.total           = remainingProduct     ← drift 흡수
+  refund_row.surcharge_share = remainingSurcharge   ← drift 흡수
+else:
+  refund_row.total           = round(remainingProduct   × refund_qty / remainingQty)
+  refund_row.surcharge_share = round(remainingSurcharge × refund_qty / remainingQty)
+```
+
+**불변식:** `row.refunded_qty === row.qty` 시점에
+```
+Σ (이 row 의 모든 refund rows).total           === origRow.total
+Σ (이 row 의 모든 refund rows).surcharge_share === origRow.surcharge_share
+```
+
+Drift 흡수 판정은 **row 별**. Invoice 가 부분 환불 상태여도 특정 row 는 완전
+환불될 수 있고, 그 시점에 그 row 는 깔끔히 정산됨.
+
+### refund_row.tax_amount — product GST only
+
+```
+refund_row.tax_amount = row.taxable ? round(refund_row.total / 11) : 0
+```
+
+refund_row.total 이 product 부분만 담으므로 상품 GST 만 나옴. Surcharge GST 는
+invoice-level `surchargeTax = round(creditSurchargeAmount / 11)` 로 별도 관리
+(D-27, SALE 과 동일 구조).
 
 ### Refund cap per row
 
@@ -428,21 +469,26 @@ BAS 허용 오차 내.
 `refund_qty` must be ≤ `qty - refunded_qty`. Updated atomically when a REFUND
 invoice is created.
 
-### REFUND invoice shape (D-26)
+### REFUND invoice shape
 
 - `type = REFUND`
 - `originalInvoiceId` → original SALE invoice
 - Rows: one REFUND row per refunded quantity of original rows, each with
-  `originalInvoiceId`, `originalInvoiceRowId` populated, and its own
-  `total` computed by the formula above
-- `linesTotal = Σ refund_row.total` (원본 row.total 비례 분)
-- `creditSurchargeAmount = Σ refund_row 의 surcharge 부분 합` (환불된 surcharge
-  총액, **0 아님**. Q5 revised)
-- `lineTax` / `surchargeTax` — refund row 들의 GST 합 (taxable 분기)
-- `total = linesTotal + rounding + creditSurchargeAmount` (D-12 동일)
-- `rounding` — refund tender 가 CASH 면 refund 자체의 5¢ round 로 재계산, 그 외 0
-- Payments: 원본 tender 로 환불. CREDIT 는 EFTPOS 에 surcharge 포함 키인,
-  VOUCHER 는 voucher balance REFUND 이벤트 + increment
+  `originalInvoiceId`, `originalInvoiceRowId` populated.
+  Each row stores product portion in `total` and surcharge portion in
+  `surcharge_share` (split 저장, drift-absorbing 로직).
+- `linesTotal            = Σ refund_row.total`             (product 합)
+- `creditSurchargeAmount = Σ refund_row.surcharge_share`   (환불 surcharge 합)
+- `lineTax               = Σ refund_row.tax_amount`        (상품 GST 합)
+- `surchargeTax          = round(creditSurchargeAmount / 11)` (surcharge GST)
+- `total = linesTotal + rounding + creditSurchargeAmount`  (D-12 동일)
+- `rounding` — refund 결제가 전부 CASH 이고 non-cash 전무 면 5¢ round, 그 외 0
+- Payments: 원본 tender 로 환불 (cap: 원본 − prior refund children 합).
+  - CREDIT / GIFTCARD: EFTPOS 수동 (payment.amount 에 surcharge 포함 키인 금액)
+  - VOUCHER (user): `VoucherEvent.REFUND +amount` + `Voucher.balance += amount`
+    (validTo / status 변경 안 함 — expired 여도 balance 복구)
+  - VOUCHER (customer, CRM): 현재 CRM online check 미구현 → 해당 invoice
+    환불 전면 차단 (D-21)
 
 ---
 
@@ -655,10 +701,24 @@ renames / tier changes on CRM do not rewrite historical receipts.
 Q5 (REFUND creditSurchargeAmount=0) 폐기. Refund 도 surcharge 를 비례로 돌려줌
 (GST 대칭 / EFTPOS 정산 대칭 / 소비자 공정). Row 의 `surcharge_share` 는 유지
 (row-total 단위, unit 아님). `rounding_share` 는 제거 — rounding 금액이 너무 작아
-row 배분 의미 없고, refund invoice 가 독립 own. 수식:
-```
-refund_row.total = round((row.total + row.surcharge_share) × refund_qty / row.qty)
-```
+row 배분 의미 없고, refund invoice 가 독립 own.
+
+**D-26 revised (2026-04-23) — Interpretation A (split storage) + drift absorption**
+초기 수식 `refund_row.total = round((row.total + surcharge_share) × refund_qty
+/ row.qty)` 를 **문자 그대로 저장** 하면 D-12 invariant 가 깨짐 (surcharge 이중
+계산). 따라서:
+
+1. **Split storage** — `refund_row.total` = 상품 부분만, `surcharge_share` =
+   surcharge 부분 별도. SALE row 와 동일 축 유지 → invoice-level 수식이 SALE /
+   REFUND 에서 동일 (§6 Storage 섹션).
+
+2. **Drift-absorbing 수식** — naive round 공식은 여러 번 나눠 환불 시 drift
+   누적. 각 row 의 prior refund 합 기반으로 remaining 계산하고, `refund_qty
+   === remainingQty` 면 (= row 의 마지막 환불) 잔량 전부 가져감. Drift 자동
+   흡수 (§6 Per-row refund amount 섹션).
+
+Server 구현: `sale.refund.service.ts`. 클라이언트 compute:
+`libs/refund/compute.ts`.
 
 ### GST on surcharge (2026-04-22)
 

@@ -106,7 +106,54 @@ export default function SaleInvoiceViewer({ invoiceId, onClose }: Props) {
             {error}
           </div>
         )}
+        {invoice && <RefundStatusBar invoice={invoice} />}
         {invoice && <Receipt invoice={invoice} />}
+      </div>
+    </div>
+  );
+}
+
+// SALE invoice 전용 — refund 상태 표시. 부분 환불 / 전체 환불 여부 + refund
+// children serial 리스트. 영수증 자체에는 안 들어감 (print 는 receipt 만).
+function RefundStatusBar({ invoice }: { invoice: SaleInvoiceDetail }) {
+  if (invoice.type !== "SALE") return null;
+  const refunds = invoice.refunds ?? [];
+  if (refunds.length === 0) return null;
+
+  const totalQty = invoice.rows.reduce((s, r) => s + r.qty, 0);
+  const refundedQty = invoice.rows.reduce((s, r) => s + r.refunded_qty, 0);
+  const fullyRefunded = totalQty > 0 && refundedQty >= totalQty;
+  const partially = refundedQty > 0 && !fullyRefunded;
+
+  return (
+    <div
+      className={
+        "w-[380px] px-4 py-2 border-b border-gray-200 " +
+        (fullyRefunded ? "bg-rose-50" : "bg-amber-50")
+      }
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold tracking-wider">
+          {fullyRefunded
+            ? "FULLY REFUNDED"
+            : partially
+              ? "PARTIALLY REFUNDED"
+              : ""}
+        </span>
+        <span className="text-[10px] text-gray-500">
+          {refunds.length} refund{refunds.length > 1 ? "s" : ""}
+        </span>
+      </div>
+      <div className="mt-1 space-y-0.5">
+        {refunds.map((r) => (
+          <div
+            key={r.id}
+            className="flex justify-between text-[11px] text-gray-600 font-mono"
+          >
+            <span>{r.serial ?? `#${r.id}`}</span>
+            <span>{new Date(r.createdAt).toLocaleString()}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

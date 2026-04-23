@@ -1,18 +1,18 @@
-// Refund math — D-26 + D-21 / D-27 / refund-plan.md §2.
+// Refund math — Interpretation A (split storage) + drift-absorbing 수식.
+// Server (sale.refund.service.ts) 와 동일 수식을 유지. 상세는 서버 파일 헤더
+// 주석 참조.
 //
-// 원본 SaleInvoice (rows + payments + refunds children) 를 받아 refund detail UI
-// 에 필요한 모든 파생값을 계산. 서버는 이 수식과 동일하게 검증 + 재계산.
+// 핵심 요약:
+//   각 원본 row 마다 prior refund 합을 빼서 remaining 을 구하고, 이번 refund
+//   qty 가 remainingQty 와 같으면 (= 이 row 의 마지막 환불) 잔량 전부 가져감
+//   → drift 자동 흡수. 그 외에는 `round(remaining × qty / remainingQty)`.
 //
-// ── 단위 해석 (중요) ──
-// §6 의 literal 수식은 "refund_row.total = round((row.total + surcharge_share)
-// × refund_qty / row.qty)" 이지만, 이 계산 라이브러리는 **분리 저장** 해석을
-// 사용한다 (SALE 과 동일 축 유지):
-//   productRefund(row, qty)   = round(row.total × qty / row.qty)
-//   surchargeRefund(row, qty) = round(row.surcharge_share × qty / row.qty)
-//   rowRefundAmount           = productRefund + surchargeRefund  (receipt 표시)
-// 이유: invoice 불변식 `total = linesTotal + rounding + creditSurchargeAmount`
-// 를 refund 에서도 유지. linesTotal = Σ productRefund (SALE 과 동일).
-// creditSurchargeAmount = Σ surchargeRefund (분리 tracking).
+//   refund_row.total           = 상품 부분 (surcharge 제외)
+//   refund_row.surcharge_share = surcharge 몫 (분리 저장)
+//   rowRefundAmount            = total + surcharge_share (cashier/receipt 표시용 합)
+//   invoice.linesTotal         = Σ row.total
+//   invoice.creditSurchargeAmount = Σ row.surcharge_share
+//   invoice.total = linesTotal + rounding + creditSurchargeAmount  (D-12)
 
 import type {
   SaleInvoiceDetail,
@@ -30,29 +30,84 @@ export function rowRefundable(row: SaleInvoiceRowItem): number {
   return Math.max(0, row.qty - row.refunded_qty);
 }
 
-// ── Per-row refund amount (D-26 분리 해석) ─────────────────────
-export function productRefund(row: SaleInvoiceRowItem, qty: number): number {
-  if (qty <= 0 || row.qty <= 0) return 0;
-  return Math.round((row.total * qty) / row.qty);
+// ── Prior refund 집계 (원본 row 기준) ───────────────────────────
+interface PriorRefund {
+  product: number;
+  surcharge: number;
+  qty: number;
 }
 
-export function surchargeRefund(row: SaleInvoiceRowItem, qty: number): number {
-  if (qty <= 0 || row.qty <= 0 || row.surcharge_share === 0) return 0;
-  return Math.round((row.surcharge_share * qty) / row.qty);
+export function priorRefundOfRow(
+  row: SaleInvoiceRowItem,
+  refunds: SaleInvoiceRefundChild[] | undefined,
+): PriorRefund {
+  let product = 0;
+  let surcharge = 0;
+  let qty = 0;
+  if (!refunds) return { product, surcharge, qty };
+  for (const child of refunds) {
+    for (const r of child.rows) {
+      if (r.originalInvoiceRowId === row.id) {
+        product += r.total;
+        surcharge += r.surcharge_share;
+        qty += r.qty;
+      }
+    }
+  }
+  return { product, surcharge, qty };
 }
 
+// ── Drift-absorbing per-row calc ─────────────────────────────────
+export interface RefundRowCalc {
+  product: number; // refund_row.total (상품 부분)
+  surcharge: number; // refund_row.surcharge_share
+}
+
+export function refundRowComputed(
+  row: SaleInvoiceRowItem,
+  qty: number,
+  refunds: SaleInvoiceRefundChild[] | undefined,
+): RefundRowCalc {
+  if (qty <= 0) return { product: 0, surcharge: 0 };
+  const remainingQty = rowRefundable(row);
+  if (remainingQty <= 0) return { product: 0, surcharge: 0 };
+  // clamp (UI 에서 이미 clamp 되지만 방어)
+  const q = Math.min(qty, remainingQty);
+
+  const prior = priorRefundOfRow(row, refunds);
+  const remProduct = row.total - prior.product;
+  const remSurcharge = row.surcharge_share - prior.surcharge;
+
+  if (q === remainingQty) {
+    // 이 row 의 마지막 환불 — drift 전부 흡수.
+    return { product: remProduct, surcharge: remSurcharge };
+  }
+  return {
+    product: Math.round((remProduct * q) / remainingQty),
+    surcharge: Math.round((remSurcharge * q) / remainingQty),
+  };
+}
+
+// cashier / receipt 에 보여주는 per-row 환불 금액 = product + surcharge.
 export function rowRefundAmount(
   row: SaleInvoiceRowItem,
   qty: number,
+  refunds: SaleInvoiceRefundChild[] | undefined,
 ): number {
-  return productRefund(row, qty) + surchargeRefund(row, qty);
+  const c = refundRowComputed(row, qty, refunds);
+  return c.product + c.surcharge;
 }
 
-// 비과세 row 에도 surcharge 부분의 GST 는 추출 필요 — invoice-level
-// surchargeTax 로 합산 (§6 non-taxable 분기와 같은 결과).
-export function rowProductTax(row: SaleInvoiceRowItem, qty: number): number {
-  if (qty <= 0 || !row.taxable) return 0;
-  return Math.round(productRefund(row, qty) / 11);
+// Row tax = taxable 면 round(product / 11), 아니면 0.
+// Surcharge GST 는 invoice-level surchargeTax 로만 추적.
+export function rowProductTax(
+  row: SaleInvoiceRowItem,
+  qty: number,
+  refunds: SaleInvoiceRefundChild[] | undefined,
+): number {
+  if (!row.taxable || qty <= 0) return 0;
+  const c = refundRowComputed(row, qty, refunds);
+  return Math.round(c.product / 11);
 }
 
 // ── Invoice-level breakdown ─────────────────────────────────────
@@ -62,14 +117,11 @@ export interface RefundInvoiceCalc {
   lineTax: number;
   surchargeTax: number;
   subtotalBeforeRounding: number; // linesTotal + creditSurchargeAmount
-  rounding: number; // cash-only 일 때만 ±0~2¢
+  rounding: number; // cash-only 일 때만
   total: number;
-  isCashOnlyCapable: boolean; // 현재 tender cap 상 전액 CASH 로 환불 가능?
+  isCashOnlyCapable: boolean;
 }
 
-// 모든 refund tender 가 CASH 라고 가정할 때의 rounding (5¢) 계산.
-// 실제 rounding 은 cashier 가 선택한 tender 조합에 따라 결정 — 이 함수는
-// 'all-cash 시나리오' 의 값만 제공. UI 가 tender 입력과 조합해 최종 결정.
 function round5ToNearest(n: number): number {
   return Math.round(n / 5) * 5;
 }
@@ -85,9 +137,10 @@ export function computeInvoice(
   for (const row of invoice.rows) {
     const qty = selections[row.id] ?? 0;
     if (qty <= 0) continue;
-    linesTotal += productRefund(row, qty);
-    creditSurchargeAmount += surchargeRefund(row, qty);
-    lineTax += rowProductTax(row, qty);
+    const c = refundRowComputed(row, qty, invoice.refunds);
+    linesTotal += c.product;
+    creditSurchargeAmount += c.surcharge;
+    lineTax += rowProductTax(row, qty, invoice.refunds);
   }
   const surchargeTax = Math.round(creditSurchargeAmount / 11);
   const subtotalBeforeRounding = linesTotal + creditSurchargeAmount;
@@ -115,7 +168,12 @@ export type FlatTenderKey =
   | { kind: "CASH" }
   | { kind: "CREDIT" }
   | { kind: "GIFTCARD" }
-  | { kind: "VOUCHER"; entityType: "user-voucher" | "customer-voucher"; entityId: number; entityLabel: string | null };
+  | {
+      kind: "VOUCHER";
+      entityType: "user-voucher" | "customer-voucher";
+      entityId: number;
+      entityLabel: string | null;
+    };
 
 export interface TenderCapEntry {
   key: FlatTenderKey;
@@ -150,7 +208,6 @@ function paymentKey(p: SaleInvoicePaymentItem): FlatTenderKey | null {
 export function computeTenderCaps(
   invoice: SaleInvoiceDetail,
 ): TenderCapEntry[] {
-  // 원본 payment 합 — 같은 key 면 합산.
   const originalMap = new Map<string, { key: FlatTenderKey; amount: number }>();
   for (const p of invoice.payments) {
     const k = paymentKey(p);
@@ -161,7 +218,6 @@ export function computeTenderCaps(
     else originalMap.set(ks, { key: k, amount: p.amount });
   }
 
-  // Prior refund children 의 같은 key tender 합.
   const priorMap = new Map<string, number>();
   for (const child of invoice.refunds ?? []) {
     for (const p of child.payments) {
@@ -197,19 +253,9 @@ export function computeTenderCaps(
   return entries;
 }
 
-// ── Prior refunded qty total per row (for display) ─────────────
-// 현재 row.refunded_qty 만 참조하면 된다 (server 가 refund create 때 increment).
-// refunds children 합 검증용으로만 쓸 경우 아래 helper 사용.
-export function sumPriorRefundQty(
-  rowId: number,
-  refunds: SaleInvoiceRefundChild[] | undefined,
-): number {
-  if (!refunds) return 0;
-  let s = 0;
-  for (const child of refunds) {
-    for (const r of child.rows) {
-      if (r.originalInvoiceRowId === rowId) s += r.qty;
-    }
-  }
-  return s;
+// ── CRM customer-voucher 차단 (D-21) ─────────────────────────────
+// 원본 invoice 에 customer-voucher payment 가 하나라도 있으면 refund 전면 차단.
+// (CRM 연동 전까지 — sale.refund.service.ts 의 loadOriginalOrThrow 참조.)
+export function hasCustomerVoucherPayment(invoice: SaleInvoiceDetail): boolean {
+  return invoice.payments.some((p) => p.entityType === "customer-voucher");
 }

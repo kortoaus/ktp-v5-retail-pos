@@ -10,8 +10,9 @@
 // 각각 해당 row/tender 의 display 버튼을 누르면 모달 open (또는 토글).
 
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
+  createRefundInvoice,
   getSaleInvoiceById,
   SaleInvoiceDetail,
   SaleInvoiceRowItem,
@@ -19,15 +20,19 @@ import {
 import {
   computeInvoice,
   computeTenderCaps,
+  hasCustomerVoucherPayment,
   rowRefundable,
   rowRefundAmount,
   type RefundSelection,
   type TenderCapEntry,
 } from "../../libs/refund/compute";
+import { buildRefundPayload } from "../../libs/refund/build-payload";
 import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../../libs/constants";
 import MoneyNumpad from "../../components/Numpads/MoneyNumpad";
 import Numpad from "../../components/Numpads/Numpad";
 import LoadingOverlay from "../../components/LoadingOverlay";
+import { kickDrawer } from "../../libs/printer/kick-drawer";
+import { printSaleInvoiceReceipt } from "../../libs/printer/sale-invoice-receipt";
 import { cn } from "../../libs/cn";
 
 const fmt = (cents: number) =>
@@ -47,11 +52,16 @@ type NumpadTarget =
   | { kind: "rowQty"; rowId: number };
 
 interface Props {
-  invoiceId: number;
+  // 명시적으로 넘어오면 그대로, 없으면 `/manager/refund/:invoiceId` 파라미터 사용.
+  invoiceId?: number;
 }
 
-export default function SaleRefundDetailScreen({ invoiceId }: Props) {
+export default function SaleRefundDetailScreen({
+  invoiceId: invoiceIdProp,
+}: Props) {
   const navigate = useNavigate();
+  const params = useParams();
+  const invoiceId = invoiceIdProp ?? parseInt(params.invoiceId ?? "", 10);
   const [invoice, setInvoice] = useState<SaleInvoiceDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -68,8 +78,18 @@ export default function SaleRefundDetailScreen({ invoiceId }: Props) {
   const [numpadTarget, setNumpadTarget] = useState<NumpadTarget | null>(null);
   const [numpadValue, setNumpadValue] = useState<string>("");
 
+  // Confirm dialog 단계 — null | review | final. Submit 은 final 이후.
+  const [confirmStage, setConfirmStage] = useState<null | "review" | "final">(
+    null,
+  );
+  const [submitting, setSubmitting] = useState(false);
+
   // ── Fetch ─────────────────────────────────────────────────
   useEffect(() => {
+    if (!Number.isFinite(invoiceId)) {
+      setError("Invalid invoice id");
+      return;
+    }
     setLoading(true);
     setError("");
     setInvoice(null);
@@ -126,7 +146,12 @@ export default function SaleRefundDetailScreen({ invoiceId }: Props) {
     () => Object.values(selections).some((q) => q > 0),
     [selections],
   );
-  const canComplete = anyRowSelected && calc.total > 0 && remaining === 0;
+
+  // CRM customer-voucher 차단 (D-21). 현재 CRM online check 없음 → 전면 차단.
+  const crmBlocked = invoice ? hasCustomerVoucherPayment(invoice) : false;
+
+  const canComplete =
+    !crmBlocked && anyRowSelected && calc.total > 0 && remaining === 0;
 
   // ── Row qty handlers ─────────────────────────────────────
   function setRowQty(row: SaleInvoiceRowItem, qty: number) {
@@ -197,6 +222,59 @@ export default function SaleRefundDetailScreen({ invoiceId }: Props) {
       if (row) setRowQty(row, qty);
     }
     closeNumpad();
+  }
+
+  // ── Submit ───────────────────────────────────────────────
+  async function doSubmit() {
+    if (!invoice) return;
+    setConfirmStage(null);
+    setSubmitting(true);
+    try {
+      const payload = buildRefundPayload(
+        invoice,
+        selections,
+        tenderAmounts,
+        caps,
+      );
+      const res = await createRefundInvoice(payload);
+      if (!res.ok || !res.result) {
+        window.alert(res.msg ?? "Refund failed");
+        return;
+      }
+
+      // Full detail for printing — 서버에서 canonical 재계산된 값으로 출력.
+      let detail: SaleInvoiceDetail | null = null;
+      const detailRes = await getSaleInvoiceById(res.result.id);
+      if (detailRes.ok && detailRes.result) detail = detailRes.result;
+
+      // Drawer kick — cash refund > 0 이면 먼저 열림.
+      const cashRefund = payload.payments
+        .filter((p) => p.type === "CASH")
+        .reduce((s, p) => s + p.amount, 0);
+      if (cashRefund > 0) {
+        try {
+          await kickDrawer();
+        } catch (e) {
+          console.error("kickDrawer failed:", e);
+        }
+      }
+
+      // Receipt print (REFUND 분기는 printer 가 처리).
+      if (detail) {
+        try {
+          await printSaleInvoiceReceipt(detail);
+        } catch (e) {
+          console.error("printSaleInvoiceReceipt failed:", e);
+        }
+      }
+
+      navigate("/manager/refund");
+    } catch (e) {
+      console.error("refund submit failed:", e);
+      window.alert("Refund failed — see console");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   // Fill — 이 tender 를 refund 합계에 맞게 채움. CASH 이고 다른 non-cash tender
@@ -276,6 +354,14 @@ export default function SaleRefundDetailScreen({ invoiceId }: Props) {
         <div className="p-10 text-center text-red-500">{error}</div>
       )}
 
+      {invoice && crmBlocked && (
+        <div className="p-3 bg-rose-50 border-b border-rose-200 text-sm text-rose-800">
+          <strong>Refund blocked.</strong> 이 invoice 는 CRM customer-voucher
+          결제를 포함하고 있어 CRM online check 없이는 환불할 수 없습니다
+          (D-21). 수기 기록 + 24h SLA 로 처리하세요.
+        </div>
+      )}
+
       {invoice && (
         <div className="flex-1 flex overflow-hidden">
           {/* Left — rows */}
@@ -289,6 +375,7 @@ export default function SaleRefundDetailScreen({ invoiceId }: Props) {
                   key={row.id}
                   row={row}
                   qty={selections[row.id] ?? 0}
+                  refunds={invoice.refunds}
                   onEditQty={() => handleRowQtyTap(row)}
                   onRefundAll={() => refundAllRow(row)}
                 />
@@ -338,15 +425,16 @@ export default function SaleRefundDetailScreen({ invoiceId }: Props) {
             <div className="p-4 border-t border-gray-200">
               <button
                 type="button"
-                disabled={!canComplete}
+                disabled={!canComplete || submitting}
+                onPointerDown={() => setConfirmStage("review")}
                 className={cn(
                   "w-full h-14 rounded-lg text-base font-bold",
-                  canComplete
+                  canComplete && !submitting
                     ? "bg-rose-600 text-white active:bg-rose-700"
                     : "bg-gray-200 text-gray-400",
                 )}
               >
-                COMPLETE REFUND
+                {submitting ? "Processing..." : "COMPLETE REFUND"}
               </button>
             </div>
           </div>
@@ -365,6 +453,27 @@ export default function SaleRefundDetailScreen({ invoiceId }: Props) {
           onCancel={closeNumpad}
         />
       )}
+
+      {/* Confirm — 2 단계. Review → Final */}
+      {confirmStage === "review" && invoice && (
+        <ReviewConfirmModal
+          invoice={invoice}
+          selections={selections}
+          caps={caps}
+          tenderAmounts={tenderAmounts}
+          total={calc.total}
+          onCancel={() => setConfirmStage(null)}
+          onNext={() => setConfirmStage("final")}
+        />
+      )}
+      {confirmStage === "final" && invoice && (
+        <FinalConfirmModal
+          total={calc.total}
+          serial={invoice.serial ?? `#${invoice.id}`}
+          onCancel={() => setConfirmStage("review")}
+          onConfirm={doSubmit}
+        />
+      )}
     </div>
   );
 }
@@ -373,16 +482,18 @@ export default function SaleRefundDetailScreen({ invoiceId }: Props) {
 function RowCard({
   row,
   qty,
+  refunds,
   onEditQty,
   onRefundAll,
 }: {
   row: SaleInvoiceRowItem;
   qty: number;
+  refunds: SaleInvoiceDetail["refunds"];
   onEditQty: () => void;
   onRefundAll: () => void;
 }) {
   const cap = rowRefundable(row);
-  const refundThisRow = rowRefundAmount(row, qty);
+  const refundThisRow = rowRefundAmount(row, qty, refunds);
   const priceChanged = row.unit_price_effective !== row.unit_price_original;
   const exhausted = cap === 0;
   const isPrepacked =
@@ -690,6 +801,162 @@ function Line({
     <div className={cn("flex justify-between", className)}>
       <span>{label}</span>
       <span>{value}</span>
+    </div>
+  );
+}
+
+// ── Review confirm modal (1/2) — refund 내역 한 번 훑기 ────────────────
+function ReviewConfirmModal({
+  invoice,
+  selections,
+  caps,
+  tenderAmounts,
+  total,
+  onCancel,
+  onNext,
+}: {
+  invoice: SaleInvoiceDetail;
+  selections: RefundSelection;
+  caps: TenderCapEntry[];
+  tenderAmounts: Record<string, number>;
+  total: number;
+  onCancel: () => void;
+  onNext: () => void;
+}) {
+  const selectedRows = invoice.rows.filter(
+    (r) => (selections[r.id] ?? 0) > 0,
+  );
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4"
+      style={{ zIndex: 1200 }}
+      onPointerDown={onCancel}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl p-6 w-[440px] max-h-[85vh] overflow-auto"
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-bold mb-1">Review Refund</h2>
+        <div className="text-xs text-gray-500 mb-4">
+          Original: {invoice.serial ?? `#${invoice.id}`}
+        </div>
+
+        <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+          Items ({selectedRows.length})
+        </div>
+        <div className="space-y-1 mb-4 text-sm">
+          {selectedRows.map((r) => {
+            const q = selections[r.id] ?? 0;
+            const amt = rowRefundAmount(r, q, invoice.refunds);
+            return (
+              <div key={r.id} className="flex justify-between gap-2">
+                <span className="truncate flex-1">
+                  {r.name_en}
+                  <span className="text-gray-400 text-xs ml-2">
+                    {fmtQty(q)} {r.uom}
+                  </span>
+                </span>
+                <span className="font-mono shrink-0">{fmt(amt)}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+          Tenders
+        </div>
+        <div className="space-y-1 mb-4 text-sm">
+          {caps
+            .filter((c) => (tenderAmounts[c.keyStr] ?? 0) > 0)
+            .map((c) => (
+              <div key={c.keyStr} className="flex justify-between">
+                <span>{c.label}</span>
+                <span className="font-mono">
+                  {fmt(tenderAmounts[c.keyStr] ?? 0)}
+                </span>
+              </div>
+            ))}
+        </div>
+
+        <hr className="border-dashed border-gray-300 my-3" />
+        <div className="flex justify-between text-lg font-bold mb-4">
+          <span>REFUND TOTAL</span>
+          <span>{fmt(total)}</span>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onPointerDown={onCancel}
+            className="flex-1 h-11 rounded-lg bg-gray-200 text-sm font-bold active:bg-gray-300"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onPointerDown={onNext}
+            className="flex-1 h-11 rounded-lg bg-blue-600 text-white text-sm font-bold active:bg-blue-700"
+          >
+            Looks Good →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Final confirm modal (2/2) — 되돌릴 수 없음 경고 후 실제 submit ─────
+function FinalConfirmModal({
+  total,
+  serial,
+  onCancel,
+  onConfirm,
+}: {
+  total: number;
+  serial: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4"
+      style={{ zIndex: 1300 }}
+      onPointerDown={onCancel}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl p-6 w-[400px]"
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-bold mb-2 text-rose-700">
+          ⚠ Confirm Refund
+        </h2>
+        <p className="text-sm text-gray-700 mb-2">
+          <span className="font-bold">{fmt(total)}</span> will be refunded from
+          invoice <span className="font-mono">{serial}</span>.
+        </p>
+        <p className="text-xs text-gray-500 mb-5">
+          This creates a REFUND invoice and cannot be undone from the POS.
+          EFTPOS / gift card entries must be keyed in manually on the terminal.
+        </p>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onPointerDown={onCancel}
+            className="flex-1 h-11 rounded-lg bg-gray-200 text-sm font-bold active:bg-gray-300"
+          >
+            ← Back
+          </button>
+          <button
+            type="button"
+            onPointerDown={onConfirm}
+            className="flex-1 h-11 rounded-lg bg-rose-600 text-white text-sm font-bold active:bg-rose-700"
+          >
+            REFUND NOW
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

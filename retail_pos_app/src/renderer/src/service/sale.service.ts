@@ -5,6 +5,7 @@ import type {
   RowTypeWire,
   SaleCreatePayload,
 } from "../libs/sale/payload.types";
+import type { RefundCreatePayload } from "../libs/refund/payload.types";
 
 export type InvoiceTypeWire = "SALE" | "REFUND" | "SPEND";
 
@@ -64,6 +65,14 @@ export async function createSpend(
   payload: SaleCreatePayload,
 ): Promise<ApiResponse<SaleInvoiceCreated>> {
   return apiService.post<SaleInvoiceCreated>("/api/sale/spend", payload);
+}
+
+// REFUND invoice 생성. 서버가 D-26 drift-absorbing 수식으로 canonical 재계산
+// (sale.refund.service.ts 헤더 주석 참조). 응답은 새 REFUND invoice 의 요약 필드.
+export async function createRefundInvoice(
+  payload: RefundCreatePayload,
+): Promise<ApiResponse<SaleInvoiceCreated>> {
+  return apiService.post<SaleInvoiceCreated>("/api/sale/refund", payload);
 }
 
 export async function searchSaleInvoices(

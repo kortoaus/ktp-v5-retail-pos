@@ -2,13 +2,14 @@ import { Request, Response } from "express";
 import { BadRequestException } from "../../libs/exceptions";
 import { createSaleService } from "./sale.create.service";
 import { createSpendService } from "./spend.create.service";
+import { createRefundService } from "./sale.refund.service";
 import {
   FindManyQuery,
   getLatestInvoiceForTerminalService,
   getSaleInvoiceByIdService,
   getSaleInvoicesService,
 } from "./sale.query.service";
-import { SaleCreatePayload } from "./sale.types";
+import { RefundCreatePayload, SaleCreatePayload } from "./sale.types";
 import { InvoiceType } from "../../generated/prisma/enums";
 
 export async function createSaleController(req: Request, res: Response) {
@@ -37,6 +38,22 @@ export async function createSpendController(req: Request, res: Response) {
 
   const payload = req.body as SaleCreatePayload;
   const result = await createSpendService(payload, {
+    terminal,
+    storeSetting,
+    user,
+    shift,
+  });
+  res.json(result);
+}
+
+export async function createRefundController(req: Request, res: Response) {
+  const { terminal, storeSetting, shift, user } = res.locals;
+  if (!shift) {
+    throw new BadRequestException("No open shift — refund cannot be created");
+  }
+
+  const payload = req.body as RefundCreatePayload;
+  const result = await createRefundService(payload, {
     terminal,
     storeSetting,
     user,
