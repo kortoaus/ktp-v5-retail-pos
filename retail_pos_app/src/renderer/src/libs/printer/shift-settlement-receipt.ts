@@ -104,17 +104,34 @@ export function renderShiftSettlementReceipt(
   ctx.fillText("SALES", PAD, y);
   y += LH;
 
+  // Voucher 는 user / customer 분리 저장 (D-20). 영수증에는 합산 표기.
+  const salesVoucherTotal = shift.salesUserVoucher + shift.salesCustomerVoucher;
+  const refundsVoucherTotal =
+    shift.refundsUserVoucher + shift.refundsCustomerVoucher;
+
   ctx.font = `${FONT}px sans-serif`;
   row(ctx, "Cash", fmt(shift.salesCash), y);
   y += LH;
   row(ctx, "Credit", fmt(shift.salesCredit), y);
   y += LH;
-  row(ctx, "Voucher", fmt(shift.salesVoucher), y);
+  row(ctx, "Voucher", fmt(salesVoucherTotal), y);
+  y += LH;
+  row(ctx, "Gift Card", fmt(shift.salesGiftcard), y);
   y += LH;
   row(ctx, "GST", fmt(shift.salesTax), y);
   y += LH;
   ctx.font = `bold ${FONT}px sans-serif`;
-  row(ctx, "Total Sales", fmt(shift.salesCash + shift.salesCredit + shift.salesVoucher), y);
+  row(
+    ctx,
+    "Total Sales",
+    fmt(
+      shift.salesCash +
+        shift.salesCredit +
+        salesVoucherTotal +
+        shift.salesGiftcard,
+    ),
+    y,
+  );
   y += LH;
 
   /* ── Refunds ── */
@@ -130,7 +147,9 @@ export function renderShiftSettlementReceipt(
   y += LH;
   row(ctx, "Credit", fmt(shift.refundsCredit), y);
   y += LH;
-  row(ctx, "Voucher", fmt(shift.refundsVoucher), y);
+  row(ctx, "Voucher", fmt(refundsVoucherTotal), y);
+  y += LH;
+  row(ctx, "Gift Card", fmt(shift.refundsGiftcard), y);
   y += LH;
   row(ctx, "GST", fmt(shift.refundsTax), y);
   y += LH;
@@ -144,9 +163,9 @@ export function renderShiftSettlementReceipt(
   y += LH;
 
   ctx.font = `${FONT}px sans-serif`;
-  row(ctx, "Cash In", fmt(shift.cashIn), y);
+  row(ctx, "Cash In", fmt(shift.totalCashIn), y);
   y += LH;
-  row(ctx, "Cash Out", fmt(shift.cashOut), y);
+  row(ctx, "Cash Out", fmt(shift.totalCashOut), y);
   y += LH;
 
   /* ── Drawer ── */
@@ -158,7 +177,7 @@ export function renderShiftSettlementReceipt(
   y += LH;
 
   ctx.font = `${FONT}px sans-serif`;
-  row(ctx, "Started", fmt(shift.startedCach), y);
+  row(ctx, "Started", fmt(shift.startedCash), y);
   y += LH;
   row(ctx, "Expected", fmt(shift.endedCashExpected), y);
   y += LH;

@@ -198,14 +198,15 @@ export interface User {
   createdAt: string;
   updatedAt: string;
 }
+// 서버 schema (TerminalShift in prisma/schema.prisma) 와 반드시 sync.
+// Close 시점에 서버가 SUM-based 재집계 (D-34) 로 모든 집계 필드를 채움.
 export interface TerminalShift {
   id: number;
   companyId: number;
   terminalId: number;
-  // date meta
   dayStr: string;
 
-  // staff data
+  // Staff
   openedUserId: number;
   openedUser: string;
   openedAt: string;
@@ -215,28 +216,52 @@ export interface TerminalShift {
   closedAt?: string | null;
   closedNote?: string | null;
 
-  // Money in Drawer
-  startedCach: number;
+  // Drawer
+  startedCash: number;
   endedCashExpected: number;
   endedCashActual: number;
 
-  // Sales
+  // Sales (tender) — VOUCHER 는 user / customer 분리 (D-20)
   salesCash: number;
-  salesCredit: number;
-  salesVoucher: number;
+  salesCredit: number; // surcharge 포함 (EFTPOS 정산액)
+  salesUserVoucher: number;
+  salesCustomerVoucher: number;
+  salesGiftcard: number;
+
+  // Sales (gross items / rounding / count)
+  salesLinesTotal: number;
+  salesRounding: number;
+  salesCount: number;
+  repayCount: number; // SALE with originalInvoiceId — repay 로 생성된 새 SALE 건수
+
+  // Sales (분석)
+  salesCreditSurcharge: number;
   salesTax: number;
 
-  // Refunds
+  // Refunds (tender)
   refundsCash: number;
   refundsCredit: number;
-  refundsVoucher: number;
+  refundsUserVoucher: number;
+  refundsCustomerVoucher: number;
+  refundsGiftcard: number;
+
+  // Refunds (gross items / rounding / count)
+  refundsLinesTotal: number;
+  refundsRounding: number;
+  refundsCount: number;
+
+  // Refunds (분석)
+  refundsCreditSurcharge: number;
   refundsTax: number;
 
-  // Cash In/Out
-  cashIn: number;
-  cashOut: number;
+  // SPEND
+  spendCount: number;
+  spendRetailValue: number;
+
+  // Cash drawer movement
   totalCashIn: number;
   totalCashOut: number;
+
   // Cloud Sync
   syncedAt?: string | null;
   synced: boolean;

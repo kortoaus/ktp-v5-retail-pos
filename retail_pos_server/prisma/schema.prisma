@@ -297,10 +297,29 @@ model TerminalShift {
   // ── Sales (tender 별, cents, 항상 양수) ──
   // CREDIT / GIFTCARD 는 payment.amount 가 EFTPOS 키인 금액 (D-10, D-24) 이라
   // 여기 누적치도 surcharge 포함한 "실제 단말 정산액".
-  salesCash     Int @default(0)
-  salesCredit   Int @default(0) // surcharge 포함 (EFTPOS 단말 정산액)
-  salesVoucher  Int @default(0)
-  salesGiftcard Int @default(0) // D-24 — CREDIT 과 별개 tender
+  // VOUCHER 는 D-20 entityType 기준 **분리 집계**:
+  //   salesUserVoucher     — staff (local Voucher) redemption
+  //   salesCustomerVoucher — CRM customer voucher redemption (Phase 4 활성)
+  salesCash            Int @default(0)
+  salesCredit          Int @default(0) // surcharge 포함 (EFTPOS 단말 정산액)
+  salesUserVoucher     Int @default(0)
+  salesCustomerVoucher Int @default(0)
+  salesGiftcard        Int @default(0) // D-24 — CREDIT 과 별개 tender
+
+  // ── Sales (gross items / rounding / count — D-34 reaggregation) ──
+  // salesLinesTotal : Σ SALE invoice.linesTotal (상품만, surcharge 제외).
+  //                   tender 합 = linesTotal + rounding + surcharge 이므로,
+  //                   BAS / Z-report 에서 "상품 매출" 단독 표시 시 필요.
+  // salesRounding   : Σ SALE invoice.rounding (signed — 대개 음수).
+  //                   Drawer 엔 영향 없음 (payment.amount 가 이미 rounding 후).
+  //                   분석 전용.
+  // salesCount      : SALE invoice 건수.
+  // repayCount      : SALE invoice 중 originalInvoiceId 가 세팅된 것 —
+  //                   repay 로 생성된 새 SALE 만 카운트 (salesCount 의 subset).
+  salesLinesTotal Int @default(0)
+  salesRounding   Int @default(0)
+  salesCount      Int @default(0)
+  repayCount      Int @default(0)
 
   // ── Sales (분석 / BAS 용) ──
   // salesCreditSurcharge 는 salesCredit 안에 이미 포함된 surcharge 부분만 따로
@@ -312,14 +331,28 @@ model TerminalShift {
 
   // ── Refunds (tender 별) ──
   // Surcharge 는 비례 환불 정책 — refundsCredit 에도 환불된 surcharge 포함.
-  refundsCash     Int @default(0)
-  refundsCredit   Int @default(0) // surcharge 포함 환불 (EFTPOS 키인 금액)
-  refundsVoucher  Int @default(0)
-  refundsGiftcard Int @default(0)
+  // VOUCHER 는 sales 와 대칭으로 분리.
+  refundsCash            Int @default(0)
+  refundsCredit          Int @default(0) // surcharge 포함 환불 (EFTPOS 키인 금액)
+  refundsUserVoucher     Int @default(0)
+  refundsCustomerVoucher Int @default(0)
+  refundsGiftcard        Int @default(0)
+
+  // ── Refunds (gross items / rounding / count) ──
+  refundsLinesTotal Int @default(0)
+  refundsRounding   Int @default(0)
+  refundsCount      Int @default(0)
 
   // ── Refunds (분석용) ──
   refundsCreditSurcharge Int @default(0) // 환불된 surcharge 합 (refundsCredit 내)
   refundsTax             Int @default(0)
+
+  // ── SPEND (내부 소비 — D-14~16) ──
+  // SPEND 은 금액 0 / payments 없음 이라 tender 필드에 반영 안 됨.
+  // spendRetailValue 는 각 row 의 `unit_price_original × qty / QTY_SCALE` 합으로
+  // "retail 환산 가치" — 매니저 보고서 / 원가 분석 용.
+  spendCount       Int @default(0)
+  spendRetailValue Int @default(0)
 
   // ── Cash In/Out (shift 내 drawer 입출금 합) ──
   // (기존 cashIn/cashOut 필드 삭제 — totalCashIn/totalCashOut 과 역할 중복)

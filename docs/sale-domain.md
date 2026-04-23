@@ -24,7 +24,7 @@ reasoning and trade-offs behind those invariants.
 4. [Payment model (`SaleInvoicePayment`)](#4-payment-model-saleinvoicepayment)
 5. [Voucher model (`Voucher` + `VoucherEvent`)](#5-voucher-model-voucher--voucherevent)
 6. [Refund math](#6-refund-math)
-7. [Decisions log (D-1 … D-25)](#7-decisions-log-d-1--d-25)
+7. [Decisions log (D-1 … D-37)](#7-decisions-log-d-1--d-37)
 8. [Open questions](#8-open-questions)
 
 ---
@@ -492,7 +492,7 @@ invoice is created.
 
 ---
 
-## 7. Decisions log (D-1 … D-36)
+## 7. Decisions log (D-1 … D-37)
 
 Numbering continues from the handover's Q-series, which stopped at Q17.
 Within this log, decisions are grouped by theme; numeric order is
@@ -802,20 +802,89 @@ legacy 빈 테이블. `User` 모델이 cashier/voucher 관계 담당. 중복 제
 - `SaleInvoicePayment`: `@@index([invoiceId])`, `@@index([type, createdAt])` (EOD tender 별 SUM)
 - `SaleInvoiceRow`: `@@index([originalInvoiceId])` (refund 조회)
 
+### Repay + TerminalShift schema 확장 (2026-04-23)
+
+**D-37. Repay (same-shift 전량 재결제) + TerminalShift 집계 필드 확장**
+
+#### Repay
+"이미 결제된 SALE 의 tender 만 다시 선택" UX. 한 transaction 안에서 REFUND (전량) +
+새 SALE 을 원자적으로 생성. 두 문서를 만들지만 UX 는 한 동작. 조건:
+- `orig.type === SALE`
+- `orig.refunds.filter(type=REFUND).length === 0` (첫 환불이어야)
+- `orig.shiftId === currentShiftId`
+- `now - orig.createdAt < 10분`
+- 원본 payments 에 customer-voucher 없음 (D-21 확장)
+
+추적: 새 SALE 의 `originalInvoiceId = 원본 SALE.id`. 기존 REFUND 의 `originalInvoiceId`
+와 같은 컬럼 공유 — **`refunds` relation 이 REFUND 자식 + repay-SALE 자식을 둘 다
+반환**. 따라서 `refunds` 순회 코드는 반드시 `type === 'REFUND'` 로 필터. 서버 Prisma
+include 2곳 (`loadOriginalOrThrow`, `getSaleInvoiceByIdService`) 에 `where: { type: "REFUND" }`
+source filter, 클라 `compute.ts` / `SaleInvoiceViewer` 도 defensive filter.
+
+구현: `POST /api/sale/repay`. 서버: `sale.repay.service.ts` 가 `buildRefundInTx` +
+`buildSaleInTx` 를 한 `$transaction` 에 순차 호출. 클라: `PaymentModalForRepay`
+(invoice viewer 에서 직접 open, SaleScreen 경유 없음 — cart 편집 불가).
+
+#### TerminalShift schema 확장
+
+D-33 이후 추가 필요 항목 8종 (SUM-based 재집계 대상, D-34 기준 close 시 채워짐):
+
+**Voucher split (D-20 대응)**
+- `salesVoucher` 삭제 → `salesUserVoucher` + `salesCustomerVoucher`
+- `refundsVoucher` 삭제 → `refundsUserVoucher` + `refundsCustomerVoucher`
+- 이유: staff voucher 비용 vs CRM customer redemption 분리 추적. CRM 연동 (Phase 4)
+  시점에 구분 의미 있어짐. 지금은 customer-voucher 차단 (D-21) 이라 항상 0.
+
+**Gross items / rounding / counts**
+- `salesLinesTotal`, `refundsLinesTotal` — Σ invoice.linesTotal (상품만, surcharge 제외)
+  - tender 합 = linesTotal + rounding + surcharge 이므로 "상품 매출" 단독 표시 시 필요.
+- `salesRounding`, `refundsRounding` — Σ invoice.rounding (signed, 보통 음수)
+  - Drawer 엔 영향 없음 (payment.amount 가 이미 rounding 후 값). 분석 전용.
+- `salesCount`, `refundsCount` — 거래 건수. Z-report 헤더, 평균 거래액.
+- `repayCount` — `SaleInvoice where type=SALE AND originalInvoiceId IS NOT NULL` 의
+  건수. Repay 로 생성된 새 SALE (salesCount 의 subset). 운영 분석용.
+
+**SPEND**
+- `spendCount`, `spendRetailValue` — SPEND 은 금액 0 / payments 없음이라 기존 tender
+  필드에 반영 안 됨. `spendRetailValue = Σ row.unit_price_original × qty / QTY_SCALE`
+  로 "주방이 retail $X 어치 가져감" 추적. 매니저 보고서용.
+
+#### Close flow — preview + 재집계
+
+두 endpoint 공통 helper `aggregateShift(shiftId)` 사용:
+- `POST /api/shift/close/data` — **preview**. SUM 집계만, write 없음. CloseShiftScreen
+  이 진입 시 호출해서 expected cash 와 tender 별 합계 표시 → cashier 가 실물 현금과
+  맞춰봄.
+- `POST /api/shift/close` — **실행**. 같은 SUM 재집계 + shift record 에 write + 닫기.
+  Client DTO 는 `{ closedNote, endedCashActual }` 만 — 기대 현금/tender 합은 서버가
+  재계산. Client-side drift / tampering 불가능.
+
+Preview 와 close 가 같은 helper 를 쓰므로 "preview 에서 봤던 숫자 ≡ 실제 close 된 숫자"
+보장 (단, 사이에 새 invoice 생기지 않았을 때).
+
+#### 파생 사항 (정리)
+- `docs/sale-domain.md` 업데이트 (이 D-37).
+- 서버: `/api/sale/repay` 추가, `sale.create.service` / `sale.refund.service` 에서 tx 내부
+  로직을 `buildSaleInTx` / `buildRefundInTx` 로 추출.
+- 클라: `PaymentModalForRepay/` 신규, `SaleInvoiceViewer` 에 Repay 버튼 + 10분 타이머,
+  `can-repay.ts`, `invoice-row-to-line.ts`.
+- `app` 쪽 `TerminalShift` 타입 server schema 와 full sync (기존 오타 `startedCach` +
+  dead `cashIn/cashOut` 포함 전수 정리).
+
 ---
 
 ## 8. Open questions
 
 Still open, to be resolved in later sessions:
 
-- **Refund UI / service** — `POST /api/sale/refund` 와 RefundScreen 미구현.
-  Invoice viewer 에서 refund 진입점 필요. Per-row refund qty 선택 + payment
-  매칭 + VoucherEvent REFUND + 원본 `refunded_qty` increment.
-- **Cloud sync push** — `SaleInvoice.synced`/`syncedAt`/`cloudId` + `TerminalShift`
-  cloud sync. `createSaleService` 에 TODO 주석만 있고 실제 push 로직 없음.
-- **Shift close service 재작성** — 집계 쿼리 (`SUM(amount) WHERE shiftId=X
-  AND type=?`) + drawer 차이 (endedCashActual - endedCashExpected). 현재 sale
-  create 가 increment 안 하므로 close 가 반드시 재집계.
+- **Shift close service 재작성** (§4-2) — D-34 / D-37 대응. `aggregateShift(shiftId)`
+  helper + `/api/shift/close/data` (preview) + `/api/shift/close` (write) 둘 다 같은
+  집계 helper 공유. 현재 `/close/data` 는 router 에만 있고 handler 없음. `/close` 는
+  client 계산값을 그대로 저장하는 과도기 stub — client DTO 에 `{closedNote,
+  endedCashActual}` 만 받도록 단순화 예정.
+- **Cloud sync push** (§4-3) — `SaleInvoice.synced`/`syncedAt`/`cloudId` +
+  `TerminalShift` cloud sync. `createSaleService` / `createRefundService` /
+  `createRepayService` 에 push 훅 필요.
 - **Cloud uniqueness** — local serial 은 local 만 unique. Cloud 로 sync 할 때
   `(store branchCode or cloudId, serial)` 조합으로 global unique 보장. Cloud
   측에서 처리하기로 결정, schema 는 local 유지.
@@ -828,4 +897,5 @@ Still open, to be resolved in later sessions:
   "consideration received" when voucher was given away. Not urgent;
   probably fine for current scope.
 - **Linkly / GiftCard provider API (Phase 4)** — EFTPOS 자동 키인, GiftCard
-  balance 조회. 현재 모두 manual.
+  balance 조회. 현재 모두 manual. CRM customer-voucher redeem/refund 도 Phase 4
+  에서 해제 (D-21).

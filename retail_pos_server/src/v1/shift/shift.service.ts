@@ -102,17 +102,24 @@ export async function getShiftByIdService(shiftId: number) {
   }
 }
 
+// NOTE: 이 DTO / service 는 §4-2 에서 **서버 SUM-based 재집계** 로 전면 rewrite
+// 예정 (D-34). 현재는 client 가 계산한 값을 그대로 저장 = 증분 캐시 모델이라
+// drift 위험. 아래는 schema 변경 (salesVoucher 분리 등) 에 맞춰 컴파일만 통과
+// 시킨 과도기 stub — 신규 필드 (salesLinesTotal / salesRounding / counts /
+// spendRetailValue / repayCount) 는 아직 client 에서 안 보냄.
 type CloseShiftDTO = {
   closedNote: string;
   endedCashExpected: number;
   endedCashActual: number;
   salesCash: number;
   salesCredit: number;
-  salesVoucher: number;
+  salesUserVoucher: number;
+  salesCustomerVoucher: number;
   salesTax: number;
   refundsCash: number;
   refundsCredit: number;
-  refundsVoucher: number;
+  refundsUserVoucher: number;
+  refundsCustomerVoucher: number;
   refundsTax: number;
   cashIn: number;
   cashOut: number;
@@ -150,11 +157,13 @@ export async function closeTerminalShiftService(
         endedCashActual: dto.endedCashActual,
         salesCash: dto.salesCash,
         salesCredit: dto.salesCredit,
-        salesVoucher: dto.salesVoucher,
+        salesUserVoucher: dto.salesUserVoucher,
+        salesCustomerVoucher: dto.salesCustomerVoucher,
         salesTax: dto.salesTax,
         refundsCash: dto.refundsCash,
         refundsCredit: dto.refundsCredit,
-        refundsVoucher: dto.refundsVoucher,
+        refundsUserVoucher: dto.refundsUserVoucher,
+        refundsCustomerVoucher: dto.refundsCustomerVoucher,
         refundsTax: dto.refundsTax,
         // cashIn: dto.cashIn,
         // cashOut: dto.cashOut,

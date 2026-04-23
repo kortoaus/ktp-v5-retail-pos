@@ -56,17 +56,23 @@ export default function CloseShiftScreen() {
   const {
     salesCash,
     salesCredit,
-    salesVoucher,
+    salesUserVoucher,
+    salesCustomerVoucher,
     salesTax,
     refundsCash,
     refundsCredit,
-    refundsVoucher,
+    refundsUserVoucher,
+    refundsCustomerVoucher,
     refundsTax,
     cashIn,
     cashOut,
   } = closingData;
 
-  const startedCash = shift.startedCach;
+  // Voucher 는 user / customer 분리 저장 (D-20). UI/드로어 계산에는 합산 표시.
+  const salesVoucher = salesUserVoucher + salesCustomerVoucher;
+  const refundsVoucher = refundsUserVoucher + refundsCustomerVoucher;
+
+  const startedCash = shift.startedCash;
   const cashActualCents = Math.round(cashActual * MONEY_SCALE);
 
   const expectedCash = startedCash + salesCash - refundsCash + cashIn - cashOut;
@@ -87,11 +93,13 @@ export default function CloseShiftScreen() {
         endedCashActual: cashActualCents,
         salesCash,
         salesCredit,
-        salesVoucher,
+        salesUserVoucher,
+        salesCustomerVoucher,
         salesTax,
         refundsCash,
         refundsCredit,
-        refundsVoucher,
+        refundsUserVoucher,
+        refundsCustomerVoucher,
         refundsTax,
         cashIn,
         cashOut,
