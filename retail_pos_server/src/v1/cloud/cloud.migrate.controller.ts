@@ -11,6 +11,10 @@ import {
 } from "./cloud.migrate.service";
 
 import { getIO } from "../../libs/socket";
+import {
+  triggerSyncAllSaleInvoices,
+  triggerSyncAllShifts,
+} from "./cloud.sync.service";
 
 export async function cloudItemMigrateController(req: Request, res: Response) {
   const categoryResult = await cloudCategoryMigrateService();
@@ -85,6 +89,9 @@ export async function cloudItemMigrateController(req: Request, res: Response) {
     });
     return;
   }
+
+  triggerSyncAllSaleInvoices();
+  triggerSyncAllShifts();
 
   res.status(200).json({
     ok: true,

@@ -3,6 +3,7 @@ import { createCashIO } from "../../service/cashio.service";
 import OnScreenKeyboard from "../OnScreenKeyboard";
 import { cn } from "../../libs/cn";
 import { kickDrawer } from "../../libs/printer/kick-drawer";
+import { MONEY_SCALE } from "../../libs/constants";
 
 interface CashIOFormProps {
   onSave: () => void;
@@ -41,9 +42,12 @@ export default function CashIOForm({ onSave, onCancel }: CashIOFormProps) {
 
     setLoading(true);
     try {
+      // 서버 schema `CashInOut.amount` 는 cents (Int). UI 는 dollars 표기 →
+      // 전송 시 MONEY_SCALE 곱해서 cents 로 변환. 이전에는 dollar 단위로 그대로
+      // 저장되어 shift drawer 집계 (cents 기준) 와 mismatch 되던 버그 수정.
       const { ok, msg } = await createCashIO({
         type,
-        amount: parsed,
+        amount: Math.round(parsed * MONEY_SCALE),
         note: note.trim() || undefined,
       });
       if (ok) {

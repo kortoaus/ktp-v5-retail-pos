@@ -410,10 +410,12 @@ export default function PaymentModalForRepay({
         }
       }
 
-      // Refund receipt → 1 초 → new sale receipt (R3)
+      // Refund receipt → 1 초 → new sale receipt (R3).
+      // belowText 는 current storeSetting (snapshot 불필요 — §4-4).
+      const belowText = storeSetting?.receipt_below_text || undefined;
       if (refundDetail) {
         try {
-          await printSaleInvoiceReceipt(refundDetail);
+          await printSaleInvoiceReceipt(refundDetail, false, belowText);
         } catch (e) {
           console.error("printSaleInvoiceReceipt (refund) failed:", e);
         }
@@ -421,7 +423,7 @@ export default function PaymentModalForRepay({
       await new Promise((r) => setTimeout(r, 1000));
       if (newSaleDetail) {
         try {
-          await printSaleInvoiceReceipt(newSaleDetail);
+          await printSaleInvoiceReceipt(newSaleDetail, false, belowText);
         } catch (e) {
           console.error("printSaleInvoiceReceipt (newSale) failed:", e);
         }
@@ -467,7 +469,12 @@ export default function PaymentModalForRepay({
         const res = await getSaleInvoiceById(completedInfo.newSaleId);
         if (res.ok && res.result) detail = res.result;
       }
-      if (detail) await printSaleInvoiceReceipt(detail, true);
+      if (detail)
+        await printSaleInvoiceReceipt(
+          detail,
+          true,
+          storeSetting?.receipt_below_text || undefined,
+        );
     } catch (e) {
       console.error("reprint failed:", e);
     }

@@ -13,6 +13,10 @@ import { MONEY_DP, MONEY_SCALE } from "../libs/constants";
 import { printShiftSettlementReceipt } from "../libs/printer/shift-settlement-receipt";
 
 const fmt = (cents: number) => `$${(Math.abs(cents) / MONEY_SCALE).toFixed(MONEY_DP)}`;
+const signedFmt = (cents: number) => {
+  if (cents === 0) return fmt(0);
+  return (cents > 0 ? "+" : "-") + fmt(cents);
+};
 
 export default function CloseShiftScreen() {
   const navigate = useNavigate();
@@ -53,32 +57,15 @@ export default function CloseShiftScreen() {
     );
   }
 
-  const {
-    salesCash,
-    salesCredit,
-    salesUserVoucher,
-    salesCustomerVoucher,
-    salesTax,
-    refundsCash,
-    refundsCredit,
-    refundsUserVoucher,
-    refundsCustomerVoucher,
-    refundsTax,
-    cashIn,
-    cashOut,
-  } = closingData;
-
-  // Voucher 는 user / customer 분리 저장 (D-20). UI/드로어 계산에는 합산 표시.
-  const salesVoucher = salesUserVoucher + salesCustomerVoucher;
-  const refundsVoucher = refundsUserVoucher + refundsCustomerVoucher;
-
+  const { aggregate, endedCashExpected } = closingData;
   const startedCash = shift.startedCash;
   const cashActualCents = Math.round(cashActual * MONEY_SCALE);
+  const difference = cashActualCents - endedCashExpected;
 
-  const expectedCash = startedCash + salesCash - refundsCash + cashIn - cashOut;
-  const difference = cashActualCents - expectedCash;
-  const totalCashIn = startedCash + salesCash + cashIn;
-  const totalCashOut = refundsCash + cashOut;
+  // Voucher 는 user / customer 분리 저장 (D-20). UI 는 합산 표시.
+  const salesVoucher = aggregate.salesUserVoucher + aggregate.salesCustomerVoucher;
+  const refundsVoucher =
+    aggregate.refundsUserVoucher + aggregate.refundsCustomerVoucher;
 
   const handleClose = async () => {
     if (!confirmClose) {
@@ -87,24 +74,10 @@ export default function CloseShiftScreen() {
     }
     setLoading(true);
     try {
+      // DTO 단순화 — 서버가 aggregate 전부 재계산 (D-34 / D-37).
       const { ok, msg } = await closeShift({
         closedNote: note.trim(),
-        endedCashExpected: expectedCash,
         endedCashActual: cashActualCents,
-        salesCash,
-        salesCredit,
-        salesUserVoucher,
-        salesCustomerVoucher,
-        salesTax,
-        refundsCash,
-        refundsCredit,
-        refundsUserVoucher,
-        refundsCustomerVoucher,
-        refundsTax,
-        cashIn,
-        cashOut,
-        totalCashIn,
-        totalCashOut,
       });
       if (ok) {
         try {
@@ -126,18 +99,32 @@ export default function CloseShiftScreen() {
     }
   };
 
+  // 한 줄 단위 요약. 값이 0 이어도 주요 항목은 표시 (상태가 정확히 보이도록).
   const summaryRows: [string, string][] = [
     ["Started Cash", fmt(startedCash)],
-    ["Sales (Cash)", fmt(salesCash)],
-    ["Sales (Credit)", fmt(salesCredit)],
-    ["Sales (Voucher)", fmt(salesVoucher)],
-    ["Sales Tax", fmt(salesTax)],
-    ["Refunds (Cash)", `-${fmt(refundsCash)}`],
-    ["Refunds (Credit)", `-${fmt(refundsCredit)}`],
-    ["Refunds (Voucher)", `-${fmt(refundsVoucher)}`],
-    ["Refunds Tax", `-${fmt(refundsTax)}`],
-    ["Cash In", fmt(cashIn)],
-    ["Cash Out", `-${fmt(cashOut)}`],
+    [`Sales (${aggregate.salesCount})`, ""],
+    ["  Cash", fmt(aggregate.salesCash)],
+    ["  Credit", fmt(aggregate.salesCredit)],
+    ["  Voucher", fmt(salesVoucher)],
+    ["  Gift Card", fmt(aggregate.salesGiftcard)],
+    ["  GST", fmt(aggregate.salesTax)],
+    ...(aggregate.repayCount > 0
+      ? ([[`  (repaid: ${aggregate.repayCount})`, ""]] as [string, string][])
+      : []),
+    [`Refunds (${aggregate.refundsCount})`, ""],
+    ["  Cash", `-${fmt(aggregate.refundsCash)}`],
+    ["  Credit", `-${fmt(aggregate.refundsCredit)}`],
+    ["  Voucher", `-${fmt(refundsVoucher)}`],
+    ["  Gift Card", `-${fmt(aggregate.refundsGiftcard)}`],
+    ["  GST", `-${fmt(aggregate.refundsTax)}`],
+    ["Cash In", fmt(aggregate.totalCashIn)],
+    ["Cash Out", `-${fmt(aggregate.totalCashOut)}`],
+    ...(aggregate.spendCount > 0
+      ? ([
+          [`Spend (${aggregate.spendCount})`, ""],
+          ["  Retail value", fmt(aggregate.spendRetailValue)],
+        ] as [string, string][])
+      : []),
   ];
 
   return (
@@ -171,11 +158,14 @@ export default function CloseShiftScreen() {
         {/* Summary */}
         <div className="w-[340px] border-r border-gray-200 p-4 flex flex-col">
           <h3 className="text-sm font-bold mb-3">Shift Summary</h3>
-          <div className="flex flex-col gap-1 text-lg">
-            {summaryRows.map(([label, value]) => (
-              <div key={label} className="flex justify-between py-0.5">
+          <div className="flex flex-col gap-1 text-base overflow-y-auto">
+            {summaryRows.map(([label, value], idx) => (
+              <div
+                key={`${label}-${idx}`}
+                className="flex justify-between py-0.5"
+              >
                 <span className="text-gray-500">{label}</span>
-                <span className="font-medium">{value}</span>
+                <span className="font-medium font-mono">{value}</span>
               </div>
             ))}
           </div>
@@ -183,11 +173,11 @@ export default function CloseShiftScreen() {
           <div className="mt-auto pt-3 border-t border-gray-200 flex flex-col gap-1">
             <div className="flex justify-between text-lg font-bold">
               <span>Expected</span>
-              <span>{fmt(expectedCash)}</span>
+              <span className="font-mono">{fmt(endedCashExpected)}</span>
             </div>
             <div className="flex justify-between text-lg font-bold">
               <span>Actual</span>
-              <span>{fmt(cashActualCents)}</span>
+              <span className="font-mono">{fmt(cashActualCents)}</span>
             </div>
             <div
               className={`flex justify-between text-lg font-bold ${
@@ -199,10 +189,7 @@ export default function CloseShiftScreen() {
               }`}
             >
               <span>Difference</span>
-              <span>
-                {difference > 0 ? "+" : difference < 0 ? "-" : ""}
-                {fmt(difference)}
-              </span>
+              <span className="font-mono">{signedFmt(difference)}</span>
             </div>
           </div>
 

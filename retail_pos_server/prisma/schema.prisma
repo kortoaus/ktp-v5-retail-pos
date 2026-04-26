@@ -360,10 +360,14 @@ model TerminalShift {
   totalCashOut Int @default(0)
 
   // ── Cloud Sync ──
-  syncedAt DateTime?
-  synced   Boolean       @default(false)
+  // cloudId == null  ⟺  아직 sync 안 됨.
+  // Data-server 의 RetailTerminalShift.id 를 여기 저장.
+  cloudId Int?
+
   cashIos  CashInOut[]
   invoices SaleInvoice[] // Applied backref — 이 shift 에서 발생한 모든 invoice
+
+  @@index([cloudId])
 }
 
 model CashInOut {
@@ -511,9 +515,9 @@ model SaleInvoice {
   note         String?
 
   // ── Cloud sync ──────────────────────────────────────────
-  synced   Boolean   @default(false)
-  syncedAt DateTime?
-  cloudId  Int? // CRM 이 assign 한 id (sync 성공 후)
+  // cloudId == null  ⟺  아직 sync 안 됨.
+  // Data-server 의 RetailSaleInvoice.id 를 여기 저장.
+  cloudId Int?
 
   // ── Relations ───────────────────────────────────────────
   rows     SaleInvoiceRow[]
@@ -528,7 +532,7 @@ model SaleInvoice {
   @@index([userId])
   @@index([dayStr])
   @@index([type, dayStr])
-  @@index([synced])
+  @@index([cloudId])
   @@index([memberId])
   @@index([originalInvoiceId])
 }

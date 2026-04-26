@@ -14,6 +14,7 @@ import {
 import { SaleCreatePayload } from "./sale.types";
 import type { Prisma } from "../../generated/prisma/client";
 import { nowAnchor } from "./sale.refund.service";
+import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
 
 // ──────────────────────────────────────────────────────────────
 // Sale create — 순서:
@@ -365,8 +366,7 @@ export async function createSaleService(
       });
     });
 
-    // TODO: cloud sync push (sale.invoice → cloud POST)
-    //   현재는 synced=false 상태로 저장만. 별도 scheduler/cron 에서 push.
+    triggerSyncAllSaleInvoices();
 
     return { ok: true, result: invoice };
   } catch (e) {

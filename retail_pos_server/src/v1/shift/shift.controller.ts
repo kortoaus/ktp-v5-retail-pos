@@ -4,8 +4,9 @@ import {
   getCurrentTerminalShiftService,
   closeTerminalShiftService,
   getShiftByIdService,
+  previewCloseShiftService,
 } from "./shift.service";
-import { NotFoundException } from "../../libs/exceptions";
+import { BadRequestException, NotFoundException } from "../../libs/exceptions";
 
 function getAuth(res: Response) {
   const company = res.locals.company;
@@ -46,6 +47,18 @@ export async function closeTerminalShiftController(
 ) {
   const { terminal, user } = getAuth(res);
   const result = await closeTerminalShiftService(terminal, user, req.body);
+  res.status(200).json(result);
+}
+
+// Preview (가정산) — 현재 open 된 shift 에 대해 SUM 재집계 후 반환. Write 없음.
+// CloseShiftScreen 진입 시 cashier 에게 기대 현금/tender 합을 미리 보여주는 용도.
+export async function previewCloseShiftController(
+  req: Request,
+  res: Response,
+) {
+  const shift = res.locals.shift;
+  if (!shift) throw new BadRequestException("No open shift");
+  const result = await previewCloseShiftService(shift);
   res.status(200).json(result);
 }
 

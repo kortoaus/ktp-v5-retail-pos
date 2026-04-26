@@ -34,6 +34,7 @@ import LoadingOverlay from "../../components/LoadingOverlay";
 import { kickDrawer } from "../../libs/printer/kick-drawer";
 import { printSaleInvoiceReceipt } from "../../libs/printer/sale-invoice-receipt";
 import { cn } from "../../libs/cn";
+import { useStoreSetting } from "../../hooks/useStoreSetting";
 
 const fmt = (cents: number) =>
   `$${(Math.abs(cents) / MONEY_SCALE).toFixed(MONEY_DP)}`;
@@ -61,6 +62,7 @@ export default function SaleRefundDetailScreen({
 }: Props) {
   const navigate = useNavigate();
   const params = useParams();
+  const { storeSetting } = useStoreSetting();
   const invoiceId = invoiceIdProp ?? parseInt(params.invoiceId ?? "", 10);
   const [invoice, setInvoice] = useState<SaleInvoiceDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -262,7 +264,11 @@ export default function SaleRefundDetailScreen({
       // Receipt print (REFUND 분기는 printer 가 처리).
       if (detail) {
         try {
-          await printSaleInvoiceReceipt(detail);
+          await printSaleInvoiceReceipt(
+            detail,
+            false,
+            storeSetting?.receipt_below_text || undefined,
+          );
         } catch (e) {
           console.error("printSaleInvoiceReceipt failed:", e);
         }

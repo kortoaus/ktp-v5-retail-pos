@@ -43,8 +43,6 @@ class ApiService {
 
       const msg = responseData.message || responseData.msg || "Success";
 
-      console.log("status", response.status);
-
       return {
         ok: true,
         msg,

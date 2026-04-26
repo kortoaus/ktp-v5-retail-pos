@@ -204,6 +204,15 @@ export async function getSaleInvoiceById(
   return apiService.get<SaleInvoiceDetail>(`/api/sale/${id}`);
 }
 
+// `originalInvoiceId = id` 인 모든 children (REFUND + repay-SALE). Reprint 에서
+// parent + children 을 한 strip 으로 출력할 때 사용. Server ordering: id ASC
+// → repay 케이스면 REFUND 먼저, 새 SALE 다음 순서로 반환.
+export async function getSaleInvoiceChildren(
+  id: number,
+): Promise<ApiResponse<SaleInvoiceDetail[]>> {
+  return apiService.get<SaleInvoiceDetail[]>(`/api/sale/${id}/children`);
+}
+
 // 현재 terminal (ip-address 헤더로 식별) 의 가장 최근 invoice.
 // 없으면 result: null.
 export async function getLatestSaleInvoice(): Promise<

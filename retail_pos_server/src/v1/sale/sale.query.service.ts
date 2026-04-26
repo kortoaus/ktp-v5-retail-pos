@@ -138,6 +138,34 @@ export async function getSaleInvoiceByIdService(id: number) {
   }
 }
 
+// 특정 invoice 의 **모든 children** — `originalInvoiceId = id` 인 invoice 들.
+// Reprint 전용: parent + children 을 한 strip 에 출력하기 위함. Children 에는
+//   - REFUND 자식 (일반 환불 + repay 의 refund)
+//   - SALE 자식 (repay 로 생성된 새 SALE)
+// 둘 다 포함 — "이 거래가 어떻게 완결됐는지" story 를 영수증에 보여주기 위해
+// type 필터 없이 전부 반환. Refund cap 계산 등 다른 용도는 `refunds` (REFUND-
+// filtered) 를 그대로 사용.
+// Ordering: id ASC — repay tx 내부에서 refund 가 먼저, 새 SALE 이 다음 생성되어
+// id 순서가 그대로 chronological.
+export async function getSaleInvoiceChildrenService(parentId: number) {
+  try {
+    const children = await db.saleInvoice.findMany({
+      where: { originalInvoiceId: parentId },
+      include: {
+        rows: { orderBy: { index: "asc" } },
+        payments: true,
+        terminal: true,
+      },
+      orderBy: { id: "asc" },
+    });
+    return { ok: true, result: children };
+  } catch (e) {
+    if (e instanceof HttpException) throw e;
+    console.error("getSaleInvoiceChildrenService error:", e);
+    throw new InternalServerException("Internal server error");
+  }
+}
+
 // 해당 terminal 의 마지막 invoice — "Print Latest" 버튼용.
 // 없으면 result: null (에러 아님). 모든 type (SALE/REFUND/SPEND) 대상.
 export async function getLatestInvoiceForTerminalService(terminalId: number) {

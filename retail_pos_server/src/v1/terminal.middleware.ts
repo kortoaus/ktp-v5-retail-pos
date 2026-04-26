@@ -46,7 +46,6 @@ export default async function terminalMiddleware(
       where: {
         terminalId: terminal.id,
         closedAt: null,
-        synced: false,
       },
     });
 

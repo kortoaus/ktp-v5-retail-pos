@@ -12,6 +12,7 @@ import hasScope from "../../libs/scope-utils";
 import KeyboardInputText from "../../components/KeyboardInputText";
 import DateRangeSelector from "../../components/DateRangeSelector";
 import type { Dayjs } from "dayjs";
+import { MONEY_DP, MONEY_SCALE } from "../../libs/constants";
 
 const PAGE_SIZE = 8;
 
@@ -147,7 +148,7 @@ export default function CashIOManageScreen() {
                     >
                       {record.type === "in" ? "IN" : "OUT"}
                     </span>
-                    ${record.amount.toFixed(2)}
+                    ${(record.amount / MONEY_SCALE).toFixed(MONEY_DP)}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">
                     {record.userName}

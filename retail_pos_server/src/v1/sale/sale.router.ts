@@ -6,6 +6,7 @@ import {
   createSpendController,
   getLatestInvoiceController,
   getSaleInvoiceByIdController,
+  getSaleInvoiceChildrenController,
   getSaleInvoicesController,
 } from "./sale.controller";
 import { scopeMiddleware, userMiddleware } from "../user/user.middleware";
@@ -75,6 +76,16 @@ saleRouter.get(
   userMiddleware,
   scopeMiddleware("sale"),
   getLatestInvoiceController,
+);
+
+// GET /api/sale/:id/children — `originalInvoiceId = :id` 인 모든 invoice (REFUND +
+// repay-SALE). Reprint 에서 parent + children 을 한 strip 에 출력하기 위한 용도.
+// `/:id` 보다 먼저 정의 (Express 매칭 순서).
+saleRouter.get(
+  "/:id/children",
+  userMiddleware,
+  scopeMiddleware("sale"),
+  getSaleInvoiceChildrenController,
 );
 
 // GET /api/sale/:id — 단일 invoice 조회 (reprint / refund 진입점).

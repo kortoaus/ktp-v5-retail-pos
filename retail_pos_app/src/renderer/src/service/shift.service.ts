@@ -21,24 +21,41 @@ export const getCurrentShift = async (): Promise<
   return await apiService.get<TerminalShift | null>("/api/shift/current");
 };
 
-// NOTE: §4-2 에서 서버 SUM-based 로 전면 rewrite 예정 — 신규 필드
-// (salesLinesTotal / rounding / counts / spendRetailValue / repayCount / giftcard /
-// creditSurcharge) 는 그때 포함. 현재는 기존 close flow 호환 유지를 위해
-// VOUCHER 만 User/Customer 로 split.
-export type ClosingShiftData = {
-  shift: TerminalShift;
+// ShiftAggregate — 서버 aggregateShift() 반환형과 동일. TerminalShift 의 집계
+// 필드 subset. Source of truth 는 서버 shift.service.ts.
+export interface ShiftAggregate {
   salesCash: number;
   salesCredit: number;
   salesUserVoucher: number;
   salesCustomerVoucher: number;
+  salesGiftcard: number;
+  salesLinesTotal: number;
+  salesRounding: number;
+  salesCount: number;
+  repayCount: number;
+  salesCreditSurcharge: number;
   salesTax: number;
   refundsCash: number;
   refundsCredit: number;
   refundsUserVoucher: number;
   refundsCustomerVoucher: number;
+  refundsGiftcard: number;
+  refundsLinesTotal: number;
+  refundsRounding: number;
+  refundsCount: number;
+  refundsCreditSurcharge: number;
   refundsTax: number;
-  cashIn: number;
-  cashOut: number;
+  spendCount: number;
+  spendRetailValue: number;
+  totalCashIn: number;
+  totalCashOut: number;
+}
+
+// Preview 응답 — CloseShiftScreen 이 진입 시 받아서 화면에 기대 현금 표시.
+export type ClosingShiftData = {
+  shift: TerminalShift;
+  aggregate: ShiftAggregate;
+  endedCashExpected: number;
 };
 
 export const getClosingShiftData = async (): Promise<
@@ -47,30 +64,16 @@ export const getClosingShiftData = async (): Promise<
   return await apiService.post<ClosingShiftData>("/api/shift/close/data");
 };
 
+// Close DTO — cashier 입력만. 모든 집계는 서버가 재계산 (D-34 / D-37).
 export type CloseShiftDTO = {
   closedNote: string;
-  endedCashExpected: number;
   endedCashActual: number;
-  salesCash: number;
-  salesCredit: number;
-  salesUserVoucher: number;
-  salesCustomerVoucher: number;
-  salesTax: number;
-  refundsCash: number;
-  refundsCredit: number;
-  refundsUserVoucher: number;
-  refundsCustomerVoucher: number;
-  refundsTax: number;
-  cashIn: number;
-  cashOut: number;
-  totalCashIn: number;
-  totalCashOut: number;
 };
 
 export const closeShift = async (
   data: CloseShiftDTO,
-): Promise<ApiResponse<number>> => {
-  return await apiService.post<number>("/api/shift/close", data);
+): Promise<ApiResponse<TerminalShift>> => {
+  return await apiService.post<TerminalShift>("/api/shift/close", data);
 };
 
 export const getShiftById = async (

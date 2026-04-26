@@ -33,8 +33,9 @@ function row(
 }
 
 function estimateHeight(): number {
-  // header(3) + meta(5) + sales(4) + refunds(4) + cashio(3) + drawer(5) + footer(2)
-  const lines = 26;
+  // header(3) + meta(6) + sales(8) + refunds(7) + cashio(3) + spend(3) +
+  // drawer(5) + footer(2)  — 여유 포함. D-37 에서 counts / Gift Card / SPEND 추가.
+  const lines = 40;
   return 60 + lines * LH + 100;
 }
 
@@ -101,7 +102,11 @@ export function renderShiftSettlementReceipt(
   y += 14;
 
   ctx.font = `bold ${FONT}px sans-serif`;
-  ctx.fillText("SALES", PAD, y);
+  const salesHeader =
+    shift.repayCount > 0
+      ? `SALES  (${shift.salesCount}, repay ${shift.repayCount})`
+      : `SALES  (${shift.salesCount})`;
+  ctx.fillText(salesHeader, PAD, y);
   y += LH;
 
   // Voucher 는 user / customer 분리 저장 (D-20). 영수증에는 합산 표기.
@@ -139,7 +144,7 @@ export function renderShiftSettlementReceipt(
   y += 14;
 
   ctx.font = `bold ${FONT}px sans-serif`;
-  ctx.fillText("REFUNDS", PAD, y);
+  ctx.fillText(`REFUNDS  (${shift.refundsCount})`, PAD, y);
   y += LH;
 
   ctx.font = `${FONT}px sans-serif`;
@@ -167,6 +172,20 @@ export function renderShiftSettlementReceipt(
   y += LH;
   row(ctx, "Cash Out", fmt(shift.totalCashOut), y);
   y += LH;
+
+  /* ── Spend (내부소비 — D-14~16) — count > 0 일 때만 ── */
+  if (shift.spendCount > 0) {
+    dashedLine(ctx, y);
+    y += 14;
+
+    ctx.font = `bold ${FONT}px sans-serif`;
+    ctx.fillText(`SPEND  (${shift.spendCount})`, PAD, y);
+    y += LH;
+
+    ctx.font = `${FONT}px sans-serif`;
+    row(ctx, "Retail Value", fmt(shift.spendRetailValue), y);
+    y += LH;
+  }
 
   /* ── Drawer ── */
   dashedLine(ctx, y);

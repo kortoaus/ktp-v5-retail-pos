@@ -8,6 +8,7 @@ import {
   FindManyQuery,
   getLatestInvoiceForTerminalService,
   getSaleInvoiceByIdService,
+  getSaleInvoiceChildrenService,
   getSaleInvoicesService,
 } from "./sale.query.service";
 import {
@@ -136,6 +137,21 @@ export async function getSaleInvoiceByIdController(
     return;
   }
   const result = await getSaleInvoiceByIdService(id);
+  res.json(result);
+}
+
+// Reprint 에서 parent + children 을 한 strip 으로 출력하기 위해 children 만
+// 별도 fetch — REFUND + repay-SALE 모두 포함.
+export async function getSaleInvoiceChildrenController(
+  req: Request,
+  res: Response,
+) {
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ ok: false, msg: "Invalid invoice id" });
+    return;
+  }
+  const result = await getSaleInvoiceChildrenService(id);
   res.json(result);
 }
 

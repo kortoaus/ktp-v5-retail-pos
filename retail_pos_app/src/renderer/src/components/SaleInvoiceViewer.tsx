@@ -5,9 +5,10 @@ import {
 } from "../service/sale.service";
 import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../libs/constants";
 import dayjsAU from "../libs/dayjsAU";
-import { printSaleInvoiceReceipt } from "../libs/printer/sale-invoice-receipt";
+import { printSaleInvoiceReprint } from "../libs/printer/sale-invoice-receipt";
 import { canRepay } from "../libs/sale/can-repay";
 import { useShift } from "../contexts/ShiftContext";
+import { useStoreSetting } from "../hooks/useStoreSetting";
 import PaymentModalForRepay from "./PaymentModalForRepay";
 
 // 80mm thermal receipt 레이아웃. Direct-print 가능한 밀도/폭으로 구성.
@@ -43,6 +44,8 @@ export default function SaleInvoiceViewer({ invoiceId, onClose }: Props) {
   const [repayOpen, setRepayOpen] = useState(false);
 
   const { shift } = useShift();
+  const { storeSetting } = useStoreSetting();
+  const belowText = storeSetting?.receipt_below_text?.trim() || "Thank you!";
 
   // 10분 타이머용 tick — invoice 가 repay 가능한 상태일 때만 작동 시키면 되지만
   // 간단히 항상 1초마다 갱신. 컴포넌트 mount 중일 때만.
@@ -56,8 +59,9 @@ export default function SaleInvoiceViewer({ invoiceId, onClose }: Props) {
     if (!invoice || printing) return;
     setPrinting(true);
     try {
-      // Viewer 에서 뽑으면 항상 "** COPY **" 표시 — 최초 영수증은 complete flow 에서 이미 출력.
-      await printSaleInvoiceReceipt(invoice, true);
+      // Reprint 전용 — SALE 이면 refund children 도 함께 (한 strip, 마지막만 cut).
+      // 그 외 type 은 단일 출력. belowText 는 current storeSetting (§4-4).
+      await printSaleInvoiceReprint(invoice, belowText);
     } catch (e) {
       console.error("print failed:", e);
       window.alert("Failed to print");
@@ -143,7 +147,7 @@ export default function SaleInvoiceViewer({ invoiceId, onClose }: Props) {
           </div>
         )}
         {invoice && <RefundStatusBar invoice={invoice} />}
-        {invoice && <Receipt invoice={invoice} />}
+        {invoice && <Receipt invoice={invoice} belowText={belowText} />}
       </div>
     </div>
     {/* Repay 모달은 viewer 의 backdrop 밖 (sibling) — backdrop onPointerDown 으로
@@ -212,7 +216,13 @@ function RefundStatusBar({ invoice }: { invoice: SaleInvoiceDetail }) {
   );
 }
 
-function Receipt({ invoice }: { invoice: SaleInvoiceDetail }) {
+function Receipt({
+  invoice,
+  belowText,
+}: {
+  invoice: SaleInvoiceDetail;
+  belowText: string;
+}) {
   const isRefund = invoice.type === "REFUND";
   const isSpend = invoice.type === "SPEND";
   const date = dayjsAU(invoice.createdAt);
@@ -476,7 +486,7 @@ function Receipt({ invoice }: { invoice: SaleInvoiceDetail }) {
           ? "Internal consumption — no payment"
           : isRefund
             ? "Refund processed"
-            : "Thank you!"}
+            : belowText}
       </div>
     </div>
   );

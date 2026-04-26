@@ -4,6 +4,7 @@ import {
   getCurrentTerminalShiftController,
   closeTerminalShiftController,
   getShiftByIdController,
+  previewCloseShiftController,
 } from "./shift.controller";
 import { scopeMiddleware, userMiddleware } from "../user/user.middleware";
 
@@ -18,8 +19,15 @@ router.post(
   openTerminalShiftController,
 );
 
-router.post("/close/data", userMiddleware, scopeMiddleware("shift"));
+// Preview / 가정산 — CloseShiftScreen 이 진입 시 호출. SUM 재집계만, write 없음.
+router.post(
+  "/close/data",
+  userMiddleware,
+  scopeMiddleware("shift"),
+  previewCloseShiftController,
+);
 
+// 실제 마감 — body { closedNote, endedCashActual } 만. 집계는 서버가 재계산.
 router.post(
   "/close",
   userMiddleware,

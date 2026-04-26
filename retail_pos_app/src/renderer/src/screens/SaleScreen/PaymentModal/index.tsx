@@ -293,10 +293,15 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
       }
 
       // Print receipt — 거래는 이미 저장됐으므로 실패해도 flow 중단 X. 같은
-      // ESC/POS 채널이라 drawer 가 끝난 뒤 직렬 전송.
+      // ESC/POS 채널이라 drawer 가 끝난 뒤 직렬 전송. belowText 는 current
+      // storeSetting 에서 읽음 (snapshot 불필요 — 재출력 시에도 current 값 사용).
       if (detail) {
         try {
-          await printSaleInvoiceReceipt(detail);
+          await printSaleInvoiceReceipt(
+            detail,
+            false,
+            storeSetting?.receipt_below_text || undefined,
+          );
         } catch (e) {
           console.error("printSaleInvoiceReceipt failed:", e);
         }
@@ -343,7 +348,12 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
         const res = await getSaleInvoiceById(completedInfo.invoice.id);
         if (res.ok && res.result) detail = res.result;
       }
-      if (detail) await printSaleInvoiceReceipt(detail, true);
+      if (detail)
+        await printSaleInvoiceReceipt(
+          detail,
+          true,
+          storeSetting?.receipt_below_text || undefined,
+        );
     } catch (e) {
       console.error("reprint failed:", e);
     }
@@ -373,7 +383,11 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
       const detailRes = await getSaleInvoiceById(res.result.id);
       if (detailRes.ok && detailRes.result) {
         try {
-          await printSaleInvoiceReceipt(detailRes.result);
+          await printSaleInvoiceReceipt(
+            detailRes.result,
+            false,
+            storeSetting?.receipt_below_text || undefined,
+          );
         } catch (e) {
           console.error("printSaleInvoiceReceipt (SPEND) failed:", e);
         }

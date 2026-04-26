@@ -2,6 +2,10 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import app from "./app";
 import { setIO } from "./libs/socket";
+import {
+  triggerSyncAllSaleInvoices,
+  triggerSyncAllShifts,
+} from "./v1/cloud/cloud.sync.service";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -25,4 +29,9 @@ io.on("connection", (socket) => {
 
 httpServer.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);
+
+  // Catch up on any invoices/shifts that never made it to cloud (failed push
+  // while server was down, network hiccup, etc).
+  triggerSyncAllSaleInvoices();
+  triggerSyncAllShifts();
 });

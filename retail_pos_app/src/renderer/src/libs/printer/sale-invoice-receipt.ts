@@ -1,9 +1,10 @@
 import QRCode from "qrcode";
 import {
+  getSaleInvoiceChildren,
   SaleInvoiceDetail,
   SaleInvoicePaymentItem,
 } from "../../service/sale.service";
-import { buildPrintBuffer } from "./escpos";
+import { buildMultiReceiptBuffer, buildPrintBuffer } from "./escpos";
 import { printESCPOS } from "./print.service";
 import dayjsAU from "../dayjsAU";
 import { MONEY_DP, MONEY_SCALE, QTY_DP, QTY_SCALE } from "../constants";
@@ -127,7 +128,7 @@ function estimateHeight(invoice: SaleInvoiceDetail, isCopy: boolean): number {
     220 /* QR placeholder */ +
     (isCopy ? LH : 0) +
     LH +
-    200 /* 여유 */
+    100 /* 여유 (bottom gap) — 종이 절약차 200 → 100 축소 */
   );
 }
 
@@ -445,5 +446,41 @@ export async function printSaleInvoiceReceipt(
 ): Promise<void> {
   const canvas = await renderSaleInvoiceReceipt(invoice, isCopy, belowText);
   const buffer = buildPrintBuffer(canvas);
+  await printESCPOS(buffer);
+}
+
+// Reprint 전용: invoice + 그 **모든 children** (originalInvoiceId = invoice.id)
+// 을 한 strip 으로 출력. 마지막에만 cut.
+//
+// Children 에는 REFUND 뿐 아니라 **repay 로 생성된 새 SALE** 도 포함 — "이
+// 거래가 어떻게 완결됐는지" 를 영수증 한 장에 보여주기 위함. 서버 endpoint
+// `/api/sale/:id/children` 이 type 필터 없이 id ASC 순으로 반환:
+//   - 일반 refund: SALE → REFUND (N개) 순
+//   - repay: SALE → REFUND → new SALE 순 (tx 내부 생성 순서)
+//
+// 사용처: invoice viewer 의 Print Copy, PrintLatestInvoiceButton. 최초 출력
+// (complete flow / refund create / repay) 에서는 children 이 아직 존재하지 않거나
+// 맥락상 단일 문서만 필요 → 기존 `printSaleInvoiceReceipt` 그대로 사용.
+export async function printSaleInvoiceReprint(
+  invoice: SaleInvoiceDetail,
+  belowText: string = "Thank you!",
+): Promise<void> {
+  // Children 조회 — REFUND 뿐 아니라 SALE (repay) 자식도 모두.
+  const childRes = await getSaleInvoiceChildren(invoice.id);
+  const children = childRes.ok && childRes.result ? childRes.result : [];
+
+  if (children.length === 0) {
+    // 자식 없으면 단독 출력.
+    return printSaleInvoiceReceipt(invoice, true, belowText);
+  }
+
+  // Parent + children 을 순서대로 render.
+  const canvases: HTMLCanvasElement[] = [];
+  canvases.push(await renderSaleInvoiceReceipt(invoice, true, belowText));
+  for (const child of children) {
+    canvases.push(await renderSaleInvoiceReceipt(child, true, belowText));
+  }
+
+  const buffer = buildMultiReceiptBuffer(canvases);
   await printESCPOS(buffer);
 }

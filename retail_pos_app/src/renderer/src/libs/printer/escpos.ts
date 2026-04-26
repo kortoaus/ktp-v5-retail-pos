@@ -91,3 +91,32 @@ export const buildPrintBufferNoCut = (canvas: HTMLCanvasElement): Uint8Array => 
   buffer.set(raster, init.length);
   return buffer;
 };
+
+// 여러 canvas 를 **한 번의 전송**으로 연속 출력. 마지막에 cut 한 번만.
+//   [init] [raster1] [raster2] ... [rasterN] [cut]
+// 용도: 원본 SALE + 그 REFUND children 을 물리적으로 한 strip 으로 묶어
+//       잘려 나오지 않게 출력. 별도 print 호출로 하면 서버 지연/feed 때문에
+//       strip 이 분리될 수 있음.
+export const buildMultiReceiptBuffer = (
+  canvases: HTMLCanvasElement[],
+): Uint8Array => {
+  if (canvases.length === 0) return new Uint8Array(0);
+  if (canvases.length === 1) return buildPrintBuffer(canvases[0]);
+
+  const init = initPrinterCommand();
+  const rasters = canvases.map(canvasToEscposRaster);
+  const cut = cutCommand(3);
+
+  const totalLen =
+    init.length + rasters.reduce((s, r) => s + r.length, 0) + cut.length;
+  const buffer = new Uint8Array(totalLen);
+  let offset = 0;
+  buffer.set(init, offset);
+  offset += init.length;
+  for (const raster of rasters) {
+    buffer.set(raster, offset);
+    offset += raster.length;
+  }
+  buffer.set(cut, offset);
+  return buffer;
+};

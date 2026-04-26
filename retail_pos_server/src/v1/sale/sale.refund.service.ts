@@ -18,6 +18,7 @@ import type {
 } from "./sale.types";
 import { PaymentType } from "../../generated/prisma/enums";
 import type { Prisma } from "../../generated/prisma/client";
+import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Sale refund — REFUND invoice 생성 서비스
@@ -576,6 +577,8 @@ export async function createRefundService(
         dayStart,
       });
     });
+
+    triggerSyncAllSaleInvoices();
 
     return { ok: true, result: invoice };
   } catch (e) {

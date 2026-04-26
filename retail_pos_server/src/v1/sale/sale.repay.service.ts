@@ -30,6 +30,7 @@ import {
   buildSaleInTx,
   validateAmounts,
 } from "./sale.create.service";
+import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Sale repay — "같은 거래의 tender 만 바꾼다" 한 방 서비스
@@ -302,6 +303,8 @@ export async function createRepayService(
 
       return { refund, newSale };
     });
+
+    triggerSyncAllSaleInvoices();
 
     return { ok: true, result };
   } catch (e) {

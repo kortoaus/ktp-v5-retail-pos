@@ -24,7 +24,7 @@ reasoning and trade-offs behind those invariants.
 4. [Payment model (`SaleInvoicePayment`)](#4-payment-model-saleinvoicepayment)
 5. [Voucher model (`Voucher` + `VoucherEvent`)](#5-voucher-model-voucher--voucherevent)
 6. [Refund math](#6-refund-math)
-7. [Decisions log (D-1 … D-37)](#7-decisions-log-d-1--d-37)
+7. [Decisions log (D-1 … D-38)](#7-decisions-log-d-1--d-38)
 8. [Open questions](#8-open-questions)
 
 ---
@@ -492,7 +492,7 @@ invoice is created.
 
 ---
 
-## 7. Decisions log (D-1 … D-37)
+## 7. Decisions log (D-1 … D-38)
 
 Numbering continues from the handover's Q-series, which stopped at Q17.
 Within this log, decisions are grouped by theme; numeric order is
@@ -871,23 +871,85 @@ Preview 와 close 가 같은 helper 를 쓰므로 "preview 에서 봤던 숫자 
 - `app` 쪽 `TerminalShift` 타입 server schema 와 full sync (기존 오타 `startedCach` +
   dead `cashIn/cashOut` 포함 전수 정리).
 
+### Cloud sync push (2026-04-24)
+
+**D-38. Cloud sync — `cloudId` 단일 플래그, id-ASC sweep, 트리거 기반 (no cron)**
+
+POS (local) → main api (deviceId 주입 + proxy) → data-server (archive). 설계 원칙
+4가지 + 파급 변경사항.
+
+#### 원칙 1. `cloudId != null ⟺ synced`
+
+`SaleInvoice.synced` / `syncedAt` boolean 삭제. `cloudId Int?` 한 컬럼으로
+단일화. `TerminalShift` 도 동일 — 기존에 `cloudId` 가 없었는데 추가하고
+`synced`/`syncedAt` 제거. 이유:
+- 한 컬럼에 "sync 여부 + cloud 쪽 참조" 둘 다 표현 → 불일치 상태 자체가 불가능.
+- Query: `WHERE cloudId IS NULL` 로 미처리 대상 한 번에. `@@index([cloudId])`
+  추가.
+
+#### 원칙 2. id-ASC sweep, 실패 시 break
+
+`cloud.sync.service.ts` 의 `syncAllSaleInvoices()` / `syncAllShifts()` 는
+`orderBy: { id: 'asc' }` 로 pending 목록을 뽑고 순차 push. **실패 시 즉시
+`break`** — 후속 invoice 는 parent 의 `cloudId` 에 의존할 수 있으므로
+(repay chain) 선행이 막히면 뒤도 막혀야 함. 다음 sweep 에서 재시도.
+
+구체적 종속성 체크: push 직전에 `inv.originalInvoiceId != null` 이면 로컬
+parent 의 `cloudId` 를 lookup, 없으면 break (이번 sweep 은 아직 parent 가 안
+올라간 상태). 다음 sale/refund/repay 또는 서버 재기동이 parent 부터 다시 push.
+
+#### 원칙 3. Fire-and-forget, no cron
+
+트리거 지점 5개 — `sale.create.service.createSaleService`,
+`sale.refund.service.createRefundService`, `sale.repay.service.createRepayService`,
+`shift.service.closeTerminalShiftService`, `index.ts` 서버 기동 직후. 전부
+`triggerSyncAllSaleInvoices()` / `triggerSyncAllShifts()` 로 module-level
+concurrency guard 내에서 1회 호출. Cron/interval scheduler 없음 — 다음 sale
+이 어차피 sweep 을 다시 돌리므로 실운영에서 재시도 커버됨.
+
+#### 원칙 4. `originalInvoiceId` 를 cloud id 로 resolve 해서 전송
+
+Data-server 의 `RetailSaleInvoice.originalInvoiceId` 는 cloud 쪽 `id`
+(self-relation) 를 참조. POS 는 push payload 빌드 시 로컬 parent 의 `cloudId`
+를 조회해서 payload 의 `originalInvoiceId` 필드로 넣음. Row-level
+`originalInvoiceId` / `originalInvoiceRowId` 는 POS-local id 를 그대로 전송
+(cross-device 분석은 필요 시 `(deviceId, localId)` join 으로 해결).
+
+#### 파급 변경 (data-server)
+
+- `@@unique([deviceId, localId])` — `RetailSaleInvoice`, `RetailTerminalShift`
+  양쪽 추가. Upsert idempotency 확보 (네트워크 재시도 시 중복 생성 방지).
+- `InvoiceType` enum 선언 + `RetailSaleInvoice.type` 을 String → enum.
+- `RetailTerminalShift.createdAt` / `updatedAt` 추가 (기존엔 없어서 cloud 가
+  언제 받았는지 추적 불가였음). `openedNote` / `closedNote` nullable.
+- `RetailSaleInvoice` 에서 `synced` / `syncedAt` / `cloudId` (POS-local 개념
+  오복사) 삭제.
+- `RetailSaleInvoice.serial` nullable (POS 와 대칭 — 실운영에선 항상 세팅).
+
+#### Transport 계약
+
+- POS 는 `API_URL` (main api) 로 POST. 엔드포인트
+  `/device/sync/retail/sale-invoice`, `/device/sync/retail/terminal-shift`.
+- Main api 가 `device-api-key` 헤더에서 `deviceId` resolve → payload 에
+  주입해서 data-server 로 forward.
+- Data-server 응답 `{ ok, msg, result: { id } }` — POS 가 `result.id` 를
+  로컬 `cloudId` 에 저장.
+- Idempotent: data-server 는 `(deviceId, localId)` unique 로 upsert. 재시도
+  안전.
+
+#### 결과 (운영)
+
+- 모든 SALE / REFUND / SPEND / repay 가 생성 직후 자동 push 시도.
+- Shift close 직후 해당 shift 도 push (closed 된 shift 만 대상).
+- 서버 재기동 시 밀린 것 자동 catch-up.
+- 실패는 조용히 남음 (`cloudId = null` 유지) — 다음 sale 이 다시 쓸어감.
+
 ---
 
 ## 8. Open questions
 
 Still open, to be resolved in later sessions:
 
-- **Shift close service 재작성** (§4-2) — D-34 / D-37 대응. `aggregateShift(shiftId)`
-  helper + `/api/shift/close/data` (preview) + `/api/shift/close` (write) 둘 다 같은
-  집계 helper 공유. 현재 `/close/data` 는 router 에만 있고 handler 없음. `/close` 는
-  client 계산값을 그대로 저장하는 과도기 stub — client DTO 에 `{closedNote,
-  endedCashActual}` 만 받도록 단순화 예정.
-- **Cloud sync push** (§4-3) — `SaleInvoice.synced`/`syncedAt`/`cloudId` +
-  `TerminalShift` cloud sync. `createSaleService` / `createRefundService` /
-  `createRepayService` 에 push 훅 필요.
-- **Cloud uniqueness** — local serial 은 local 만 unique. Cloud 로 sync 할 때
-  `(store branchCode or cloudId, serial)` 조합으로 global unique 보장. Cloud
-  측에서 처리하기로 결정, schema 는 local 유지.
 - **`LineAdjustment` enum redesign** — structured entries (`{ type, reason?,
   authorizedByUserId? }[]`) vs. the current string enum array. D-6 deferred.
 - **Manager override for rare edge cases** — e.g., force a refund when CRM

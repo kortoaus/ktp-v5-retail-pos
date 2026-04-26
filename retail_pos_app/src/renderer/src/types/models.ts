@@ -262,9 +262,8 @@ export interface TerminalShift {
   totalCashIn: number;
   totalCashOut: number;
 
-  // Cloud Sync
-  syncedAt?: string | null;
-  synced: boolean;
+  // Cloud Sync — cloudId != null ⟺ synced
+  cloudId?: number | null;
 }
 
 export const SCOPES = [
