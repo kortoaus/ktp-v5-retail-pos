@@ -1,5 +1,9 @@
 # EFTPOS Integration Plan — Linkly Cloud
 
+Status: future Phase 4 reference. The current POS still records CREDIT and
+GIFTCARD manually; `README.md` and `docs/sale-domain.md` are canonical for live
+payment behavior.
+
 ## Decisions Made
 
 | Decision | Choice | Reason |

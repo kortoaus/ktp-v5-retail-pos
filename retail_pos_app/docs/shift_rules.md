@@ -40,8 +40,8 @@ Everything that happens on the terminal is linked to the current shift:
 
 | Activity | What Gets Tracked |
 |----------|-------------------|
-| Sales | Cash received, credit received, GST |
-| Refunds | Cash refunded, credit refunded, GST |
+| Sales | Cash, credit, user voucher, customer voucher, gift card, line totals, rounding, surcharge, GST |
+| Refunds | Cash, credit, user voucher, customer voucher, gift card, line totals, rounding, surcharge, GST |
 | Cash In | Money added to the drawer (e.g. float top-up) |
 | Cash Out | Money removed from the drawer (e.g. petty cash) |
 
@@ -60,11 +60,25 @@ Everything that happens on the terminal is linked to the current shift:
 |-------|-------------|
 | Started Cash | Cash in drawer when shift opened |
 | Sales (Cash) | Total cash received from sales |
-| Sales (Credit) | Total credit card payments from sales |
+| Sales (Credit) | Total credit card payments from sales, including surcharge |
+| Sales (User Voucher) | Staff voucher redemption |
+| Sales (Customer Voucher) | CRM customer voucher redemption, once online provider support exists |
+| Sales (Gift Card) | Third-party gift card tender |
+| Sales Lines Total | Item/product sales total, excluding surcharge |
+| Sales Rounding | Sum of SALE invoice rounding |
+| Sales Surcharge | Credit surcharge collected |
 | Sales Tax | GST collected from sales |
 | Refunds (Cash) | Total cash given back for refunds |
-| Refunds (Credit) | Total credit refunded |
+| Refunds (Credit) | Total credit refunded, including refunded surcharge |
+| Refunds (User Voucher) | Staff voucher balance restored |
+| Refunds (Customer Voucher) | CRM customer voucher refund, once online provider support exists |
+| Refunds (Gift Card) | Gift card refund |
+| Refunds Lines Total | Product refund total, excluding surcharge |
+| Refunds Rounding | Sum of REFUND invoice rounding |
+| Refunds Surcharge | Credit surcharge refunded |
 | Refunds Tax | GST included in refunds |
+| Repay Count | Replacement SALE invoices created by repay |
+| Spend Count / Retail Value | Internal consumption count and retail-value snapshot |
 | Cash In | Total cash added to drawer during shift |
 | Cash Out | Total cash removed from drawer during shift |
 | Expected Cash | Calculated: Started + Sales Cash - Refunds Cash + Cash In - Cash Out |
@@ -91,8 +105,9 @@ When a shift is closed, a receipt is automatically printed with the full shift s
 
 - Shift ID and day
 - Who opened and closed the shift, with timestamps
-- Sales breakdown (cash, credit, GST)
-- Refunds breakdown (cash, credit, GST)
+- Sales breakdown (cash, credit, user voucher, customer voucher, gift card, item lines, rounding, surcharge, GST)
+- Refunds breakdown (cash, credit, user voucher, customer voucher, gift card, item lines, rounding, surcharge, GST)
+- Repay count and internal spend summary
 - Cash in/out totals
 - Drawer summary (started, expected, actual, difference)
 - Print timestamp
@@ -103,7 +118,9 @@ When a shift is closed, a receipt is automatically printed with the full shift s
 
 All money amounts on the shift are stored in **cents** (whole numbers). For example, $15.50 is stored as 1550. This avoids rounding errors when adding up many transactions.
 
-Sales, refunds, and cash in/out amounts from individual transactions are in dollars with decimals. They are converted to cents when the shift is closed.
+Sale, refund, spend, and cash in/out rows are already stored in cents. Closing a
+shift re-aggregates from source rows with `SUM()` and writes the final shift
+summary fields; sale/refund creation does not increment cached shift totals.
 
 ---
 

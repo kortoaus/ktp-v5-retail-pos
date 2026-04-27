@@ -1,3 +1,6 @@
+Historical note: old hardware scratch plan. The current hardware status lives
+in root `README.md`.
+
 # Scale
 
 - [x]: CAS Scale

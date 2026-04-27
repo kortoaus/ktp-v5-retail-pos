@@ -1,5 +1,9 @@
 # Socket.IO Sync Notification Plan
 
+Historical note: Socket.IO is now wired into the server/app sync flow. Use
+`README.md` and live code for the current contract; this file is retained as
+the original plan.
+
 ## Problem
 
 Multiple terminals connect to one server. When Terminal A presses "Sync", the server downloads latest cloud data and Terminal A reloads — but Terminals B, C, D still have stale data (promotions, hotkeys, etc.) until they manually reload. A cashier might be mid-transaction, so we **cannot force-reload**.

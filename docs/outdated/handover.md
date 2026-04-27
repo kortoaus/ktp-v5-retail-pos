@@ -1,5 +1,9 @@
 # Handover — End of 2026-04-24 session
 
+Historical note: this was an end-of-session snapshot. The current source of
+truth is `README.md`, `AGENTS.md`, and `docs/sale-domain.md`. Use this file only
+for background on how D-38 cloud sync was introduced.
+
 **Written**: 2026-04-24 end-of-session
 **Branch**: `main` (커밋은 사용자가 단계별로 수행 중)
 **Next session's task**: **없음 — Phase 3 사이클 종료**. 사용자가 다른 서버(main api /

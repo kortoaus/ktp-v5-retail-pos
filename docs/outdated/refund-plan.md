@@ -1,6 +1,10 @@
 # Refund Plan — ktpv5-pos-retail
 
-Working plan for the refund domain build-out. Supplements `docs/sale-domain.md`
+Historical note: refund and repay are now implemented. The current contract is
+`README.md` plus `docs/sale-domain.md` D-26/D-37. This file is retained as
+planning history only.
+
+Original working plan for the refund domain build-out. Supplements `docs/sale-domain.md`
 §6 + D-21 / D-26 / D-28 / D-34 with the UI/flow decisions made in this session.
 
 ---
@@ -21,7 +25,7 @@ Working plan for the refund domain build-out. Supplements `docs/sale-domain.md`
 | 항목 | 참조 |
 |---|---|
 | Refund math (surcharge 비례, rounding 독립) | §6 / D-26 |
-| `refund_row.total = round((row.total + row.surcharge_share) × refund_qty / row.qty)` | §6 |
+| Split storage: `refund_row.total` = product only, `refund_row.surcharge_share` = surcharge refund share | §6 / D-26 revised |
 | Taxable 분기 GST | §6 |
 | Serial prefix `R` via DocCounter | D-28 |
 | Shift 집계: refund → current shift, close 시 SUM 재집계 | D-34 |
@@ -90,8 +94,9 @@ CUSTOMER_VOUCHER — Welcome $5    $___ / $5.00
 
 ### 2-6. Payload 계약 — server 가 canonical
 
-Client 는 **refund 의도** 만 보냄. Server 가 D-26 수식으로 refund_row.total /
-lineTax / surchargeTax / refund_total / rounding 을 재계산해서 저장.
+Client 는 **refund 의도** 만 보냄. Server 가 D-26 revised 수식으로 product
+refund, surcharge share, lineTax / surchargeTax / refund_total / rounding 을
+재계산해서 저장.
 
 ```ts
 interface RefundCreatePayload {
@@ -112,8 +117,8 @@ Server validation 순서:
 1. 원본 invoice 존재 + `type=SALE` 확인.
 2. Customer-voucher 포함 시 CRM online 확인 (실패 시 reject 전체).
 3. 각 row `refund_qty ≤ row.qty − row.refunded_qty`.
-4. D-26 수식으로 refund_row.total 계산 → Σ = refund linesTotal.
-5. refund 의 surcharge 부분 = Σ (row.surcharge_share × refund_qty / row.qty).
+4. D-26 revised 수식으로 product `refund_row.total` 과 `surcharge_share` 계산.
+5. refund 의 surcharge 부분 = remaining 기반으로 비례 계산하고 마지막 refund 가 drift 흡수.
    → creditSurchargeAmount.
 6. lineTax, surchargeTax (taxable 분기).
 7. Rounding 규칙 (2-5) 적용 → refund_total 확정.

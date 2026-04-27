@@ -1,6 +1,10 @@
 # RETAIL POS — Electron Desktop App
 
-Electron shell wrapping a React web app. **Electron exists solely for SerialPort access.** Renderer should be built like a standard website — no Electron APIs in renderer code.
+Electron shell wrapping a React web app. Read root `README.md` first for the
+current product/route/API map. This file only contains app-side hard rules.
+
+**Electron exists only for native device/window access.** Renderer code must
+remain a normal SPA with no direct Electron or Node imports.
 
 ## OVERVIEW
 
@@ -18,7 +22,8 @@ Electron shell wrapping a React web app. **Electron exists solely for SerialPort
 src/
   main/
     index.ts       ← Electron entry. BrowserWindow + app lifecycle
-    serial.ts      ← IPC handlers for SerialPort (list/open/close/send/receive)
+    ipc/           ← app/config/serial/scale/label IPC handlers
+    driver/        ← scale drivers
   preload/
     index.ts       ← contextBridge: exposes serial API to renderer
     index.d.ts     ← Type declarations for window.electronAPI
@@ -33,24 +38,28 @@ src/
 
 ## ARCHITECTURE RULES
 
-1. **Renderer = pure web app.** No `require('electron')`, no Node.js APIs, no `fs`, no `path`. Access serial ONLY through `window.electronAPI`.
-2. **SerialPort lives in main process only.** All serial communication flows: renderer → IPC invoke → main → SerialPort → IPC send → renderer.
+1. **Renderer = pure web app.** No `require('electron')`, no Node.js APIs, no `fs`, no `path`. Native capabilities go through `window.electronAPI`.
+2. **SerialPort lives in main process only.** Serial/scale/label flows are renderer -> preload bridge -> IPC handler -> native device.
 3. **Stability is the #1 priority.** Prefer boring, proven patterns over clever ones.
 4. **Single native dependency.** `serialport` (pinned 13.0.0) is the ONLY native module. Keep it that way.
 
 ## IPC CONTRACT
 
-All serial IPC channels are prefixed `serial:`. Defined in three places that MUST stay in sync:
+IPC capabilities are defined in three places that MUST stay in sync:
 
-| Channel | Direction | Handler |
-|---------|-----------|---------|
-| `serial:list-ports` | renderer → main | Returns `string[]` of port paths |
-| `serial:open` | renderer → main | Opens port (path, baudRate) |
-| `serial:close` | renderer → main | Closes active port |
-| `serial:send` | renderer → main | Writes string data to port |
-| `serial:data` | main → renderer | Pushes received serial data |
+| Area | Handler |
+|------|---------|
+| App/window/network helpers | `src/main/ipc/app.ts` |
+| Config persistence | `src/main/ipc/config.ts` |
+| Serial printer/device write path | `src/main/ipc/serial.ts` |
+| Scale auto-connect/read/poll | `src/main/ipc/scale.ts` |
+| Label printing | `src/main/ipc/label.ts` |
 
-**Files to update when changing IPC:** `src/main/serial.ts` + `src/preload/index.ts` + `src/preload/index.d.ts`
+**Files to update when changing IPC:** the relevant `src/main/ipc/*.ts` handler,
+`src/preload/index.ts`, and `src/preload/index.d.ts`.
+
+Customer display communication is not IPC. It uses renderer `BroadcastChannel`
+channels documented in the root `README.md`.
 
 ## BUILD & DEPLOY
 

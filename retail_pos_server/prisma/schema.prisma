@@ -575,8 +575,12 @@ model SaleInvoicePayment {
 // ══════════════════════════════════════════════════════════════
 // ── REFUND MATH ── row-local 연산만 (drilling 방지)
 //
-//   refund_row.total =
-//     round((row.total + row.surcharge_share) × refund_qty / row.qty)
+//   REFUND row 는 product 와 surcharge 를 split 저장:
+//     refund_row.total           = 상품 부분만
+//     refund_row.surcharge_share = surcharge 환불 몫
+//
+//   각 refund 는 original row 의 remaining product/surcharge 에서 비례 계산하고,
+//   해당 row 의 마지막 refund 가 정수 반올림 drift 를 흡수한다.
 //
 //   ★ Surcharge 는 비례 환불한다 (원칙). row 에 저장된 surcharge_share 를
 //     refund_qty 비율로 가져감. 이유:
@@ -678,11 +682,14 @@ model SaleInvoiceRow {
   //                   (cents, 양수, ROW-TOTAL 단위 — unit 단위 아님).
   //                   sale create 시 `round(invoice.creditSurchargeAmount
   //                   × row.total / invoice.linesTotal)` 로 비례 배분,
-  //                   마지막 row 에 drift 흡수. refund 수식:
-  //                     refund_row.total =
-  //                       round((row.total + row.surcharge_share)
-  //                             × refund_qty / row.qty)
-  //                   상세는 위 블록 주석 참고.
+  //                   마지막 row 에 drift 흡수.
+  //
+  //                   refund 는 split storage:
+  //                     refund_row.total           = 상품 부분만
+  //                     refund_row.surcharge_share = surcharge 환불 몫
+  //                   각 refund 는 remaining product/surcharge 에서 비례 계산하고,
+  //                   해당 row 의 마지막 refund 가 남은 drift 를 흡수한다.
+  //                   상세는 docs/sale-domain.md D-26 revised 참고.
   //
   // rounding_share  없음 — rounding 은 refund invoice 가 독립 own
   //                          (refund CASH tender 시 자체 재계산).

@@ -165,7 +165,7 @@ CASE WHEN invoice.type = 'REFUND' THEN -amount ELSE amount END
 | Member snapshot | `memberId`, `memberName`, `memberLevel`, `memberPhoneLast4` — optional |
 | Money | `linesTotal`, `rounding`, `creditSurchargeAmount`, `lineTax`, `surchargeTax`, `total`, `cashChange` |
 | Operational | `receiptCount`, `note` |
-| Cloud sync | `synced`, `syncedAt`, `cloudId` |
+| Cloud sync | `cloudId` (`null` means not pushed yet) |
 
 ### Why all the snapshots
 
@@ -231,18 +231,20 @@ refund invoice 자체의 5¢ rounding 을 새로 계산). 따라서 row 에 pre-
 
 ### Why `unit_refundable` is absent
 
-Decided (D-18) to compute refund-per-unit on the fly:
+Decided (D-18/D-26 revised) to compute refund amounts on the fly:
 
 ```
-refund_row.total  =  round((row.total + row.surcharge_share) × refund_qty / row.qty)
+refund_row.total           = product refund amount only
+refund_row.surcharge_share = surcharge refund share
 ```
 
-One multiplication, one round, all row-local. A pre-computed
-`unit_refundable` would add a field to sync and could drift from the formula
-above by 1 cent on rounding boundaries. Not worth it.
+The service calculates both from the row's remaining product/surcharge amounts
+and lets the final refund of that row absorb rounding drift. A pre-computed
+`unit_refundable` would add a field to sync and could drift by 1 cent on
+rounding boundaries. Not worth it.
 
 `surcharge_share` 는 **row-total 단위** (unit 단위 아님) — row.total 과 같은
-축이라 수식 한 줄. Sale 생성 시 pre-compute (`round(invoice.creditSurchargeAmount
+축. Sale 생성 시 pre-compute (`round(invoice.creditSurchargeAmount
 × row.total / invoice.linesTotal)`), 마지막 row 에 drift absorb.
 
 ---
@@ -687,9 +689,9 @@ Added to the schema:
 - Member snapshot (optional): `memberId`, `memberName`, `memberLevel`,
   `memberPhoneLast4`
 - Operational: `receiptCount`, `note`
-- Cloud sync: `synced`, `syncedAt`, `cloudId`
+- Cloud sync: `cloudId` (`null` means not pushed yet; D-38 removed `synced` / `syncedAt`)
 - Indexes: `shiftId`, `terminalId`, `userId`, `dayStr`, `(type, dayStr)`,
-  `synced`, `memberId`, `originalInvoiceId`
+  `cloudId`, `memberId`, `originalInvoiceId`
 
 `memberId` is a `String?` external reference to CRM — not a FK. The member
 snapshot fields freeze the member's identity at sale time so that later

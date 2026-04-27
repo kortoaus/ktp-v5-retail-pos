@@ -1,3 +1,6 @@
+Historical note: old scratch request list. Use root `README.md`,
+`TEST_CHECKLIST.md`, and the issue/task at hand as the current source of truth.
+
 - [x]: Sale 화면에서 무게 자동 입력
 - [x]: Payment 모달에서 Cash가 먼저
 - [x]: 캐셔 로그인 온 세일

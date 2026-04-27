@@ -2,6 +2,19 @@
 
 Retail point-of-sale system for Australian supermarkets. Monorepo with two projects: Electron desktop app + Express REST API server.
 
+## Documentation Map
+
+This README is the canonical product, architecture, route, permission, and workflow reference.
+
+Read these when changing code:
+
+- `AGENTS.md` — repo rules for coding agents and maintainers.
+- `retail_pos_app/AGENTS.md` — Electron renderer/main/preload boundary rules.
+- `docs/sale-domain.md` — detailed sale/payment/refund/repay/shift/cloud-sync decisions (D-1 ... D-38).
+- `TEST_CHECKLIST.md` — manual regression checklist.
+
+Historical planning files live under `docs/outdated/`. They are kept for context only; do not treat them as current implementation contracts.
+
 ## Architecture
 
 ```
@@ -58,17 +71,17 @@ Retail point-of-sale system for Australian supermarkets. Monorepo with two proje
 | Route               | Screen                  | Shift | Scope     | Purpose                     |
 | ------------------- | ----------------------- | ----- | --------- | --------------------------- |
 | `/`                 | HomeScreen              | —     | —         | Landing / navigation        |
-| `/sale`             | SaleScreen              | Yes   | —         | Main POS register           |
+| `/sale`             | SaleScreen              | Yes   | sale      | Main POS register           |
 | `/price-tag`        | PriceTagScreen          | —     | —         | Print item price tags       |
 | `/server-setup`     | ServerSetupScreen       | —     | —         | Configure server connection |
 | `/shift/open`       | OpenShiftScreen         | No    | shift     | Open shift with cash count  |
 | `/shift/close`      | CloseShiftScreen        | Yes   | shift     | Close shift with Z-report   |
 | `/manager/settings` | InterfaceSettingsScreen | —     | interface | App settings                |
-| `/manager/test`     | TestScreen              | —     | —         | Hardware testing            |
 | `/manager/hotkey`   | HotkeyManagerScreen     | —     | hotkey    | Quick-select grid CRUD      |
 | `/manager/user`     | UserManageScreen        | —     | user      | User account management     |
 | `/manager/invoices` | SaleInvoiceSearchScreen | —     | —         | Invoice search, reprint     |
-| `/manager/refund`   | RefundScreen            | Yes   | refund    | Refund against sale invoice |
+| `/manager/refund`   | SaleRefundPickerScreen  | Yes   | refund    | Pick sale invoice to refund |
+| `/manager/refund/:invoiceId` | SaleRefundDetailScreen | Yes | refund | Build refund or repay       |
 | `/manager/cashio`   | CashIOManageScreen      | Yes   | cashio    | Cash in/out management      |
 | `/manager/store`    | StoreSettingScreen      | —     | store     | Store settings              |
 | `/customer-display` | CustomerScreen          | —     | —         | Customer-facing display     |
@@ -77,20 +90,21 @@ Retail point-of-sale system for Australian supermarkets. Monorepo with two proje
 
 All routes prefixed with `/api`. Terminal middleware identifies terminal + company + store settings + current shift by IP address.
 
-| Prefix      | Module   | Auth          | Purpose                             |
-| ----------- | -------- | ------------- | ----------------------------------- |
-| `/terminal` | Terminal | —             | Terminal registration, `/me`        |
-| `/shift`    | Shift    | user + shift  | Open/close shifts, closing data     |
-| `/item`     | Item     | —             | Item search, barcode/batch lookup   |
-| `/hotkey`   | Hotkey   | —             | Quick-select grid CRUD              |
-| `/crm`      | CRM      | —             | Member lookup (by phone, by ID)     |
-| `/user`     | User     | user + user   | User CRUD, auth by code             |
-| `/sale`     | Sale     | user + sale   | Create / spend / query / latest     |
-| `/voucher`  | Voucher  | user + sale   | Staff daily voucher list / issue    |
-| `/printer`  | Printer  | —             | Server-side print (raw data)        |
-| `/cloud`    | Cloud    | —             | Sync with cloud system              |
-| `/cashio`   | CashIO   | user + cashio | Cash in/out CRUD with search        |
-| `/store`    | Store    | user + store  | Store settings (GET/POST)           |
+| Prefix      | Module   | Auth          | Purpose                                      |
+| ----------- | -------- | ------------- | -------------------------------------------- |
+| `/terminal` | Terminal | —             | Terminal registration, `/me`                 |
+| `/shift`    | Shift    | user + shift  | Open/close shifts, current shift, close data |
+| `/item`     | Item     | —             | Item search, barcode/batch/id lookup         |
+| `/brand`    | Brand    | —             | Brand search/list data                       |
+| `/hotkey`   | Hotkey   | —             | Quick-select grid CRUD                       |
+| `/crm`      | CRM      | —             | Member lookup (by phone, by ID)              |
+| `/user`     | User     | user + user   | User CRUD, auth by code                      |
+| `/sale`     | Sale     | user + sale   | Create, spend, refund, repay, query, latest  |
+| `/voucher`  | Voucher  | user + sale   | Staff daily voucher list / issue             |
+| `/printer`  | Printer  | —             | Server-side print (raw data)                 |
+| `/cloud`    | Cloud    | —             | Cloud down-sync, posts, item sheets, push    |
+| `/cashio`   | CashIO   | user + cashio | Cash in/out CRUD with search                 |
+| `/store`    | Store    | GET open; POST user + store | Store settings                         |
 
 ## Features
 
@@ -144,15 +158,19 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - Serial: `{shift.id}-{YYYYMMDD}-{S|R|P}{seq6}` via `DocCounter` atomic increment (D-28)
 - Server 가 invariant 검증 + row 별 `surcharge_share` 비례 배분 저장 + voucher REDEEM 트랜잭션 처리
 
-### Refunds (in progress — service / UI 미구현)
+### Refunds and Repay
 
 - Refund against any completed sale invoice (shift required)
 - Full or partial refund per row (per-row cap = `qty - refunded_qty`)
-- **Surcharge 비례 환불** (D-26, revised) — GST 대칭 / EFTPOS 정산 대칭 / 소비자 공정
-- Per-row refund math: `refund_row.total = round((row.total + row.surcharge_share) × refund_qty / row.qty)`
-- `rounding_share` 는 없음. Refund invoice 가 자체 cash rounding 재계산 (tender 가 CASH 일 때만)
-- Cash/credit/voucher/giftcard 모두 원본 tender 로 환불. Voucher 는 `VoucherEvent REFUND` + balance increment
-- Customer voucher 포함 invoice 는 CRM 오프라인 시 환불 거부 (D-21)
+- Refund rows store product and surcharge separately:
+  - `refund_row.total` = product refund amount only
+  - `refund_row.surcharge_share` = proportional surcharge refund
+  - invoice `creditSurchargeAmount` = sum of refunded surcharge shares
+- Refund math is remaining-based with last-refund drift absorption, not naive `round(original × qty / row.qty)`. See `docs/sale-domain.md` D-26 revised.
+- `rounding_share` does not exist. Each refund invoice recalculates its own cash rounding only when all refund tender is CASH.
+- Cash/credit/user-voucher/customer-voucher/giftcard refunds are capped by the original tender minus prior refund children. User voucher refunds create `VoucherEvent REFUND` and increment balance.
+- Customer-voucher invoices are currently blocked from refund/repay until the CRM online check/provider flow is implemented (D-21).
+- Repay (`POST /api/sale/repay`) creates a full refund plus replacement sale in one transaction. It is limited to same-shift, no prior refund, within 10 minutes, and no customer-voucher original payment.
 
 ### Shift Management
 
@@ -160,7 +178,7 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - Open: cash counter (denomination grid, 999 cap) + note
 - Close: server sums invoices + cashios (D-34 — no increment cache, always re-aggregate via `SUM()`), count actual cash, double-confirm, Z-report auto-print
 - Expected cash = `startedCash + salesCash − refundsCash + totalCashIn − totalCashOut`
-- Shift tracks per-tender: `salesCash / salesCredit / salesVoucher / salesGiftcard` + refunds mirror, plus `salesCreditSurcharge / refundsCreditSurcharge / salesTax / refundsTax` (D-27, D-33)
+- Shift tracks per-tender: `salesCash / salesCredit / salesUserVoucher / salesCustomerVoucher / salesGiftcard` + refunds mirror, plus `salesLinesTotal / refundsLinesTotal`, rounding, counts, `repayCount`, `spendCount`, `spendRetailValue`, `salesCreditSurcharge / refundsCreditSurcharge`, and `salesTax / refundsTax` (D-33, D-34, D-37)
 - All shift money stored in cents (Int)
 
 ### Cash In / Out
@@ -177,7 +195,7 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 
 ### User Management
 
-- Code-based login, scopes: admin, interface, user, hotkey, refund, cashio, store, shift
+- Code-based login, scopes: admin, sale, interface, user, hotkey, refund, cashio, store, shift
 - Admin (ID 1) bypasses all scope checks, cannot be edited
 - ServerPagingList with search
 
@@ -200,8 +218,8 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 ### Receipts
 
 - **Sale**: store header, items (`^` = price changed, `#` = GST applicable, `!` = saved), totals, tender-by-tender payments, GST Included, You Saved, Vouchers Used (entityLabel list), QR code (`receipt%%%serial`), footer
-- **Refund**: "*** REFUND ***" banner, links original invoice id, same row/payment structure with "Refunded" labels
-- **Spend**: "*** INTERNAL ***" banner, rows only (prices `-`), no totals/payments, footer "Internal consumption - no payment"
+- **Refund**: "**_ REFUND _**" banner, links original invoice id, same row/payment structure with "Refunded" labels
+- **Spend**: "**_ INTERNAL _**" banner, rows only (prices `-`), no totals/payments, footer "Internal consumption - no payment"
 - **Z-report**: shift settlement (tender별 sales/refunds, cashio, drawer expected vs actual)
 - All: 576px canvas → ESC/POS thermal print. `** COPY **` marker on reprint
 - Touchscreen tap-through guard: ModalContainer keeps invisible backdrop 100ms after close
@@ -220,16 +238,17 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 
 ## Permissions
 
-| Scope     | Allows                                 |
-| --------- | -------------------------------------- |
-| admin     | Full access, bypasses all scope checks |
-| interface | Interface/display settings             |
-| user      | User account CRUD                      |
-| hotkey    | Hotkey grid CRUD                       |
-| refund    | Process refunds                        |
-| cashio    | Cash in/out records                    |
-| store     | Store settings                         |
-| shift     | Open and close shifts                  |
+| Scope     | Allows                                  |
+| --------- | --------------------------------------- |
+| admin     | Full access, bypasses all scope checks  |
+| sale      | Sale creation, invoice search, vouchers |
+| interface | Interface/display settings              |
+| user      | User account CRUD                       |
+| hotkey    | Hotkey grid CRUD                        |
+| refund    | Process refunds and repay               |
+| cashio    | Cash in/out records                     |
+| store     | Store settings                          |
+| shift     | Open and close shifts                   |
 
 ## Commands
 
@@ -259,12 +278,12 @@ npx prisma db push       # Push schema to database
 
 - [x] Reprint last receipt (`PrintLatestInvoiceButton`)
 - [x] Server-side payment validation (row totals / taxes / payment sum — `sale.create.service.ts`)
-- [ ] Refund service + `RefundScreen` (D-26 surcharge 비례 환불)
-- [ ] Shift close re-aggregation rewrite (D-34)
-- [ ] Cloud sync push (invoice / shift → cloud)
+- [x] Refund service + `SaleRefundPickerScreen` / `SaleRefundDetailScreen` (D-26 surcharge 비례 환불)
+- [x] Shift close re-aggregation rewrite (D-34)
+- [x] Cloud sync push (invoice / shift → cloud)
 - [ ] Linkly EFTPOS + GiftCard provider API (Phase 4)
 - [ ] More label templates
 
 Reports and analytics are handled by the cloud app — the POS does not store reporting data locally.
 
-Domain decisions log: `docs/sale-domain.md` (D-1 … D-36).
+Domain decisions log: `docs/sale-domain.md` (D-1 ... D-38).

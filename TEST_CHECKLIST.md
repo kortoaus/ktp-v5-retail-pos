@@ -1,7 +1,7 @@
 # Test Checklist
 
 > 모든 금액은 cents, 수량은 ×1000 기준. 표시는 dollars/실수량.
-> 도메인 결정사항은 `docs/sale-domain.md` 참조 (D-1 … D-36).
+> 도메인 결정사항은 `docs/sale-domain.md` 참조 (D-1 ... D-38).
 
 ---
 
@@ -9,7 +9,7 @@
 
 - [ ] Open Shift — CashCounter 로 금액 입력, 서버에 cents 저장
 - [ ] Close Shift — Summary 금액 정확 (SUM 재집계, D-34), cents 저장, 영수증 인쇄
-- [ ] Shift Settlement 영수증 — tender 별 매출/환불 표시 (Cash/Credit/Voucher/GiftCard), surcharge 별도 라인
+- [ ] Shift Settlement 영수증 — tender 별 매출/환불 표시 (Cash/Credit/User Voucher/Customer Voucher/GiftCard), line totals, rounding, surcharge, tax, repay/spend counts
 
 ---
 
@@ -188,9 +188,20 @@
 
 ---
 
-## 9. 환불 (미구현 — 차후)
+## 9. 환불 / 재결제
 
-> `POST /api/sale/refund` + RefundScreen 은 아직. D-26 (surcharge 비례 환불) 반영 필요.
+- [ ] `/manager/refund` — SALE invoice picker loads searchable invoices only
+- [ ] `/manager/refund/:invoiceId` — row qty picker caps at `qty - refunded_qty`
+- [ ] Partial row refund — product amount and surcharge share are split correctly
+- [ ] Final refund of a row absorbs remaining product/surcharge drift
+- [ ] Cash-only refund applies its own 5 cent rounding
+- [ ] Non-cash or mixed refund has no cash rounding
+- [ ] Tender caps prevent refunding more than original tender minus prior refunds
+- [ ] User voucher refund creates `VoucherEvent REFUND` and restores balance
+- [ ] Customer-voucher invoice is blocked until CRM online refund support exists
+- [ ] Refund receipt shows `*** REFUND ***`, original invoice link, refunded tenders, and REFUND TOTAL
+- [ ] Repay button appears only for eligible invoices: same shift, within 10 minutes, no prior refund, no customer-voucher payment
+- [ ] Repay creates both REFUND and replacement SALE, then prints both receipts
 
 ---
 
@@ -217,6 +228,7 @@
 - [ ] Kick Drawer 버튼
 - [ ] Sync 버튼 (파랑) → 클라우드 다운로드 + 업로드
 - [ ] Sync 버튼 (빨강) → 다른 터미널 sync 완료 시
+- [ ] Cloud push catch-up — unsynced invoices/shifts with `cloudId = null` are retried on sale/refund/repay/shift close/server boot
 - [ ] Back 버튼 → 홈
 
 ---

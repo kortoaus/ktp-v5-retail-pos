@@ -1,5 +1,8 @@
 # Linkly Cloud Integration — Full Process Guide
 
+Status: future Phase 4 reference. This guide is background for a later EFTPOS
+provider integration, not a current POS implementation contract.
+
 ## Overview
 
 Linkly Cloud is a hosted payment integration system. Your POS communicates with Linkly's cloud servers via REST API, and Linkly routes the transaction to the paired EFTPOS terminal in your store. The terminal connects to the internet independently — no direct connection between POS and terminal required.
@@ -664,5 +667,4 @@ Switch fully to integrated EFTPOS. You're done.
 | Accreditation review                 | 1–2 weeks       |
 | Production setup + pilot             | 1 week          |
 | **Total**                            | **~6–14 weeks** |
-
 
