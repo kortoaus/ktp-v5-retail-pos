@@ -112,7 +112,9 @@ export default function UserVoucherInput({
 
       {/* Numpad */}
       <div className="grid grid-cols-3 gap-1">
-        {(["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const).map((k) => (
+        {(
+          ["7", "8", "9", "4", "5", "6", "1", "2", "3"] as const
+        ).map((k) => (
           <NumKey key={k} label={k} onClick={() => pushKey(k)} />
         ))}
         <NumKey label="DEL" onClick={() => pushKey("DEL")} variant="warn" />

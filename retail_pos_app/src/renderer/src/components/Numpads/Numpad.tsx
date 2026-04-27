@@ -59,9 +59,9 @@ export default function Numpad({
       </div>
       <div className="Numpad-buttons">
         <div className="Numpad-row">
-          <button onClick={handleClick}>1</button>
-          <button onClick={handleClick}>2</button>
-          <button onClick={handleClick}>3</button>
+          <button onClick={handleClick}>7</button>
+          <button onClick={handleClick}>8</button>
+          <button onClick={handleClick}>9</button>
         </div>
         <div className="Numpad-row">
           <button onClick={handleClick}>4</button>
@@ -69,9 +69,9 @@ export default function Numpad({
           <button onClick={handleClick}>6</button>
         </div>
         <div className="Numpad-row">
-          <button onClick={handleClick}>7</button>
-          <button onClick={handleClick}>8</button>
-          <button onClick={handleClick}>9</button>
+          <button onClick={handleClick}>1</button>
+          <button onClick={handleClick}>2</button>
+          <button onClick={handleClick}>3</button>
         </div>
         <div className="Numpad-row">
           <button onClick={handleClick}>DEL</button>
