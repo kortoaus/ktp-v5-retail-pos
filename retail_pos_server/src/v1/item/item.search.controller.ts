@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { parseFindManyQuery, parseIntId } from "../../libs/query";
+import { BadRequestException } from "../../libs/exceptions";
 import {
+  getItemsByIdsService,
   searchItemByIdService,
   searchItemsService,
 } from "./item.search.service";
@@ -38,5 +40,21 @@ export async function searchItemsBarcodeController(
 export async function searchItemByIdController(req: Request, res: Response) {
   const id = parseIntId(req, "id");
   const result = await searchItemByIdService(id);
+  res.status(200).json(result);
+}
+
+export async function getItemsByIdsController(req: Request, res: Response) {
+  const { ids } = req.body as { ids?: unknown };
+  if (!Array.isArray(ids)) {
+    throw new BadRequestException("ids must be an array");
+  }
+
+  const parsedIds = ids.map((id) => Number(id));
+  if (parsedIds.some((id) => !Number.isInteger(id) || id < 1)) {
+    throw new BadRequestException("ids must contain positive integers");
+  }
+
+  const distinctIds = [...new Set(parsedIds)];
+  const result = await getItemsByIdsService(distinctIds);
   res.status(200).json(result);
 }

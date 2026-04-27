@@ -81,7 +81,7 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 | ----------- | -------- | ------------- | ----------------------------------- |
 | `/terminal` | Terminal | —             | Terminal registration, `/me`        |
 | `/shift`    | Shift    | user + shift  | Open/close shifts, closing data     |
-| `/item`     | Item     | —             | Item search, barcode lookup         |
+| `/item`     | Item     | —             | Item search, barcode/batch lookup   |
 | `/hotkey`   | Hotkey   | —             | Quick-select grid CRUD              |
 | `/crm`      | CRM      | —             | Member lookup (by phone, by ID)     |
 | `/user`     | User     | user + user   | User CRUD, auth by code             |
@@ -117,6 +117,19 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - Discounted = lowest of `prices[level]` and `promoPrice[level]`, only if < original
 - Prepacked: embedded price from PP barcode → `unit_price_adjusted`
 - Member change recalculates all lines in active cart
+
+### Price Tags
+
+- `/price-tag` has two modes: manual Item labels and cloud Item Sheet labels.
+- Item mode builds a local queue from search/scan and prints immediately to selected
+  70×30 or 70×90 label printers.
+- Item Sheet mode loads cloud label-update sheets, fetches sheet rows by sheet id,
+  and lets the operator remove rows before printing.
+- Item Sheet printing syncs items from cloud first, resolves queued rows through
+  `POST /api/item/search/ids`, and sends 70×30 before 70×90. Promo items use
+  70×90 when selected; otherwise they fall back to 70×30.
+- Printed sheet markers are stored client-side per terminal in localStorage using
+  sheet ids, so each terminal can show whether it has already printed a sheet.
 
 ### Payment
 

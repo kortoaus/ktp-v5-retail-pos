@@ -19,3 +19,7 @@ export async function searchItemsByKeyword(
   });
   return apiService.get<Item[]>(`/api/item/search/keyword?${params}`);
 }
+
+export async function getItemsByIds(ids: number[]): Promise<ApiResponse<Item[]>> {
+  return apiService.post<Item[]>(`/api/item/search/ids`, { ids });
+}

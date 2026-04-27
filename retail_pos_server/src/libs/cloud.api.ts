@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from "axios";
 import { API_KEY, API_URL, CRM_URL, ITEM_URL } from "./constants";
 import { PagingType } from "../types/cloud";
+import { Request } from "express";
 
 export type ApiResponse<T = any> = {
   ok: boolean;
@@ -105,3 +106,11 @@ export const apiService = new ApiService(API_URL);
 export const crmApiService = new ApiService(CRM_URL);
 
 export default apiService;
+
+export function getCloudQs(req: Request) {
+  const qs = new URLSearchParams(
+    req.query as Record<string, string>,
+  ).toString();
+
+  return qs;
+}

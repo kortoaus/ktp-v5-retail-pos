@@ -339,3 +339,33 @@ export interface CloudPostContentType {
   marks?: { type: string; attrs?: Record<string, any> }[];
   text?: string;
 }
+
+export type ItemSheetType = "LABEL-UPDATE";
+
+export interface CloudItemSheetRow {
+  id: number;
+  sheetId: number;
+  itemId: number;
+  qty: number; // in QTY_SCALE
+  name_en: string;
+  name_ko: string;
+  barcode: string;
+  mDate?: string | null; // ISO date string or null
+  expDate?: string | null; // ISO date string or null
+  note?: string | null;
+  createdAt: string; // ISO date string
+  updatedAt: string; // ISO date string
+}
+
+export interface CloudItemSheet {
+  id: number;
+  companyId: number;
+  author: string;
+  authorId: string;
+  type: ItemSheetType;
+  createdAt: string; // ISO date string
+  updatedAt: string; // ISO date string
+  archived: boolean;
+  note?: string | null;
+  rows: CloudItemSheetRow[];
+}

@@ -90,3 +90,28 @@ export async function searchItemByIdService(id: number) {
     throw new InternalServerException("Internal server error");
   }
 }
+
+export async function getItemsByIdsService(ids: number[]) {
+  try {
+    if (ids.length === 0) {
+      return { ok: true, result: [], msg: "Success" };
+    }
+
+    const items = await db.item.findMany({
+      where: { id: { in: ids }, archived: false },
+      include: ItemInclude,
+    });
+    const resultWithPrices = await patchItemPriceService(items);
+    const itemById = new Map(resultWithPrices.map((item) => [item.id, item]));
+    const ordered = ids.flatMap((id) => {
+      const item = itemById.get(id);
+      return item ? [item] : [];
+    });
+
+    return { ok: true, result: ordered, msg: "Success" };
+  } catch (e) {
+    if (e instanceof HttpException) throw e;
+    console.error("Error getting items by ids:", e);
+    throw new InternalServerException("Internal server error");
+  }
+}
