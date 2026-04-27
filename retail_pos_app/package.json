@@ -1,7 +1,8 @@
 {
   "name": "retail-pos",
   "version": "1.0.0",
-  "description": "Retail POS Desktop Application",
+  "description": "KTPV5 Retail Terminal Desktop Application",
+  "author": "KORTOAUS PTY LTD",
   "main": "./out/main/index.js",
   "private": true,
   "scripts": {
@@ -45,8 +46,9 @@
     "typescript": "^5.7.0"
   },
   "build": {
-    "appId": "com.retailpos.app",
-    "productName": "Retail POS",
+    "appId": "com.kortoaus.ktpv5-retail-terminal",
+    "productName": "KTPV5 Retail Terminal",
+    "copyright": "Copyright 2026 KORTOAUS PTY LTD",
     "directories": {
       "buildResources": "build",
       "output": "dist"
