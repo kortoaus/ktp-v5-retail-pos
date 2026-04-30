@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useSalesStore } from "../../store/SalesStore";
 import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../../libs/constants";
+import { cn } from "../../libs/cn";
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 
@@ -25,40 +26,50 @@ export default function DocumentMonitor({}: {}) {
   const due = total;
 
   return (
-    <div className="grid grid-cols-12 grid-rows-2 bg-zinc-900 h-full px-4 py-2 gap-x-2">
-      <div className="flex flex-col justify-center gap-1">
-        <div className="text-xs text-gray-400 font-medium">ITEMS</div>
-        <div className="text-white font-semibold text-base">{itemCount}</div>
-      </div>
-      <div className="flex flex-col justify-center gap-1">
-        <div className="text-xs text-gray-400 font-medium">LINES</div>
-        <div className="text-white font-semibold text-base">{lineCount}</div>
-      </div>
-      <div className="flex flex-col justify-center gap-1">
-        <div className="text-xs text-gray-400 font-medium">QTY</div>
-        <div className="text-white font-semibold text-base">
-          {Math.round(qtyCount)}
-        </div>
-      </div>
-      <div className="flex flex-col justify-center gap-1 col-span-2">
-        <div className="text-xs text-gray-400 font-medium">NET</div>
-        <div className="text-white font-semibold text-base">
-          {fmtMoney(net)}
-        </div>
-      </div>
-      <div className="flex flex-col justify-center gap-1 col-span-2">
-        <div className="text-xs text-gray-400 font-medium">TAX</div>
-        <div className="text-white font-semibold text-base">
-          {fmtMoney(tax_amount)}
-        </div>
-      </div>
+    <div className="grid grid-cols-12 grid-rows-1 bg-zinc-900 h-full px-4 py-2 gap-x-2">
+      <DocumentMonitorItem label="ITEMS" value={itemCount.toString()} />
+      <DocumentMonitorItem label="LINES" value={lineCount.toString()} />
+      <DocumentMonitorItem
+        label="QTY"
+        value={Math.round(qtyCount).toString()}
+      />
+      <DocumentMonitorItem label="NET" value={fmtMoney(net)} colSpan={2} />
+      <DocumentMonitorItem
+        label="TAX"
+        value={fmtMoney(tax_amount)}
+        colSpan={2}
+      />
 
       <div className="col-span-5 row-span-2 flex items-center justify-between gap-4">
-        <div className="text-lg text-white font-medium">DUE</div>
-        <div className="text-green-400 text-3xl font-bold">
+        <div className="text-base text-white font-medium">DUE</div>
+        <div className="text-green-400 text-2xl font-bold">
           ${fmtMoney(due)}
         </div>
       </div>
+    </div>
+  );
+}
+
+function DocumentMonitorItem({
+  label,
+  value,
+  colSpan = 1,
+}: {
+  label: string;
+  value: string;
+  colSpan?: number;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col justify-center",
+        colSpan && `col-span-${colSpan}`,
+      )}
+    >
+      <div style={{ fontSize: 10 }} className="text-gray-400 font-medium">
+        {label}
+      </div>
+      <div className="text-white font-semibold text-base">{value}</div>
     </div>
   );
 }

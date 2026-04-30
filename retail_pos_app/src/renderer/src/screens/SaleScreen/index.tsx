@@ -309,7 +309,7 @@ export default function SaleScreen() {
   return (
     <div className="h-full w-full bg-gray-50 flex flex-col">
       {/* ── Top Bar ──────────────────────────────────────── */}
-      <div className="h-16 flex items-center justify-between gap-4 px-4 border-b border-gray-200">
+      <div className="h-14 flex items-center justify-between gap-4 px-4 border-b border-gray-200">
         <div className="flex items-center gap-4 h-full py-2">
           <TopBarButton label="← Back" onClick={() => navigate("/")} />
           <TopBarButton
@@ -340,13 +340,20 @@ export default function SaleScreen() {
 
       {/* ── Body ─────────────────────────────────────────── */}
       <div className="flex-1 flex divide-x divide-gray-200 overflow-hidden">
-        <div className="flex-1 bg-white">
-          <LineViewer
-            lines={lines}
-            lineOffset={lineOffset}
-            selectedLineKey={selectedLineKey}
-            setSelectedLineKey={setSelectedLineKey}
-          />
+        <div className="w-[500px] bg-white flex flex-col">
+          <div className="flex-1">
+            <LineViewer
+              lines={lines}
+              lineOffset={lineOffset}
+              selectedLineKey={selectedLineKey}
+              setSelectedLineKey={setSelectedLineKey}
+            />
+          </div>
+
+          {/* Document Monitor — subtotal, discount, due */}
+          <div className="h-14">
+            <DocumentMonitor />
+          </div>
         </div>
 
         <LinePaging
@@ -359,7 +366,7 @@ export default function SaleScreen() {
         />
 
         {/* Right Panel */}
-        <div className="w-[550px] h-full flex flex-col divide-y divide-gray-200">
+        <div className="flex-1 h-full flex flex-col divide-y divide-gray-200">
           {/* Function Area — hotkeys or line actions */}
           <div className="flex-1">
             {selectedLine && (
@@ -382,13 +389,8 @@ export default function SaleScreen() {
               )}
           </div>
 
-          {/* Document Monitor — subtotal, discount, due */}
-          <div className="h-24">
-            <DocumentMonitor />
-          </div>
-
           {/* Action Bar — Clear + Pay */}
-          <div className="h-20 grid grid-cols-4 gap-2 p-2">
+          <div className="h-16 grid grid-cols-4 gap-2 p-2">
             <div
               className="bg-red-500 text-white font-bold rounded-lg flex items-center justify-center"
               onClick={() => {

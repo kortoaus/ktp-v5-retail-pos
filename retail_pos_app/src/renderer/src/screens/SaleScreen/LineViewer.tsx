@@ -26,11 +26,11 @@ export default function LineViewer({
   return (
     <div className="w-full h-full flex flex-col">
       <div className="text-sm bg-gray-100 border-b border-b-gray-200 h-8 divide-x divide-gray-200 flex *:flex *:justify-center *:items-center">
-        <div className="w-12">No.</div>
+        <div className="w-8">No.</div>
         <div className="flex-1">Item</div>
-        <div className="w-24">U. Price</div>
-        <div className="w-24">Qty</div>
-        <div className="w-24">Total</div>
+        <div className="w-20">U. Price</div>
+        <div className="w-20">Qty</div>
+        <div className="w-20">Total</div>
       </div>
       <div
         className="flex-1 h-full overflow-hidden divide-y divide-gray-200"
@@ -97,15 +97,13 @@ function LineCaption({
         isSelected && "bg-blue-50",
       )}
     >
-      <div className="w-12 flex items-center justify-center">{index + 1}</div>
+      <div className="w-8 flex items-center justify-center text-xs">
+        {index + 1}
+      </div>
 
       <div className="flex-1 p-1 flex flex-col justify-center">
-        <div className="line-clamp-1 truncate text-sm font-medium">
-          {name_en}
-        </div>
-        <div className="line-clamp-1 truncate text-gray-500 text-xs">
-          {name_ko}
-        </div>
+        <div className="line-clamp-1 text-xs font-medium">{name_en}</div>
+        <div className="line-clamp-1 text-gray-500 text-xs">{name_ko}</div>
         {measured_weight != null && measured_weight > 0 && (
           <div className="text-xs text-gray-400">
             {fmtQty(measured_weight)}kg ×{" "}
@@ -114,8 +112,8 @@ function LineCaption({
         )}
       </div>
 
-      <div className="flex flex-col items-end justify-center w-24 p-1">
-        <div className="text-base font-medium">
+      <div className="flex flex-col items-end justify-center w-20 p-1">
+        <div className="text-sm font-medium">
           {unit_price_adjusted && <span className="text-red-500">*</span>}
           {fmtMoney(displayPrice)}
         </div>
@@ -126,12 +124,12 @@ function LineCaption({
         )}
       </div>
 
-      <div className="flex flex-col items-end justify-center w-24 p-1">
-        <div className="text-base font-medium">{fmtQty(displayQty)}</div>
+      <div className="flex flex-col items-end justify-center w-20 p-1">
+        <div className="text-sm font-medium">{fmtQty(displayQty)}</div>
       </div>
 
-      <div className="flex flex-col items-end justify-center w-24 p-1">
-        <div className="text-base font-medium">
+      <div className="flex flex-col items-end justify-center w-20 p-1">
+        <div className="text-sm font-medium">
           {taxable && <span className="text-red-500">*</span>}
           {fmtMoney(total)}
         </div>
