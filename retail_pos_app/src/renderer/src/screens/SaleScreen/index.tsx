@@ -28,7 +28,6 @@ import DiscountPercentModal from "./DiscountPercentModal";
 import MemberSearchModal from "../../components/MemberSearchModal";
 import WeightModal from "../../components/WeightModal";
 import DocumentMonitor from "./DocumentMonitor";
-import CloudHotkeyViewer from "../../components/CloudHotkeyViewer";
 import useCloudHotkeys from "../../hooks/useCloudHotkeys";
 import LinePaging from "./LinePaging";
 import PrintLatestInvoiceButton from "../../components/PrintLatestInvoiceButton";
@@ -36,6 +35,7 @@ import { kickDrawer } from "../../libs/printer/kick-drawer";
 import SyncButton from "../../components/SyncButton";
 import SyncPostButton from "../../components/SyncPostButton";
 import PaymentModal from "./PaymentModal";
+import CloudHotkeyViewerV2 from "../../components/CloudHotkeyViewerV2";
 
 type ModalTarget =
   | null
@@ -379,14 +379,14 @@ export default function SaleScreen() {
                 onOpenDiscountPercent={() => setModalTarget("discount-percent")}
               />
             )}
-            {!selectedLine &&
-              !cloudHotkeysLoading &&
-              cloudHotkeys.length > 0 && (
-                <CloudHotkeyViewer
+            {!cloudHotkeysLoading && cloudHotkeys.length > 0 && (
+              <div className={cn(selectedLine ? "hidden" : "w-full h-full")}>
+                <CloudHotkeyViewerV2
                   hotkeys={cloudHotkeys}
                   onItemClick={(barcode: string) => scanCallback(barcode)}
                 />
-              )}
+              </div>
+            )}
           </div>
 
           {/* Action Bar — Clear + Pay */}

@@ -102,8 +102,8 @@ function LineCaption({
       </div>
 
       <div className="flex-1 p-1 flex flex-col justify-center">
-        <div className="line-clamp-1 text-xs font-medium">{name_en}</div>
-        <div className="line-clamp-1 text-gray-500 text-xs">{name_ko}</div>
+        <div className="line-clamp-1 text-xs font-medium">{name_ko}</div>
+        <div className="line-clamp-1 text-gray-500 text-xs">{name_en}</div>
         {measured_weight != null && measured_weight > 0 && (
           <div className="text-xs text-gray-400">
             {fmtQty(measured_weight)}kg ×{" "}

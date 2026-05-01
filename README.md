@@ -96,7 +96,7 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 | `/shift`    | Shift    | user + shift  | Open/close shifts, current shift, close data |
 | `/item`     | Item     | —             | Item search, barcode/batch/id lookup         |
 | `/brand`    | Brand    | —             | Brand search/list data                       |
-| `/hotkey`   | Hotkey   | —             | Quick-select grid CRUD                       |
+| `/hotkey`   | Hotkey   | —             | Quick-select grid CRUD; `/hotkey/cloud` returns cloud hotkeys with item default/promo price data |
 | `/crm`      | CRM      | —             | Member lookup (by phone, by ID)              |
 | `/user`     | User     | user + user   | User CRUD, auth by code                      |
 | `/sale`     | Sale     | user + sale   | Create, spend, refund, repay, query, latest  |
@@ -121,7 +121,7 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - SPEND toggle (internal consumption): PaymentModal 안에서 toggle ON → cart 를
   type=SPEND invoice 로 기록 (payments 없음, 금액 0). D-14~16, D-29.
 - On-screen keyboard (Korean dubeolsik + English + numpad)
-- Hotkeys: touchscreen 6×6 grid for quick item selection
+- Hotkeys: touchscreen cloud hotkey viewer with always-visible parent groups (8×2 paged group grid) and 5×5 paged item grid; item tiles display default price or active promo price as `$price/uom`
 
 ### Pricing
 

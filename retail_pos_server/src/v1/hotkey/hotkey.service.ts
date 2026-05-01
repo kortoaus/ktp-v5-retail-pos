@@ -166,29 +166,61 @@ export async function getCloudHotkeysService() {
       },
     });
 
-    console.log(
-      result
-        .map((k) => k.keys.map((k) => k.page))
-        .flat()
-        .join(","),
-    );
-
     const allKeys = result.flatMap((hotkey) => hotkey.keys);
     const distinctItemIds = [...new Set(allKeys.map((key) => key.itemId))];
-    const items = await db.item.findMany({
-      where: {
-        id: {
-          in: distinctItemIds,
+
+    const [items, prices, promoPrices] = await Promise.all([
+      db.item.findMany({
+        where: {
+          id: {
+            in: distinctItemIds,
+          },
         },
-      },
-      include: ItemInclude,
+        include: ItemInclude,
+      }),
+      db.price.findMany({
+        where: {
+          itemId: {
+            in: distinctItemIds,
+          },
+          archived: false,
+        },
+      }),
+      db.promoPrice.findMany({
+        where: {
+          itemId: {
+            in: distinctItemIds,
+          },
+          archived: false,
+          validFrom: {
+            lte: new Date(),
+          },
+          validTo: {
+            gte: new Date(),
+          },
+        },
+      }),
+    ]);
+
+    const itemsWithPrices = items.map((item) => {
+      const price = prices.find((price) => price.itemId === item.id) || null;
+      const promoPrice =
+        promoPrices.find((promoPrice) => promoPrice.itemId === item.id) || null;
+
+      return {
+        ...item,
+        price: price ? { ...price, prices: price.prices.slice(0, 1) } : null,
+        promoPrice: promoPrice
+          ? { ...promoPrice, prices: promoPrice.prices.slice(0, 1) }
+          : null,
+      };
     });
 
     const resultWithItems = result.map((hotkey) => ({
       ...hotkey,
       keys: hotkey.keys.map((key) => ({
         ...key,
-        item: items.find((item) => item.id === key.itemId),
+        item: itemsWithPrices.find((item) => item.id === key.itemId),
       })),
     }));
 

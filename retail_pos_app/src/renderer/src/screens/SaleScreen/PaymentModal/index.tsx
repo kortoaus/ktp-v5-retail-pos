@@ -454,9 +454,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     if (!p) return;
     const label = p.tender === "GIFTCARD" ? "GIFT CARD" : p.tender;
     const disp = p.tender === "CASH" ? p.cashReceived : p.amount;
-    const ok = window.confirm(
-      `Remove ${label} payment ($${fmtMoney(disp)})?`,
-    );
+    const ok = window.confirm(`Remove ${label} payment ($${fmtMoney(disp)})?`);
     if (!ok) return;
     setPayments((prev) => prev.filter((pp) => pp.key !== key));
   }
@@ -556,11 +554,11 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
                   className="flex items-start justify-between px-3 py-2 gap-2 border-b border-gray-100 last:border-b-0"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate text-sm">
-                      {li.name_en}
+                    <div className="font-medium truncate text-xs">
+                      {li.name_ko}
                     </div>
                     <div className="text-xs text-gray-500 truncate">
-                      {li.name_ko}
+                      {li.name_en}
                     </div>
                   </div>
                   <div className="text-right shrink-0 text-xs leading-tight">
@@ -631,7 +629,10 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
             )}
             {stagedPayment.tender === "CREDIT" && (
               <CreditInput
-                billPortion={billPortionOf(stagedPayment, credit_surcharge_rate)}
+                billPortion={billPortionOf(
+                  stagedPayment,
+                  credit_surcharge_rate,
+                )}
                 setBillPortion={setStagedCreditBillPortion}
                 left={left}
                 surchargeRate={credit_surcharge_rate}
@@ -724,9 +725,8 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
               <div className="text-[10px] uppercase tracking-[0.15em] text-gray-500">
                 Payments
               </div>
-              {Array.from(tenderSums.entries()).filter(
-                ([, amt]) => amt > 0,
-              ).length === 0 ? (
+              {Array.from(tenderSums.entries()).filter(([, amt]) => amt > 0)
+                .length === 0 ? (
                 <div className="text-gray-400 text-xs">None yet</div>
               ) : (
                 Array.from(tenderSums.entries())

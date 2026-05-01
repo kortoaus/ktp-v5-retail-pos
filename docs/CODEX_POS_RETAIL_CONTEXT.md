@@ -55,6 +55,11 @@ such as `../generated/prisma/client`, not `@prisma/client`.
 - API calls from renderer belong in `src/renderer/src/service/*.service.ts`.
 - Server `/api/*` handlers assume `terminalMiddleware` populated
   `res.locals.terminal`, `company`, `storeSetting`, and current `shift`.
+- Sale Screen cloud hotkeys use `CloudHotkeyViewerV2`: parent groups stay
+  visible in an 8x2 paged group grid, while the selected group renders a 5x5
+  paged item grid. Interactive cells are `div`-based rather than native
+  buttons so HID barcode scanner keyboard input cannot activate focused
+  controls.
 
 ## Numeric And Date Rules
 
@@ -110,6 +115,9 @@ The POS server is a LAN-local cache/proxy:
 
 - Down-sync: items, categories, brands, users, CRM members, hotkeys, posts, and
   item sheets.
+- `/api/hotkey/cloud` patches each hotkey key's item with active default price
+  and current promo price data, trimmed to `prices[0]`, so the POS can display
+  `$price/uom` on cloud hotkey item tiles.
 - Up-sync: sale invoices, refunds, repay chains, spend invoices, closed shifts,
   and cash in/out where included in shift payloads.
 
