@@ -112,12 +112,15 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 
 - 4 independent carts with per-cart member assignment
 - Barcode scan → GTIN → PLU → raw lookup chain (한글 IME 무관 — `e.code` 기반)
+- Last scanner payload is shown on the bottom DeviceMonitor for quick operator
+  diagnostics; the shared scanner hook updates it for both serial and HID input.
 - QR scan: `member%%%{id}` assigns member, `receipt%%%{serial}` searches invoice
 - Item types: normal, prepacked, weight, weight-prepacked
 - Weight items: auto-read on modal open + 500ms polling when `autoPolling` enabled
 - Normal item merge (same item + same price = qty increment)
-- Line functions: change qty, override price, discount $, discount % (모두 line-level
-  `unit_price_adjusted` 로 반영 — document-level discount 는 D-17 에서 제거)
+- Line functions: change qty (normal + prepacked), override price, discount $,
+  discount % (모두 line-level `unit_price_adjusted` 로 반영 — document-level
+  discount 는 D-17 에서 제거)
 - SPEND toggle (internal consumption): PaymentModal 안에서 toggle ON → cart 를
   type=SPEND invoice 로 기록 (payments 없음, 금액 0). D-14~16, D-29.
 - On-screen keyboard (Korean dubeolsik + English + numpad)
@@ -128,7 +131,9 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - Price arrays indexed by member level: `prices[0]` = base, `prices[N]` = level N
 - Item-level promo prices (`PromoPrice`) with valid date range, same array structure — kept intentionally; cart-level/rule-based promotions removed (D-17)
 - Effective price = `adjusted ?? discounted ?? original`
-- Discounted = lowest of `prices[level]` and `promoPrice[level]`, only if < original
+- Discounted = lowest valid price across `price.prices[0..memberLevel]` and
+  `promoPrice.prices[0..memberLevel]`, only if < original. This prevents a
+  mis-keyed higher member tier from making the customer pay more.
 - Prepacked: embedded price from PP barcode → `unit_price_adjusted`
 - Member change recalculates all lines in active cart
 
@@ -137,6 +142,8 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - `/price-tag` has two modes: manual Item labels and cloud Item Sheet labels.
 - Item mode builds a local queue from search/scan and prints immediately to selected
   70×30 or 70×90 label printers.
+- Item search results and the manual print queue show the level-0 default price,
+  or level-0 promo price in red when promo exists.
 - Item Sheet mode loads cloud label-update sheets, fetches sheet rows by sheet id,
   and lets the operator remove rows before printing.
 - Item Sheet printing syncs items from cloud first, resolves queued rows through
@@ -179,6 +186,9 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - Close: server sums invoices + cashios (D-34 — no increment cache, always re-aggregate via `SUM()`), count actual cash, double-confirm, Z-report auto-print
 - Expected cash = `startedCash + salesCash − refundsCash + totalCashIn − totalCashOut`
 - Shift tracks per-tender: `salesCash / salesCredit / salesUserVoucher / salesCustomerVoucher / salesGiftcard` + refunds mirror, plus `salesLinesTotal / refundsLinesTotal`, rounding, counts, `repayCount`, `spendCount`, `spendRetailValue`, `salesCreditSurcharge / refundsCreditSurcharge`, and `salesTax / refundsTax` (D-33, D-34, D-37)
+- Z-report prints separate Sales and Refunds sections plus a Net Total section
+  (`sales - refunds`) for actual cash, credit, voucher, gift card, GST, and
+  total tender movement.
 - All shift money stored in cents (Int)
 
 ### Cash In / Out
@@ -220,7 +230,7 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - **Sale**: store header, items (`^` = price changed, `#` = GST applicable, `!` = saved), totals, tender-by-tender payments, GST Included, You Saved, Vouchers Used (entityLabel list), QR code (`receipt%%%serial`), footer
 - **Refund**: "**_ REFUND _**" banner, links original invoice id, same row/payment structure with "Refunded" labels
 - **Spend**: "**_ INTERNAL _**" banner, rows only (prices `-`), no totals/payments, footer "Internal consumption - no payment"
-- **Z-report**: shift settlement (tender별 sales/refunds, cashio, drawer expected vs actual)
+- **Z-report**: shift settlement (tender별 sales/refunds/net total, cashio, drawer expected vs actual)
 - All: 576px canvas → ESC/POS thermal print. `** COPY **` marker on reprint
 - Touchscreen tap-through guard: ModalContainer keeps invisible backdrop 100ms after close
 

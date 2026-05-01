@@ -10,6 +10,10 @@ const FONT = 28;
 const FONT_SM = 24;
 const FONT_LG = 36;
 const fmt = (cents: number) => `$${(Math.abs(cents) / 100).toFixed(2)}`;
+const fmtSigned = (cents: number) => {
+  const sign = cents < 0 ? "-" : "";
+  return `${sign}${fmt(cents)}`;
+};
 
 function dashedLine(ctx: CanvasRenderingContext2D, y: number) {
   ctx.beginPath();
@@ -33,9 +37,9 @@ function row(
 }
 
 function estimateHeight(): number {
-  // header(3) + meta(6) + sales(8) + refunds(7) + cashio(3) + spend(3) +
+  // header(3) + meta(6) + sales(8) + refunds(7) + net(8) + cashio(3) + spend(3) +
   // drawer(5) + footer(2)  — 여유 포함. D-37 에서 counts / Gift Card / SPEND 추가.
-  const lines = 40;
+  const lines = 48;
   return 60 + lines * LH + 100;
 }
 
@@ -113,6 +117,16 @@ export function renderShiftSettlementReceipt(
   const salesVoucherTotal = shift.salesUserVoucher + shift.salesCustomerVoucher;
   const refundsVoucherTotal =
     shift.refundsUserVoucher + shift.refundsCustomerVoucher;
+  const salesTenderTotal =
+    shift.salesCash +
+    shift.salesCredit +
+    salesVoucherTotal +
+    shift.salesGiftcard;
+  const refundsTenderTotal =
+    shift.refundsCash +
+    shift.refundsCredit +
+    refundsVoucherTotal +
+    shift.refundsGiftcard;
 
   ctx.font = `${FONT}px sans-serif`;
   row(ctx, "Cash", fmt(shift.salesCash), y);
@@ -157,6 +171,34 @@ export function renderShiftSettlementReceipt(
   row(ctx, "Gift Card", fmt(shift.refundsGiftcard), y);
   y += LH;
   row(ctx, "GST", fmt(shift.refundsTax), y);
+  y += LH;
+
+  /* ── Net Total ── */
+  dashedLine(ctx, y);
+  y += 14;
+
+  ctx.font = `bold ${FONT}px sans-serif`;
+  ctx.fillText("NET TOTAL", PAD, y);
+  y += LH;
+
+  ctx.font = `${FONT}px sans-serif`;
+  row(ctx, "Cash", fmtSigned(shift.salesCash - shift.refundsCash), y);
+  y += LH;
+  row(ctx, "Credit", fmtSigned(shift.salesCredit - shift.refundsCredit), y);
+  y += LH;
+  row(ctx, "Voucher", fmtSigned(salesVoucherTotal - refundsVoucherTotal), y);
+  y += LH;
+  row(
+    ctx,
+    "Gift Card",
+    fmtSigned(shift.salesGiftcard - shift.refundsGiftcard),
+    y,
+  );
+  y += LH;
+  row(ctx, "GST", fmtSigned(shift.salesTax - shift.refundsTax), y);
+  y += LH;
+  ctx.font = `bold ${FONT}px sans-serif`;
+  row(ctx, "Total", fmtSigned(salesTenderTotal - refundsTenderTotal), y);
   y += LH;
 
   /* ── Cash In/Out ── */

@@ -18,7 +18,7 @@ const CART_COUNT = 4;
 export const LINE_PAGE_SIZE = 10;
 export const ALLOWED_CHANGE_QTY_TYPES = [
   "normal",
-  // "prepacked",
+  "prepacked",
   // "weight-prepacked",
 ];
 interface SalesStoreState {

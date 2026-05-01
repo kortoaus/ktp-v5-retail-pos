@@ -946,6 +946,47 @@ Data-server 의 `RetailSaleInvoice.originalInvoiceId` 는 cloud 쪽 `id`
 - 서버 재기동 시 밀린 것 자동 catch-up.
 - 실패는 조용히 남음 (`cloudId = null` 유지) — 다음 sale 이 다시 쓸어감.
 
+### POS pricing / Z-report presentation refinements (2026-05-01)
+
+**D-39. Member/promo price candidates include all tiers up to member level**
+
+기존 `resolveDiscountedPrice` 는 현재 `memberLevel` 의 level price 와 promo price
+만 후보로 봤다. 운영자가 level-1 가격을 base 보다 높게 오입력하거나, base promo 가
+member-level promo 보다 낮은 경우를 놓치지 않기 위해 후보 범위를 확장한다.
+
+규칙:
+- `unit_price_original = price.prices[0]`
+- 자동 할인 후보 = `price.prices[0..memberLevel]` +
+  `promoPrice.prices[0..memberLevel]`
+- 후보 중 `> 0 && < unit_price_original` 인 값만 `unit_price_discounted` 가 될 수
+  있다.
+- 후보가 없으면 `unit_price_discounted = null`, 따라서 effective 는 original 로
+  fallback.
+
+의미:
+- 고객은 본인 level 이하에서 접근 가능한 정상/프로모 가격 중 최저가를 받는다.
+- mis-keyed higher member tier 는 자동으로 제외되어 base 가격보다 비싸게 팔리지
+  않는다.
+- PP barcode markdown 도 같은 resolver 를 통해 markdown 전 기준가를 잡는다.
+
+**D-40. Z-report prints net tender movement**
+
+Shift settlement receipt 는 Sales 와 Refunds 를 각각 독립 섹션으로 유지한다. 여기에
+운영자가 실제 tender movement 를 바로 볼 수 있도록 `NET TOTAL` 섹션을 추가한다.
+
+표시 항목:
+- Cash = `salesCash - refundsCash`
+- Credit = `salesCredit - refundsCredit`
+- Voucher = `(salesUserVoucher + salesCustomerVoucher) -
+  (refundsUserVoucher + refundsCustomerVoucher)`
+- Gift Card = `salesGiftcard - refundsGiftcard`
+- GST = `salesTax - refundsTax`
+- Total = sales tender total - refund tender total
+
+Expected cash 공식은 그대로
+`startedCash + salesCash - refundsCash + totalCashIn - totalCashOut` 이며, Z-report
+의 Net Cash row 는 이 공식의 tender movement 부분과 일치한다.
+
 ---
 
 ## 8. Open questions

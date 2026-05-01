@@ -4,6 +4,14 @@ import { registerAllHandlers, autoConnectScale, cleanupAll } from "./ipc";
 
 let mainWindow: BrowserWindow | null = null;
 let customerWindow: BrowserWindow | null = null;
+
+function closeCustomerWindow(): void {
+  if (customerWindow && !customerWindow.isDestroyed()) {
+    customerWindow.close();
+  }
+  customerWindow = null;
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1366,
@@ -24,6 +32,11 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
   }
+
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+    closeCustomerWindow();
+  });
 }
 
 function createCustomerWindow(): void {
@@ -55,12 +68,15 @@ function createCustomerWindow(): void {
       hash: "customer-display",
     });
   }
+
+  customerWindow.on("closed", () => {
+    customerWindow = null;
+  });
 }
 
 function toggleCustomerDisplay(): void {
   if (customerWindow && !customerWindow.isDestroyed()) {
-    customerWindow.close();
-    customerWindow = null;
+    closeCustomerWindow();
   } else {
     createCustomerWindow();
   }
@@ -80,6 +96,7 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  closeCustomerWindow();
   cleanupAll();
 });
 

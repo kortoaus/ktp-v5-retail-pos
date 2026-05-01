@@ -36,14 +36,20 @@ export function resolveDiscountedPrice(
   memberLevel: number,
 ): number | null {
   const original = item.price?.prices[0] ?? 0;
-  const levelPrice = item.price?.prices[memberLevel] ?? 0;
-  const promoPrice = item.promoPrice?.prices[memberLevel] ?? 0;
 
-  const candidates = [levelPrice, promoPrice].filter(
+  const candidates = getEligiblePrices(item, memberLevel).filter(
     (p) => p > 0 && p < original,
   );
   if (candidates.length === 0) return null;
   return Math.min(...candidates);
+}
+
+function getEligiblePrices(item: SaleLineItem, memberLevel: number): number[] {
+  const maxLevel = Math.max(0, memberLevel);
+  return [
+    ...(item.price?.prices.slice(0, maxLevel + 1) ?? []),
+    ...(item.promoPrice?.prices.slice(0, maxLevel + 1) ?? []),
+  ];
 }
 
 export function recalculateLine(line: SaleLineType): SaleLineType {

@@ -1,6 +1,7 @@
 import { Terminal } from "../contexts/TerminalContext";
 import { useServerHealth } from "../hooks/useServerHealth";
 import { useScaleStatus } from "../hooks/useScaleStatus";
+import { useDeviceMonitorStore } from "../store/DeviceMonitorStore";
 import { Company, TerminalShift } from "../types/models";
 
 const badgeOk =
@@ -21,6 +22,9 @@ export default function DeviceMonitor({
 }) {
   const { ok: serverOk } = useServerHealth();
   const scaleConnected = useScaleStatus();
+  const lastScannedBarcode = useDeviceMonitorStore(
+    (s) => s.lastScannedBarcode,
+  );
 
   return (
     <div className="h-8 bg-gray-100 border-t border-gray-200 flex items-center px-2 divide-x divide-gray-300 text-sm *:px-2">
@@ -38,6 +42,12 @@ export default function DeviceMonitor({
       <div>
         <span className={scaleConnected ? badgeOk : badgeOff}>
           Scale : {scaleConnected ? "OK" : "OFF"}
+        </span>
+      </div>
+      <div className="ml-auto flex flex-1 min-w-0 items-center justify-end gap-1">
+        <span className="shrink-0 text-gray-500">Last Scan:</span>
+        <span className="min-w-0 truncate font-mono">
+          {lastScannedBarcode ?? "-"}
         </span>
       </div>
     </div>

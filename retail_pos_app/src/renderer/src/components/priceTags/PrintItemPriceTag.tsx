@@ -11,6 +11,7 @@ import {
 } from "../../libs/label-templates";
 import { mergeLabelOutputs } from "../../libs/label-builder";
 import { LabelPrinter, useZplPrinters } from "../../hooks/useZplPrinters";
+import { MONEY_DP, MONEY_SCALE } from "../../libs/constants";
 
 const QUEUE_PAGE_SIZE = 10;
 
@@ -18,18 +19,15 @@ export default function PrintItemPriceTag() {
   const [queue, setQueue] = useState<Item[]>([]);
   const { printLabel, printers } = useZplPrinters();
 
-  const scanCallback = useCallback(
-    async (rawBarcode: string) => {
-      const { ok, result } = await searchItemByBarcode(rawBarcode);
-      if (ok && result) {
-        setQueue((prev) => {
-          if (prev.some((i) => i.id === result.id)) return prev;
-          return [...prev, result];
-        });
-      }
-    },
-    [],
-  );
+  const scanCallback = useCallback(async (rawBarcode: string) => {
+    const { ok, result } = await searchItemByBarcode(rawBarcode);
+    if (ok && result) {
+      setQueue((prev) => {
+        if (prev.some((i) => i.id === result.id)) return prev;
+        return [...prev, result];
+      });
+    }
+  }, []);
 
   useBarcodeScanner(scanCallback);
 
@@ -70,7 +68,7 @@ export default function PrintItemPriceTag() {
 
   return (
     <div className="h-full w-full bg-white flex divide-x divide-gray-200">
-      <div className="w-[300px] h-full">
+      <div className="w-[400px] h-full">
         <SearchItemList
           selectedItemId={null}
           selectedItemIds={queue.map((i) => i.id)}
@@ -78,7 +76,7 @@ export default function PrintItemPriceTag() {
           listSize={QUEUE_PAGE_SIZE}
         />
       </div>
-      <div className="w-[300px] h-full flex flex-col">
+      <div className="w-[400px] h-full flex flex-col">
         <div className="h-12 flex items-center justify-between px-3 bg-gray-100 border-b border-gray-200">
           <span className="text-sm font-semibold">Queue ({queue.length})</span>
           {queue.length > 0 && (
@@ -149,6 +147,7 @@ export default function PrintItemPriceTag() {
 
 function QueueItem({ item, onRemove }: { item: Item; onRemove: () => void }) {
   const hasPromo = item.promoPrice != null;
+  const price = getItemDisplayPrice(item);
   const { name_en, name_ko } = itemNameParser(item);
   return (
     <div className="flex items-center px-3 h-full hover:bg-gray-50 transition-colors overflow-hidden">
@@ -159,6 +158,13 @@ function QueueItem({ item, onRemove }: { item: Item; onRemove: () => void }) {
         </div>
         <div className="text-xs text-gray-500 truncate">{name_ko}</div>
       </div>
+      <div
+        className={`shrink-0 ml-2 text-sm font-semibold tabular-nums ${
+          hasPromo ? "text-red-500" : "text-gray-700"
+        }`}
+      >
+        ${fmtMoney(price)}
+      </div>
       <button
         onPointerDown={onRemove}
         className="text-xs text-red-500 hover:text-red-700 font-medium shrink-0 ml-2"
@@ -167,4 +173,12 @@ function QueueItem({ item, onRemove }: { item: Item; onRemove: () => void }) {
       </button>
     </div>
   );
+}
+
+function getItemDisplayPrice(item: Item) {
+  return item.promoPrice?.prices[0] ?? item.price?.prices[0] ?? 0;
+}
+
+function fmtMoney(cents: number) {
+  return (cents / MONEY_SCALE).toFixed(MONEY_DP);
 }

@@ -3,6 +3,7 @@ import { Item } from "../types/models";
 import { PagingType } from "../libs/api";
 import { searchItemsByKeyword } from "../service/item.service";
 import { cn } from "../libs/cn";
+import { MONEY_DP, MONEY_SCALE } from "../libs/constants";
 import KeyboardInputText from "./KeyboardInputText";
 import { FaArrowDown, FaArrowUp } from "react-icons/fa6";
 
@@ -71,6 +72,8 @@ export default function SearchItemList({
           if (!item) return <div key={i} />;
           const selected =
             selectedItemId === item.id || selectedItemIds?.includes(item.id);
+          const hasPromo = item.promoPrice != null;
+          const price = getItemDisplayPrice(item);
           return (
             <div
               key={item.id}
@@ -88,6 +91,14 @@ export default function SearchItemList({
                   {item.barcode}
                   {item.name_ko ? ` · ${item.name_ko}` : ""}
                 </div>
+              </div>
+              <div
+                className={cn(
+                  "ml-2 shrink-0 text-sm font-semibold tabular-nums",
+                  hasPromo ? "text-red-500" : "text-gray-700",
+                )}
+              >
+                ${fmtMoney(price)}
               </div>
             </div>
           );
@@ -118,4 +129,12 @@ export default function SearchItemList({
       </div>
     </div>
   );
+}
+
+function getItemDisplayPrice(item: Item) {
+  return item.promoPrice?.prices[0] ?? item.price?.prices[0] ?? 0;
+}
+
+function fmtMoney(cents: number) {
+  return (cents / MONEY_SCALE).toFixed(MONEY_DP);
 }

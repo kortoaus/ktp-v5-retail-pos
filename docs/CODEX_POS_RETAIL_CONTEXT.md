@@ -60,6 +60,11 @@ such as `../generated/prisma/client`, not `@prisma/client`.
   paged item grid. Interactive cells are `div`-based rather than native
   buttons so HID barcode scanner keyboard input cannot activate focused
   controls.
+- `useBarcodeScanner` is the single scanner boundary for serial scanner events
+  and HID keyboard-emulated scans. It also updates `DeviceMonitorStore` with the
+  last scanner payload so the bottom `DeviceMonitor` can show "Last Scan"
+  globally. Do not add per-screen last-scan state unless the screen needs extra
+  local presentation.
 
 ## Numeric And Date Rules
 

@@ -771,15 +771,15 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
                 onClick={handleCompleteSale}
                 disabled={completeDisabled}
                 className={cn(
-                  "mt-auto h-16 rounded-lg font-bold text-lg tracking-wide transition",
+                  "mt-auto h-16 rounded-lg font-bold text-sm tracking-wide transition",
                   completeDisabled
                     ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                     : "bg-emerald-600 text-white active:bg-emerald-700",
                 )}
               >
-                COMPLETE SALE
+                COMPLETE
                 {!completeDisabled && (
-                  <span className="ml-2 text-base font-mono">
+                  <span className="ml-2 text-2xl font-mono">
                     ${fmtMoney(cal.total)}
                   </span>
                 )}
@@ -828,9 +828,7 @@ function PaymentRow({
           ${fmtMoney(billPortion)}
         </div>
         {suffix && (
-          <div className="font-mono text-xs text-gray-400 break-words">
-            ({suffix})
-          </div>
+          <div className="font-mono text-sm  break-words">({suffix})</div>
         )}
         {item.tender === "VOUCHER" && item.entityLabel && (
           <div className="text-xs text-gray-500 truncate">

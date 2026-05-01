@@ -12,7 +12,10 @@ import {
   parsePPBarcode,
   calcMarkdownPrice,
 } from "../../libs/pp-barcode";
-import type { AddLineOptions } from "../../store/SalesStore.helper";
+import {
+  resolveDiscountedPrice,
+  type AddLineOptions,
+} from "../../store/SalesStore.helper";
 import { useSalesStore, LINE_PAGE_SIZE } from "../../store/SalesStore";
 import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../../libs/constants";
 import { useWeight } from "../../hooks/useWeight";
@@ -60,7 +63,6 @@ export default function SaleScreen() {
     clearActiveCart,
   } = useSalesStore();
   const [loading, setLoading] = useState(false);
-  const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [selectedLineKey, setSelectedLineKey] = useState<string | null>(null);
   const [modalTarget, setModalTarget] = useState<ModalTarget>(null);
   const pendingWeightLineRef = useRef<SaleLineItem | null>(null);
@@ -134,7 +136,6 @@ export default function SaleScreen() {
           window.alert("Failed to load item");
         } finally {
           setLoading(false);
-          setLastScanned(rawBarcode);
         }
         return;
       }
@@ -155,7 +156,6 @@ export default function SaleScreen() {
         window.alert("Failed to scan barcode");
       } finally {
         setLoading(false);
-        setLastScanned(rawBarcode);
       }
     },
     [loading, addLineGateway],
@@ -257,13 +257,8 @@ export default function SaleScreen() {
       useSalesStore.getState().carts[useSalesStore.getState().activeCartIndex]
         ?.member?.level ?? 0;
     const original = pp.prices[0] ?? 0;
-    const levelPrice = pp.prices[memberLevel] ?? 0;
-    const promoPrice = pp.promoPrices[memberLevel] ?? 0;
-    const candidates = [levelPrice, promoPrice].filter(
-      (p) => p > 0 && p < original,
-    );
-    const effectivePrice =
-      candidates.length > 0 ? Math.min(...candidates) : original;
+    const discountedPrice = resolveDiscountedPrice(data, memberLevel);
+    const effectivePrice = discountedPrice ?? original;
 
     const options: AddLineOptions = {};
 

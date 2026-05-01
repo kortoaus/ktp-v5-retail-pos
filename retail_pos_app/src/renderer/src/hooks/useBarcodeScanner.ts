@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useDeviceMonitorStore } from '../store/DeviceMonitorStore'
 
 const HID_MAX_KEYSTROKE_GAP_MS = 50
 const HID_IDLE_CLEAR_MS = 300
@@ -56,8 +57,13 @@ export function useBarcodeScanner(onScan: (barcode: string) => void): void {
   onScanRef.current = onScan
 
   useEffect(() => {
-    const removeSerialListener = window.electronAPI.onBarcodeScan((barcode) => {
+    const emitScan = (barcode: string) => {
+      useDeviceMonitorStore.getState().setLastScannedBarcode(barcode)
       onScanRef.current(barcode)
+    }
+
+    const removeSerialListener = window.electronAPI.onBarcodeScan((barcode) => {
+      emitScan(barcode)
     })
 
     let buffer = ''
@@ -84,7 +90,7 @@ export function useBarcodeScanner(onScan: (barcode: string) => void): void {
       if (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') {
         if (clearTimer) clearTimeout(clearTimer)
         if (buffer.length >= HID_MIN_LENGTH) {
-          onScanRef.current(buffer)
+          emitScan(buffer)
         }
         resetBuffer()
         return

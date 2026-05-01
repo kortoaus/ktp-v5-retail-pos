@@ -166,9 +166,9 @@ export interface SaleLineType extends SaleLineItem {
   /**
    * Best automatic discount that beats `unit_price_original`, in cents, or
    * `null` when no level/promo price improves on the original. Computed by
-   * `resolveDiscountedPrice` as `min({level_price, promo_price})` filtered
-   * to values strictly less than `unit_price_original`. Re-evaluated when
-   * the cart's member changes.
+   * `resolveDiscountedPrice` as the lowest valid price from `price` and
+   * `promoPrice` tiers `0..memberLevel`, filtered to values strictly less
+   * than `unit_price_original`. Re-evaluated when the cart's member changes.
    */
   unit_price_discounted: number | null;
 

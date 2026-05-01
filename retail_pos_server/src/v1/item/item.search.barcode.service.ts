@@ -112,6 +112,15 @@ export async function getItemByBarcode(rawBarcode: string) {
     }
   }
 
+  const rawBarcodeItem = await getItemByRawBarcode(rawBarcode);
+  if (rawBarcodeItem) {
+    return {
+      ok: true,
+      result: rawBarcodeItem,
+      msg: "Success",
+    };
+  }
+
   return {
     ok: false,
     result: null,
