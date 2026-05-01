@@ -11,6 +11,7 @@
     "preview": "electron-vite preview",
     "postinstall": "electron-builder install-app-deps",
     "package:win": "npm run build && electron-builder --win",
+    "package:win:publish": "npm run build && electron-builder --win --publish always",
     "package:mac": "npm run build && electron-builder --mac",
     "package:all": "npm run build && electron-builder --win --mac"
   },
@@ -20,6 +21,7 @@
     "clsx": "^2.1.1",
     "dayjs": "^1.11.19",
     "decimal.js": "^10.6.0",
+    "electron-updater": "^6.8.3",
     "es-hangul": "^2.3.8",
     "iconv": "^3.0.1",
     "iconv-lite": "^0.7.2",
@@ -56,6 +58,14 @@
     "files": [
       "out/**/*",
       "resources/**/*"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "kortoaus",
+        "repo": "ktp-v5-retail-pos",
+        "releaseType": "release"
+      }
     ],
     "asarUnpack": [
       "resources/**",

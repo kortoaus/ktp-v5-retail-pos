@@ -1,6 +1,7 @@
 import { app, BrowserWindow, screen } from "electron";
 import path from "node:path";
 import { registerAllHandlers, autoConnectScale, cleanupAll } from "./ipc";
+import { checkForBootUpdate } from "./updater";
 
 let mainWindow: BrowserWindow | null = null;
 let customerWindow: BrowserWindow | null = null;
@@ -87,6 +88,7 @@ app.whenReady().then(() => {
   createWindow();
   createCustomerWindow();
   autoConnectScale();
+  checkForBootUpdate();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
