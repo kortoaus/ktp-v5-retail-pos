@@ -111,9 +111,10 @@ model Item {
   scaleData ItemScaleData?
 
   // Misc
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  isTemporary Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  isTemporary     Boolean  @default(false)
+  isPointExcluded Boolean  @default(false)
 
   @@index([companyId])
   @@index([companyId, name_en])
@@ -251,9 +252,11 @@ model StoreSetting {
   abn                        String?
   website                    String?
   email                      String?
-  credit_surcharge_rate      Int?     @default(15)
+  credit_surcharge_rate      Int?     @default(15) // permille (15 = 1.5%)
   receipt_below_text         String?  @default("Thank you!")
   user_daily_voucher_default Int      @default(2000)
+  cash_point_rate            Int      @default(10) // percent (1 = 10%)
+  other_point_rate           Int      @default(10) // percent (1 = 10%)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 }

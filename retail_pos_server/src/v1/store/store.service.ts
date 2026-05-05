@@ -20,6 +20,8 @@ type StoreSettingDTO = {
   credit_surcharge_rate?: number; // permille (15 = 1.5%)
   receipt_below_text?: string;
   user_daily_voucher_default?: number; // cents (2000 = $20)
+  cash_point_rate?: number; // percent (1 = 10%)
+  other_point_rate?: number; // percent (1 = 10%)
 };
 
 export const updateStoreSettingService = async (dto: StoreSettingDTO) => {
@@ -39,6 +41,8 @@ export const updateStoreSettingService = async (dto: StoreSettingDTO) => {
       credit_surcharge_rate,
       receipt_below_text,
       user_daily_voucher_default,
+      cash_point_rate,
+      other_point_rate,
     } = dto;
 
     const storeSetting = await db.storeSetting.update({
@@ -58,6 +62,8 @@ export const updateStoreSettingService = async (dto: StoreSettingDTO) => {
         credit_surcharge_rate,
         receipt_below_text,
         user_daily_voucher_default,
+        cash_point_rate,
+        other_point_rate,
       },
     });
 
