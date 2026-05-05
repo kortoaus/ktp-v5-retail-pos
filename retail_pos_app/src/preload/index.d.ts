@@ -87,6 +87,7 @@ export interface ElectronAPI {
   setConfig: (config: AppConfig) => Promise<AppConfig>
 
   getNetworkIp: () => Promise<string | null>
+  getAppVersion: () => Promise<string>
   restartApp: () => Promise<void>
   toggleFullscreen: () => Promise<void>
   toggleCustomerDisplay: () => Promise<void>

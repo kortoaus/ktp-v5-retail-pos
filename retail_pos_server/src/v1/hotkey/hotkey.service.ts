@@ -158,6 +158,9 @@ export async function getHotkeysService() {
 export async function getCloudHotkeysService() {
   try {
     const result = await db.cloudHotkey.findMany({
+      where: {
+        archived: false,
+      },
       orderBy: {
         sort: "asc",
       },

@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('config:set', config),
 
   getNetworkIp: (): Promise<string | null> => ipcRenderer.invoke('app:get-network-ip'),
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
   restartApp: (): Promise<void> => ipcRenderer.invoke('app:restart'),
   toggleFullscreen: (): Promise<void> => ipcRenderer.invoke('app:toggle-fullscreen'),
   toggleCustomerDisplay: (): Promise<void> => ipcRenderer.invoke('app:toggle-customer-display'),

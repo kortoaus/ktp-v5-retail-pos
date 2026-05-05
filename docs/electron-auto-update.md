@@ -51,22 +51,23 @@ Use this when you want installed POS terminals to update.
 From the repo root:
 
 ```bash
-cd retail_pos_app
-npm version patch
-cd ..
-
-git push
-git push origin v1.0.1
+./scripts/release-pos.sh patch
 ```
 
-Replace `v1.0.1` with the actual version printed by `npm version`.
+For a feature release:
 
-Example:
-
-```text
-npm version patch prints v1.0.2
-  -> use git push origin v1.0.2
+```bash
+./scripts/release-pos.sh minor
 ```
+
+For a major release:
+
+```bash
+./scripts/release-pos.sh major
+```
+
+The script bumps the POS app version, creates a commit, creates the matching
+tag, pushes `main`, and pushes the tag.
 
 Pushing the tag starts GitHub Actions.
 The workflow builds the Windows installer and publishes the Release assets.
@@ -120,16 +121,29 @@ is released, existing `1.x.x` installs can update to it.
 
 ## What `npm version` Does
 
-`npm version patch/minor/major` usually does all of this:
+Do not run `npm version` manually for POS releases.
+
+Use:
+
+```bash
+./scripts/release-pos.sh patch
+```
+
+The script runs `npm version` safely for this repo and then handles the git
+commit/tag/push steps explicitly.
+
+The script does all of this:
 
 ```text
 Updates retail_pos_app/package.json
 Updates retail_pos_app/package-lock.json
 Creates a git commit
 Creates a git tag, such as v1.0.1
+Pushes main
+Pushes the tag
 ```
 
-That tag is what triggers release deployment after it is pushed.
+That tag push is what triggers release deployment.
 
 ## If You Run `npm version` By Mistake
 
@@ -216,9 +230,8 @@ Just push code:
   git push
 
 Release update:
-  npm version patch/minor
-  git push
-  git push origin vX.Y.Z
+  ./scripts/release-pos.sh patch
+  ./scripts/release-pos.sh minor
 
 Do not want release:
   do not push a v* tag

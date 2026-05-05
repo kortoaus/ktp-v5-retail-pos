@@ -73,6 +73,7 @@ export default function InterfaceSettingsScreen() {
   const [zplSerial, setZplSerial] = useState<ZplSerialEntry[]>([]);
   const [zplNet, setZplNet] = useState<ZplNetEntry[]>([]);
   const [escpos, setEscpos] = useState<EscposForm>(ESCPOS_DEFAULTS);
+  const [appVersion, setAppVersion] = useState("");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -83,10 +84,13 @@ export default function InterfaceSettingsScreen() {
 
   useEffect(() => {
     async function init() {
-      const [config] = await Promise.all([
+      const [config, version] = await Promise.all([
         window.electronAPI.getConfig(),
+        window.electronAPI.getAppVersion(),
         fetchPorts(),
       ]);
+
+      setAppVersion(version);
 
       if (config.devices.scale) {
         setScale({ enabled: true, ...config.devices.scale });
@@ -567,6 +571,10 @@ export default function InterfaceSettingsScreen() {
           {saved && (
             <span className="text-sm text-green-600 font-medium">Saved</span>
           )}
+        </div>
+
+        <div className="border-t border-gray-200 pt-4 text-xs text-gray-400">
+          App version {appVersion || "-"}
         </div>
       </div>
     </div>

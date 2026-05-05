@@ -34,7 +34,7 @@ export const getItemType = (item: Item): ItemTypes => {
   if (isScale) {
     if (!scaleData) return "invalid";
     const { isFixedWeight } = scaleData;
-    return isFixedWeight ? "prepacked" : "weight";
+    return isFixedWeight ? "normal" : "weight";
   } else {
     return "normal";
   }

@@ -367,6 +367,7 @@ export async function cloudHotkeyMigrateService() {
 
     for (const hotkey of result) {
       const { keys, ...rest } = hotkey;
+      console.log(rest.archived);
       const updatedHotkey = await db.cloudHotkey.upsert({
         where: { id: hotkey.id },
         create: { ...rest },

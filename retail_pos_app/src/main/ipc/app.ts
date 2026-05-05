@@ -19,6 +19,8 @@ export function registerAppHandlers(getMainWindow: () => BrowserWindow | null, t
     return null
   })
 
+  ipcMain.handle('app:get-version', () => app.getVersion())
+
   ipcMain.handle('app:toggle-fullscreen', () => {
     const win = getMainWindow()
     if (!win) return

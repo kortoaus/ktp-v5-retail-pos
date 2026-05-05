@@ -183,8 +183,6 @@ export default function SaleScreen() {
   function addLineGateway(item: Item, rawBarcode: string) {
     const data = generateSaleLineItem(item, rawBarcode);
 
-    console.log(data);
-
     if (data.type === "invalid") {
       window.alert("Invalid item");
       return;
@@ -198,7 +196,7 @@ export default function SaleScreen() {
 
     if (rawBarcode.startsWith("02") && rawBarcode.length === 7) {
       if (data.type === "prepacked") {
-        addLine(data);
+        addLine({ ...data, uom: "ea" });
         setSelectedLineKey(null);
         setModalTarget(null);
         return;
@@ -209,10 +207,13 @@ export default function SaleScreen() {
       const raw13 = rawBarcode.length === 12 ? "0" + rawBarcode : rawBarcode;
       const dollars = embededPriceParser(raw13);
       const prepackedPriceCents = Math.round(dollars * MONEY_SCALE);
-      addLine(data, {
-        qty: QTY_SCALE,
-        adjustedPrice: prepackedPriceCents,
-      });
+      addLine(
+        { ...data, uom: "ea" },
+        {
+          qty: QTY_SCALE,
+          adjustedPrice: prepackedPriceCents,
+        },
+      );
       setSelectedLineKey(null);
       setModalTarget(null);
       return;
