@@ -515,6 +515,7 @@ model SaleInvoice {
 
   // ── Receipt / operational ────────────────────────────────
   receiptCount Int     @default(0) // 영수증 재출력 횟수 (감사)
+  pointsEarned Int     @default(0) // SALE member point snapshot. REFUND/SPEND stay 0.
   note         String?
 
   // ── Cloud sync ──────────────────────────────────────────
@@ -645,12 +646,13 @@ model SaleInvoiceRow {
   type SaleInvoiceRowType
 
   // ── Item snapshot (flat columns — 마스터 변경 무관하게 재출력 가능) ──
-  itemId  Int
-  name_en String
-  name_ko String
-  barcode String
-  uom     String
-  taxable Boolean
+  itemId          Int
+  name_en         String
+  name_ko         String
+  barcode         String
+  uom             String
+  taxable         Boolean
+  isPointExcluded Boolean @default(false)
 
   // ── Price snapshot (cents) ──────────────────────────────
   unit_price_original   Int // 마스터 공개가 snapshot
