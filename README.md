@@ -11,6 +11,7 @@ Read these when changing code:
 - `AGENTS.md` — repo rules for coding agents and maintainers.
 - `retail_pos_app/AGENTS.md` — Electron renderer/main/preload boundary rules.
 - `docs/sale-domain.md` — detailed sale/payment/refund/repay/shift/cloud-sync decisions (D-1 ... D-38).
+- `docs/customer-voucher-system.md` — CRM-owned Customer Voucher flows, node diagrams, failure policy, and QA checklist.
 - `TEST_CHECKLIST.md` — manual regression checklist.
 
 Historical planning files live under `docs/outdated/`. They are kept for context only; do not treat them as current implementation contracts.
