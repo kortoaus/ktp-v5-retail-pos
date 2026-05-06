@@ -1,7 +1,9 @@
 import { crmApiService } from "../../libs/cloud.api";
 import {
   BadRequestException,
+  HttpException,
   InternalServerException,
+  UnauthorizedException,
 } from "../../libs/exceptions";
 import type {
   CustomerVoucherRedeemRequest,
@@ -12,12 +14,26 @@ import type {
 function requireOk<T>(res: {
   ok: boolean;
   msg?: string;
+  status?: number;
   result?: T | null;
 }): T {
   if (!res.ok || res.result == null) {
-    throw new BadRequestException(
-      res.msg || "CRM customer voucher request failed",
-    );
+    const msg = res.msg || "CRM customer voucher request failed";
+    if (res.status === 400 || res.status === 404) {
+      throw new BadRequestException(msg);
+    }
+    if (res.status === 401 || res.status === 403) {
+      throw new UnauthorizedException(msg);
+    }
+    if (res.status && res.status >= 500) {
+      throw new InternalServerException(msg);
+    }
+    if (res.status === 0) {
+      throw new InternalServerException(
+        "CRM customer voucher service unavailable",
+      );
+    }
+    throw new HttpException(res.status ?? 502, msg);
   }
   return res.result;
 }
