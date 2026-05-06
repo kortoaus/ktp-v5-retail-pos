@@ -34,7 +34,7 @@ export function calculateSalePoints({
 
   if (!hasMember || eligiblePointBase <= 0 || linesTotal <= 0) {
     return {
-      eligiblePointBase,
+      eligiblePointBase: 0,
       cashPointBase: 0,
       otherPointBase: 0,
       pointsEarned: 0,
