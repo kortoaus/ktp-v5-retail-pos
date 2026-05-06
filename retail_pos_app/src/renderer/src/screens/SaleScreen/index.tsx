@@ -117,6 +117,7 @@ export default function SaleScreen() {
         return;
       }
 
+      // Check for PP barcode
       if (isPPBarcode(rawBarcode)) {
         const pp = parsePPBarcode(rawBarcode);
         if (!pp) {
@@ -208,7 +209,13 @@ export default function SaleScreen() {
       const dollars = embededPriceParser(raw13);
       const prepackedPriceCents = Math.round(dollars * MONEY_SCALE);
       addLine(
-        { ...data, uom: "ea" },
+        {
+          ...data,
+          uom: "ea",
+          price: data.price
+            ? { ...data.price, prices: [prepackedPriceCents] }
+            : null,
+        },
         {
           qty: QTY_SCALE,
           adjustedPrice: prepackedPriceCents,

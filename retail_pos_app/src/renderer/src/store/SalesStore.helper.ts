@@ -125,10 +125,7 @@ export function findMergeTarget(
   );
 }
 
-export function recalculateCartLines(
-  cart: Cart,
-  memberLevel: number,
-): Cart {
+export function recalculateCartLines(cart: Cart, memberLevel: number): Cart {
   const lines = cart.lines.map((line) => {
     if (line.unit_price_adjusted != null && !line.ppMarkdown) return line;
 
