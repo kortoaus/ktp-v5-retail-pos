@@ -30,6 +30,16 @@ const FIELDS = [
     layout: "numpad" as const,
   },
   {
+    key: "cash_point_rate",
+    label: "Cash Point Rate (%)",
+    layout: "numpad" as const,
+  },
+  {
+    key: "other_point_rate",
+    label: "Other Point Rate (%)",
+    layout: "numpad" as const,
+  },
+  {
     key: "user_daily_voucher_default",
     label: "Daily User Voucher Default",
     layout: "numpad" as const,
@@ -60,7 +70,15 @@ function settingToForm(s: StoreSetting): FormState {
     email: s.email ?? "",
     credit_surcharge_rate:
       s.credit_surcharge_rate != null
-        ? String(s.credit_surcharge_rate * 100 / PCT_SCALE)
+        ? String((s.credit_surcharge_rate * 100) / PCT_SCALE)
+        : "",
+    cash_point_rate:
+      s.cash_point_rate != null
+        ? String((s.cash_point_rate * 100) / PCT_SCALE)
+        : "",
+    other_point_rate:
+      s.other_point_rate != null
+        ? String((s.other_point_rate * 100) / PCT_SCALE)
         : "",
     user_daily_voucher_default:
       s.user_daily_voucher_default != null
@@ -72,6 +90,8 @@ function settingToForm(s: StoreSetting): FormState {
 
 function formToPayload(form: FormState) {
   const rate = parseFloat(form.credit_surcharge_rate);
+  const cash_point_rate = parseFloat(form.cash_point_rate);
+  const other_point_rate = parseFloat(form.other_point_rate);
   return {
     name: form.name,
     phone: form.phone || undefined,
@@ -84,7 +104,15 @@ function formToPayload(form: FormState) {
     abn: form.abn || undefined,
     website: form.website || undefined,
     email: form.email || undefined,
-    credit_surcharge_rate: isNaN(rate) ? undefined : Math.round(rate * PCT_SCALE / 100),
+    credit_surcharge_rate: isNaN(rate)
+      ? undefined
+      : Math.round((rate * PCT_SCALE) / 100),
+    cash_point_rate: isNaN(cash_point_rate)
+      ? undefined
+      : Math.round((cash_point_rate * PCT_SCALE) / 100),
+    other_point_rate: isNaN(other_point_rate)
+      ? undefined
+      : Math.round((other_point_rate * PCT_SCALE) / 100),
     receipt_below_text: form.receipt_below_text || undefined,
     user_daily_voucher_default:
       form.user_daily_voucher_default != null

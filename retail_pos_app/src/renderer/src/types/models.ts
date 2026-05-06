@@ -82,6 +82,7 @@ export interface Item {
   categoryMarks: string[];
   taxable: boolean;
   wholesaleTaxable: boolean;
+  isPointExcluded: boolean;
   scaleData: ItemScaleData | null;
   createdAt: string;
   updatedAt: string;
@@ -312,9 +313,11 @@ export interface StoreSetting {
   abn?: string | null;
   website?: string | null;
   email?: string | null;
-  credit_surcharge_rate?: number | null;
+  credit_surcharge_rate?: number | null; // percent
   receipt_below_text?: string | null;
-  user_daily_voucher_default?: number | null;
+  user_daily_voucher_default?: number | null; // cents
+  cash_point_rate?: number | null; // per-1000 percent (10 = 1%)
+  other_point_rate?: number | null; // per-1000 percent (10 = 1%)
 }
 
 export interface CloudPost {

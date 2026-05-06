@@ -111,6 +111,9 @@ function isStagedActive(p: PaymentQueueItem): boolean {
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 
+const userVoucherEntityLabel = (userName: string, expectedBalance: number) =>
+  `${userName} - Est. balance $${fmtMoney(Math.max(0, expectedBalance))}`;
+
 // qty (×QTY_SCALE) → display string. 정수면 그대로, 소수 weight 면 뒤 0 제거.
 const fmtQty = (q: number) => {
   const v = q / QTY_SCALE;
@@ -127,6 +130,9 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
   // because PaymentQueueItem only carries entityId/entityLabel — not balance.
   // Cleared on slot change or commit.
   const [stagedVoucher, setStagedVoucher] = useState<Voucher | null>(null);
+  const [stagedVoucherUserName, setStagedVoucherUserName] = useState<
+    string | null
+  >(null);
 
   // SPEND 토글 모드 — ON 이면 tender picker (4종) 비활성 + keypad 영역 overlay,
   // Summary 의 COMPLETE SALE 자리에 RECORD SPEND 버튼. 토글할 때마다 staged /
@@ -138,6 +144,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     setPayments([]);
     setStagedPayment(makeDefaultStage("CASH"));
     setStagedVoucher(null);
+    setStagedVoucherUserName(null);
   }
   const { carts, activeCartIndex, clearActiveCart } = useSalesStore();
   const lines = useMemo(
@@ -425,6 +432,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     }
     setStagedPayment(makeDefaultStage(slot));
     setStagedVoucher(null);
+    setStagedVoucherUserName(null);
   }
 
   // Commit the current staged draft into payments[]. Resets staged to a fresh
@@ -447,6 +455,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     ]);
     setStagedPayment(makeDefaultStage(slotOf(stagedPayment)));
     setStagedVoucher(null);
+    setStagedVoucherUserName(null);
   }
 
   function handleRemovePayment(key: string) {
@@ -500,12 +509,13 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     voucher: Voucher,
   ) {
     setStagedVoucher(voucher);
+    setStagedVoucherUserName(user.name);
     setStagedPayment({
       key: "staged",
       tender: "VOUCHER",
       entityType: "user-voucher",
       entityId: voucher.id,
-      entityLabel: user.name,
+      entityLabel: userVoucherEntityLabel(user.name, voucher.balance),
       amount: 0,
     });
   }
@@ -515,7 +525,18 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
   function setStagedVoucherAmount(amount: number) {
     setStagedPayment((prev) => {
       if (prev.tender !== "VOUCHER") return prev;
-      return { ...prev, amount };
+      if (prev.entityType !== "user-voucher" || !stagedVoucherUserName) {
+        return { ...prev, amount };
+      }
+      const expectedBalance = (stagedVoucher?.balance ?? 0) - amount;
+      return {
+        ...prev,
+        amount,
+        entityLabel: userVoucherEntityLabel(
+          stagedVoucherUserName,
+          expectedBalance,
+        ),
+      };
     });
   }
 
