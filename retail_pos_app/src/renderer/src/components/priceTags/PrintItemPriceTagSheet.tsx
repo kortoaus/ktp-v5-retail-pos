@@ -8,10 +8,8 @@ import { getItemsByIds } from "../../service/item.service";
 import { CloudItemSheet, CloudItemSheetRow, Item } from "../../types/models";
 import { cn } from "../../libs/cn";
 import { LabelPrinter, useZplPrinters } from "../../hooks/useZplPrinters";
-import {
-  buildPriceTag7030,
-  buildPriceTag7090,
-} from "../../libs/label-templates";
+import { buildPriceTag7030 } from "../../libs/label-templates";
+import { buildPriceTag7090V2 } from "../../libs/label-7090-v2";
 import { mergeLabelOutputs } from "../../libs/label-builder";
 import PagingRowList from "../list/PagingRowList";
 import SearchItemSheetList from "./SearchItemSheetList";
@@ -124,6 +122,11 @@ export default function PrintItemPriceTagSheet() {
           p7030.push(item);
         }
       }
+    } catch (err) {
+      window.alert(
+        err instanceof Error ? err.message : "Failed to print labels",
+      );
+      return;
     } finally {
       setProcessing(false);
     }
@@ -160,11 +163,12 @@ export default function PrintItemPriceTagSheet() {
       }
 
       if (selectedPrinter7090 !== null && p7090.length > 0) {
-        const merged = mergeLabelOutputs(
+        const labels = await Promise.all(
           p7090.map((item) =>
-            buildPriceTag7090(selectedPrinter7090.language, item),
+            buildPriceTag7090V2(selectedPrinter7090.language, item),
           ),
         );
+        const merged = mergeLabelOutputs(labels);
         if (merged) {
           const result = await printLabel(selectedPrinter7090, merged);
           if (!result.ok) {
@@ -175,6 +179,10 @@ export default function PrintItemPriceTagSheet() {
       }
 
       markSheetPrinted(selectedSheet.id);
+    } catch (err) {
+      window.alert(
+        err instanceof Error ? err.message : "Failed to print labels",
+      );
     } finally {
       setProcessing(false);
     }

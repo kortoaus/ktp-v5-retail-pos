@@ -6,6 +6,15 @@ import type { LabelSendRequest, SLCSPart } from "../types";
 
 const TCP_TIMEOUT_MS = 5000;
 const SERIAL_TIMEOUT_MS = 3000;
+const SERIAL_BYTES_PER_SECOND = 11520;
+const SERIAL_TIMEOUT_MARGIN_MS = 5000;
+
+function getSerialTimeoutMs(dataSize: number): number {
+  const estimatedMs =
+    Math.ceil((dataSize / SERIAL_BYTES_PER_SECOND) * 1000) +
+    SERIAL_TIMEOUT_MARGIN_MS;
+  return Math.max(SERIAL_TIMEOUT_MS, estimatedMs);
+}
 
 function sendTcp(
   host: string,
@@ -39,8 +48,11 @@ function sendSerial(path: string, data: Buffer | string): Promise<void> {
   const dataSize = Buffer.isBuffer(data)
     ? data.length
     : Buffer.byteLength(data);
-  console.log(`[Label:Serial] Opening ${path} (9600/8/N/1/XOFF)`);
-  console.log(`[Label:Serial] Payload: ${dataSize} bytes`);
+  const timeoutMs = getSerialTimeoutMs(dataSize);
+  console.log(`[Label:Serial] Opening ${path} (115200/8/N/1/XOFF)`);
+  console.log(
+    `[Label:Serial] Payload: ${dataSize} bytes, timeout: ${timeoutMs}ms`,
+  );
 
   return new Promise((resolve, reject) => {
     const port = new SerialPort({
@@ -56,12 +68,12 @@ function sendSerial(path: string, data: Buffer | string): Promise<void> {
     });
 
     const timeout = setTimeout(() => {
-      console.log(`[Label:Serial] Timeout on ${path}`);
+      console.log(`[Label:Serial] Timeout on ${path} after ${timeoutMs}ms`);
       try {
         port.close();
       } catch {}
-      reject(new Error(`Serial timeout on ${path}`));
-    }, SERIAL_TIMEOUT_MS);
+      reject(new Error(`Serial timeout on ${path} after ${timeoutMs}ms`));
+    }, timeoutMs);
 
     port.open((err) => {
       if (err) {
@@ -109,6 +121,8 @@ function assembleSLCS(parts: SLCSPart[]): Buffer {
   for (const part of parts) {
     if (part.type === "euc-kr") {
       buffers.push(iconv.encode(part.data, "euc-kr"));
+    } else if (part.type === "bytes") {
+      buffers.push(Buffer.from(part.data));
     } else {
       buffers.push(Buffer.from(part.data, "ascii"));
     }

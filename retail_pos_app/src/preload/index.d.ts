@@ -52,10 +52,15 @@ export interface WeightResult {
   message?: string
 }
 
-export interface SLCSPart {
-  type: 'raw' | 'euc-kr'
-  data: string
-}
+export type SLCSPart =
+  | {
+      type: 'raw' | 'euc-kr'
+      data: string
+    }
+  | {
+      type: 'bytes'
+      data: number[]
+    }
 
 export type LabelOutput =
   | { language: 'zpl'; data: string }

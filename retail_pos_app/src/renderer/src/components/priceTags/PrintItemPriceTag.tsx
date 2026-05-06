@@ -1,14 +1,12 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Item } from "../../types/models";
 import { searchItemByBarcode } from "../../service/item.service";
 import { useBarcodeScanner } from "../../hooks/useBarcodeScanner";
 import SearchItemList from "../SearchItemList";
 import PagingRowList from "../list/PagingRowList";
 import { itemNameParser } from "../../libs/item-utils";
-import {
-  buildPriceTag7030,
-  buildPriceTag7090,
-} from "../../libs/label-templates";
+import { buildPriceTag7030 } from "../../libs/label-templates";
+import { buildPriceTag7090V2 } from "../../libs/label-7090-v2";
 import { mergeLabelOutputs } from "../../libs/label-builder";
 import { LabelPrinter, useZplPrinters } from "../../hooks/useZplPrinters";
 import { MONEY_DP, MONEY_SCALE } from "../../libs/constants";
@@ -17,6 +15,8 @@ const QUEUE_PAGE_SIZE = 10;
 
 export default function PrintItemPriceTag() {
   const [queue, setQueue] = useState<Item[]>([]);
+  const [printing7090, setPrinting7090] = useState(false);
+  const printing7090Ref = useRef(false);
   const { printLabel, printers } = useZplPrinters();
 
   const scanCallback = useCallback(async (rawBarcode: string) => {
@@ -48,12 +48,29 @@ export default function PrintItemPriceTag() {
     if (merged) printLabel(printer, merged);
   };
 
-  const handlePrintLabel7090 = (printer: LabelPrinter) => {
-    if (queue.length === 0) return;
-    const merged = mergeLabelOutputs(
-      queue.map((item) => buildPriceTag7090(printer.language, item)),
-    );
-    if (merged) printLabel(printer, merged);
+  const handlePrintLabel7090 = async (printer: LabelPrinter) => {
+    if (queue.length === 0 || printing7090Ref.current) return;
+    printing7090Ref.current = true;
+    setPrinting7090(true);
+    try {
+      const labels = await Promise.all(
+        queue.map((item) => buildPriceTag7090V2(printer.language, item)),
+      );
+      const merged = mergeLabelOutputs(labels);
+      if (merged) {
+        const result = await printLabel(printer, merged);
+        if (!result.ok) {
+          window.alert(result.message || "Failed to print 70x90 labels");
+        }
+      }
+    } catch (err) {
+      window.alert(
+        err instanceof Error ? err.message : "Failed to print 70x90 labels",
+      );
+    } finally {
+      printing7090Ref.current = false;
+      setPrinting7090(false);
+    }
   };
 
   const handleSelect = (item: Item) => {
@@ -126,8 +143,9 @@ export default function PrintItemPriceTag() {
               {printers7090.map((p) => (
                 <button
                   key={p.name}
+                  disabled={printing7090}
                   onPointerDown={() => handlePrintLabel7090(p)}
-                  className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                  className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
                 >
                   {p.name}
                 </button>

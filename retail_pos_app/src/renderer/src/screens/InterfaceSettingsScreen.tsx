@@ -1,8 +1,15 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
+import { IoPrintOutline } from "react-icons/io5";
 import { useUser } from "../contexts/UserContext";
 import hasScope from "../libs/scope-utils";
 import BlockScreen from "../components/BlockScreen";
+import {
+  buildGraphicPriceTagSample7090,
+  buildKoreanVectorFontTest7090,
+} from "../libs/label-templates";
+import { buildPriceTag7090V2 } from "../libs/label-7090-v2";
+import type { Item } from "../types/models";
 
 type ScaleType = "CAS" | "DATALOGIC";
 type Parity = "none" | "even" | "odd" | "mark" | "space";
@@ -41,6 +48,237 @@ interface EscposForm {
   port: number;
 }
 
+type LabelTestPrinter =
+  | {
+      type: "serial";
+      name: string;
+      language: LabelLanguage;
+      path: string;
+    }
+  | {
+      type: "net";
+      name: string;
+      language: LabelLanguage;
+      host: string;
+      port: number;
+    };
+
+const LABEL_V2_FIXTURE_DATE = "2026-05-06T00:00:00.000Z";
+
+const LABEL_V2_FIXTURE_ITEMS = [
+  {
+    id: 9001,
+    companyId: 1,
+    name_en: "Premium Rice Crackers",
+    name_ko: "프리미엄 쌀과자",
+    name_invoice: null,
+    barcode: "9300000000011",
+    code: "V2-NG",
+    thumb: null,
+    barcodeGTIN: "9300000000011",
+    barcodePLU: null,
+    barcodeType: "GTIN",
+    uom: "ea",
+    defaultRFD: "R",
+    isScale: false,
+    isBundle: false,
+    useBatch: false,
+    archived: false,
+    bundleQty: 1,
+    parentId: null,
+    brandId: null,
+    brand: null,
+    categoryIds: [],
+    categoryMarks: [],
+    taxable: true,
+    wholesaleTaxable: true,
+    isPointExcluded: false,
+    scaleData: null,
+    createdAt: LABEL_V2_FIXTURE_DATE,
+    updatedAt: LABEL_V2_FIXTURE_DATE,
+    isTemporary: false,
+    price: {
+      id: 9101,
+      companyId: 1,
+      itemId: 9001,
+      priceType: "DEFAULT",
+      prices: [499],
+      createdAt: LABEL_V2_FIXTURE_DATE,
+      updatedAt: LABEL_V2_FIXTURE_DATE,
+      archived: false,
+      markup: 0,
+    },
+    promoPrice: null,
+  },
+  {
+    id: 9002,
+    companyId: 1,
+    name_en: "Roasted Seaweed Snack",
+    name_ko: "구운 김스낵",
+    name_invoice: null,
+    barcode: "9300000000028",
+    code: "V2-NM",
+    thumb: null,
+    barcodeGTIN: "9300000000028",
+    barcodePLU: null,
+    barcodeType: "GTIN",
+    uom: "pack",
+    defaultRFD: "R",
+    isScale: false,
+    isBundle: false,
+    useBatch: false,
+    archived: false,
+    bundleQty: 1,
+    parentId: null,
+    brandId: 7101,
+    brand: {
+      id: 7101,
+      name_en: "KTP Market",
+      name_ko: "케이티피 마켓",
+      archived: false,
+      companyId: 1,
+      createdAt: LABEL_V2_FIXTURE_DATE,
+      updatedAt: LABEL_V2_FIXTURE_DATE,
+      itemCount: 1,
+    },
+    categoryIds: [],
+    categoryMarks: [],
+    taxable: true,
+    wholesaleTaxable: true,
+    isPointExcluded: false,
+    scaleData: null,
+    createdAt: LABEL_V2_FIXTURE_DATE,
+    updatedAt: LABEL_V2_FIXTURE_DATE,
+    isTemporary: false,
+    price: {
+      id: 9102,
+      companyId: 1,
+      itemId: 9002,
+      priceType: "DEFAULT",
+      prices: [699, 599],
+      createdAt: LABEL_V2_FIXTURE_DATE,
+      updatedAt: LABEL_V2_FIXTURE_DATE,
+      archived: false,
+      markup: 0,
+    },
+    promoPrice: null,
+  },
+  {
+    id: 9003,
+    companyId: 1,
+    name_en: "Honey Citron Tea",
+    name_ko: "꿀 유자차",
+    name_invoice: null,
+    barcode: "9300000000035",
+    code: "V2-PG",
+    thumb: null,
+    barcodeGTIN: "9300000000035",
+    barcodePLU: null,
+    barcodeType: "GTIN",
+    uom: "jar",
+    defaultRFD: "R",
+    isScale: false,
+    isBundle: false,
+    useBatch: false,
+    archived: false,
+    bundleQty: 1,
+    parentId: null,
+    brandId: null,
+    brand: null,
+    categoryIds: [],
+    categoryMarks: [],
+    taxable: true,
+    wholesaleTaxable: true,
+    isPointExcluded: false,
+    scaleData: null,
+    createdAt: LABEL_V2_FIXTURE_DATE,
+    updatedAt: LABEL_V2_FIXTURE_DATE,
+    isTemporary: false,
+    price: {
+      id: 9103,
+      companyId: 1,
+      itemId: 9003,
+      priceType: "DEFAULT",
+      prices: [1299],
+      createdAt: LABEL_V2_FIXTURE_DATE,
+      updatedAt: LABEL_V2_FIXTURE_DATE,
+      archived: false,
+      markup: 0,
+    },
+    promoPrice: {
+      id: 9203,
+      companyId: 1,
+      itemId: 9003,
+      priceType: "PROMO",
+      prices: [999],
+      validFrom: "2026-05-01T00:00:00.000Z",
+      validTo: "2026-05-31T23:59:59.000Z",
+      archived: false,
+      createdAt: LABEL_V2_FIXTURE_DATE,
+      updatedAt: LABEL_V2_FIXTURE_DATE,
+      name_en: "May Special",
+      name_ko: "5월 특가",
+    },
+  },
+  {
+    id: 9004,
+    companyId: 1,
+    name_en: "Korean Pear Juice",
+    name_ko: "배 주스",
+    name_invoice: null,
+    barcode: "9300000000042",
+    code: "V2-PM",
+    thumb: null,
+    barcodeGTIN: "9300000000042",
+    barcodePLU: null,
+    barcodeType: "GTIN",
+    uom: "box",
+    defaultRFD: "R",
+    isScale: false,
+    isBundle: false,
+    useBatch: false,
+    archived: false,
+    bundleQty: 1,
+    parentId: null,
+    brandId: null,
+    brand: null,
+    categoryIds: [],
+    categoryMarks: [],
+    taxable: true,
+    wholesaleTaxable: true,
+    isPointExcluded: false,
+    scaleData: null,
+    createdAt: LABEL_V2_FIXTURE_DATE,
+    updatedAt: LABEL_V2_FIXTURE_DATE,
+    isTemporary: false,
+    price: {
+      id: 9104,
+      companyId: 1,
+      itemId: 9004,
+      priceType: "DEFAULT",
+      prices: [1899, 1699],
+      createdAt: LABEL_V2_FIXTURE_DATE,
+      updatedAt: LABEL_V2_FIXTURE_DATE,
+      archived: false,
+      markup: 0,
+    },
+    promoPrice: {
+      id: 9204,
+      companyId: 1,
+      itemId: 9004,
+      priceType: "PROMO",
+      prices: [1599, 1499],
+      validFrom: "2026-05-01T00:00:00.000Z",
+      validTo: "2026-05-31T23:59:59.000Z",
+      archived: false,
+      createdAt: LABEL_V2_FIXTURE_DATE,
+      updatedAt: LABEL_V2_FIXTURE_DATE,
+      name_en: "Member Promo",
+      name_ko: "회원 특가",
+    },
+  },
+] satisfies Item[];
+
 const SCALE_DEFAULTS: ScaleForm = {
   enabled: false,
   type: "CAS",
@@ -75,6 +313,14 @@ export default function InterfaceSettingsScreen() {
   const [escpos, setEscpos] = useState<EscposForm>(ESCPOS_DEFAULTS);
   const [appVersion, setAppVersion] = useState("");
   const [saved, setSaved] = useState(false);
+  const [labelTestPrinting, setLabelTestPrinting] = useState(false);
+  const [labelTestMessage, setLabelTestMessage] = useState("");
+  const [graphicTestPrinting, setGraphicTestPrinting] = useState(false);
+  const [graphicTestMessage, setGraphicTestMessage] = useState("");
+  const [graphicV2TestPrinting, setGraphicV2TestPrinting] = useState(false);
+  const [graphicV2TestMessage, setGraphicV2TestMessage] = useState("");
+  const isDiagnosticPrinting =
+    labelTestPrinting || graphicTestPrinting || graphicV2TestPrinting;
   const [loading, setLoading] = useState(true);
 
   const fetchPorts = useCallback(async () => {
@@ -197,6 +443,188 @@ export default function InterfaceSettingsScreen() {
 
   const removeZplNet = (index: number) => {
     setZplNet((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const getKoreanVectorTestPrinter = (): LabelTestPrinter | null => {
+    const serialTargets: LabelTestPrinter[] = zplSerial
+      .filter(
+        (entry) =>
+          entry.language === "slcs" &&
+          entry.mediaSize === "7090" &&
+          entry.path.trim() !== "",
+      )
+      .map((entry) => ({
+        type: "serial",
+        name: entry.name || entry.path,
+        language: entry.language,
+        path: entry.path,
+      }));
+
+    const netTargets: LabelTestPrinter[] = zplNet
+      .filter(
+        (entry) =>
+          entry.language === "slcs" &&
+          entry.mediaSize === "7090" &&
+          entry.host.trim() !== "",
+      )
+      .map((entry) => ({
+        type: "net",
+        name: entry.name || `${entry.host}:${entry.port}`,
+        language: entry.language,
+        host: entry.host,
+        port: entry.port,
+      }));
+
+    return [...serialTargets, ...netTargets][0] ?? null;
+  };
+
+  const getGraphicTestPrinter = (): LabelTestPrinter | null => {
+    const serialTargets: LabelTestPrinter[] = zplSerial
+      .filter((entry) => entry.mediaSize === "7090" && entry.path.trim() !== "")
+      .map((entry) => ({
+        type: "serial",
+        name: entry.name || entry.path,
+        language: entry.language,
+        path: entry.path,
+      }));
+
+    const netTargets: LabelTestPrinter[] = zplNet
+      .filter((entry) => entry.mediaSize === "7090" && entry.host.trim() !== "")
+      .map((entry) => ({
+        type: "net",
+        name: entry.name || `${entry.host}:${entry.port}`,
+        language: entry.language,
+        host: entry.host,
+        port: entry.port,
+      }));
+
+    return [...serialTargets, ...netTargets][0] ?? null;
+  };
+
+  const handleKoreanVectorTestPrint = async () => {
+    if (isDiagnosticPrinting) return;
+
+    const printer = getKoreanVectorTestPrinter();
+    if (!printer) {
+      setLabelTestMessage("No 70x90 SLCS printer found for destination [0].");
+      return;
+    }
+
+    setLabelTestPrinting(true);
+    setLabelTestMessage("");
+
+    try {
+      const result = await window.electronAPI.printLabel({
+        printer: {
+          type: printer.type,
+          path: printer.type === "serial" ? printer.path : undefined,
+          host: printer.type === "net" ? printer.host : undefined,
+          port: printer.type === "net" ? printer.port : undefined,
+        },
+        label: buildKoreanVectorFontTest7090(),
+      });
+
+      setLabelTestMessage(
+        result.ok
+          ? `Sent 70x90 price tag samples to ${printer.name}.`
+          : result.message,
+      );
+    } catch (err) {
+      setLabelTestMessage(err instanceof Error ? err.message : "Print failed.");
+    } finally {
+      setLabelTestPrinting(false);
+    }
+  };
+
+  const handleGraphicTestPrint = async () => {
+    if (isDiagnosticPrinting) return;
+
+    const printer = getGraphicTestPrinter();
+    if (!printer) {
+      setGraphicTestMessage("No 70x90 printer found for destination [0].");
+      return;
+    }
+
+    setGraphicTestPrinting(true);
+    setGraphicTestMessage("");
+
+    const printerTarget = {
+      type: printer.type,
+      path: printer.type === "serial" ? printer.path : undefined,
+      host: printer.type === "net" ? printer.host : undefined,
+      port: printer.type === "net" ? printer.port : undefined,
+    };
+
+    try {
+      const zplLabel = await buildGraphicPriceTagSample7090("zpl");
+      const zplResult = await window.electronAPI.printLabel({
+        printer: printerTarget,
+        label: zplLabel,
+      });
+      if (!zplResult.ok) {
+        setGraphicTestMessage(`ZPL failed: ${zplResult.message}`);
+        return;
+      }
+
+      const slcsLabel = await buildGraphicPriceTagSample7090("slcs");
+      const slcsResult = await window.electronAPI.printLabel({
+        printer: printerTarget,
+        label: slcsLabel,
+      });
+      if (!slcsResult.ok) {
+        setGraphicTestMessage(`SLCS failed: ${slcsResult.message}`);
+        return;
+      }
+
+      setGraphicTestMessage(`Sent graphic ZPL + SLCS samples to ${printer.name}.`);
+    } catch (err) {
+      setGraphicTestMessage(err instanceof Error ? err.message : "Print failed.");
+    } finally {
+      setGraphicTestPrinting(false);
+    }
+  };
+
+  const handleGraphicV2TestPrint = async () => {
+    if (isDiagnosticPrinting) return;
+
+    const printer = getGraphicTestPrinter();
+    if (!printer) {
+      setGraphicV2TestMessage("No 70x90 printer found for destination [0].");
+      return;
+    }
+
+    setGraphicV2TestPrinting(true);
+    setGraphicV2TestMessage("");
+
+    const printerTarget = {
+      type: printer.type,
+      path: printer.type === "serial" ? printer.path : undefined,
+      host: printer.type === "net" ? printer.host : undefined,
+      port: printer.type === "net" ? printer.port : undefined,
+    };
+
+    try {
+      for (const fixture of LABEL_V2_FIXTURE_ITEMS) {
+        const label = await buildPriceTag7090V2(printer.language, fixture);
+        const result = await window.electronAPI.printLabel({
+          printer: printerTarget,
+          label,
+        });
+
+        if (!result.ok) {
+          setGraphicV2TestMessage(`${fixture.code ?? fixture.barcode} failed: ${result.message}`);
+          return;
+        }
+      }
+
+      setGraphicV2TestMessage(
+        `Sent 4 graphic v2 labels to ${printer.name}.`,
+      );
+    } catch (err) {
+      setGraphicV2TestMessage(err instanceof Error ? err.message : "Print failed.");
+    } finally {
+      setGraphicV2TestPrinting(false);
+    }
   };
 
   if (loading || userLoading) {
@@ -519,6 +947,81 @@ export default function InterfaceSettingsScreen() {
                 </div>
               ))}
             </div>
+          )}
+        </section>
+
+        <section className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">
+                Label Printer Test
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Prints 70x90 SLCS price tag samples on the first 70x90 SLCS printer.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleKoreanVectorTestPrint}
+              disabled={isDiagnosticPrinting}
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-900 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              <IoPrintOutline size={18} />
+              {labelTestPrinting ? "Printing..." : "Print 70x90 Samples [0]"}
+            </button>
+          </div>
+          {labelTestMessage && (
+            <p className="mt-3 text-sm font-medium text-gray-600">
+              {labelTestMessage}
+            </p>
+          )}
+          <div className="mt-4 flex items-center justify-between gap-4 border-t border-gray-100 pt-4">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">
+                Graphic Raster Test
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Prints one ZPL graphic label and one SLCS graphic label to the first 70x90 printer.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleGraphicTestPrint}
+              disabled={isDiagnosticPrinting}
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              <IoPrintOutline size={18} />
+              {graphicTestPrinting ? "Printing..." : "Print Graphic ZPL+SLCS [0]"}
+            </button>
+          </div>
+          {graphicTestMessage && (
+            <p className="mt-3 text-sm font-medium text-gray-600">
+              {graphicTestMessage}
+            </p>
+          )}
+          <div className="mt-4 flex items-center justify-between gap-4 border-t border-gray-100 pt-4">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">
+                Graphic Raster V2 Test
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Prints four data-driven 70x90 labels with a real 54px Data Matrix to the first 70x90 printer.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleGraphicV2TestPrint}
+              disabled={isDiagnosticPrinting}
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              <IoPrintOutline size={18} />
+              {graphicV2TestPrinting ? "Printing..." : "Print 70x90 V2 [0]"}
+            </button>
+          </div>
+          {graphicV2TestMessage && (
+            <p className="mt-3 text-sm font-medium text-gray-600">
+              {graphicV2TestMessage}
+            </p>
           )}
         </section>
 
