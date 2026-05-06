@@ -1039,7 +1039,10 @@ Sync contract:
 
 Operational implication: CRM must be deployed before data-server when this
 contract changes, because data-server starts sending the expanded `/push`
-payload after deployment.
+payload after deployment. This change also includes DB migrations for POS
+local server and data-server; apply them with `npx prisma migrate deploy` in
+each target environment before running code that reads or writes
+`pointsReversed`.
 
 ---
 

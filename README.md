@@ -284,6 +284,7 @@ npm run build            # TypeScript compile
 npm run start            # Production
 npx prisma generate      # Regenerate Prisma client
 npx prisma db push       # Push schema to database
+npx prisma migrate deploy # Apply committed migrations to the target DB
 ```
 
 ## What's Next
