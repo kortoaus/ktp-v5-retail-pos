@@ -3,6 +3,7 @@ import { fmtDateRangeStr } from "../dayjsAU";
 import { itemNameParser } from "../item-utils";
 import type {
   PriceDisplay,
+  PriceTag7090BuildOptions,
   PriceTag7090Case,
   PriceTag7090Model,
 } from "./types";
@@ -11,9 +12,9 @@ function positivePrice(value: number | undefined): number | null {
   return typeof value === "number" && value > 0 ? value : null;
 }
 
-function minPositivePrice(prices: Array<number | null>): number | null {
-  const positivePrices = prices.filter((price) => price !== null);
-  return positivePrices.length > 0 ? Math.min(...positivePrices) : null;
+function memberPrice(guestCents: number, value: number | undefined): number | null {
+  const priceCents = positivePrice(value);
+  return priceCents !== null && priceCents < guestCents ? priceCents : null;
 }
 
 function display(
@@ -28,22 +29,27 @@ function display(
   };
 }
 
-export function getPriceTag7090Model(item: Item): PriceTag7090Model {
+export function getPriceTag7090Model(
+  item: Item,
+  options: PriceTag7090BuildOptions = {},
+): PriceTag7090Model {
   const { name_en, name_ko } = itemNameParser(item);
+  const usePromo = options.priceMode !== "normal";
+  const storeName = options.storeName?.trim() || "Special";
   const baseGuestCents = item.price?.prices[0] ?? 0;
-  const normalMemberCents = positivePrice(item.price?.prices[1]);
-  const promoGuestCents = positivePrice(item.promoPrice?.prices[0]);
-  const promoMemberCents = positivePrice(item.promoPrice?.prices[1]);
-
-  const hasPromo = promoGuestCents !== null;
+  const normalMemberCents = memberPrice(baseGuestCents, item.price?.prices[1]);
+  const promoGuestCandidate = usePromo
+    ? positivePrice(item.promoPrice?.prices[0])
+    : null;
+  const hasPromo = promoGuestCandidate !== null;
   const guestPriceCents =
-    promoGuestCents !== null
-      ? Math.min(baseGuestCents, promoGuestCents)
+    promoGuestCandidate !== null
+      ? Math.min(baseGuestCents, promoGuestCandidate)
       : baseGuestCents;
-  const memberPriceCents = minPositivePrice([
-    normalMemberCents,
-    promoMemberCents,
-  ]);
+  const promoMemberCents = hasPromo
+    ? memberPrice(guestPriceCents, item.promoPrice?.prices[1])
+    : null;
+  const memberPriceCents = hasPromo ? promoMemberCents : normalMemberCents;
   const hasMember = memberPriceCents !== null;
 
   let caseName: PriceTag7090Case;
@@ -59,6 +65,12 @@ export function getPriceTag7090Model(item: Item): PriceTag7090Model {
 
   return {
     caseName,
+    headline:
+      caseName === "normal-member"
+        ? "Member Price"
+        : hasPromo
+          ? item.promoPrice?.name_en || "Special"
+          : storeName,
     barcode: item.barcodeGTIN || item.barcodePLU || item.barcode,
     code: item.code,
     nameKo: name_ko,

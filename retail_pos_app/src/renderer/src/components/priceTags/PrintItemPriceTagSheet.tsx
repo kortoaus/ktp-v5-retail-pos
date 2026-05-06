@@ -15,6 +15,7 @@ import PagingRowList from "../list/PagingRowList";
 import SearchItemSheetList from "./SearchItemSheetList";
 import LoadingOverlay from "../LoadingOverlay";
 import { useTerminal } from "../../contexts/TerminalContext";
+import { useStoreSetting } from "../../hooks/useStoreSetting";
 
 const QUEUE_PAGE_SIZE = 10;
 const PRINTED_SHEET_STORAGE_PREFIX = "pos.printedItemSheetIds";
@@ -35,6 +36,7 @@ export default function PrintItemPriceTagSheet() {
   const [processing, setProcessing] = useState(false);
   const [processingLabel, setProcessingLabel] = useState("Printing labels...");
   const { printLabel, printers } = useZplPrinters();
+  const { storeSetting } = useStoreSetting();
 
   const printers7030 = useMemo(
     () => printers.filter((p) => p.mediaSize === "7030"),
@@ -116,7 +118,7 @@ export default function PrintItemPriceTagSheet() {
       }
 
       for (const item of itemResult.result) {
-        if (item.promoPrice !== null && selectedPrinter7090 !== null) {
+        if (shouldPrint7090(item, selectedPrinter7090 !== null)) {
           p7090.push(item);
         } else {
           p7030.push(item);
@@ -165,7 +167,9 @@ export default function PrintItemPriceTagSheet() {
       if (selectedPrinter7090 !== null && p7090.length > 0) {
         const labels = await Promise.all(
           p7090.map((item) =>
-            buildPriceTag7090V2(selectedPrinter7090.language, item),
+            buildPriceTag7090V2(selectedPrinter7090.language, item, {
+              storeName: storeSetting?.name,
+            }),
           ),
         );
         const merged = mergeLabelOutputs(labels);
@@ -401,6 +405,21 @@ function formatQty(qty: number): string {
   return (qty / QTY_SCALE)
     .toFixed(QTY_DP)
     .replace(/\.?0+$/, "");
+}
+
+function shouldPrint7090(item: Item, has7090Printer: boolean): boolean {
+  if (!has7090Printer) return false;
+  if (item.promoPrice !== null) return true;
+
+  const guestPrice = item.price?.prices[0];
+  const memberPrice = item.price?.prices[1];
+
+  return (
+    typeof guestPrice === "number" &&
+    typeof memberPrice === "number" &&
+    memberPrice > 0 &&
+    memberPrice < guestPrice
+  );
 }
 
 function readPrintedSheetIds(storageKey: string): Set<number> {

@@ -4,7 +4,6 @@ import {
   DATAMATRIX_SIZE_PX,
   LABEL_7090_HEIGHT,
   LABEL_7090_WIDTH,
-  type PriceDisplay,
   type PriceTag7090Model,
 } from "./types";
 
@@ -40,6 +39,85 @@ function drawText(
 ): void {
   ctx.font = font(size, weight, family);
   ctx.fillText(text, x, y, maxWidth);
+}
+
+function fitText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  size: number,
+  minSize: number,
+  weight: number,
+  maxWidth: number,
+  family: FontFamily,
+): { text: string; size: number; width: number } {
+  let actualSize = size;
+
+  while (actualSize > minSize) {
+    ctx.font = font(actualSize, weight, family);
+    if (ctx.measureText(text).width <= maxWidth) {
+      return { text, size: actualSize, width: ctx.measureText(text).width };
+    }
+    actualSize -= 2;
+  }
+
+  ctx.font = font(actualSize, weight, family);
+  if (ctx.measureText(text).width <= maxWidth) {
+    return { text, size: actualSize, width: ctx.measureText(text).width };
+  }
+
+  const ellipsis = "...";
+  if (ctx.measureText(ellipsis).width > maxWidth) {
+    return { text: "", size: actualSize, width: 0 };
+  }
+
+  const chars = Array.from(text);
+  let low = 0;
+  let high = chars.length;
+  let best = ellipsis;
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const candidate = `${chars.slice(0, mid).join("").trimEnd()}${ellipsis}`;
+    if (ctx.measureText(candidate).width <= maxWidth) {
+      best = candidate;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  return { text: best, size: actualSize, width: ctx.measureText(best).width };
+}
+
+function drawFittedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  size: number,
+  minSize: number,
+  weight: number,
+  maxWidth: number,
+  family: FontFamily = "latin",
+): void {
+  const fitted = fitText(ctx, text, size, minSize, weight, maxWidth, family);
+  drawText(ctx, fitted.text, x, y, fitted.size, weight, maxWidth, family);
+}
+
+function drawCenteredFittedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  centerX: number,
+  y: number,
+  size: number,
+  minSize: number,
+  weight: number,
+  maxWidth: number,
+  family: FontFamily = "latin",
+): void {
+  const fitted = fitText(ctx, text, size, minSize, weight, maxWidth, family);
+  ctx.font = font(fitted.size, weight, family);
+  ctx.fillText(fitted.text, centerX - fitted.width / 2, y, maxWidth);
 }
 
 function splitByMeasure(
@@ -117,6 +195,48 @@ function splitByMeasure(
   return lines;
 }
 
+function splitPriceMetrics(
+  ctx: CanvasRenderingContext2D,
+  price: string,
+  dollarSize: number,
+  centSize: number,
+  maxWidth: number,
+): {
+  dollars: string;
+  cents: string;
+  dollarSize: number;
+  centSize: number;
+  width: number;
+} | null {
+  const match = /^\$(\d+)\.(\d{2})$/.exec(price);
+  if (!match) return null;
+
+  const dollars = `$${match[1]}`;
+  const cents = match[2];
+  let actualDollarSize = dollarSize;
+  let actualCentSize = centSize;
+  let width = 0;
+
+  for (let i = 0; i < 18; i++) {
+    ctx.font = font(actualDollarSize, 900);
+    const dollarWidth = ctx.measureText(dollars).width;
+    ctx.font = font(actualCentSize, 900);
+    const centWidth = ctx.measureText(cents).width;
+    width = dollarWidth + 10 + centWidth;
+    if (width <= maxWidth) break;
+    actualDollarSize -= 4;
+    actualCentSize -= 2;
+  }
+
+  return {
+    dollars,
+    cents,
+    dollarSize: actualDollarSize,
+    centSize: actualCentSize,
+    width,
+  };
+}
+
 function drawSplitPrice(
   ctx: CanvasRenderingContext2D,
   price: string,
@@ -124,59 +244,96 @@ function drawSplitPrice(
   y: number,
   dollarSize: number,
   centSize: number,
-  maxRight: number,
+  maxWidth: number,
 ): void {
-  const match = /^\$(\d+)\.(\d{2})$/.exec(price);
-  if (!match) {
-    drawText(ctx, price, x, y, dollarSize, 900, maxRight - x);
+  const metrics = splitPriceMetrics(ctx, price, dollarSize, centSize, maxWidth);
+  if (!metrics) {
+    drawText(ctx, price, x, y, dollarSize, 900, maxWidth);
     return;
   }
 
-  const dollars = `$${match[1]}`;
-  const cents = match[2];
-  let actualDollarSize = dollarSize;
-  let actualCentSize = centSize;
-
-  for (let i = 0; i < 12; i++) {
-    ctx.font = font(actualDollarSize, 900);
-    const dollarWidth = ctx.measureText(dollars).width;
-    ctx.font = font(actualCentSize, 900);
-    const centWidth = ctx.measureText(cents).width;
-    if (x + dollarWidth + 10 + centWidth <= maxRight) break;
-    actualDollarSize -= 4;
-    actualCentSize -= 2;
-  }
-
-  drawText(ctx, dollars, x, y, actualDollarSize, 900, maxRight - x);
-  ctx.font = font(actualDollarSize, 900);
-  const centX = x + ctx.measureText(dollars).width + 10;
+  drawText(ctx, metrics.dollars, x, y, metrics.dollarSize, 900, maxWidth);
+  ctx.font = font(metrics.dollarSize, 900);
+  const centX = x + ctx.measureText(metrics.dollars).width + 10;
   drawText(
     ctx,
-    cents,
+    metrics.cents,
     centX,
-    y - Math.round(actualDollarSize * 0.16),
-    actualCentSize,
+    y - Math.round(metrics.dollarSize * 0.16),
+    metrics.centSize,
     900,
-    maxRight - centX,
+    maxWidth - (centX - x),
   );
 }
 
-function drawPriceBlock(
+function drawCenteredSplitPrice(
   ctx: CanvasRenderingContext2D,
-  price: PriceDisplay,
-  x: number,
+  priceCents: number,
+  centerX: number,
   y: number,
-  maxRight: number,
-  uom: string,
+  dollarSize: number,
+  centSize: number,
+  maxWidth: number,
 ): void {
-  drawText(ctx, price.label, x, y, 24, 800, maxRight - x);
-  drawSplitPrice(ctx, fmtMoney(price.priceCents), x, y + 104, 88, 54, maxRight);
-  drawText(ctx, `/${uom}`, x, y + 140, 22, 700, maxRight - x);
-
-  const save = fmtSave(price.saveCents);
-  if (save) {
-    drawText(ctx, save, x, y + 184, 24, 800, maxRight - x);
+  const price = fmtMoney(priceCents);
+  const metrics = splitPriceMetrics(ctx, price, dollarSize, centSize, maxWidth);
+  if (!metrics) {
+    drawCenteredFittedText(ctx, price, centerX, y, dollarSize, 42, 900, maxWidth);
+    return;
   }
+
+  drawSplitPrice(
+    ctx,
+    price,
+    centerX - metrics.width / 2,
+    y,
+    metrics.dollarSize,
+    metrics.centSize,
+    maxWidth,
+  );
+}
+
+function drawCompactPriceLine(
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  priceCents: number,
+  uom: string,
+  y: number,
+): void {
+  const text = `${label} ${fmtMoney(priceCents)} /${uom}`;
+  drawCenteredFittedText(ctx, text, LABEL_7090_WIDTH / 2, y, 34, 24, 900, 500);
+}
+
+function drawPromoMeta(
+  ctx: CanvasRenderingContext2D,
+  model: PriceTag7090Model,
+  y: number,
+): void {
+  drawText(ctx, `Was ${fmtMoney(model.baseGuestCents)}`, 24, y, 28, 500, 190);
+
+  const saveCents =
+    model.caseName === "promo-member" && model.member
+      ? model.member.saveCents
+      : model.guest.saveCents;
+  const save = fmtSave(saveCents);
+  if (save) {
+    drawFittedText(ctx, save, 330, y, 30, 22, 900, 205);
+  }
+
+  if (model.promoDateRange) {
+    drawText(ctx, model.promoDateRange, 24, y + 34, 23, 500, 300);
+  }
+}
+
+function drawDottedDivider(ctx: CanvasRenderingContext2D, y: number): void {
+  ctx.save();
+  ctx.fillStyle = "#111";
+  for (let x = 24; x < 536; x += 16) {
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 function drawNames(
@@ -185,17 +342,17 @@ function drawNames(
   y: number,
 ): void {
   ctx.font = font(40, 800, "ko");
-  const koLines = splitByMeasure(ctx, model.nameKo, 510, 2);
+  const koLines = splitByMeasure(ctx, model.nameKo, 430, 2);
   let cursor = y;
   for (const line of koLines) {
-    drawText(ctx, line, 24, cursor, 40, 800, 510, "ko");
+    drawText(ctx, line, 24, cursor, 40, 800, 430, "ko");
     cursor += 46;
   }
 
   ctx.font = font(27, 800);
-  const enLines = splitByMeasure(ctx, model.nameEn, 510, 2);
+  const enLines = splitByMeasure(ctx, model.nameEn, 430, 2);
   for (const line of enLines) {
-    drawText(ctx, line, 24, cursor, 27, 800, 510);
+    drawText(ctx, line, 24, cursor, 27, 800, 430);
     cursor += 34;
   }
 }
@@ -222,32 +379,52 @@ export async function renderPriceTag7090Canvas(
   drawText(ctx, model.code ?? "", 24, 48, 22, 700, 240);
 
   const isPromo = model.caseName.startsWith("promo");
-  if (isPromo) {
-    drawText(ctx, model.promoNameEn || "Special", 72, 118, 58, 900, 430);
-    if (model.promoNameKo) {
-      drawText(ctx, model.promoNameKo, 72, 156, 28, 800, 430, "ko");
-    }
+  drawCenteredFittedText(
+    ctx,
+    model.headline,
+    LABEL_7090_WIDTH / 2,
+    isPromo ? 110 : 128,
+    isPromo ? 52 : 62,
+    isPromo ? 36 : 42,
+    900,
+    500,
+  );
+  if (isPromo && model.promoNameKo) {
+    drawCenteredFittedText(ctx, model.promoNameKo, LABEL_7090_WIDTH / 2, 150, 30, 22, 800, 500, "ko");
+  }
+  ctx.fillRect(24, 176, 512, 2);
+
+  let nameY = 430;
+
+  if (model.caseName === "normal-guest") {
+    drawCenteredSplitPrice(ctx, model.guest.priceCents, 280, 335, 156, 86, 510);
+    drawCenteredFittedText(ctx, `/${model.uom}`, 280, 382, 28, 20, 800, 160);
+    nameY = 440;
+  } else if (model.caseName === "normal-member" && model.member) {
+    drawCompactPriceLine(ctx, "GUEST", model.guest.priceCents, model.uom, 224);
+    drawCenteredFittedText(ctx, "MEMBER", 280, 268, 32, 24, 900, 300);
+    drawCenteredSplitPrice(ctx, model.member.priceCents, 280, 382, 136, 76, 510);
+    drawCenteredFittedText(ctx, `/${model.uom}`, 280, 426, 26, 20, 800, 160);
+    const save = fmtSave(model.member.saveCents);
+    if (save) drawCenteredFittedText(ctx, save, 280, 466, 28, 22, 900, 340);
+    nameY = 505;
+  } else if (model.caseName === "promo-guest") {
+    drawCenteredSplitPrice(ctx, model.guest.priceCents, 280, 334, 146, 82, 510);
+    drawCenteredFittedText(ctx, `/${model.uom}`, 280, 380, 26, 20, 800, 160);
+    drawPromoMeta(ctx, model, 420);
+    drawDottedDivider(ctx, 472);
+    nameY = 526;
+  } else if (model.caseName === "promo-member" && model.member) {
+    drawCompactPriceLine(ctx, "GUEST", model.guest.priceCents, model.uom, 226);
+    drawCenteredFittedText(ctx, "MEMBER", 280, 270, 32, 24, 900, 300);
+    drawCenteredSplitPrice(ctx, model.member.priceCents, 280, 374, 132, 74, 510);
+    drawCenteredFittedText(ctx, `/${model.uom}`, 280, 416, 24, 18, 800, 160);
+    drawPromoMeta(ctx, model, 454);
+    drawDottedDivider(ctx, 504);
+    nameY = 548;
   }
 
-  const priceY = isPromo ? 190 : 110;
-  if (model.member) {
-    drawPriceBlock(ctx, model.guest, 24, priceY, 260, model.uom);
-    drawPriceBlock(ctx, model.member, 292, priceY, 548, model.uom);
-  } else {
-    drawPriceBlock(ctx, model.guest, 24, priceY, 520, model.uom);
-  }
-
-  if (isPromo) {
-    drawText(ctx, `Was ${fmtMoney(model.baseGuestCents)}`, 24, 382, 24, 500, 230);
-    if (model.promoDateRange) {
-      drawText(ctx, model.promoDateRange, 24, 414, 21, 500, 280);
-    }
-  }
-
-  const nameY = isPromo ? 482 : 410;
   drawNames(ctx, model, nameY);
-
-  drawText(ctx, model.uom, 24, 610, 24, 800, 180);
 
   await drawDataMatrix(ctx, model.barcode, 475, 628, DATAMATRIX_SIZE_PX);
   drawText(ctx, model.barcode, 24, 684, 20, 500, 390);

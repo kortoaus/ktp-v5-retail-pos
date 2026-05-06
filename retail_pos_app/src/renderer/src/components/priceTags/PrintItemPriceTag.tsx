@@ -10,14 +10,17 @@ import { buildPriceTag7090V2 } from "../../libs/label-7090-v2";
 import { mergeLabelOutputs } from "../../libs/label-builder";
 import { LabelPrinter, useZplPrinters } from "../../hooks/useZplPrinters";
 import { MONEY_DP, MONEY_SCALE } from "../../libs/constants";
+import { useStoreSetting } from "../../hooks/useStoreSetting";
 
 const QUEUE_PAGE_SIZE = 10;
+type PriceTag7090PrintMode = "current" | "normal";
 
 export default function PrintItemPriceTag() {
   const [queue, setQueue] = useState<Item[]>([]);
   const [printing7090, setPrinting7090] = useState(false);
   const printing7090Ref = useRef(false);
   const { printLabel, printers } = useZplPrinters();
+  const { storeSetting } = useStoreSetting();
 
   const scanCallback = useCallback(async (rawBarcode: string) => {
     const { ok, result } = await searchItemByBarcode(rawBarcode);
@@ -39,6 +42,10 @@ export default function PrintItemPriceTag() {
     () => printers.filter((p) => p.mediaSize === "7090"),
     [printers],
   );
+  const hasPromoQueued = useMemo(
+    () => queue.some((item) => item.promoPrice != null),
+    [queue],
+  );
 
   const handlePrintLabel7030 = (printer: LabelPrinter) => {
     if (queue.length === 0) return;
@@ -48,13 +55,21 @@ export default function PrintItemPriceTag() {
     if (merged) printLabel(printer, merged);
   };
 
-  const handlePrintLabel7090 = async (printer: LabelPrinter) => {
+  const handlePrintLabel7090 = async (
+    printer: LabelPrinter,
+    priceMode: PriceTag7090PrintMode,
+  ) => {
     if (queue.length === 0 || printing7090Ref.current) return;
     printing7090Ref.current = true;
     setPrinting7090(true);
     try {
       const labels = await Promise.all(
-        queue.map((item) => buildPriceTag7090V2(printer.language, item)),
+        queue.map((item) =>
+          buildPriceTag7090V2(printer.language, item, {
+            priceMode,
+            storeName: storeSetting?.name,
+          }),
+        ),
       );
       const merged = mergeLabelOutputs(labels);
       if (merged) {
@@ -141,14 +156,24 @@ export default function PrintItemPriceTag() {
             </div>
             <div className="flex flex-wrap gap-2">
               {printers7090.map((p) => (
-                <button
-                  key={p.name}
-                  disabled={printing7090}
-                  onPointerDown={() => handlePrintLabel7090(p)}
-                  className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
-                >
-                  {p.name}
-                </button>
+                <div key={p.name} className="flex flex-wrap gap-2">
+                  <button
+                    disabled={printing7090}
+                    onPointerDown={() => handlePrintLabel7090(p, "current")}
+                    className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                  >
+                    {p.name} Current
+                  </button>
+                  {hasPromoQueued && (
+                    <button
+                      disabled={printing7090}
+                      onPointerDown={() => handlePrintLabel7090(p, "normal")}
+                      className="rounded-lg bg-slate-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:bg-gray-300 transition-colors"
+                    >
+                      {p.name} Normal
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </div>

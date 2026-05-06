@@ -7,12 +7,14 @@ import {
 } from "./canvas-raster";
 import { getPriceTag7090Model } from "./price-model";
 import { renderPriceTag7090Canvas } from "./render";
+import type { PriceTag7090BuildOptions } from "./types";
 
 export async function buildPriceTag7090V2(
   labelLanguage: LabelLanguage,
   item: Item,
+  options?: PriceTag7090BuildOptions,
 ): Promise<LabelOutput> {
-  const model = getPriceTag7090Model(item);
+  const model = getPriceTag7090Model(item, options);
   const canvas = await renderPriceTag7090Canvas(model);
   const raster = canvasToMonoRaster(canvas);
 

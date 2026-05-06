@@ -2,7 +2,7 @@ export const LABEL_7090_WIDTH = 560;
 export const LABEL_7090_HEIGHT = 720;
 export const LABEL_7090_SLCS_SLICE_HEIGHT = 256;
 export const LABEL_7090_BLACK_THRESHOLD = 220;
-export const DATAMATRIX_SIZE_PX = 54;
+export const DATAMATRIX_SIZE_PX = 60;
 
 export type PriceTag7090Case =
   | "normal-guest"
@@ -16,8 +16,16 @@ export interface PriceDisplay {
   saveCents: number;
 }
 
+export type PriceTag7090PriceMode = "current" | "normal";
+
+export interface PriceTag7090BuildOptions {
+  priceMode?: PriceTag7090PriceMode;
+  storeName?: string | null;
+}
+
 export interface PriceTag7090Model {
   caseName: PriceTag7090Case;
+  headline: string;
   barcode: string;
   code: string | null;
   nameKo: string;

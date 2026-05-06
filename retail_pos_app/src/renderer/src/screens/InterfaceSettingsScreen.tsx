@@ -10,6 +10,7 @@ import {
 } from "../libs/label-templates";
 import { buildPriceTag7090V2 } from "../libs/label-7090-v2";
 import type { Item } from "../types/models";
+import { useStoreSetting } from "../hooks/useStoreSetting";
 
 type ScaleType = "CAS" | "DATALOGIC";
 type Parity = "none" | "even" | "odd" | "mark" | "space";
@@ -306,6 +307,7 @@ const btnSmClass =
 
 export default function InterfaceSettingsScreen() {
   const { user, loading: userLoading } = useUser();
+  const { storeSetting } = useStoreSetting();
   const [ports, setPorts] = useState<string[]>([]);
   const [scale, setScale] = useState<ScaleForm>(SCALE_DEFAULTS);
   const [zplSerial, setZplSerial] = useState<ZplSerialEntry[]>([]);
@@ -605,7 +607,9 @@ export default function InterfaceSettingsScreen() {
 
     try {
       for (const fixture of LABEL_V2_FIXTURE_ITEMS) {
-        const label = await buildPriceTag7090V2(printer.language, fixture);
+        const label = await buildPriceTag7090V2(printer.language, fixture, {
+          storeName: storeSetting?.name,
+        });
         const result = await window.electronAPI.printLabel({
           printer: printerTarget,
           label,
