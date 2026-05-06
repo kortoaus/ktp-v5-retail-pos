@@ -7,6 +7,7 @@ export interface CalculateSalePointsInput {
   lines: PointLine[];
   linesTotal: number;
   cashApplied: number;
+  nonCashBill: number;
   hasMember: boolean;
   cashPointRate: number;
   otherPointRate: number;
@@ -23,6 +24,7 @@ export function calculateSalePoints({
   lines,
   linesTotal,
   cashApplied,
+  nonCashBill,
   hasMember,
   cashPointRate,
   otherPointRate,
@@ -42,9 +44,10 @@ export function calculateSalePoints({
   }
 
   const cappedCashApplied = Math.min(Math.max(0, cashApplied), linesTotal);
-  const cashPointBase = Math.round(
-    (eligiblePointBase * cappedCashApplied) / linesTotal,
-  );
+  const cashPointBase =
+    nonCashBill <= 0 && cashApplied > 0
+      ? eligiblePointBase
+      : Math.round((eligiblePointBase * cappedCashApplied) / linesTotal);
   const otherPointBase = eligiblePointBase - cashPointBase;
   const pointsEarned =
     Math.round((cashPointBase * cashPointRate) / 1000) +
