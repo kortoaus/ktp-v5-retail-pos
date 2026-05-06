@@ -453,6 +453,7 @@ export async function buildRefundInTx(
       surchargeTax: aggregates.surchargeTax,
       total: aggregates.total,
       cashChange: 0,
+      pointsEarned: 0,
       note,
       rows: {
         create: computed.map((c, idx) => ({
@@ -464,6 +465,7 @@ export async function buildRefundInTx(
           barcode: c.origRow.barcode,
           uom: c.origRow.uom,
           taxable: c.origRow.taxable,
+          isPointExcluded: c.origRow.isPointExcluded,
           unit_price_original: c.origRow.unit_price_original,
           unit_price_discounted: c.origRow.unit_price_discounted,
           unit_price_adjusted: c.origRow.unit_price_adjusted,

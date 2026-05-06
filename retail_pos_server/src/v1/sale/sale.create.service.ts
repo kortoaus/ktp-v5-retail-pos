@@ -15,6 +15,7 @@ import { SaleCreatePayload } from "./sale.types";
 import type { Prisma } from "../../generated/prisma/client";
 import { nowAnchor } from "./sale.refund.service";
 import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
+import { calculateInvoicePoints } from "./sale.points";
 
 // ──────────────────────────────────────────────────────────────
 // Sale create — 순서:
@@ -247,6 +248,22 @@ export async function buildSaleInTx(
   const typePrefix = payload.type === "SPEND" ? "P" : "S";
   const serial = `${shift.id}-${yyyymmdd}-${typePrefix}${seq}`;
 
+  const isRepayReplacement = originalInvoiceId != null;
+  const pointsEarned = isRepayReplacement
+    ? 0
+    : calculateInvoicePoints({
+        type: payload.type,
+        member: payload.member,
+        rows: payload.rows,
+        payments: payload.payments,
+        linesTotal: payload.linesTotal,
+        nonCashBill: payload.payments
+          .filter((payment) => payment.type !== "CASH")
+          .reduce((sum, payment) => sum + payment.amount, 0),
+        cashPointRate: storeSetting.cash_point_rate,
+        otherPointRate: storeSetting.other_point_rate,
+      });
+
   const inv = await tx.saleInvoice.create({
     data: {
       serial,
@@ -280,6 +297,7 @@ export async function buildSaleInTx(
       surchargeTax: payload.surchargeTax,
       total: payload.total,
       cashChange: payload.cashChange,
+      pointsEarned,
       note: payload.note ?? null,
       rows: {
         create: payload.rows.map((r, idx) => ({
@@ -291,6 +309,7 @@ export async function buildSaleInTx(
           barcode: r.barcode,
           uom: r.uom,
           taxable: r.taxable,
+          isPointExcluded: r.isPointExcluded,
           unit_price_original: r.unit_price_original,
           unit_price_discounted: r.unit_price_discounted,
           unit_price_adjusted: r.unit_price_adjusted,
