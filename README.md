@@ -231,7 +231,9 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - **Refund**: "**_ REFUND _**" banner, links original invoice id, same row/payment structure with "Refunded" labels
 - **Spend**: "**_ INTERNAL _**" banner, rows only (prices `-`), no totals/payments, footer "Internal consumption - no payment"
 - **Z-report**: shift settlement (tender별 sales/refunds/net total, cashio, drawer expected vs actual)
-- All: 576px canvas → ESC/POS thermal print. `** COPY **` marker on reprint
+- All: 576px canvas → ESC/POS thermal print. Tall receipt canvases are split
+  into bounded raster slices before sending, so long receipts/reprints do not
+  overflow printer buffers. `** COPY **` marker on reprint
 - Touchscreen tap-through guard: ModalContainer keeps invisible backdrop 100ms after close
 
 ### Hardware

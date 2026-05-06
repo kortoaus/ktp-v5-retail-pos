@@ -215,6 +215,8 @@
 - [ ] Paging
 - [ ] Row click → SaleInvoiceViewer (80mm thermal layout)
 - [ ] Viewer 의 Print Copy 버튼 → `isCopy=true` 로 "** COPY **"
+- [ ] Long receipt / parent+children reprint prints without timeout or garbled
+      ESC/POS bytes
 - [ ] 바코드 스캔 (`receipt%%%` prefix) → 자동 검색, 1건이면 viewer 자동 open
 - [ ] 한글 IME 스캔 대응
 

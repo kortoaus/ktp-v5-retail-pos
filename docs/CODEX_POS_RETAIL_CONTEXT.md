@@ -55,6 +55,10 @@ such as `../generated/prisma/client`, not `@prisma/client`.
 - API calls from renderer belong in `src/renderer/src/service/*.service.ts`.
 - Server `/api/*` handlers assume `terminalMiddleware` populated
   `res.locals.terminal`, `company`, `storeSetting`, and current `shift`.
+- Receipt printing renders 576px canvases in the renderer, converts them to
+  ESC/POS raster slices in `libs/printer/escpos.ts`, then sends raw bytes through
+  the local server `/api/printer/print` TCP bridge. Keep long documents sliced
+  rather than sending one giant raster command.
 - Sale Screen cloud hotkeys use `CloudHotkeyViewerV2`: parent groups stay
   visible in an 8x2 paged group grid, while the selected group renders a 5x5
   paged item grid. Interactive cells are `div`-based rather than native

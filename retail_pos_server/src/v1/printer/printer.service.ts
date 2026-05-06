@@ -1,7 +1,9 @@
 import net from "net";
 
 const CONNECT_TIMEOUT = 5_000;
-const JOB_TIMEOUT = 10_000;
+const MIN_JOB_TIMEOUT = 30_000;
+const MAX_JOB_TIMEOUT = 300_000;
+const JOB_TIMEOUT_MS_PER_KIB = 20;
 const CHUNK_SIZE = 32 * 1024;
 
 const queues = new Map<string, Promise<void>>();
@@ -51,9 +53,22 @@ async function writeAll(socket: net.Socket, data: Buffer): Promise<void> {
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, msg: string): Promise<T> {
+function getJobTimeoutMs(bytes: number): number {
+  const scaled = Math.ceil(bytes / 1024) * JOB_TIMEOUT_MS_PER_KIB;
+  return Math.min(MAX_JOB_TIMEOUT, Math.max(MIN_JOB_TIMEOUT, scaled));
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  msg: string,
+  onTimeout?: () => void,
+): Promise<T> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(msg)), ms);
+    const timer = setTimeout(() => {
+      onTimeout?.();
+      reject(new Error(msg));
+    }, ms);
     promise.then(
       (v) => { clearTimeout(timer); resolve(v); },
       (e) => { clearTimeout(timer); reject(e); },
@@ -67,17 +82,20 @@ export async function printToDevice(
   data: Buffer,
 ): Promise<{ bytes: number }> {
   return enqueue(ip, async () => {
+    let socket: net.Socket | null = null;
+    const jobTimeout = getJobTimeoutMs(data.length);
     await withTimeout(
       (async () => {
-        const socket = await connectPrinter(ip, port);
+        socket = await connectPrinter(ip, port);
         try {
           await writeAll(socket, data);
         } finally {
           socket.end();
         }
       })(),
-      JOB_TIMEOUT,
-      `Print job timeout: ${ip}:${port}`,
+      jobTimeout,
+      `Print job timeout after ${jobTimeout}ms: ${ip}:${port}`,
+      () => socket?.destroy(),
     );
   }).then(() => ({ bytes: data.length }));
 }

@@ -2,36 +2,13 @@ const ESC = 0x1b;
 const GS = 0x1d;
 
 const BLACK_THRESHOLD = 220;
+const MAX_RASTER_SLICE_HEIGHT = 512;
 
-export const canvasToEscposRaster = (canvas: HTMLCanvasElement): Uint8Array => {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("No canvas context");
-
-  const width = canvas.width;
-  const height = canvas.height;
-  const imageData = ctx.getImageData(0, 0, width, height);
-  const pixels = imageData.data;
-
-  const widthBytes = Math.ceil(width / 8);
-  const rasterData = new Uint8Array(widthBytes * height);
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const idx = (y * width + x) * 4;
-      const r = pixels[idx];
-      const g = pixels[idx + 1];
-      const b = pixels[idx + 2];
-      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-      const isBlack = gray < BLACK_THRESHOLD;
-
-      if (isBlack) {
-        const byteIdx = y * widthBytes + Math.floor(x / 8);
-        const bitIdx = 7 - (x % 8);
-        rasterData[byteIdx] |= 1 << bitIdx;
-      }
-    }
-  }
-
+function buildRasterCommand(
+  widthBytes: number,
+  height: number,
+  rasterData: Uint8Array,
+): Uint8Array {
   const xL = widthBytes & 0xff;
   const xH = (widthBytes >> 8) & 0xff;
   const yL = height & 0xff;
@@ -49,6 +26,59 @@ export const canvasToEscposRaster = (canvas: HTMLCanvasElement): Uint8Array => {
   command.set(rasterData, 8);
 
   return command;
+}
+
+export const canvasToEscposRaster = (canvas: HTMLCanvasElement): Uint8Array => {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("No canvas context");
+
+  const width = canvas.width;
+  const height = canvas.height;
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const pixels = imageData.data;
+
+  const widthBytes = Math.ceil(width / 8);
+  const commands: Uint8Array[] = [];
+  let totalLength = 0;
+
+  for (
+    let sliceTop = 0;
+    sliceTop < height;
+    sliceTop += MAX_RASTER_SLICE_HEIGHT
+  ) {
+    const sliceHeight = Math.min(MAX_RASTER_SLICE_HEIGHT, height - sliceTop);
+    const rasterData = new Uint8Array(widthBytes * sliceHeight);
+
+    for (let localY = 0; localY < sliceHeight; localY++) {
+      const y = sliceTop + localY;
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4;
+        const r = pixels[idx];
+        const g = pixels[idx + 1];
+        const b = pixels[idx + 2];
+        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        const isBlack = gray < BLACK_THRESHOLD;
+
+        if (isBlack) {
+          const byteIdx = localY * widthBytes + Math.floor(x / 8);
+          const bitIdx = 7 - (x % 8);
+          rasterData[byteIdx] |= 1 << bitIdx;
+        }
+      }
+    }
+
+    const command = buildRasterCommand(widthBytes, sliceHeight, rasterData);
+    commands.push(command);
+    totalLength += command.length;
+  }
+
+  const buffer = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const command of commands) {
+    buffer.set(command, offset);
+    offset += command.length;
+  }
+  return buffer;
 };
 
 export const kickDrawerPin2 = (): Uint8Array => {
