@@ -15,7 +15,9 @@ import CashInput from "./CashInput";
 import CreditInput from "./CreditInput";
 import GiftCardInput from "./GiftCardInput";
 import UserVoucherInput from "./UserVoucherInput";
+import CustomerVoucherInput from "./CustomerVoucherInput";
 import { Voucher } from "../../../service/voucher.service";
+import { CustomerVoucher } from "../../../service/customer-voucher.service";
 import {
   createSale,
   createSpend,
@@ -116,6 +118,12 @@ const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 const userVoucherEntityLabel = (userName: string, expectedBalance: number) =>
   `${userName} - Est. balance $${fmtMoney(Math.max(0, expectedBalance))}`;
 
+const activeMemberPoints = (member: unknown): number => {
+  if (!member || typeof member !== "object") return 0;
+  const points = (member as { points?: unknown }).points;
+  return typeof points === "number" ? points : 0;
+};
+
 // qty (×QTY_SCALE) → display string. 정수면 그대로, 소수 weight 면 뒤 0 제거.
 const fmtQty = (q: number) => {
   const v = q / QTY_SCALE;
@@ -135,6 +143,10 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
   const [stagedVoucherUserName, setStagedVoucherUserName] = useState<
     string | null
   >(null);
+  const [stagedCustomerVoucher, setStagedCustomerVoucher] =
+    useState<CustomerVoucher | null>(null);
+  const [customerVoucherMemberPoints, setCustomerVoucherMemberPoints] =
+    useState<number | null>(null);
 
   // SPEND 토글 모드 — ON 이면 tender picker (4종) 비활성 + keypad 영역 overlay,
   // Summary 의 COMPLETE SALE 자리에 RECORD SPEND 버튼. 토글할 때마다 staged /
@@ -147,6 +159,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     setStagedPayment(makeDefaultStage("CASH"));
     setStagedVoucher(null);
     setStagedVoucherUserName(null);
+    setStagedCustomerVoucher(null);
   }
   const { carts, activeCartIndex, clearActiveCart } = useSalesStore();
   const lines = useMemo(
@@ -176,6 +189,8 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     setStagedPayment(makeDefaultStage("CASH"));
     setStagedVoucher(null);
     setStagedVoucherUserName(null);
+    setStagedCustomerVoucher(null);
+    setCustomerVoucherMemberPoints(null);
   }, [activeMemberId]);
 
   // Combined list for math. Always include staged so the hook sees the
@@ -245,6 +260,16 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
       payments
         .filter(
           (p) => p.tender === "VOUCHER" && p.entityType === "user-voucher",
+        )
+        .map((p) => (p as { entityId: number }).entityId),
+    [payments],
+  );
+
+  const usedCustomerVoucherIds = useMemo(
+    () =>
+      payments
+        .filter(
+          (p) => p.tender === "VOUCHER" && p.entityType === "customer-voucher",
         )
         .map((p) => (p as { entityId: number }).entityId),
     [payments],
@@ -459,6 +484,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     setStagedPayment(makeDefaultStage(slot));
     setStagedVoucher(null);
     setStagedVoucherUserName(null);
+    setStagedCustomerVoucher(null);
   }
 
   // Commit the current staged draft into payments[]. Resets staged to a fresh
@@ -482,6 +508,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     setStagedPayment(makeDefaultStage(slotOf(stagedPayment)));
     setStagedVoucher(null);
     setStagedVoucherUserName(null);
+    setStagedCustomerVoucher(null);
   }
 
   function handleRemovePayment(key: string) {
@@ -563,6 +590,32 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
           expectedBalance,
         ),
       };
+    });
+  }
+
+  function selectCustomerVoucher(
+    voucher: CustomerVoucher,
+    memberPoints?: number,
+  ) {
+    setStagedCustomerVoucher(voucher);
+    if (typeof memberPoints === "number") {
+      setCustomerVoucherMemberPoints(memberPoints);
+    }
+    setStagedPayment({
+      key: "staged",
+      tender: "VOUCHER",
+      entityType: "customer-voucher",
+      entityId: voucher.id,
+      entityLabel: voucher.label,
+      amount: 0,
+    });
+  }
+
+  function setStagedCustomerVoucherAmount(amount: number) {
+    setStagedPayment((prev) => {
+      if (prev.tender !== "VOUCHER") return prev;
+      if (prev.entityType !== "customer-voucher") return prev;
+      return { ...prev, amount };
     });
   }
 
@@ -716,9 +769,22 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
               )}
             {stagedPayment.tender === "VOUCHER" &&
               stagedPayment.entityType === "customer-voucher" && (
-                <div className="h-full flex items-center justify-center text-gray-400 text-sm font-medium">
-                  CUSTOMER VOUCHER lookup pending
-                </div>
+                activeMemberId && (
+                  <CustomerVoucherInput
+                    amount={stagedPayment.amount}
+                    setAmount={setStagedCustomerVoucherAmount}
+                    left={left}
+                    voucher={stagedCustomerVoucher}
+                    memberId={activeMemberId}
+                    memberPoints={
+                      customerVoucherMemberPoints ??
+                      activeMemberPoints(activeMember)
+                    }
+                    usedVoucherIds={usedCustomerVoucherIds}
+                    onSelectVoucher={selectCustomerVoucher}
+                    onCommit={commitStaged}
+                  />
+                )
               )}
             {spendMode && (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-sm font-bold uppercase tracking-widest">
