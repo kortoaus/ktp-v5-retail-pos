@@ -25,10 +25,12 @@ function requireOk<T>(res: {
     if (res.status === 401 || res.status === 403) {
       throw new UnauthorizedException(msg);
     }
-    if (res.status && res.status >= 500) {
-      throw new InternalServerException(msg);
-    }
     if (res.status === 0) {
+      throw new InternalServerException(
+        "CRM customer voucher service unavailable",
+      );
+    }
+    if (res.status && res.status >= 500) {
       throw new InternalServerException(
         "CRM customer voucher service unavailable",
       );
