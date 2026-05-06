@@ -11,6 +11,7 @@ import cashIORouter from "./v1/cashio/cashio.router";
 import storeRouter from "./v1/store/store.router";
 import brandRouter from "./v1/brand/brand.router";
 import voucherRouter from "./v1/voucher/voucher.router";
+import customerVoucherRouter from "./v1/customer-voucher/customer-voucher.router";
 import saleRouter from "./v1/sale/sale.router";
 
 const router = Router();
@@ -27,5 +28,6 @@ router.use("/printer", printerRouter);
 router.use("/cashio", cashIORouter);
 router.use("/store", storeRouter);
 router.use("/voucher", voucherRouter);
+router.use("/customer-voucher", customerVoucherRouter);
 router.use("/sale", saleRouter);
 export default router;
