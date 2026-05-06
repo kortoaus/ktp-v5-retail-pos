@@ -68,6 +68,132 @@ export async function redeemCustomerVoucherService(
   };
 }
 
+export interface RedeemedCustomerVoucher {
+  redeemRequestId: string;
+  voucherId: number;
+  amount: number;
+}
+
+export interface CustomerVoucherRedeemVoidOutcome
+  extends RedeemedCustomerVoucher {
+  ok: boolean;
+  error?: unknown;
+}
+
+export class CustomerVoucherRedeemVoidFailedError extends Error {
+  constructor(public readonly outcomes: CustomerVoucherRedeemVoidOutcome[]) {
+    super("one or more customer voucher redeem voids failed");
+  }
+}
+
+export async function redeemCustomerVouchersForSale({
+  invoiceRequestId,
+  memberId,
+  payments,
+}: {
+  invoiceRequestId: string;
+  memberId: string;
+  payments: Array<{
+    type: string;
+    amount: number;
+    entityType?: string;
+    entityId?: number;
+    entityLabel?: string;
+  }>;
+}): Promise<RedeemedCustomerVoucher[]> {
+  const customerVoucherPayments = payments.filter(
+    (payment) =>
+      payment.type === "VOUCHER" &&
+      payment.entityType === "customer-voucher",
+  );
+
+  const seen = new Set<number>();
+  for (const payment of customerVoucherPayments) {
+    if (payment.entityId == null) {
+      throw new BadRequestException("customer voucher entityId missing");
+    }
+    if (seen.has(payment.entityId)) {
+      throw new BadRequestException(
+        `customer voucher ${payment.entityId} used more than once`,
+      );
+    }
+    seen.add(payment.entityId);
+  }
+
+  const customerVouchers = customerVoucherPayments.filter(
+    (payment): payment is typeof payment & { entityId: number } =>
+      payment.entityId != null,
+  );
+
+  const redeemed: RedeemedCustomerVoucher[] = [];
+  for (const payment of customerVouchers) {
+    const voucherId = payment.entityId;
+    const redeemRequestId = `${invoiceRequestId}:cv:${voucherId}:${payment.amount}`;
+    try {
+      await redeemCustomerVoucherService({
+        memberId,
+        voucherId,
+        amount: payment.amount,
+        requestId: redeemRequestId,
+        entityType: "pos-sale-request",
+        entityId: invoiceRequestId,
+        entitySerial: null,
+        note: payment.entityLabel ?? null,
+      });
+    } catch (redeemError) {
+      if (redeemed.length > 0) {
+        try {
+          await voidRedeemedCustomerVouchersForSale({
+            redeemed,
+            reason: "POS customer voucher sale redeem failed after partial success",
+          });
+        } catch (voidError) {
+          console.error("[customer-voucher] partial redeem void failed", {
+            voidError,
+            redeemed,
+            memberId,
+            invoiceRequestId,
+            failedRedeem: {
+              redeemRequestId,
+              voucherId,
+              amount: payment.amount,
+            },
+          });
+        }
+      }
+      throw redeemError;
+    }
+    redeemed.push({ redeemRequestId, voucherId, amount: payment.amount });
+  }
+  return redeemed;
+}
+
+export async function voidRedeemedCustomerVouchersForSale({
+  redeemed,
+  reason,
+}: {
+  redeemed: RedeemedCustomerVoucher[];
+  reason: string;
+}): Promise<CustomerVoucherRedeemVoidOutcome[]> {
+  const outcomes: CustomerVoucherRedeemVoidOutcome[] = [];
+  for (const item of redeemed) {
+    try {
+      await voidCustomerVoucherRedeemService({
+        redeemRequestId: item.redeemRequestId,
+        requestId: `${item.redeemRequestId}:void`,
+        note: reason,
+      });
+      outcomes.push({ ...item, ok: true });
+    } catch (error) {
+      outcomes.push({ ...item, ok: false, error });
+    }
+  }
+  if (outcomes.some((outcome) => !outcome.ok)) {
+    throw new CustomerVoucherRedeemVoidFailedError(outcomes);
+  }
+  return outcomes;
+}
+
 export async function voidCustomerVoucherRedeemService({
   redeemRequestId,
   requestId,

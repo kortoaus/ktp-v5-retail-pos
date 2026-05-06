@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import db from "../../libs/db";
 import {
   BadRequestException,
@@ -16,6 +17,10 @@ import type { Prisma } from "../../generated/prisma/client";
 import { nowAnchor } from "./sale.refund.service";
 import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
 import { calculateInvoicePoints } from "./sale.points";
+import {
+  redeemCustomerVouchersForSale,
+  voidRedeemedCustomerVouchersForSale,
+} from "../customer-voucher/customer-voucher.service";
 
 // ──────────────────────────────────────────────────────────────
 // Sale create — 순서:
@@ -376,17 +381,79 @@ export async function createSaleService(
     // 금액 검증은 순수 함수 — tx 밖에서 fail-fast.
     validateAmounts(payload);
 
+    const hasCustomerVoucherPayment = payload.payments.some(
+      (payment) =>
+        payment.type === "VOUCHER" &&
+        payment.entityType === "customer-voucher",
+    );
+    if (hasCustomerVoucherPayment && !payload.member?.id) {
+      throw new BadRequestException("customer voucher requires member");
+    }
+
+    const invoiceRequestId = randomUUID();
+    const redeemedCustomerVouchers = hasCustomerVoucherPayment
+      ? await redeemCustomerVouchersForSale({
+          invoiceRequestId,
+          memberId: payload.member!.id,
+          payments: payload.payments,
+        })
+      : [];
+
     const { dayStr, yyyymmdd, dayStart } = nowAnchor();
 
-    const invoice = await db.$transaction(async (tx) => {
-      return buildSaleInTx(tx, {
-        payload,
-        context,
-        dayStr,
-        yyyymmdd,
-        dayStart,
-      });
-    });
+    const invoice = await (async () => {
+      try {
+        return await db.$transaction(async (tx) => {
+          return buildSaleInTx(tx, {
+            payload,
+            context,
+            dayStr,
+            yyyymmdd,
+            dayStart,
+          });
+        });
+      } catch (persistenceError) {
+        if (redeemedCustomerVouchers.length > 0) {
+          try {
+            await voidRedeemedCustomerVouchersForSale({
+              redeemed: redeemedCustomerVouchers,
+              reason: "local sale persistence failed",
+            });
+          } catch (voidError) {
+            console.error("[customer-voucher] redeem void failed", {
+              voidError,
+              persistenceError,
+              redeemed: redeemedCustomerVouchers,
+              invoiceRequestId,
+              memberId: payload.member?.id,
+              terminalId: context.terminal.id,
+              terminalName: context.terminal.name,
+              userId: context.user.id,
+              userName: context.user.name,
+              shiftId: context.shift.id,
+              total: payload.total,
+              payloadSummary: {
+                type: payload.type,
+                rowCount: payload.rows.length,
+                paymentCount: payload.payments.length,
+                customerVoucherPayments: payload.payments
+                  .filter(
+                    (payment) =>
+                      payment.type === "VOUCHER" &&
+                      payment.entityType === "customer-voucher",
+                  )
+                  .map((payment) => ({
+                    amount: payment.amount,
+                    entityId: payment.entityId,
+                    entityLabel: payment.entityLabel,
+                  })),
+              },
+            });
+          }
+        }
+        throw persistenceError;
+      }
+    })();
 
     triggerSyncAllSaleInvoices();
 
