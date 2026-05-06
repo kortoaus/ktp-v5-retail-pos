@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { calculateSalePoints } from "../../../libs/sale/points";
 import type { SaleLineType } from "../../../types/sales";
 import type { PaymentQueueItem } from "./types";
 
@@ -81,10 +82,16 @@ export function calcLeft(
 export function usePaymentCal({
   lines,
   credit_surcharge_rate,
+  cash_point_rate,
+  other_point_rate,
+  hasMember,
   payments,
 }: {
   lines: SaleLineType[];
   credit_surcharge_rate: number;
+  cash_point_rate: number;
+  other_point_rate: number;
+  hasMember: boolean;
   payments: PaymentQueueItem[];
 }) {
   // ── 1. LINES ───────────────────────────────────────────────
@@ -176,6 +183,26 @@ export function usePaymentCal({
   const cashApplied = Math.min(cashIntent, Math.max(0, due - nonCashBill));
   const change = cashIntent - cashApplied;
 
+  const pointResult = useMemo(
+    () =>
+      calculateSalePoints({
+        lines,
+        linesTotal,
+        cashApplied,
+        hasMember,
+        cashPointRate: cash_point_rate,
+        otherPointRate: other_point_rate,
+      }),
+    [
+      lines,
+      linesTotal,
+      cashApplied,
+      hasMember,
+      cash_point_rate,
+      other_point_rate,
+    ],
+  );
+
   // ── 7. CASH FIFO ALLOCATION (per-item) ────────────────────
   // Pending list 디스플레이용. Committed cash 가 먼저 흡수 (insertion order),
   // staged("staged" key) 가 마지막 leftover 를 채움. 비-현금 committed 가 제거
@@ -220,6 +247,11 @@ export function usePaymentCal({
     cashApplied,
     cashAllocations,
     change,
+    // Points
+    eligiblePointBase: pointResult.eligiblePointBase,
+    cashPointBase: pointResult.cashPointBase,
+    otherPointBase: pointResult.otherPointBase,
+    pointsEarned: pointResult.pointsEarned,
     // Settlement
     paid,
     remaining,

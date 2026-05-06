@@ -157,6 +157,9 @@ export default function PaymentModalForRepay({
   const cal = usePaymentCal({
     lines,
     credit_surcharge_rate,
+    cash_point_rate: 0,
+    other_point_rate: 0,
+    hasMember: false,
     payments: combinedPayments,
   });
 
@@ -889,4 +892,3 @@ function SummaryRow({
     </div>
   );
 }
-

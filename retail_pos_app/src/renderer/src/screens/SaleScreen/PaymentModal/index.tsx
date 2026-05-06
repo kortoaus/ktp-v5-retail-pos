@@ -153,6 +153,9 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
   );
 
   const credit_surcharge_rate = storeSetting?.credit_surcharge_rate ?? 15; // 15: 1.5%, 150:15%, 1500:150%
+  const cash_point_rate = storeSetting?.cash_point_rate ?? 10;
+  const other_point_rate = storeSetting?.other_point_rate ?? 10;
+  const activeMember = carts[activeCartIndex]?.member ?? null;
 
   // Combined list for math. Always include staged so the hook sees the
   // tender presence (e.g. CASH staged at $0 should still trigger rounding).
@@ -165,6 +168,9 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
   const cal = usePaymentCal({
     lines,
     credit_surcharge_rate,
+    cash_point_rate,
+    other_point_rate,
+    hasMember: activeMember != null,
     payments: combinedPayments,
   });
 
@@ -766,6 +772,12 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
             {/* Settlement */}
             <section className="bg-white border border-gray-200 rounded-md p-3 space-y-1 font-mono text-sm">
               <SummaryRow label="PAID" value={cal.paid} />
+              {cal.pointsEarned > 0 && !spendMode && (
+                <div className="flex items-center justify-between text-sm text-emerald-700 font-bold">
+                  <span>Points Earned</span>
+                  <span>{cal.pointsEarned.toLocaleString()}</span>
+                </div>
+              )}
               <SummaryRow
                 label="REMAINING"
                 value={cal.remaining}
