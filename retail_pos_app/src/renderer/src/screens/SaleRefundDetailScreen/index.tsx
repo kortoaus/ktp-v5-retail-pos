@@ -27,6 +27,7 @@ import {
   type TenderCapEntry,
 } from "../../libs/refund/compute";
 import { buildRefundPayload } from "../../libs/refund/build-payload";
+import { calculateExpectedRefundPointsReversed } from "../../libs/refund/points";
 import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../../libs/constants";
 import MoneyNumpad from "../../components/Numpads/MoneyNumpad";
 import Numpad from "../../components/Numpads/Numpad";
@@ -137,6 +138,11 @@ export default function SaleRefundDetailScreen({
       };
     return computeInvoice(invoice, selections, { allCashMode });
   }, [invoice, selections, allCashMode]);
+
+  const expectedPointsReversed = useMemo(() => {
+    if (!invoice) return 0;
+    return calculateExpectedRefundPointsReversed(invoice, selections);
+  }, [invoice, selections]);
 
   const paid = useMemo(
     () => Object.values(tenderAmounts).reduce((s, n) => s + n, 0),
@@ -425,6 +431,7 @@ export default function SaleRefundDetailScreen({
                 tax={calc.lineTax + calc.surchargeTax}
                 paid={paid}
                 remaining={remaining}
+                expectedPointsReversed={expectedPointsReversed}
               />
             </div>
 
@@ -468,6 +475,7 @@ export default function SaleRefundDetailScreen({
           caps={caps}
           tenderAmounts={tenderAmounts}
           total={calc.total}
+          expectedPointsReversed={expectedPointsReversed}
           onCancel={() => setConfirmStage(null)}
           onNext={() => setConfirmStage("final")}
         />
@@ -753,6 +761,7 @@ function SummaryPane({
   tax,
   paid,
   remaining,
+  expectedPointsReversed,
 }: {
   linesTotal: number;
   creditSurchargeAmount: number;
@@ -761,6 +770,7 @@ function SummaryPane({
   tax: number;
   paid: number;
   remaining: number;
+  expectedPointsReversed: number;
 }) {
   return (
     <div className="space-y-1 font-mono text-sm">
@@ -769,6 +779,13 @@ function SummaryPane({
         <Line label="Card Surcharge" value={fmt(creditSurchargeAmount)} />
       )}
       {rounding !== 0 && <Line label="Rounding" value={fmtSigned(rounding)} />}
+      {expectedPointsReversed > 0 && (
+        <Line
+          label="Expected Points Reversed"
+          value={expectedPointsReversed.toLocaleString()}
+          className="text-rose-600"
+        />
+      )}
       <hr className="border-dashed border-gray-300 my-2" />
       <div className="flex justify-between text-lg font-bold">
         <span>REFUND TOTAL</span>
@@ -818,6 +835,7 @@ function ReviewConfirmModal({
   caps,
   tenderAmounts,
   total,
+  expectedPointsReversed,
   onCancel,
   onNext,
 }: {
@@ -826,6 +844,7 @@ function ReviewConfirmModal({
   caps: TenderCapEntry[];
   tenderAmounts: Record<string, number>;
   total: number;
+  expectedPointsReversed: number;
   onCancel: () => void;
   onNext: () => void;
 }) {
@@ -886,6 +905,14 @@ function ReviewConfirmModal({
         </div>
 
         <hr className="border-dashed border-gray-300 my-3" />
+        {expectedPointsReversed > 0 && (
+          <div className="flex justify-between text-sm font-bold text-rose-600 mb-2">
+            <span>Expected Points Reversed</span>
+            <span className="font-mono">
+              {expectedPointsReversed.toLocaleString()}
+            </span>
+          </div>
+        )}
         <div className="flex justify-between text-lg font-bold mb-4">
           <span>REFUND TOTAL</span>
           <span>{fmt(total)}</span>

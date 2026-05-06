@@ -43,6 +43,7 @@ export type SaleInvoiceAvgAggregateOutputType = {
   cashChange: number | null
   receiptCount: number | null
   pointsEarned: number | null
+  pointsReversed: number | null
   cloudId: number | null
 }
 
@@ -63,6 +64,7 @@ export type SaleInvoiceSumAggregateOutputType = {
   cashChange: number | null
   receiptCount: number | null
   pointsEarned: number | null
+  pointsReversed: number | null
   cloudId: number | null
 }
 
@@ -100,6 +102,7 @@ export type SaleInvoiceMinAggregateOutputType = {
   cashChange: number | null
   receiptCount: number | null
   pointsEarned: number | null
+  pointsReversed: number | null
   note: string | null
   cloudId: number | null
   createdAt: Date | null
@@ -140,6 +143,7 @@ export type SaleInvoiceMaxAggregateOutputType = {
   cashChange: number | null
   receiptCount: number | null
   pointsEarned: number | null
+  pointsReversed: number | null
   note: string | null
   cloudId: number | null
   createdAt: Date | null
@@ -180,6 +184,7 @@ export type SaleInvoiceCountAggregateOutputType = {
   cashChange: number
   receiptCount: number
   pointsEarned: number
+  pointsReversed: number
   note: number
   cloudId: number
   createdAt: number
@@ -205,6 +210,7 @@ export type SaleInvoiceAvgAggregateInputType = {
   cashChange?: true
   receiptCount?: true
   pointsEarned?: true
+  pointsReversed?: true
   cloudId?: true
 }
 
@@ -225,6 +231,7 @@ export type SaleInvoiceSumAggregateInputType = {
   cashChange?: true
   receiptCount?: true
   pointsEarned?: true
+  pointsReversed?: true
   cloudId?: true
 }
 
@@ -262,6 +269,7 @@ export type SaleInvoiceMinAggregateInputType = {
   cashChange?: true
   receiptCount?: true
   pointsEarned?: true
+  pointsReversed?: true
   note?: true
   cloudId?: true
   createdAt?: true
@@ -302,6 +310,7 @@ export type SaleInvoiceMaxAggregateInputType = {
   cashChange?: true
   receiptCount?: true
   pointsEarned?: true
+  pointsReversed?: true
   note?: true
   cloudId?: true
   createdAt?: true
@@ -342,6 +351,7 @@ export type SaleInvoiceCountAggregateInputType = {
   cashChange?: true
   receiptCount?: true
   pointsEarned?: true
+  pointsReversed?: true
   note?: true
   cloudId?: true
   createdAt?: true
@@ -469,6 +479,7 @@ export type SaleInvoiceGroupByOutputType = {
   cashChange: number
   receiptCount: number
   pointsEarned: number
+  pointsReversed: number
   note: string | null
   cloudId: number | null
   createdAt: Date
@@ -532,6 +543,7 @@ export type SaleInvoiceWhereInput = {
   cashChange?: Prisma.IntFilter<"SaleInvoice"> | number
   receiptCount?: Prisma.IntFilter<"SaleInvoice"> | number
   pointsEarned?: Prisma.IntFilter<"SaleInvoice"> | number
+  pointsReversed?: Prisma.IntFilter<"SaleInvoice"> | number
   note?: Prisma.StringNullableFilter<"SaleInvoice"> | string | null
   cloudId?: Prisma.IntNullableFilter<"SaleInvoice"> | number | null
   createdAt?: Prisma.DateTimeFilter<"SaleInvoice"> | Date | string
@@ -579,6 +591,7 @@ export type SaleInvoiceOrderByWithRelationInput = {
   cashChange?: Prisma.SortOrder
   receiptCount?: Prisma.SortOrder
   pointsEarned?: Prisma.SortOrder
+  pointsReversed?: Prisma.SortOrder
   note?: Prisma.SortOrderInput | Prisma.SortOrder
   cloudId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -629,6 +642,7 @@ export type SaleInvoiceWhereUniqueInput = Prisma.AtLeast<{
   cashChange?: Prisma.IntFilter<"SaleInvoice"> | number
   receiptCount?: Prisma.IntFilter<"SaleInvoice"> | number
   pointsEarned?: Prisma.IntFilter<"SaleInvoice"> | number
+  pointsReversed?: Prisma.IntFilter<"SaleInvoice"> | number
   note?: Prisma.StringNullableFilter<"SaleInvoice"> | string | null
   cloudId?: Prisma.IntNullableFilter<"SaleInvoice"> | number | null
   createdAt?: Prisma.DateTimeFilter<"SaleInvoice"> | Date | string
@@ -676,6 +690,7 @@ export type SaleInvoiceOrderByWithAggregationInput = {
   cashChange?: Prisma.SortOrder
   receiptCount?: Prisma.SortOrder
   pointsEarned?: Prisma.SortOrder
+  pointsReversed?: Prisma.SortOrder
   note?: Prisma.SortOrderInput | Prisma.SortOrder
   cloudId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -724,6 +739,7 @@ export type SaleInvoiceScalarWhereWithAggregatesInput = {
   cashChange?: Prisma.IntWithAggregatesFilter<"SaleInvoice"> | number
   receiptCount?: Prisma.IntWithAggregatesFilter<"SaleInvoice"> | number
   pointsEarned?: Prisma.IntWithAggregatesFilter<"SaleInvoice"> | number
+  pointsReversed?: Prisma.IntWithAggregatesFilter<"SaleInvoice"> | number
   note?: Prisma.StringNullableWithAggregatesFilter<"SaleInvoice"> | string | null
   cloudId?: Prisma.IntNullableWithAggregatesFilter<"SaleInvoice"> | number | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"SaleInvoice"> | Date | string
@@ -759,6 +775,7 @@ export type SaleInvoiceCreateInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -806,6 +823,7 @@ export type SaleInvoiceUncheckedCreateInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -844,6 +862,7 @@ export type SaleInvoiceUpdateInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -891,6 +910,7 @@ export type SaleInvoiceUncheckedUpdateInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -934,6 +954,7 @@ export type SaleInvoiceCreateManyInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -969,6 +990,7 @@ export type SaleInvoiceUpdateManyMutationInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1009,6 +1031,7 @@ export type SaleInvoiceUncheckedUpdateManyInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1064,6 +1087,7 @@ export type SaleInvoiceCountOrderByAggregateInput = {
   cashChange?: Prisma.SortOrder
   receiptCount?: Prisma.SortOrder
   pointsEarned?: Prisma.SortOrder
+  pointsReversed?: Prisma.SortOrder
   note?: Prisma.SortOrder
   cloudId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -1087,6 +1111,7 @@ export type SaleInvoiceAvgOrderByAggregateInput = {
   cashChange?: Prisma.SortOrder
   receiptCount?: Prisma.SortOrder
   pointsEarned?: Prisma.SortOrder
+  pointsReversed?: Prisma.SortOrder
   cloudId?: Prisma.SortOrder
 }
 
@@ -1124,6 +1149,7 @@ export type SaleInvoiceMaxOrderByAggregateInput = {
   cashChange?: Prisma.SortOrder
   receiptCount?: Prisma.SortOrder
   pointsEarned?: Prisma.SortOrder
+  pointsReversed?: Prisma.SortOrder
   note?: Prisma.SortOrder
   cloudId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -1164,6 +1190,7 @@ export type SaleInvoiceMinOrderByAggregateInput = {
   cashChange?: Prisma.SortOrder
   receiptCount?: Prisma.SortOrder
   pointsEarned?: Prisma.SortOrder
+  pointsReversed?: Prisma.SortOrder
   note?: Prisma.SortOrder
   cloudId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -1187,6 +1214,7 @@ export type SaleInvoiceSumOrderByAggregateInput = {
   cashChange?: Prisma.SortOrder
   receiptCount?: Prisma.SortOrder
   pointsEarned?: Prisma.SortOrder
+  pointsReversed?: Prisma.SortOrder
   cloudId?: Prisma.SortOrder
 }
 
@@ -1440,6 +1468,7 @@ export type SaleInvoiceCreateWithoutTerminalInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -1485,6 +1514,7 @@ export type SaleInvoiceUncheckedCreateWithoutTerminalInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -1557,6 +1587,7 @@ export type SaleInvoiceScalarWhereInput = {
   cashChange?: Prisma.IntFilter<"SaleInvoice"> | number
   receiptCount?: Prisma.IntFilter<"SaleInvoice"> | number
   pointsEarned?: Prisma.IntFilter<"SaleInvoice"> | number
+  pointsReversed?: Prisma.IntFilter<"SaleInvoice"> | number
   note?: Prisma.StringNullableFilter<"SaleInvoice"> | string | null
   cloudId?: Prisma.IntNullableFilter<"SaleInvoice"> | number | null
   createdAt?: Prisma.DateTimeFilter<"SaleInvoice"> | Date | string
@@ -1592,6 +1623,7 @@ export type SaleInvoiceCreateWithoutUserInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -1637,6 +1669,7 @@ export type SaleInvoiceUncheckedCreateWithoutUserInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -1701,6 +1734,7 @@ export type SaleInvoiceCreateWithoutShiftInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -1746,6 +1780,7 @@ export type SaleInvoiceUncheckedCreateWithoutShiftInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -1810,6 +1845,7 @@ export type SaleInvoiceCreateWithoutRefundsInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -1856,6 +1892,7 @@ export type SaleInvoiceUncheckedCreateWithoutRefundsInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -1898,6 +1935,7 @@ export type SaleInvoiceCreateWithoutOriginalInvoiceInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -1943,6 +1981,7 @@ export type SaleInvoiceUncheckedCreateWithoutOriginalInvoiceInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -2002,6 +2041,7 @@ export type SaleInvoiceUpdateWithoutRefundsInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2048,6 +2088,7 @@ export type SaleInvoiceUncheckedUpdateWithoutRefundsInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2101,6 +2142,7 @@ export type SaleInvoiceCreateWithoutPaymentsInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -2147,6 +2189,7 @@ export type SaleInvoiceUncheckedCreateWithoutPaymentsInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -2200,6 +2243,7 @@ export type SaleInvoiceUpdateWithoutPaymentsInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2246,6 +2290,7 @@ export type SaleInvoiceUncheckedUpdateWithoutPaymentsInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2283,6 +2328,7 @@ export type SaleInvoiceCreateWithoutRowsInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -2329,6 +2375,7 @@ export type SaleInvoiceUncheckedCreateWithoutRowsInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -2382,6 +2429,7 @@ export type SaleInvoiceUpdateWithoutRowsInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2428,6 +2476,7 @@ export type SaleInvoiceUncheckedUpdateWithoutRowsInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2469,6 +2518,7 @@ export type SaleInvoiceCreateManyTerminalInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -2504,6 +2554,7 @@ export type SaleInvoiceUpdateWithoutTerminalInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2549,6 +2600,7 @@ export type SaleInvoiceUncheckedUpdateWithoutTerminalInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2591,6 +2643,7 @@ export type SaleInvoiceUncheckedUpdateManyWithoutTerminalInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2630,6 +2683,7 @@ export type SaleInvoiceCreateManyUserInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -2665,6 +2719,7 @@ export type SaleInvoiceUpdateWithoutUserInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2710,6 +2765,7 @@ export type SaleInvoiceUncheckedUpdateWithoutUserInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2752,6 +2808,7 @@ export type SaleInvoiceUncheckedUpdateManyWithoutUserInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2791,6 +2848,7 @@ export type SaleInvoiceCreateManyShiftInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -2826,6 +2884,7 @@ export type SaleInvoiceUpdateWithoutShiftInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2871,6 +2930,7 @@ export type SaleInvoiceUncheckedUpdateWithoutShiftInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2913,6 +2973,7 @@ export type SaleInvoiceUncheckedUpdateManyWithoutShiftInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2952,6 +3013,7 @@ export type SaleInvoiceCreateManyOriginalInvoiceInput = {
   cashChange?: number
   receiptCount?: number
   pointsEarned?: number
+  pointsReversed?: number
   note?: string | null
   cloudId?: number | null
   createdAt?: Date | string
@@ -2987,6 +3049,7 @@ export type SaleInvoiceUpdateWithoutOriginalInvoiceInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -3032,6 +3095,7 @@ export type SaleInvoiceUncheckedUpdateWithoutOriginalInvoiceInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -3074,6 +3138,7 @@ export type SaleInvoiceUncheckedUpdateManyWithoutOriginalInvoiceInput = {
   cashChange?: Prisma.IntFieldUpdateOperationsInput | number
   receiptCount?: Prisma.IntFieldUpdateOperationsInput | number
   pointsEarned?: Prisma.IntFieldUpdateOperationsInput | number
+  pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -3163,6 +3228,7 @@ export type SaleInvoiceSelect<ExtArgs extends runtime.Types.Extensions.InternalA
   cashChange?: boolean
   receiptCount?: boolean
   pointsEarned?: boolean
+  pointsReversed?: boolean
   note?: boolean
   cloudId?: boolean
   createdAt?: boolean
@@ -3211,6 +3277,7 @@ export type SaleInvoiceSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
   cashChange?: boolean
   receiptCount?: boolean
   pointsEarned?: boolean
+  pointsReversed?: boolean
   note?: boolean
   cloudId?: boolean
   createdAt?: boolean
@@ -3255,6 +3322,7 @@ export type SaleInvoiceSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
   cashChange?: boolean
   receiptCount?: boolean
   pointsEarned?: boolean
+  pointsReversed?: boolean
   note?: boolean
   cloudId?: boolean
   createdAt?: boolean
@@ -3299,13 +3367,14 @@ export type SaleInvoiceSelectScalar = {
   cashChange?: boolean
   receiptCount?: boolean
   pointsEarned?: boolean
+  pointsReversed?: boolean
   note?: boolean
   cloudId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type SaleInvoiceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "companyId" | "serial" | "dayStr" | "type" | "originalInvoiceId" | "shiftId" | "terminalId" | "userId" | "companyName" | "abn" | "phone" | "address1" | "address2" | "suburb" | "state" | "postcode" | "country" | "terminalName" | "userName" | "memberId" | "memberName" | "memberLevel" | "memberPhoneLast4" | "linesTotal" | "rounding" | "creditSurchargeAmount" | "lineTax" | "surchargeTax" | "total" | "cashChange" | "receiptCount" | "pointsEarned" | "note" | "cloudId" | "createdAt" | "updatedAt", ExtArgs["result"]["saleInvoice"]>
+export type SaleInvoiceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "companyId" | "serial" | "dayStr" | "type" | "originalInvoiceId" | "shiftId" | "terminalId" | "userId" | "companyName" | "abn" | "phone" | "address1" | "address2" | "suburb" | "state" | "postcode" | "country" | "terminalName" | "userName" | "memberId" | "memberName" | "memberLevel" | "memberPhoneLast4" | "linesTotal" | "rounding" | "creditSurchargeAmount" | "lineTax" | "surchargeTax" | "total" | "cashChange" | "receiptCount" | "pointsEarned" | "pointsReversed" | "note" | "cloudId" | "createdAt" | "updatedAt", ExtArgs["result"]["saleInvoice"]>
 export type SaleInvoiceInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   originalInvoice?: boolean | Prisma.SaleInvoice$originalInvoiceArgs<ExtArgs>
   refunds?: boolean | Prisma.SaleInvoice$refundsArgs<ExtArgs>
@@ -3374,6 +3443,7 @@ export type $SaleInvoicePayload<ExtArgs extends runtime.Types.Extensions.Interna
     cashChange: number
     receiptCount: number
     pointsEarned: number
+    pointsReversed: number
     note: string | null
     cloudId: number | null
     createdAt: Date
@@ -3841,6 +3911,7 @@ export interface SaleInvoiceFieldRefs {
   readonly cashChange: Prisma.FieldRef<"SaleInvoice", 'Int'>
   readonly receiptCount: Prisma.FieldRef<"SaleInvoice", 'Int'>
   readonly pointsEarned: Prisma.FieldRef<"SaleInvoice", 'Int'>
+  readonly pointsReversed: Prisma.FieldRef<"SaleInvoice", 'Int'>
   readonly note: Prisma.FieldRef<"SaleInvoice", 'String'>
   readonly cloudId: Prisma.FieldRef<"SaleInvoice", 'Int'>
   readonly createdAt: Prisma.FieldRef<"SaleInvoice", 'DateTime'>

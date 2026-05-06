@@ -428,6 +428,7 @@ export const SaleInvoiceScalarFieldEnum = {
   cashChange: 'cashChange',
   receiptCount: 'receiptCount',
   pointsEarned: 'pointsEarned',
+  pointsReversed: 'pointsReversed',
   note: 'note',
   cloudId: 'cloudId',
   createdAt: 'createdAt',

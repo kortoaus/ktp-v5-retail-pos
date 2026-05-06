@@ -21,6 +21,7 @@ import {
   aggregateRefund,
   buildRefundInTx,
   computeRefundRows,
+  lockOriginalInvoiceInTx,
   loadOriginalOrThrow,
   nowAnchor,
   OrigInvoice,
@@ -243,49 +244,52 @@ export async function createRepayService(
   try {
     validatePayloadShape(payload);
 
-    const orig = await loadOriginalOrThrow(payload.originalInvoiceId);
-
-    const now = new Date();
-    validateEligibility(orig, context, now);
-
-    // ── (a) Refund 준비 ──
-    const refundPayload = buildFullRefundPayload(orig);
-    const computedRefund = computeRefundRows(orig, refundPayload.rows);
-    const refundAggregates = aggregateRefund(
-      computedRefund,
-      refundPayload.payments,
-    );
-    // Refund 합 == orig 총액 검증 (drift 없으므로 정확히 일치해야 함)
-    const refundPaySum = refundPayload.payments.reduce(
-      (s, p) => s + p.amount,
-      0,
-    );
-    if (refundPaySum !== refundAggregates.total)
-      throw new InternalServerException(
-        `repay refund mirror sum ${refundPaySum} !== aggregated total ${refundAggregates.total}`,
-      );
-    validateTenderCaps(orig, refundPayload.payments);
-
-    // ── (b) New SALE 준비 ──
-    const newSalePayload = synthesizeNewSalePayload(
-      orig,
-      payload.payments,
-      payload.cashChange,
-      payload.note,
-      surchargeRateOf(context.storeSetting),
-    );
-    // validateAmounts — rows invariants, payments sum == total 등 self-check
-    validateAmounts(newSalePayload);
-
     // ── Time anchor + Transaction ──
     const { dayStr, yyyymmdd, dayStart } = nowAnchor();
 
     const result = await db.$transaction(async (tx) => {
+      await lockOriginalInvoiceInTx(tx, payload.originalInvoiceId);
+
+      const orig = await loadOriginalOrThrow(payload.originalInvoiceId, tx);
+
+      const now = new Date();
+      validateEligibility(orig, context, now);
+
+      // ── (a) Refund 준비 ──
+      const refundPayload = buildFullRefundPayload(orig);
+      const computedRefund = computeRefundRows(orig, refundPayload.rows);
+      const refundAggregates = aggregateRefund(
+        computedRefund,
+        refundPayload.payments,
+      );
+      // Refund 합 == orig 총액 검증 (drift 없으므로 정확히 일치해야 함)
+      const refundPaySum = refundPayload.payments.reduce(
+        (s, p) => s + p.amount,
+        0,
+      );
+      if (refundPaySum !== refundAggregates.total)
+        throw new InternalServerException(
+          `repay refund mirror sum ${refundPaySum} !== aggregated total ${refundAggregates.total}`,
+        );
+      validateTenderCaps(orig, refundPayload.payments);
+
+      // ── (b) New SALE 준비 ──
+      const newSalePayload = synthesizeNewSalePayload(
+        orig,
+        payload.payments,
+        payload.cashChange,
+        payload.note,
+        surchargeRateOf(context.storeSetting),
+      );
+      // validateAmounts — rows invariants, payments sum == total 등 self-check
+      validateAmounts(newSalePayload);
+
       const refund = await buildRefundInTx(tx, {
         orig,
         computed: computedRefund,
         aggregates: refundAggregates,
         payments: refundPayload.payments,
+        pointsReversed: 0,
         note: refundPayload.note ?? null,
         context,
         dayStr,

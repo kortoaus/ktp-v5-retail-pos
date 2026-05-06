@@ -199,6 +199,7 @@ function buildInvoicePayload(
 
     receiptCount: inv.receiptCount,
     pointsEarned: inv.pointsEarned,
+    pointsReversed: inv.pointsReversed,
     note: inv.note,
 
     createdAt: inv.createdAt,

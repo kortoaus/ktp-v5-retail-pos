@@ -17,6 +17,7 @@ export interface SaleInvoiceCreated {
   total: number;
   cashChange: number;
   pointsEarned: number;
+  pointsReversed: number;
   createdAt: string;
 }
 
@@ -41,6 +42,7 @@ export interface SaleInvoiceListItem {
   total: number;
   cashChange: number;
   pointsEarned: number;
+  pointsReversed: number;
   note: string | null;
   createdAt: string;
 }

@@ -514,9 +514,10 @@ model SaleInvoice {
   cashChange            Int @default(0) // 거스름돈 (total invariant 와 무관, 감사용 기록)
 
   // ── Receipt / operational ────────────────────────────────
-  receiptCount Int     @default(0) // 영수증 재출력 횟수 (감사)
-  pointsEarned Int     @default(0) // SALE member point snapshot. REFUND/SPEND stay 0.
-  note         String?
+  receiptCount   Int     @default(0) // 영수증 재출력 횟수 (감사)
+  pointsEarned   Int     @default(0) // SALE member point snapshot. REFUND/SPEND stay 0.
+  pointsReversed Int     @default(0) // REFUND point reversal snapshot. SALE/SPEND stay 0.
+  note           String?
 
   // ── Cloud sync ──────────────────────────────────────────
   // cloudId == null  ⟺  아직 sync 안 됨.

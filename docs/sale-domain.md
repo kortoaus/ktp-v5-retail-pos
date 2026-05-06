@@ -1005,9 +1005,21 @@ Rules:
 - `cashApplied` is used, not cash received, so change never earns points.
 - Surcharge and rounding are not part of the point base.
 
+Refund point reversal:
+- REFUND invoices store `pointsReversed` as a positive snapshot.
+- `pointsReversed` is derived from the original sale's `pointsEarned`, not
+  from current point rates.
+- Eligible refund base uses refund row product totals only; surcharge and
+  rounding do not contribute.
+- Excluded original rows do not reverse points.
+- The final eligible refund absorbs proportional rounding drift so total
+  reversed points can equal the original sale's `pointsEarned`.
+- CRM records REFUND reversal as `MemberPointLedgerType.VOID` and floors
+  `Member.points` at `0`.
+
 Sync contract:
 - POS sync sends invoice `pointsEarned` and row `isPointExcluded` to
-  data-server.
+  data-server. REFUND sync also sends invoice `pointsReversed`.
 - Data-server persists those fields on `RetailSaleInvoice` and
   `RetailSaleInvoiceRow`.
 - For member invoices, data-server sends a best-effort signed CRM `/push`
@@ -1017,6 +1029,7 @@ Sync contract:
   - `invoiceId` = data-server `RetailSaleInvoice.id`
   - `serial`
   - `pointsEarned`
+  - `pointsReversed`
 - CRM validates the HMAC signature with `CRM_PUSH_SECRET`, creates one
   `MemberPointLedger` `EARN` row for
   `entityType = "retail-sale-invoice"` / `entityId = String(invoiceId)`, and

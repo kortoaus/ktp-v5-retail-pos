@@ -19,6 +19,7 @@ import type {
 import { PaymentType } from "../../generated/prisma/enums";
 import type { Prisma } from "../../generated/prisma/client";
 import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
+import { calculateRefundPointsReversed } from "./sale.refund.points";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Sale refund — REFUND invoice 생성 서비스
@@ -130,8 +131,13 @@ export function validatePayloadShape(p: RefundCreatePayload) {
 }
 
 // ── Load + eligibility ───────────────────────────────────────────────────────
-export async function loadOriginalOrThrow(originalInvoiceId: number) {
-  const orig = await db.saleInvoice.findUnique({
+type SaleDbClient = Prisma.TransactionClient | typeof db;
+
+export async function loadOriginalOrThrow(
+  originalInvoiceId: number,
+  client: SaleDbClient = db,
+) {
+  const orig = await client.saleInvoice.findUnique({
     where: { id: originalInvoiceId },
     include: {
       rows: true,
@@ -166,6 +172,15 @@ export async function loadOriginalOrThrow(originalInvoiceId: number) {
 
 export type OrigInvoice = Awaited<ReturnType<typeof loadOriginalOrThrow>>;
 type OrigRow = OrigInvoice["rows"][number];
+
+export async function lockOriginalInvoiceInTx(
+  tx: Prisma.TransactionClient,
+  originalInvoiceId: number,
+) {
+  await tx.$queryRaw<{ id: number }[]>`
+    SELECT "id" FROM "SaleInvoice" WHERE "id" = ${originalInvoiceId} FOR UPDATE
+  `;
+}
 
 // ── Drift-absorbing per-row computation ──────────────────────────────────────
 // 각 요청된 refund row 에 대해 {originalRow, refundQty, refund_row 값들} 을 반환.
@@ -385,6 +400,7 @@ export interface BuildRefundInTxOpts {
   computed: ComputedRefundRow[];
   aggregates: RefundAggregates;
   payments: RefundCreatePayload["payments"];
+  pointsReversed: number;
   note: string | null;
   context: RefundContext;
   dayStr: string;
@@ -401,6 +417,7 @@ export async function buildRefundInTx(
     computed,
     aggregates,
     payments,
+    pointsReversed,
     note,
     context,
     dayStr,
@@ -454,6 +471,7 @@ export async function buildRefundInTx(
       total: aggregates.total,
       cashChange: 0,
       pointsEarned: 0,
+      pointsReversed,
       note,
       rows: {
         create: computed.map((c, idx) => ({
@@ -550,28 +568,51 @@ export async function createRefundService(
   try {
     validatePayloadShape(payload);
 
-    const orig = await loadOriginalOrThrow(payload.originalInvoiceId);
-
-    const computed = computeRefundRows(orig, payload.rows);
-    const aggregates = aggregateRefund(computed, payload.payments);
-
-    // 결제 합 == total 검증
-    const paySum = payload.payments.reduce((s, p) => s + p.amount, 0);
-    if (paySum !== aggregates.total)
-      throw new BadRequestException(
-        `payments sum ${paySum} !== refund total ${aggregates.total}`,
-      );
-
-    validateTenderCaps(orig, payload.payments);
-
     const { dayStr, yyyymmdd, dayStart } = nowAnchor();
 
     const invoice = await db.$transaction(async (tx) => {
+      await lockOriginalInvoiceInTx(tx, payload.originalInvoiceId);
+
+      const orig = await loadOriginalOrThrow(payload.originalInvoiceId, tx);
+
+      const computed = computeRefundRows(orig, payload.rows);
+      const priorRefundRows = orig.refunds.flatMap((child) =>
+        child.rows.map((row) => ({
+          originalInvoiceRowId: row.originalInvoiceRowId,
+          total: row.total,
+        })),
+      );
+      const currentRefundRows = computed.map((row) => ({
+        originalInvoiceRowId: row.origRow.id,
+        total: row.total,
+      }));
+      const pointsReversed = calculateRefundPointsReversed({
+        originalPointsEarned: orig.pointsEarned,
+        originalRows: orig.rows.map((row) => ({
+          id: row.id,
+          total: row.total,
+          isPointExcluded: row.isPointExcluded,
+        })),
+        priorRefundRows,
+        currentRefundRows,
+      });
+      const aggregates = aggregateRefund(computed, payload.payments);
+
+      // 결제 합 == total 검증
+      const paySum = payload.payments.reduce((s, p) => s + p.amount, 0);
+      if (paySum !== aggregates.total)
+        throw new BadRequestException(
+          `payments sum ${paySum} !== refund total ${aggregates.total}`,
+        );
+
+      validateTenderCaps(orig, payload.payments);
+
       return buildRefundInTx(tx, {
         orig,
         computed,
         aggregates,
         payments: payload.payments,
+        pointsReversed,
         note: payload.note ?? null,
         context,
         dayStr,
