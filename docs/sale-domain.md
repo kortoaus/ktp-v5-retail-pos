@@ -987,6 +987,47 @@ Expected cash 공식은 그대로
 `startedCash + salesCash - refundsCash + totalCashIn - totalCashOut` 이며, Z-report
 의 Net Cash row 는 이 공식의 tender movement 부분과 일치한다.
 
+### Sale point earning and CRM ledger (2026-05-06)
+
+**D-41. POS/data-server store point snapshots; CRM owns the point ledger**
+
+POS calculates canonical earned points when a normal `SALE` is created and
+stores the result on `SaleInvoice.pointsEarned`. Each invoice row stores the
+item point-exclusion snapshot on `SaleInvoiceRow.isPointExcluded`.
+
+Rules:
+- Points earn only for completed `SALE` invoices with a member attached.
+- `REFUND`, `SPEND`, and repay replacement `SALE` invoices store
+  `pointsEarned = 0`.
+- Rows with `isPointExcluded = true` do not contribute to the point base.
+- Cash and non-cash shares use `StoreSetting.cash_point_rate` and
+  `StoreSetting.other_point_rate`.
+- `cashApplied` is used, not cash received, so change never earns points.
+- Surcharge and rounding are not part of the point base.
+
+Sync contract:
+- POS sync sends invoice `pointsEarned` and row `isPointExcluded` to
+  data-server.
+- Data-server persists those fields on `RetailSaleInvoice` and
+  `RetailSaleInvoiceRow`.
+- For member invoices, data-server sends a best-effort signed CRM `/push`
+  signal with:
+  - `companyId`
+  - `memberId`
+  - `invoiceId` = data-server `RetailSaleInvoice.id`
+  - `serial`
+  - `pointsEarned`
+- CRM validates the HMAC signature with `CRM_PUSH_SECRET`, creates one
+  `MemberPointLedger` `EARN` row for
+  `entityType = "retail-sale-invoice"` / `entityId = String(invoiceId)`, and
+  increments `Member.points` only if that ledger row is newly created.
+- Duplicate CRM push signals are idempotent through
+  `@@unique([companyId, entityType, entityId, type])`.
+
+Operational implication: CRM must be deployed before data-server when this
+contract changes, because data-server starts sending the expanded `/push`
+payload after deployment.
+
 ---
 
 ## 8. Open questions

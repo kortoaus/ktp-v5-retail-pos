@@ -4,6 +4,57 @@ Date: 2026-05-06
 Branch: `codex/sale-point-earning`
 Workspace: `/Users/dev/ktpv5/ktpv5-pos-retail`
 
+## 2026-05-06 Production Rollout Update
+
+The sale point earning work has been deployed to production across POS retail,
+data-server, and CRM server.
+
+This supersedes the earlier "Next Session Implementation Plan" below:
+
+- CRM `/push` now accepts `companyId`, `memberId`, `invoiceId`, `serial`, and
+  `pointsEarned`.
+- CRM creates an idempotent `MemberPointLedger` `EARN` entry for member sale
+  invoices and increments `Member.points` only for newly-created ledger rows.
+- CRM push notifications include earned points when `pointsEarned > 0`, e.g.
+  `Purchase - $74.30 (+74 pts)`.
+- Data-server sends `serial` and `pointsEarned` in its best-effort CRM push
+  signal.
+- CRM invoice API types include `RetailSaleInvoice.pointsEarned` and row
+  `isPointExcluded`.
+- POS payment modal shows `Expected Points Earned` only when the sale has
+  positive points, is not spend mode, and the complete button is enabled.
+
+Verification before production rollout:
+
+```bash
+cd /Users/dev/ktpv5/ktpv5-crm-server
+npm test
+```
+
+Result: passed, `13/13` tests.
+
+```bash
+cd /Users/dev/ktpv5/ktpv5-data-server
+npm test
+```
+
+Result: passed, `4/4` tests.
+
+```bash
+cd /Users/dev/ktpv5/ktpv5-pos-retail/retail_pos_app
+npm run build
+```
+
+Result: passed.
+
+Recommended post-production smoke checks:
+
+- Member SALE with eligible items creates exactly one CRM `EARN` ledger row.
+- Duplicate `/push` for the same data-server invoice does not increment points
+  again.
+- No-member sale and `pointsEarned = 0` flows do not create ledger rows.
+- REFUND, SPEND, and repay replacement SALE remain at `pointsEarned = 0`.
+
 ## 2026-05-06 Session Update
 
 This thread continued after the original handover. Work is now spanning three
@@ -67,27 +118,23 @@ Important existing support already present:
 - `src/retail/invoice/invoice.service.ts` persists:
   - invoice `pointsEarned`
   - row `isPointExcluded`
-- after a member invoice sync, data-server currently calls CRM `/push` via
+- after a member invoice sync, data-server calls CRM `/push` via
   `src/libs/crmClient.ts`.
 
-Current data-server -> CRM push signal is still only:
+Current data-server -> CRM push signal:
 
 ```ts
 {
   companyId,
   memberId,
   invoiceId, // data-server RetailSaleInvoice.id
+  serial,
+  pointsEarned,
 }
 ```
 
-Next intended data-server change:
-
-- extend push signal payload to include:
-  - `invoiceId` (same meaning: data-server `RetailSaleInvoice.id`)
-  - `serial` (receipt/invoice serial)
-  - `pointsEarned`
-
-The user explicitly wants this because CRM will own the member point ledger.
+CRM owns the member point ledger; data-server only forwards the synced invoice
+signal.
 
 ### CRM Server Repo Current State
 
@@ -207,58 +254,24 @@ There are two existing communication directions:
      - `x-ktp-timestamp`
      - `x-ktp-signature`
    - CRM validates in `src/libs/internalSignature.ts`
-   - CRM currently sends push notification after re-fetching invoice from
-     data-server.
+   - CRM processes positive `pointsEarned` into `MemberPointLedger`
+   - CRM sends push notification after re-fetching invoice from data-server
 
-Current CRM `/push` only sends notifications. It does not update
-`Member.points` yet.
+Current CRM `/push` responsibilities:
 
-### Next Session Implementation Plan
-
-Continue in this order:
-
-1. CRM server:
-   - update `/push` request parser to accept:
-     - `companyId`
-     - `memberId`
-     - `invoiceId`
-     - `serial`
-     - `pointsEarned`
-   - keep HMAC middleware unchanged.
-   - add point processing service that transactionally:
-     - ignores `pointsEarned <= 0` for ledger/aggregate purposes
-     - creates `MemberPointLedger` row:
-       - `type = EARN`
-       - `pointsDelta = pointsEarned`
-       - `entityType = "retail-sale-invoice"`
-       - `entityId = String(invoiceId)`
-       - `entitySerial = serial`
-       - `balanceAfter = previous Member.points + pointsEarned`
-     - increments `Member.points` only if the ledger row is newly created
-     - treats unique conflict as idempotent duplicate signal
-   - decide whether to include points in notification body, e.g.
-     `Purchase - $74.30 (+74 pts)`.
-
-2. data-server:
-   - extend `InvoicePushSignal` in `src/libs/crmClient.ts`
-   - send `serial` and `pointsEarned` from
-     `src/retail/invoice/invoice.service.ts`
-   - preserve best-effort behavior for now.
-
-3. CRM types:
-   - update `src/api/invoice/invoice.type.ts` so `RetailSaleInvoice` includes
-     `pointsEarned`
-   - consider adding row `isPointExcluded` if CRM UI may inspect rows later.
-
-4. POS retail:
-   - keep current PaymentModal UI edit or commit it with the broader point
-     work.
-
-5. Verification:
-   - CRM: `npm run build`
-   - data-server: `npm run build`
-   - POS app: `npm run build` if PaymentModal remains changed
-   - POS server: `npm run build` if sync payload changes require type updates
+- accept `companyId`, `memberId`, `invoiceId`, `serial`, and `pointsEarned`
+- ignore `pointsEarned <= 0` for ledger/aggregate purposes
+- create `MemberPointLedger` row:
+  - `type = EARN`
+  - `pointsDelta = pointsEarned`
+  - `entityType = "retail-sale-invoice"`
+  - `entityId = String(invoiceId)`
+  - `entitySerial = serial`
+  - `balanceAfter = previous Member.points + pointsEarned`
+- increment `Member.points` only if the ledger row is newly created
+- treat unique conflict as idempotent duplicate signal
+- include points in notification body when positive, e.g.
+  `Purchase - $74.30 (+74 pts)`
 
 ## Current State
 
@@ -419,15 +432,14 @@ Notes:
 - invoice `pointsEarned`
 - row `isPointExcluded`
 
-The sibling data server already had pending matching support when checked:
+The sibling data server has matching production support:
 
 - `/Users/dev/ktpv5/ktpv5-data-server/prisma/schema.prisma`
 - `/Users/dev/ktpv5/ktpv5-data-server/src/retail/invoice/invoice.service.ts`
 - `/Users/dev/ktpv5/ktpv5-data-server/prisma/migrations/20260506002302_add_point_fields_to_retail_invoice/migration.sql`
 
-Important: that sibling repo had uncommitted local changes at the time of this
-handover. Coordinate deployment of this POS branch with the data-server point
-fields/migration.
+Data-server now forwards `serial` and `pointsEarned` to CRM `/push` for member
+invoices. CRM owns the member point ledger and the `Member.points` aggregate.
 
 ## Verification Already Run
 
@@ -476,22 +488,18 @@ Subagent review gates were run per task:
 - Final whole-branch review caught SPEND rows losing the point-exclusion
   snapshot; fixed in `f358e72`.
 
-## Suggested Next Session Steps
+## Post-Rollout Notes
 
-1. Commit this handover document if desired.
-2. Re-run:
+The production deployment order was CRM server, then data-server, then POS
+retail. Keep that order for future changes to the signed `/push` payload:
+receiver first, sender second.
 
-```bash
-cd retail_pos_server && npm run build
-cd retail_pos_app && npm run build
-```
+For future point features, keep these ownership boundaries:
 
-3. Decide whether to open a PR from `codex/sale-point-earning`.
-4. Coordinate data-server branch/deployment for matching retail invoice point
-   fields.
-5. Before production rollout, apply migrations on:
-   - local POS server DBs
-   - data-server DB
+- POS calculates and stores sale point snapshots.
+- Data-server stores reporting copies and forwards a best-effort member invoice
+  signal.
+- CRM owns point ledger events and the `Member.points` aggregate.
 
 ## Manual Regression Checklist
 
