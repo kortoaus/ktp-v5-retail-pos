@@ -198,6 +198,7 @@ function buildInvoicePayload(
     cashChange: inv.cashChange,
 
     receiptCount: inv.receiptCount,
+    pointsEarned: inv.pointsEarned,
     note: inv.note,
 
     createdAt: inv.createdAt,
@@ -212,6 +213,7 @@ function buildInvoicePayload(
       barcode: r.barcode,
       uom: r.uom,
       taxable: r.taxable,
+      isPointExcluded: r.isPointExcluded,
       unit_price_original: r.unit_price_original,
       unit_price_discounted: r.unit_price_discounted,
       unit_price_adjusted: r.unit_price_adjusted,
