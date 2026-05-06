@@ -113,6 +113,7 @@ export async function createSpendService(
               barcode: r.barcode,
               uom: r.uom,
               taxable: r.taxable,
+              isPointExcluded: r.isPointExcluded,
               unit_price_original: r.unit_price_original, // retail 보존 (D-16)
               unit_price_discounted: r.unit_price_discounted,
               unit_price_adjusted: 0, // D-16 강제
