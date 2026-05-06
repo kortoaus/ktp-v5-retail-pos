@@ -44,6 +44,9 @@
 - `retail_pos_server/src/v1/sale/sale.refund.service.ts`
   - Set refund invoice `pointsEarned` to `0`.
   - Copy `isPointExcluded` onto refund rows only as a row snapshot.
+- `retail_pos_server/src/v1/sale/sale.repay.service.ts`
+  - Copy `isPointExcluded` when synthesizing replacement SALE row payloads.
+  - Ensure repay-created SALE invoices do not earn points again in this phase.
 - `retail_pos_app/src/renderer/src/libs/printer/sale-invoice-receipt.ts`
   - Print `Points Earned` for `SALE` invoices where `pointsEarned > 0`.
 - `retail_pos_app/src/renderer/src/components/SaleInvoiceViewer.tsx`
@@ -451,6 +454,7 @@ git commit -m "feat: preview member points during sale payment"
 - Create: `retail_pos_server/src/v1/sale/sale.points.ts`
 - Modify: `retail_pos_server/src/v1/sale/sale.create.service.ts`
 - Modify: `retail_pos_server/src/v1/sale/sale.refund.service.ts`
+- Modify: `retail_pos_server/src/v1/sale/sale.repay.service.ts`
 
 - [ ] **Step 1: Create the server point helper**
 
@@ -514,15 +518,18 @@ import { calculateInvoicePoints } from "./sale.points";
 Inside `buildSaleInTx`, before `tx.saleInvoice.create`, add:
 
 ```ts
-  const pointsEarned = calculateInvoicePoints({
-    type: payload.type,
-    member: payload.member,
-    rows: payload.rows,
-    payments: payload.payments,
-    linesTotal: payload.linesTotal,
-    cashPointRate: storeSetting.cash_point_rate,
-    otherPointRate: storeSetting.other_point_rate,
-  });
+  const isRepayReplacement = originalInvoiceId != null;
+  const pointsEarned = isRepayReplacement
+    ? 0
+    : calculateInvoicePoints({
+        type: payload.type,
+        member: payload.member,
+        rows: payload.rows,
+        payments: payload.payments,
+        linesTotal: payload.linesTotal,
+        cashPointRate: storeSetting.cash_point_rate,
+        otherPointRate: storeSetting.other_point_rate,
+      });
 ```
 
 In the invoice create data, add:
@@ -551,7 +558,20 @@ Inside refund row create data, add:
           isPointExcluded: c.origRow.isPointExcluded,
 ```
 
-- [ ] **Step 4: Build the server**
+- [ ] **Step 4: Copy row point exclusion in repay replacement rows**
+
+In `sale.repay.service.ts`, find the code that synthesizes replacement
+`SaleRowPayload[]` from original invoice rows. Add the row snapshot field:
+
+```ts
+      isPointExcluded: r.isPointExcluded,
+```
+
+The replacement SALE should still use the original row snapshots, but
+`buildSaleInTx` must store `pointsEarned = 0` for repay replacements because
+point reversal/re-earning is out of scope for this phase.
+
+- [ ] **Step 5: Build the server**
 
 Run:
 
@@ -562,12 +582,13 @@ npm run build
 
 Expected: Server build succeeds.
 
-- [ ] **Step 5: Commit server point calculation**
+- [ ] **Step 6: Commit server point calculation**
 
 ```bash
 git add retail_pos_server/src/v1/sale/sale.points.ts \
   retail_pos_server/src/v1/sale/sale.create.service.ts \
-  retail_pos_server/src/v1/sale/sale.refund.service.ts
+  retail_pos_server/src/v1/sale/sale.refund.service.ts \
+  retail_pos_server/src/v1/sale/sale.repay.service.ts
 git commit -m "feat: calculate sale points on server"
 ```
 
