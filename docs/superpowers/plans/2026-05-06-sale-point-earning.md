@@ -15,6 +15,8 @@
 - `retail_pos_server/prisma/schema.prisma`
   - Add `SaleInvoice.pointsEarned`.
   - Add `SaleInvoiceRow.isPointExcluded`.
+- `retail_pos_server/prisma/migrations/YYYYMMDDHHMMSS_add_point_fields_to_sale_invoice/migration.sql`
+  - Add local POS database columns for invoice points and row point exclusion.
 - `retail_pos_app/src/renderer/src/types/sales.ts`
   - Add the point-exclusion snapshot to `SaleLineItem`.
 - `retail_pos_app/src/renderer/src/libs/item-utils.ts`
@@ -47,6 +49,8 @@
 - `retail_pos_server/src/v1/sale/sale.repay.service.ts`
   - Copy `isPointExcluded` when synthesizing replacement SALE row payloads.
   - Ensure repay-created SALE invoices do not earn points again in this phase.
+- `retail_pos_server/src/v1/cloud/cloud.sync.service.ts`
+  - Include `pointsEarned` and row `isPointExcluded` in the retail sale sync payload.
 - `retail_pos_app/src/renderer/src/libs/printer/sale-invoice-receipt.ts`
   - Print `Points Earned` for `SALE` invoices where `pointsEarned > 0`.
 - `retail_pos_app/src/renderer/src/components/SaleInvoiceViewer.tsx`
@@ -460,6 +464,8 @@ git commit -m "feat: preview member points during sale payment"
 - Modify: `retail_pos_server/src/v1/sale/sale.create.service.ts`
 - Modify: `retail_pos_server/src/v1/sale/sale.refund.service.ts`
 - Modify: `retail_pos_server/src/v1/sale/sale.repay.service.ts`
+- Modify: `retail_pos_server/src/v1/cloud/cloud.sync.service.ts`
+- Create: `retail_pos_server/prisma/migrations/20260506003000_add_point_fields_to_sale_invoice/migration.sql`
 
 - [ ] **Step 1: Create the server point helper**
 
@@ -582,7 +588,34 @@ The replacement SALE should still use the original row snapshots, but
 `buildSaleInTx` must store `pointsEarned = 0` for repay replacements because
 point reversal/re-earning is out of scope for this phase.
 
-- [ ] **Step 5: Build the server**
+- [ ] **Step 5: Add the local POS migration**
+
+Create
+`retail_pos_server/prisma/migrations/20260506003000_add_point_fields_to_sale_invoice/migration.sql`:
+
+```sql
+-- Add sale point earning snapshots.
+ALTER TABLE "SaleInvoice" ADD COLUMN "pointsEarned" INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE "SaleInvoiceRow" ADD COLUMN "isPointExcluded" BOOLEAN NOT NULL DEFAULT false;
+```
+
+- [ ] **Step 6: Include point snapshots in cloud sync payload**
+
+In `retail_pos_server/src/v1/cloud/cloud.sync.service.ts`, add the invoice
+field near the other invoice-level operational fields:
+
+```ts
+    pointsEarned: inv.pointsEarned,
+```
+
+In each row payload, add the row snapshot near `taxable`:
+
+```ts
+      isPointExcluded: r.isPointExcluded,
+```
+
+- [ ] **Step 7: Build the server**
 
 Run:
 
@@ -593,13 +626,15 @@ npm run build
 
 Expected: Server build succeeds.
 
-- [ ] **Step 6: Commit server point calculation**
+- [ ] **Step 8: Commit server point calculation**
 
 ```bash
 git add retail_pos_server/src/v1/sale/sale.points.ts \
   retail_pos_server/src/v1/sale/sale.create.service.ts \
   retail_pos_server/src/v1/sale/sale.refund.service.ts \
-  retail_pos_server/src/v1/sale/sale.repay.service.ts
+  retail_pos_server/src/v1/sale/sale.repay.service.ts \
+  retail_pos_server/src/v1/cloud/cloud.sync.service.ts \
+  retail_pos_server/prisma/migrations/20260506003000_add_point_fields_to_sale_invoice/migration.sql
 git commit -m "feat: calculate sale points on server"
 ```
 
