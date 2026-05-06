@@ -260,6 +260,9 @@ export async function buildSaleInTx(
         nonCashBill: payload.payments
           .filter((payment) => payment.type !== "CASH")
           .reduce((sum, payment) => sum + payment.amount, 0),
+        voucherBill: payload.payments
+          .filter((payment) => payment.type === "VOUCHER")
+          .reduce((sum, payment) => sum + payment.amount, 0),
         cashPointRate: storeSetting.cash_point_rate,
         otherPointRate: storeSetting.other_point_rate,
       });

@@ -138,23 +138,44 @@ export function usePaymentCal({
       ),
     [payments, credit_surcharge_rate],
   );
+  const voucherBill = useMemo(
+    () =>
+      payments.reduce(
+        (s, p) => (p.tender === "VOUCHER" ? s + p.amount : s),
+        0,
+      ),
+    [payments],
+  );
+  const exactNonCashBill = useMemo(
+    () =>
+      payments.reduce((s, p) => {
+        if (p.tender === "CREDIT") {
+          return s + billPortionOf(p, credit_surcharge_rate);
+        }
+        if (p.tender === "GIFTCARD") return s + p.amount;
+        return s;
+      }, 0),
+    [payments, credit_surcharge_rate],
+  );
+  const cashTenderPresent = payments.some((p) => p.tender === "CASH");
 
   // ── 3. ROUNDING (AU 5¢) ────────────────────────────────────
-  // CASH 가 유일한 tender 이고 실제로 settle 가능할 때만 적용. Mixed / card-only
-  // 는 항상 exact — non-cash tender 가 1¢ 정밀도를 받을 수 있으므로.
-  //   (a) nonCashBill === 0               — 비-현금 tender 부재
-  //   (b) cashIntent >= roundedCashTarget — 현금이 round 된 타겟을 덮음
-  //   (c) cashTarget !== roundedCashTarget — bill 이 아직 5¢ 배수 아님
+  // CASH 가 exact tender 없이 실제로 settle 가능할 때만 적용. Voucher+cash 는
+  // cash remainder 를 round 할 수 있고, card/giftcard mixed 는 항상 exact.
+  //   (a) exactNonCashBill === 0          — card/giftcard tender 부재
+  //   (b) cashTenderPresent              — cash tender 가 rounding 을 맡음
+  //   (c) cashIntent >= roundedCashTarget — 현금이 round 된 타겟을 덮음
+  //   (d) cashTarget !== roundedCashTarget — bill 이 아직 5¢ 배수 아님
   //
   // 예:
   //   $100.01 cash-only $200 → round $100, change $100
   //   $100.01 cash $99 + credit $1 → NO round (credit 이 $0.01 받음)
   //   $100.01 card-only → NO round
-  const cashOnlyMode = nonCashBill === 0;
-  const cashTarget = Math.max(0, linesTotal - nonCashBill);
+  const cashRoundingMode = exactNonCashBill === 0;
+  const cashTarget = Math.max(0, linesTotal - voucherBill - exactNonCashBill);
   const roundedCashTarget = round5(cashTarget);
   const cashCanSettle =
-    cashOnlyMode && cashIntent > 0 && cashIntent >= roundedCashTarget;
+    cashRoundingMode && cashTenderPresent && cashIntent >= roundedCashTarget;
   const needsRounding = cashTarget !== roundedCashTarget;
   const rounding =
     cashCanSettle && needsRounding ? roundedCashTarget - cashTarget : 0;
@@ -190,6 +211,7 @@ export function usePaymentCal({
         linesTotal,
         cashApplied,
         nonCashBill,
+        voucherBill,
         hasMember,
         cashPointRate: cash_point_rate,
         otherPointRate: other_point_rate,
@@ -199,6 +221,7 @@ export function usePaymentCal({
       linesTotal,
       cashApplied,
       nonCashBill,
+      voucherBill,
       hasMember,
       cash_point_rate,
       other_point_rate,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSalesStore } from "../../../store/SalesStore";
 import { cn } from "../../../libs/cn";
 import { useStoreSetting } from "../../../hooks/useStoreSetting";
@@ -30,6 +30,7 @@ import {
 import LoadingOverlay from "../../../components/LoadingOverlay";
 import { kickDrawer } from "../../../libs/printer/kick-drawer";
 import { printSaleInvoiceReceipt } from "../../../libs/printer/sale-invoice-receipt";
+import TapTarget from "./TapTarget";
 
 // UI-level tender slot. Distinct from PaymentType in the schema:
 //   USER_VOUCHER + CUSTOMER_VOUCHER both map to tender="VOUCHER" in the
@@ -41,14 +42,7 @@ type TenderSlot =
   | "CUSTOMER_VOUCHER"
   | "GIFTCARD";
 
-// PAYMENT_TYPE drives the picker buttons. CUSTOMER_VOUCHER hidden until CRM
-// lookup is wired (D-21).
-const PAYMENT_TYPE: TenderSlot[] = [
-  "CASH",
-  "CREDIT",
-  "USER_VOUCHER",
-  "GIFTCARD",
-]; // todo: CUSTOMER_VOUCHER
+const EXACT_TENDER_SLOTS: TenderSlot[] = ["CREDIT", "GIFTCARD"];
 
 // Summary 패널 — tender 별 합계 표시용 라벨.
 const TENDER_LABEL: Record<TenderSlot, string> = {
@@ -100,6 +94,14 @@ function slotOf(p: PaymentQueueItem): TenderSlot {
       : "CUSTOMER_VOUCHER";
   }
   return p.tender; // CASH | CREDIT | GIFTCARD
+}
+
+function isVoucherSlot(slot: TenderSlot): boolean {
+  return slot === "USER_VOUCHER" || slot === "CUSTOMER_VOUCHER";
+}
+
+function isExactTenderPayment(p: PaymentQueueItem): boolean {
+  return p.tender === "CREDIT" || p.tender === "GIFTCARD";
 }
 
 // "Has the cashier put anything into this draft yet?" CASH uses cashReceived
@@ -156,6 +158,25 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
   const cash_point_rate = storeSetting?.cash_point_rate ?? 10;
   const other_point_rate = storeSetting?.other_point_rate ?? 10;
   const activeMember = carts[activeCartIndex]?.member ?? null;
+  const activeMemberId = activeMember?.id ?? null;
+  const previousMemberIdRef = useRef<string | null>(activeMemberId);
+  const voucherSlot: TenderSlot = activeMember
+    ? "CUSTOMER_VOUCHER"
+    : "USER_VOUCHER";
+  const paymentTypes: TenderSlot[] = [
+    voucherSlot,
+    "CASH",
+    ...EXACT_TENDER_SLOTS,
+  ];
+
+  useEffect(() => {
+    if (previousMemberIdRef.current === activeMemberId) return;
+    previousMemberIdRef.current = activeMemberId;
+    setPayments([]);
+    setStagedPayment(makeDefaultStage("CASH"));
+    setStagedVoucher(null);
+    setStagedVoucherUserName(null);
+  }, [activeMemberId]);
 
   // Combined list for math. Always include staged so the hook sees the
   // tender presence (e.g. CASH staged at $0 should still trigger rounding).
@@ -181,10 +202,10 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     [payments, cal.due, credit_surcharge_rate],
   );
 
-  // EXACT 버튼 값. Committed 에 non-cash 가 하나도 없으면 round5(left) 로 넣어줘서
-  // cashIntent >= roundedCashTarget 조건을 충족시킴 → rounding 자동 작동.
-  // Non-cash 가 committed 되면 그냥 left (mixed tender 는 round 금지 — D-section 3).
-  const exactCashAmount = payments.some((p) => p.tender !== "CASH")
+  // EXACT 버튼 값. Credit/giftcard exact tender 가 없으면 round5(left) 로 넣어
+  // cash-only and voucher+cash remainder rounding 을 충족시킴.
+  // Exact tender 가 committed 되면 그냥 left (card/giftcard mixed 는 round 금지).
+  const exactCashAmount = payments.some(isExactTenderPayment)
     ? left
     : round5(left);
 
@@ -412,17 +433,16 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     }
   }
 
-  // CASH must be the first committed tender — once any non-CASH is committed
-  // the CASH button locks. Rationale: cash is the round-absorbing tender, so
-  // it goes first; non-cash fills the exact remainder. Locking prevents
-  // cashier from adding cash after non-cash, which would break the rounding
-  // ordering. Multi-cash is fine until a non-cash committal triggers the lock.
-  const cashLocked = payments.some((p) => p.tender !== "CASH");
+  // Voucher must lead tender order. Cash can follow voucher and absorb rounding,
+  // but exact tenders lock further cash because mixed exact payments settle at 1¢.
+  const voucherLocked = payments.some((p) => p.tender !== "VOUCHER");
+  const cashLocked = payments.some(isExactTenderPayment);
 
   // Switch tender slot — discards any in-progress staged input.
   // Confirms first if there's a non-empty draft so the cashier doesn't lose
   // an entry by mis-tapping a tender button.
   function changeSlot(slot: TenderSlot) {
+    if (isVoucherSlot(slot) && voucherLocked) return;
     if (slot === "CASH" && cashLocked) return;
     const currentSlot = slotOf(stagedPayment);
     if (currentSlot === slot) return;
@@ -559,14 +579,20 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
       )}
       <div className="bg-white w-full h-full rounded-md flex flex-col divide-y divide-gray-300">
         <div className="h-14 flex items-center justify-between px-4">
-          <h2 className="text-xl font-semibold">Payment</h2>
-          <button
-            type="button"
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-semibold">Payment</h2>
+            {activeMember && (
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
+                Member
+              </span>
+            )}
+          </div>
+          <TapTarget
             onClick={() => onCancel()}
-            className="px-4 h-9 rounded-md bg-red-500 text-white font-semibold text-sm active:bg-red-600"
+            className="px-4 h-9 rounded-md bg-red-500 text-white font-semibold text-sm active:bg-red-600 flex items-center justify-center"
           >
             Cancel
-          </button>
+          </TapTarget>
         </div>
         <div className="flex-1 grid grid-cols-12 divide-x divide-gray-300 min-h-0">
           {/* Lines */}
@@ -603,18 +629,20 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
 
           {/* Payment Type */}
           <div className="flex flex-col gap-2 p-2">
-            {PAYMENT_TYPE.map((pt, idx) => {
+            {paymentTypes.map((pt, idx) => {
               const isActived = !spendMode && slotOf(stagedPayment) === pt;
-              const isDisabled = spendMode || (pt === "CASH" && cashLocked);
+              const isDisabled =
+                spendMode ||
+                (isVoucherSlot(pt) && voucherLocked) ||
+                (pt === "CASH" && cashLocked);
               const strs = pt.split("_");
               return (
-                <button
+                <TapTarget
                   key={`pt_${idx}`}
-                  type="button"
                   onClick={() => changeSlot(pt)}
                   disabled={isDisabled}
                   className={cn(
-                    "border border-gray-300 h-16 rounded-md text-sm",
+                    "border border-gray-300 h-16 rounded-md text-sm flex flex-col items-center justify-center",
                     isDisabled
                       ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
                       : isActived
@@ -625,22 +653,21 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
                   {strs.map((st, lIdx) => (
                     <div key={`${lIdx}`}>{st}</div>
                   ))}
-                </button>
+                </TapTarget>
               );
             })}
             {/* SPEND toggle — 다른 tender 와 달리 mode 전환 (내부 소비 D-14~16) */}
-            <button
-              type="button"
+            <TapTarget
               onClick={toggleSpendMode}
               className={cn(
-                "border h-16 rounded-md text-sm font-bold",
+                "border h-16 rounded-md text-sm font-bold flex items-center justify-center",
                 spendMode
                   ? "bg-orange-500 text-white border-orange-600"
                   : "bg-white text-orange-600 border-orange-300 active:bg-orange-50",
               )}
             >
               SPEND
-            </button>
+            </TapTarget>
           </div>
 
           {/* Keypad and inputs — controlled by stagedPayment */}
@@ -689,8 +716,8 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
               )}
             {stagedPayment.tender === "VOUCHER" &&
               stagedPayment.entityType === "customer-voucher" && (
-                <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-                  CUSTOMER VOUCHER input — TODO
+                <div className="h-full flex items-center justify-center text-gray-400 text-sm font-medium">
+                  CUSTOMER VOUCHER lookup pending
                 </div>
               )}
             {spendMode && (
@@ -790,24 +817,27 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
 
             {/* Complete Sale / Record Spend — spendMode 에 따라 교체 (별도 DOM) */}
             {spendMode ? (
-              <button
-                type="button"
+              <TapTarget
                 onClick={handleSpend}
                 disabled={processing || lines.length === 0}
-                className="mt-auto h-16 rounded-lg font-bold text-lg tracking-wide bg-orange-500 text-white active:bg-orange-600 disabled:opacity-40"
+                className={cn(
+                  "mt-auto h-16 rounded-lg font-bold text-lg tracking-wide text-white flex items-center justify-center",
+                  processing || lines.length === 0
+                    ? "bg-orange-300 opacity-40 cursor-not-allowed"
+                    : "bg-orange-500 active:bg-orange-600",
+                )}
               >
                 RECORD SPEND
-              </button>
+              </TapTarget>
             ) : (
-              <button
-                type="button"
+              <TapTarget
                 onClick={handleCompleteSale}
                 disabled={completeDisabled}
                 className={cn(
                   "mt-auto h-16 rounded-lg font-bold text-sm tracking-wide transition",
                   completeDisabled
-                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                    : "bg-emerald-600 text-white active:bg-emerald-700",
+                    ? "bg-gray-200 text-gray-400 cursor-not-allowed flex items-center justify-center"
+                    : "bg-emerald-600 text-white active:bg-emerald-700 flex items-center justify-center",
                 )}
               >
                 COMPLETE
@@ -816,7 +846,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
                     ${fmtMoney(cal.total)}
                   </span>
                 )}
-              </button>
+              </TapTarget>
             )}
           </div>
         </div>
@@ -870,13 +900,12 @@ function PaymentRow({
         )}
       </div>
       {onRemove ? (
-        <button
-          type="button"
+        <TapTarget
           onClick={onRemove}
           className="self-stretch w-10 flex items-center justify-center rounded text-gray-400 hover:bg-gray-100 active:bg-gray-200 text-base shrink-0"
         >
           ✕
-        </button>
+        </TapTarget>
       ) : (
         <span className="w-10 shrink-0" />
       )}
@@ -933,28 +962,25 @@ function ChangeOverlay({
           </div>
         </div>
         <div className="flex gap-2">
-          <button
-            type="button"
+          <TapTarget
             onClick={onKickDrawer}
-            className="flex-1 h-12 rounded-md bg-blue-600 text-white font-bold text-sm active:bg-blue-700"
+            className="flex-1 h-12 rounded-md bg-blue-600 text-white font-bold text-sm active:bg-blue-700 flex items-center justify-center"
           >
             Open Drawer
-          </button>
-          <button
-            type="button"
+          </TapTarget>
+          <TapTarget
             onClick={onReprint}
-            className="flex-1 h-12 rounded-md bg-gray-200 text-gray-800 font-bold text-sm active:bg-gray-300"
+            className="flex-1 h-12 rounded-md bg-gray-200 text-gray-800 font-bold text-sm active:bg-gray-300 flex items-center justify-center"
           >
             Reprint
-          </button>
+          </TapTarget>
         </div>
-        <button
-          type="button"
+        <TapTarget
           onClick={onClose}
-          className="h-14 rounded-md bg-emerald-600 text-white font-bold text-lg active:bg-emerald-700"
+          className="h-14 rounded-md bg-emerald-600 text-white font-bold text-lg active:bg-emerald-700 flex items-center justify-center"
         >
           Done
-        </button>
+        </TapTarget>
       </div>
     </div>
   );

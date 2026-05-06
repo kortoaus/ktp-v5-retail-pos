@@ -32,8 +32,8 @@ export const KeyboardKey = React.memo(function KeyboardKey({
   );
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
       onPointerDown={handlePointerDown}
       className={`
         select-none rounded-lg shadow-sm border border-gray-300
@@ -46,6 +46,6 @@ export const KeyboardKey = React.memo(function KeyboardKey({
       style={{ flex: width }}
     >
       {label}
-    </button>
+    </div>
   );
 });

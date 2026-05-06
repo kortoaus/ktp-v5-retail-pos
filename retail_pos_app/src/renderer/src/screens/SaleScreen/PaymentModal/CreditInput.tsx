@@ -1,6 +1,7 @@
 import { MONEY_DP, MONEY_SCALE } from "../../../libs/constants";
 import { cn } from "../../../libs/cn";
 import { eftposAmountOf, surchargeOf } from "./usePaymentCal";
+import TapTarget from "./TapTarget";
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 
@@ -62,8 +63,7 @@ export default function CreditInput({
       </div>
 
       {/* EXACT — auto-complete remaining bill */}
-      <button
-        type="button"
+      <TapTarget
         onClick={() => setBillPortion(left)}
         disabled={left <= 0}
         className={cn(
@@ -79,7 +79,7 @@ export default function CreditInput({
             ${fmtMoney(left)}
           </span>
         )}
-      </button>
+      </TapTarget>
 
       {/* Numpad */}
       <div className="grid grid-cols-3 gap-1">
@@ -100,12 +100,11 @@ export default function CreditInput({
       </div>
 
       {/* Commit — dual notation: ADD CREDIT · $bill ($eftpos) */}
-      <button
-        type="button"
+      <TapTarget
         onClick={onCommit}
         disabled={!canCommit}
         className={cn(
-          "h-12 rounded-md font-bold text-white text-sm tracking-wide",
+          "h-12 rounded-md font-bold text-white text-sm tracking-wide flex items-center justify-center",
           canCommit
             ? "bg-blue-600 active:bg-blue-700"
             : "bg-gray-300 cursor-not-allowed",
@@ -114,7 +113,7 @@ export default function CreditInput({
         ADD CREDIT
         {canCommit &&
           ` · $${fmtMoney(billPortion)} ($${fmtMoney(eftposAmount)})`}
-      </button>
+      </TapTarget>
     </div>
   );
 }
@@ -148,11 +147,10 @@ function NumKey({
   className?: string;
 }) {
   return (
-    <button
-      type="button"
+    <TapTarget
       onClick={onClick}
       className={cn(
-        "h-12 rounded-md font-bold text-lg border active:scale-95 transition-transform",
+        "h-12 rounded-md font-bold text-lg border active:scale-95 transition-transform flex items-center justify-center",
         variant === "warn"
           ? "bg-amber-50 text-amber-700 border-amber-300 active:bg-amber-100"
           : "bg-white text-black border-gray-300 active:bg-gray-100",
@@ -160,6 +158,6 @@ function NumKey({
       )}
     >
       {label}
-    </button>
+    </TapTarget>
   );
 }

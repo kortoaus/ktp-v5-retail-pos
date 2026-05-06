@@ -8,6 +8,7 @@ import {
   getDailyVouchers,
   issueDailyVoucher,
 } from "../../../service/voucher.service";
+import TapTarget from "./TapTarget";
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 
@@ -101,13 +102,12 @@ export default function SearchUserVoucherModal({
       <div className="bg-white rounded-2xl w-full max-w-3xl flex flex-col overflow-hidden shadow-2xl">
         <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200">
           <h2 className="text-lg font-bold">Select Staff Daily Voucher</h2>
-          <button
-            type="button"
+          <TapTarget
             onPointerDown={onClose}
             className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-500 active:bg-gray-200 text-xl"
           >
             ✕
-          </button>
+          </TapTarget>
         </div>
 
         <div className="px-4 py-3 border-b border-gray-200">
@@ -122,13 +122,12 @@ export default function SearchUserVoucherModal({
               <span className="text-sm text-gray-400">Loading...</span>
             )}
             {keyword && !loading && (
-              <button
-                type="button"
+              <TapTarget
                 onPointerDown={() => setKeyword("")}
                 className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 active:bg-gray-300 text-sm"
               >
                 ✕
-              </button>
+              </TapTarget>
             )}
           </div>
         </div>
@@ -158,8 +157,7 @@ export default function SearchUserVoucherModal({
                 </div>
                 <div className="shrink-0">
                   {v ? (
-                    <button
-                      type="button"
+                    <TapTarget
                       disabled={!canPick}
                       onPointerDown={() => handlePick(row)}
                       className={
@@ -178,10 +176,9 @@ export default function SearchUserVoucherModal({
                       ) : (
                         <span>${fmtMoney(v.balance)}</span>
                       )}
-                    </button>
+                    </TapTarget>
                   ) : (
-                    <button
-                      type="button"
+                    <TapTarget
                       disabled={isIssuing || dailyDefault <= 0}
                       onPointerDown={() => handleIssue(row)}
                       className={
@@ -194,7 +191,7 @@ export default function SearchUserVoucherModal({
                       <span className="text-[10px] font-normal opacity-80">
                         ${fmtMoney(dailyDefault)}
                       </span>
-                    </button>
+                    </TapTarget>
                   )}
                 </div>
               </div>

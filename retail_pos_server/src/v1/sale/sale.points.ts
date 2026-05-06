@@ -7,6 +7,7 @@ export interface CalculateInvoicePointsInput {
   payments: Pick<PaymentPayload, "type" | "amount">[];
   linesTotal: number;
   nonCashBill: number;
+  voucherBill: number;
   cashPointRate: number;
   otherPointRate: number;
 }
@@ -18,6 +19,7 @@ export function calculateInvoicePoints({
   payments,
   linesTotal,
   nonCashBill,
+  voucherBill,
   cashPointRate,
   otherPointRate,
 }: CalculateInvoicePointsInput): number {
@@ -34,11 +36,15 @@ export function calculateInvoicePoints({
     .reduce((sum, payment) => sum + payment.amount, 0);
 
   const cappedCashApplied = Math.min(Math.max(0, cashApplied), linesTotal);
+  const cappedVoucherBill = Math.min(Math.max(0, voucherBill), linesTotal);
+  const earningPointBase = Math.round(
+    (eligiblePointBase * (linesTotal - cappedVoucherBill)) / linesTotal,
+  );
   const cashPointBase =
     nonCashBill <= 0 && cappedCashApplied > 0
       ? eligiblePointBase
       : Math.round((eligiblePointBase * cappedCashApplied) / linesTotal);
-  const otherPointBase = eligiblePointBase - cashPointBase;
+  const otherPointBase = Math.max(0, earningPointBase - cashPointBase);
 
   return (
     Math.round((cashPointBase * cashPointRate) / 1000) +
