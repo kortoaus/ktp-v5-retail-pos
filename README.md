@@ -159,9 +159,12 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - Staff daily voucher: cashier issues on-spot from Search modal; balance decrements via `VoucherEvent REDEEM` on sale
 - `total = linesTotal + rounding + creditSurchargeAmount`, `Σ payments.amount == total` (D-12)
 - Tax: `lineTax = Σ row.tax_amount`, `surchargeTax = round(creditSurchargeAmount / 11)` (D-27). `invoice.lineTax` / `invoice.surchargeTax` 두 컬럼
-- AU 5¢ rounding: cash-only mode (nonCashBill == 0 && cashIntent ≥ roundedCashTarget) 만 (D-30). Mixed / card-only 는 exact
-- Split cash / credit / voucher / giftcard. Staged draft 가 active 면 `Complete Sale` 시 자동 포함 (1-step flow)
+- Tender order: voucher-first, cash-second, exact-last. No-member carts show User Voucher; member carts show Customer Voucher placeholder. Voucher/cash entry is locked once CREDIT/GIFTCARD exact tender is committed.
+- AU 5¢ rounding: cash-settled mode only (D-30). Cash-only and voucher+cash can round the cash remainder; CREDIT/GIFTCARD mixed tenders are exact
+- Split cash / credit / voucher / giftcard. Staged draft 가 active 면 `Complete Sale` 시 자동 포함 (1-step flow). If member changes while PaymentModal is open, all payment state is cleared.
 - `payment.amount` CASH 는 split 여부 무관 단일 payment 로 집약 (amount = cashApplied, change 는 invoice.cashChange, D-32)
+- PaymentModal interactive controls are div-based tap targets, not `<button>`, to prevent HID scanner Enter suffixes from triggering focused actions.
+- Points: voucher redemption does not earn points; cash and eligible exact-tender bill portions use the configured cash/other rates.
 - Serial: `{shift.id}-{YYYYMMDD}-{S|R|P}{seq6}` via `DocCounter` atomic increment (D-28)
 - Server 가 invariant 검증 + row 별 `surcharge_share` 비례 배분 저장 + voucher REDEEM 트랜잭션 처리
 

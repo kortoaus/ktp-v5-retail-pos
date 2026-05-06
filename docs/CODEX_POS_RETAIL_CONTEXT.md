@@ -15,7 +15,6 @@ duplicating the full product contract.
 
 Historical/context-only docs live under `docs/outdated/`:
 
-- `docs/outdated/handover.md`
 - `docs/outdated/refund-plan.md`
 - `docs/outdated/eftpos-plan.md`
 - `docs/outdated/linkly.md`
@@ -109,6 +108,17 @@ Central files:
 - `retail_pos_server/src/v1/sale/sale.refund.service.ts`
 - `retail_pos_server/src/v1/sale/sale.repay.service.ts`
 - `retail_pos_server/src/v1/sale/spend.create.service.ts`
+
+PaymentModal guardrails:
+
+- Tender entry order is voucher-first, cash-second, exact-last.
+- User Voucher is shown for non-member carts; Customer Voucher placeholder is
+  shown for member carts. They are mutually exclusive.
+- Cash can follow voucher and absorb AU 5¢ rounding on the cash remainder.
+  CREDIT/GIFTCARD are exact tenders and suppress rounding.
+- Member changes while PaymentModal is open clear staged and committed payments.
+- PaymentModal controls use div-based tap targets rather than `<button>` to
+  avoid HID scanner Enter suffixes triggering focused controls.
 
 Refund storage is split: `refund_row.total` is product only and
 `refund_row.surcharge_share` is the refunded surcharge share. Use the D-26

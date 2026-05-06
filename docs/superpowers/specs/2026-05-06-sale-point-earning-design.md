@@ -15,7 +15,7 @@ ledger behavior is clear.
 - Earn points only when a member is attached to the cart.
 - Exclude lines whose item snapshot has `isPointExcluded = true`.
 - Use `StoreSetting.cash_point_rate` for the cash-paid portion and
-  `StoreSetting.other_point_rate` for all non-cash tender portions.
+  `StoreSetting.other_point_rate` for eligible non-voucher tender portions.
 - Store the final earned point count on the invoice.
 - Store each row's point-exclusion snapshot on the invoice row.
 - Show earned points on printed receipts and invoice viewer previews.
@@ -86,7 +86,8 @@ If there is a member:
 
 ```text
 cashBase = eligiblePointBase * cashApplied / linesTotal
-otherBase = eligiblePointBase - cashBase
+earningBase = eligiblePointBase * (linesTotal - voucherBill) / linesTotal
+otherBase = earningBase - cashBase
 
 pointsEarned =
   round(cashBase * cash_point_rate / 1000)
@@ -96,10 +97,12 @@ pointsEarned =
 `cashApplied` is used instead of cash received so change does not earn points.
 Surcharge is not part of the point base; item line totals are the point base.
 Rounding is also excluded from the point base.
+Voucher redemption is excluded from the point-earning base.
 
 For mixed tender, the eligible point base is split proportionally by the cash
-portion of the bill. This keeps excluded items and tender splitting predictable
-without requiring per-line tender allocation.
+portion of the bill and the remaining eligible non-voucher bill portion. This
+keeps excluded items and tender splitting predictable without requiring
+per-line tender allocation.
 
 The server should recalculate the canonical `pointsEarned` at sale creation
 using:
@@ -107,6 +110,7 @@ using:
 - `payload.member`
 - `payload.rows`
 - `payload.payments`
+- voucher payment total
 - `context.storeSetting.cash_point_rate`
 - `context.storeSetting.other_point_rate`
 
@@ -164,6 +168,9 @@ Manual scenarios:
 - Member attached, all eligible cash sale: cash point rate applies.
 - Member attached, all eligible credit sale: other point rate applies.
 - Member attached, mixed cash/credit sale: point base splits by tender.
+- Member attached, voucher-only sale: points are zero.
+- Member attached, voucher plus cash/credit sale: only the non-voucher bill
+  portions earn points.
 - Member attached, excluded item only: points are zero.
 - Member attached, eligible plus excluded item: only eligible line totals earn.
 - Cash received with change: only `cashApplied` earns points.
