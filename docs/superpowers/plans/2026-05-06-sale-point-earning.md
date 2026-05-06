@@ -263,6 +263,7 @@ export interface CalculateSalePointsInput {
   lines: PointLine[];
   linesTotal: number;
   cashApplied: number;
+  nonCashBill: number;
   hasMember: boolean;
   cashPointRate: number;
   otherPointRate: number;
@@ -279,6 +280,7 @@ export function calculateSalePoints({
   lines,
   linesTotal,
   cashApplied,
+  nonCashBill,
   hasMember,
   cashPointRate,
   otherPointRate,
@@ -290,7 +292,7 @@ export function calculateSalePoints({
 
   if (!hasMember || eligiblePointBase <= 0 || linesTotal <= 0) {
     return {
-      eligiblePointBase,
+      eligiblePointBase: 0,
       cashPointBase: 0,
       otherPointBase: 0,
       pointsEarned: 0,
@@ -298,9 +300,10 @@ export function calculateSalePoints({
   }
 
   const cappedCashApplied = Math.min(Math.max(0, cashApplied), linesTotal);
-  const cashPointBase = Math.round(
-    (eligiblePointBase * cappedCashApplied) / linesTotal,
-  );
+  const cashPointBase =
+    nonCashBill <= 0 && cappedCashApplied > 0
+      ? eligiblePointBase
+      : Math.round((eligiblePointBase * cappedCashApplied) / linesTotal);
   const otherPointBase = eligiblePointBase - cashPointBase;
   const pointsEarned =
     Math.round((cashPointBase * cashPointRate) / 1000) +
@@ -352,6 +355,7 @@ After `cashApplied` is calculated, add:
         lines,
         linesTotal,
         cashApplied,
+        nonCashBill,
         hasMember,
         cashPointRate: cash_point_rate,
         otherPointRate: other_point_rate,
@@ -360,6 +364,7 @@ After `cashApplied` is calculated, add:
       lines,
       linesTotal,
       cashApplied,
+      nonCashBill,
       hasMember,
       cash_point_rate,
       other_point_rate,
@@ -469,6 +474,7 @@ export interface CalculateInvoicePointsInput {
   rows: Pick<SaleRowPayload, "total" | "isPointExcluded">[];
   payments: Pick<PaymentPayload, "type" | "amount">[];
   linesTotal: number;
+  nonCashBill: number;
   cashPointRate: number;
   otherPointRate: number;
 }
@@ -479,6 +485,7 @@ export function calculateInvoicePoints({
   rows,
   payments,
   linesTotal,
+  nonCashBill,
   cashPointRate,
   otherPointRate,
 }: CalculateInvoicePointsInput): number {
@@ -495,9 +502,10 @@ export function calculateInvoicePoints({
     .reduce((sum, payment) => sum + payment.amount, 0);
 
   const cappedCashApplied = Math.min(Math.max(0, cashApplied), linesTotal);
-  const cashPointBase = Math.round(
-    (eligiblePointBase * cappedCashApplied) / linesTotal,
-  );
+  const cashPointBase =
+    nonCashBill <= 0 && cappedCashApplied > 0
+      ? eligiblePointBase
+      : Math.round((eligiblePointBase * cappedCashApplied) / linesTotal);
   const otherPointBase = eligiblePointBase - cashPointBase;
 
   return (
@@ -527,6 +535,9 @@ Inside `buildSaleInTx`, before `tx.saleInvoice.create`, add:
         rows: payload.rows,
         payments: payload.payments,
         linesTotal: payload.linesTotal,
+        nonCashBill: payload.payments
+          .filter((payment) => payment.type !== "CASH")
+          .reduce((sum, payment) => sum + payment.amount, 0),
         cashPointRate: storeSetting.cash_point_rate,
         otherPointRate: storeSetting.other_point_rate,
       });
