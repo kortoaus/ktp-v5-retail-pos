@@ -452,6 +452,12 @@ function Receipt({
                 <span>{fmt(totalSaved)}</span>
               </div>
             )}
+            {!isRefund && invoice.type === "SALE" && invoice.pointsEarned > 0 && (
+              <div className="flex justify-between">
+                <span>Points Earned</span>
+                <span>{invoice.pointsEarned.toLocaleString()}</span>
+              </div>
+            )}
           </div>
 
           {voucherPayments.length > 0 && (

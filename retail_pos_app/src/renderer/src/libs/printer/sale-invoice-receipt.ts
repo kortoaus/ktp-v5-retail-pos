@@ -99,6 +99,7 @@ function estimateHeight(invoice: SaleInvoiceDetail, isCopy: boolean): number {
   let totalLines = 2;
   if (invoice.creditSurchargeAmount > 0) totalLines += 1;
   if (invoice.rounding !== 0) totalLines += 1;
+  if (invoice.type === "SALE" && invoice.pointsEarned > 0) totalLines += 1;
 
   let payLines = 0;
   if (cashPaid > 0) payLines += invoice.type === "REFUND" ? 1 : 2;
@@ -365,6 +366,10 @@ export async function renderSaleInvoiceReceipt(
     y += LH;
     if (totalSaved > 0) {
       row(ctx, "You Saved", fmt(totalSaved), y);
+      y += LH;
+    }
+    if (!isRefund && invoice.type === "SALE" && invoice.pointsEarned > 0) {
+      row(ctx, "Points Earned", invoice.pointsEarned.toLocaleString(), y);
       y += LH;
     }
 
