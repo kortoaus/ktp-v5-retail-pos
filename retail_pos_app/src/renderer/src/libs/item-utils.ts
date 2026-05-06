@@ -44,7 +44,7 @@ export const generateSaleLineItem = (
   item: Item,
   rawBarcode: string,
 ): SaleLineItem => {
-  const { id, taxable, uom, barcode, barcodeGTIN } = item;
+  const { id, taxable, isPointExcluded, uom, barcode, barcodeGTIN } = item;
   const { name_en, name_ko } = itemNameParser(item);
   let type = getItemType(item);
   let price = item.price;
@@ -66,6 +66,7 @@ export const generateSaleLineItem = (
     price,
     promoPrice,
     taxable,
+    isPointExcluded,
     uom: type === "weight" ? "kg" : uom.toLowerCase(),
     barcode: barcodeGTIN || barcode,
   };

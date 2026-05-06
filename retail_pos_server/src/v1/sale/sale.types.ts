@@ -28,6 +28,7 @@ export interface SaleRowPayload {
   barcode: string;
   uom: string;
   taxable: boolean;
+  isPointExcluded: boolean;
   unit_price_original: number;
   unit_price_discounted: number | null;
   unit_price_adjusted: number | null;

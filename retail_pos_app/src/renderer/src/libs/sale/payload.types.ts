@@ -53,6 +53,7 @@ export interface SaleRowPayload {
   barcode: string;
   uom: string;
   taxable: boolean;
+  isPointExcluded: boolean;
 
   // Price snapshot (cents)
   unit_price_original: number;

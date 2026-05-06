@@ -67,6 +67,7 @@ function buildRow(line: SaleLineType, index: number): SaleRowPayload {
     barcode: line.barcode,
     uom: line.uom,
     taxable: line.taxable,
+    isPointExcluded: line.isPointExcluded,
 
     unit_price_original: line.unit_price_original,
     unit_price_discounted: line.unit_price_discounted,

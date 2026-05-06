@@ -57,6 +57,12 @@ export interface SaleLineItem {
    */
   taxable: boolean;
 
+  /**
+   * Point eligibility flag snapshotted at scan time. When true, this line's
+   * total does not contribute to member point earning.
+   */
+  isPointExcluded: boolean;
+
   /** Unit of measure string ("ea", "kg", "pk", etc.). Display-only today. */
   uom: string;
 

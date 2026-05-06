@@ -16,6 +16,7 @@ export interface SaleInvoiceCreated {
   dayStr: string;
   total: number;
   cashChange: number;
+  pointsEarned: number;
   createdAt: string;
 }
 
@@ -39,6 +40,7 @@ export interface SaleInvoiceListItem {
   surchargeTax: number;
   total: number;
   cashChange: number;
+  pointsEarned: number;
   note: string | null;
   createdAt: string;
 }
@@ -134,6 +136,7 @@ export interface SaleInvoiceRowItem {
   barcode: string;
   uom: string;
   taxable: boolean;
+  isPointExcluded: boolean;
   unit_price_original: number;
   unit_price_discounted: number | null;
   unit_price_adjusted: number | null;
