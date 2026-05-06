@@ -37,6 +37,7 @@ export function invoiceRowToLine(row: SaleInvoiceRowItem): SaleLineType {
     price: null,
     promoPrice: null,
     taxable: row.taxable,
+    isPointExcluded: row.isPointExcluded,
     uom: row.uom,
     barcode: row.barcode,
 
