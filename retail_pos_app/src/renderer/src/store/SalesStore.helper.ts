@@ -12,6 +12,7 @@ export interface SaleMember {
   name: string;
   level: number;
   phone_last4: string | null;
+  points: number;
 }
 
 import { PPMarkdown } from "../types/sales";

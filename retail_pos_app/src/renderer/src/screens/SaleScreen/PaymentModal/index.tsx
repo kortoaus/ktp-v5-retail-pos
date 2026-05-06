@@ -118,12 +118,6 @@ const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 const userVoucherEntityLabel = (userName: string, expectedBalance: number) =>
   `${userName} - Est. balance $${fmtMoney(Math.max(0, expectedBalance))}`;
 
-const activeMemberPoints = (member: unknown): number => {
-  if (!member || typeof member !== "object") return 0;
-  const points = (member as { points?: unknown }).points;
-  return typeof points === "number" ? points : 0;
-};
-
 // qty (×QTY_SCALE) → display string. 정수면 그대로, 소수 weight 면 뒤 0 제거.
 const fmtQty = (q: number) => {
   const v = q / QTY_SCALE;
@@ -161,7 +155,8 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     setStagedVoucherUserName(null);
     setStagedCustomerVoucher(null);
   }
-  const { carts, activeCartIndex, clearActiveCart } = useSalesStore();
+  const { carts, activeCartIndex, clearActiveCart, setMember } =
+    useSalesStore();
   const lines = useMemo(
     () => carts[activeCartIndex]?.lines ?? [],
     [carts, activeCartIndex],
@@ -600,6 +595,9 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     setStagedCustomerVoucher(voucher);
     if (typeof memberPoints === "number") {
       setCustomerVoucherMemberPoints(memberPoints);
+      if (activeMember) {
+        setMember({ ...activeMember, points: memberPoints });
+      }
     }
     setStagedPayment({
       key: "staged",
@@ -777,8 +775,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
                     voucher={stagedCustomerVoucher}
                     memberId={activeMemberId}
                     memberPoints={
-                      customerVoucherMemberPoints ??
-                      activeMemberPoints(activeMember)
+                      customerVoucherMemberPoints ?? activeMember?.points ?? 0
                     }
                     usedVoucherIds={usedCustomerVoucherIds}
                     onSelectVoucher={selectCustomerVoucher}

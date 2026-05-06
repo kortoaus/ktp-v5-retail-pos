@@ -104,6 +104,7 @@ export default function SaleScreen() {
               name: result.name,
               level: result.level,
               phone_last4: result.phone_last4,
+              points: result.points,
             });
           } else {
             window.alert(msg);
@@ -473,6 +474,7 @@ export default function SaleScreen() {
             name: m.name,
             level: m.level,
             phone_last4: m.phone_last4,
+            points: m.points,
           });
           setModalTarget(null);
         }}
