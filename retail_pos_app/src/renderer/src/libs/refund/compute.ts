@@ -188,7 +188,10 @@ export interface TenderCapEntry {
 }
 
 function keyToStr(k: FlatTenderKey): string {
-  if (k.kind === "VOUCHER") return `V:${k.entityType}:${k.entityId}`;
+  if (k.kind === "VOUCHER") {
+    if (k.entityType === "customer-voucher") return "V:customer-voucher";
+    return `V:${k.entityType}:${k.entityId}`;
+  }
   return k.kind;
 }
 
@@ -259,9 +262,8 @@ export function computeTenderCaps(
   return entries;
 }
 
-// ── CRM customer-voucher 차단 (D-21) ─────────────────────────────
-// 원본 invoice 에 customer-voucher payment 가 하나라도 있으면 refund 전면 차단.
-// (CRM 연동 전까지 — sale.refund.service.ts 의 loadOriginalOrThrow 참조.)
+// ── Customer-voucher detection ─────────────────────────────
+// Normal refund is allowed; repay UI can still use this to block tender swaps.
 export function hasCustomerVoucherPayment(invoice: SaleInvoiceDetail): boolean {
   return invoice.payments.some((p) => p.entityType === "customer-voucher");
 }

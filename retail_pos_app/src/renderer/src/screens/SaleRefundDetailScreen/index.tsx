@@ -20,7 +20,6 @@ import {
 import {
   computeInvoice,
   computeTenderCaps,
-  hasCustomerVoucherPayment,
   rowRefundable,
   rowRefundAmount,
   type RefundSelection,
@@ -155,11 +154,7 @@ export default function SaleRefundDetailScreen({
     [selections],
   );
 
-  // CRM customer-voucher 차단 (D-21). 현재 CRM online check 없음 → 전면 차단.
-  const crmBlocked = invoice ? hasCustomerVoucherPayment(invoice) : false;
-
-  const canComplete =
-    !crmBlocked && anyRowSelected && calc.total > 0 && remaining === 0;
+  const canComplete = anyRowSelected && calc.total > 0 && remaining === 0;
 
   // ── Row qty handlers ─────────────────────────────────────
   function setRowQty(row: SaleInvoiceRowItem, qty: number) {
@@ -364,14 +359,6 @@ export default function SaleRefundDetailScreen({
 
       {error && !loading && (
         <div className="p-10 text-center text-red-500">{error}</div>
-      )}
-
-      {invoice && crmBlocked && (
-        <div className="p-3 bg-rose-50 border-b border-rose-200 text-sm text-rose-800">
-          <strong>Refund blocked.</strong> 이 invoice 는 CRM customer-voucher
-          결제를 포함하고 있어 CRM online check 없이는 환불할 수 없습니다
-          (D-21). 수기 기록 + 24h SLA 로 처리하세요.
-        </div>
       )}
 
       {invoice && (

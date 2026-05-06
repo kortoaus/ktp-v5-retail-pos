@@ -13,6 +13,7 @@ import {
   UserModel,
 } from "../../generated/prisma/models";
 import type {
+  PaymentPayload,
   RefundCreatePayload,
   RefundRowPayload,
 } from "./sale.types";
@@ -20,6 +21,7 @@ import { PaymentType } from "../../generated/prisma/enums";
 import type { Prisma } from "../../generated/prisma/client";
 import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
 import { calculateRefundPointsReversed } from "./sale.refund.points";
+import { issueRefundCustomerVoucherService } from "../customer-voucher/customer-voucher.service";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Sale refund — REFUND invoice 생성 서비스
@@ -84,8 +86,8 @@ import { calculateRefundPointsReversed } from "./sale.refund.points";
 //              round5(subtotalBeforeRounding) 로 snap, delta 를 rounding 에 기록.
 //              (원본 invoice 의 rounding 은 반영 안 함 — §6 refund 독립 own.)
 //  - 원본 type === 'SALE' 만 환불 대상.
-//  - Customer-voucher payment 포함 시 현재 환불 전면 차단 (D-21).
-//    CRM 연동은 Phase 4 이후 추가.
+//  - Customer-voucher refund: CRM refund voucher 를 새로 issue 한 뒤 refund
+//    payment snapshot 을 새 voucher id/label 로 저장.
 //  - user-voucher payment: VoucherEvent.REFUND +amount, Voucher.balance += amount.
 //                          Voucher.validTo / status 는 변경 안 함.
 //  - Shift 집계 increment 안 함 — close 시점에 SUM() 재집계 (D-34).
@@ -157,21 +159,31 @@ export async function loadOriginalOrThrow(
     throw new BadRequestException(
       `Only SALE invoices are refundable (got ${orig.type})`,
     );
-  // D-21 — customer-voucher 가 포함된 invoice 는 CRM online 이어야 환불 가능.
-  // 현재 CRM 연동 미구현 → 해당 invoice 는 환불 전면 차단.
-  const hasCustomerVoucher = orig.payments.some(
-    (p) => p.entityType === "customer-voucher",
-  );
-  if (hasCustomerVoucher) {
-    throw new BadRequestException(
-      "Invoice contains customer-voucher payment — refund blocked until CRM online check is implemented (D-21)",
-    );
-  }
   return orig;
 }
 
 export type OrigInvoice = Awaited<ReturnType<typeof loadOriginalOrThrow>>;
 type OrigRow = OrigInvoice["rows"][number];
+
+function refundIssueEntityId(
+  originalInvoiceId: number,
+  rows: RefundRowPayload[],
+  payment: PaymentPayload,
+): string {
+  const rowKey = rows
+    .slice()
+    .sort((a, b) => a.originalInvoiceRowId - b.originalInvoiceRowId)
+    .map((row) => `${row.originalInvoiceRowId}:${row.refund_qty}`)
+    .join(",");
+  const voucherKey = payment.entityId == null ? "none" : payment.entityId;
+  return [
+    originalInvoiceId,
+    "customer-voucher-refund",
+    voucherKey,
+    payment.amount,
+    rowKey,
+  ].join(":");
+}
 
 export async function lockOriginalInvoiceInTx(
   tx: Prisma.TransactionClient,
@@ -303,6 +315,12 @@ function paymentTenderKey(p: {
   if (p.type === "GIFTCARD") return "GIFTCARD";
   if (p.type === "VOUCHER") {
     if (!p.entityType || p.entityId == null) return null;
+    if (p.entityType === "customer-voucher") {
+      // Refund rows store the newly issued CRM refund voucher id, not the
+      // original redeemed voucher id. Cap customer-voucher refunds as one
+      // tender bucket so partial refunds still subtract prior refund issues.
+      return "VOUCHER:customer-voucher";
+    }
     return `VOUCHER:${p.entityType}:${p.entityId}`;
   }
   return null;
@@ -565,6 +583,14 @@ export async function createRefundService(
   payload: RefundCreatePayload,
   context: RefundContext,
 ) {
+  const issuedCustomerVoucherRefunds: Array<{
+    requestEntityId: string;
+    voucherId: number;
+    voucherLabel: string;
+    amount: number;
+    originalEntityId?: number;
+  }> = [];
+
   try {
     validatePayloadShape(payload);
 
@@ -607,11 +633,52 @@ export async function createRefundService(
 
       validateTenderCaps(orig, payload.payments);
 
+      const payments: PaymentPayload[] = [];
+      for (const payment of payload.payments) {
+        if (
+          payment.type === "VOUCHER" &&
+          payment.entityType === "customer-voucher"
+        ) {
+          if (!orig.memberId) {
+            throw new BadRequestException(
+              "customer voucher refund requires member",
+            );
+          }
+          const requestEntityId = refundIssueEntityId(
+            payload.originalInvoiceId,
+            payload.rows,
+            payment,
+          );
+          const refundVoucher = await issueRefundCustomerVoucherService({
+            memberId: orig.memberId,
+            amount: payment.amount,
+            entityType: "pos-refund-request",
+            entityId: requestEntityId,
+            entitySerial: orig.serial,
+            note: "Customer voucher refund",
+          });
+          issuedCustomerVoucherRefunds.push({
+            requestEntityId,
+            voucherId: refundVoucher.result.id,
+            voucherLabel: refundVoucher.result.label,
+            amount: payment.amount,
+            originalEntityId: payment.entityId,
+          });
+          payments.push({
+            ...payment,
+            entityId: refundVoucher.result.id,
+            entityLabel: refundVoucher.result.label,
+          });
+          continue;
+        }
+        payments.push(payment);
+      }
+
       return buildRefundInTx(tx, {
         orig,
         computed,
         aggregates,
-        payments: payload.payments,
+        payments,
         pointsReversed,
         note: payload.note ?? null,
         context,
@@ -625,6 +692,33 @@ export async function createRefundService(
 
     return { ok: true, result: invoice };
   } catch (e) {
+    if (issuedCustomerVoucherRefunds.length > 0) {
+      console.error("[customer-voucher] refund issue local persistence failed", {
+        error: e,
+        issuedCustomerVoucherRefunds,
+        originalInvoiceId: payload.originalInvoiceId,
+        terminalId: context.terminal.id,
+        terminalName: context.terminal.name,
+        userId: context.user.id,
+        userName: context.user.name,
+        shiftId: context.shift.id,
+        payloadSummary: {
+          rowCount: payload.rows.length,
+          paymentCount: payload.payments.length,
+          customerVoucherPayments: payload.payments
+            .filter(
+              (payment) =>
+                payment.type === "VOUCHER" &&
+                payment.entityType === "customer-voucher",
+            )
+            .map((payment) => ({
+              amount: payment.amount,
+              entityId: payment.entityId,
+              entityLabel: payment.entityLabel,
+            })),
+        },
+      });
+    }
     if (e instanceof HttpException) throw e;
     console.error("createRefundService error:", e);
     throw new InternalServerException("Internal server error");

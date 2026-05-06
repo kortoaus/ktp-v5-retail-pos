@@ -47,7 +47,7 @@ import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
 //   - orig.refunds (type=REFUND 필터 후) 자식 없음
 //   - orig.shiftId === current shift
 //   - now - orig.createdAt < 10분
-//   - orig.payments 에 customer-voucher 없음 (loadOriginalOrThrow 에서 차단, D-21)
+//   - orig.payments 에 customer-voucher 없음
 //
 // 추적: new SALE.originalInvoiceId = 원본 SALE.id. `refunds` 관계는 이제 SALE
 // 자식도 포함할 수 있게 되어, 서버/클라 모두 `type === 'REFUND'` 로 source
@@ -87,6 +87,14 @@ function validateEligibility(
     throw new BadRequestException(
       `Repay requires SALE invoice (got ${orig.type})`,
     );
+  const hasCustomerVoucher = orig.payments.some(
+    (payment) => payment.entityType === "customer-voucher",
+  );
+  if (hasCustomerVoucher) {
+    throw new BadRequestException(
+      "Repay is not allowed for customer-voucher invoices",
+    );
+  }
   // orig.refunds 는 loadOriginalOrThrow 에서 `type=REFUND` source-filter 되어있음.
   if (orig.refunds.length > 0)
     throw new BadRequestException(
@@ -101,7 +109,6 @@ function validateEligibility(
     throw new BadRequestException(
       "Repay time limit (10 minutes) exceeded — use refund flow instead",
     );
-  // customer-voucher 차단은 loadOriginalOrThrow 가 이미 수행 (D-21).
 }
 
 // ── Build full-refund payload (orig 의 mirror) ───────────────────────────────
