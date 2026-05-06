@@ -772,9 +772,9 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
             {/* Settlement */}
             <section className="bg-white border border-gray-200 rounded-md p-3 space-y-1 font-mono text-sm">
               <SummaryRow label="PAID" value={cal.paid} />
-              {cal.pointsEarned > 0 && !spendMode && (
+              {cal.pointsEarned > 0 && !spendMode && !completeDisabled && (
                 <div className="flex items-center justify-between text-sm text-emerald-700 font-bold">
-                  <span>Points Earned</span>
+                  <span>Expected Points Earned</span>
                   <span>{cal.pointsEarned.toLocaleString()}</span>
                 </div>
               )}

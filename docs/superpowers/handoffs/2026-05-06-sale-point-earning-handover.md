@@ -4,6 +4,262 @@ Date: 2026-05-06
 Branch: `codex/sale-point-earning`
 Workspace: `/Users/dev/ktpv5/ktpv5-pos-retail`
 
+## 2026-05-06 Session Update
+
+This thread continued after the original handover. Work is now spanning three
+repos and should continue in the same session/thread context:
+
+- `/Users/dev/ktpv5/ktpv5-pos-retail`
+- `/Users/dev/ktpv5/ktpv5-data-server`
+- `/Users/dev/ktpv5/ktpv5-crm-server`
+
+### POS Retail Repo Current State
+
+The feature branch `codex/sale-point-earning` was merged locally into `main`
+with a fast-forward merge for testing.
+
+Current repo state when this section was written:
+
+```text
+## main...origin/main
+ M retail_pos_app/src/renderer/src/screens/SaleScreen/PaymentModal/index.tsx
+```
+
+The only current POS working-tree edit is:
+
+- `retail_pos_app/src/renderer/src/screens/SaleScreen/PaymentModal/index.tsx`
+
+That edit changes the payment modal preview display:
+
+- label changed from `Points Earned` to `Expected Points Earned`
+- preview only renders when:
+  - `cal.pointsEarned > 0`
+  - not `spendMode`
+  - `completeDisabled === false`
+
+Meaning: expected points show only when the sale is fully paid and the
+`COMPLETE` button is active. A screenshot looked like the label was missing,
+but that example had no member attached, so no points were expected.
+
+Verification after this UI edit:
+
+```bash
+cd /Users/dev/ktpv5/ktpv5-pos-retail/retail_pos_app
+npm run build
+```
+
+Result: passed.
+
+### Data Server Repo Current State
+
+`/Users/dev/ktpv5/ktpv5-data-server` was inspected and is currently clean:
+
+```text
+## main...origin/main
+```
+
+Important existing support already present:
+
+- `prisma/schema.prisma` has `RetailSaleInvoice.pointsEarned`
+- `prisma/schema.prisma` has `RetailSaleInvoiceRow.isPointExcluded`
+- migration exists:
+  `prisma/migrations/20260506002302_add_point_fields_to_retail_invoice/migration.sql`
+- `src/retail/invoice/invoice.service.ts` persists:
+  - invoice `pointsEarned`
+  - row `isPointExcluded`
+- after a member invoice sync, data-server currently calls CRM `/push` via
+  `src/libs/crmClient.ts`.
+
+Current data-server -> CRM push signal is still only:
+
+```ts
+{
+  companyId,
+  memberId,
+  invoiceId, // data-server RetailSaleInvoice.id
+}
+```
+
+Next intended data-server change:
+
+- extend push signal payload to include:
+  - `invoiceId` (same meaning: data-server `RetailSaleInvoice.id`)
+  - `serial` (receipt/invoice serial)
+  - `pointsEarned`
+
+The user explicitly wants this because CRM will own the member point ledger.
+
+### CRM Server Repo Current State
+
+`/Users/dev/ktpv5/ktpv5-crm-server` was inspected and edited. It already had
+unrelated user-owned dirty files before CRM schema work:
+
+```text
+## main...origin/main
+ M package.json
+ M prisma/schema.prisma
+?? src/scripts/
+```
+
+Treat these as user-owned and do not revert:
+
+- `package.json`
+- `src/scripts/`
+
+Codex changed only:
+
+- `prisma/schema.prisma`
+
+CRM schema updates now in the working tree:
+
+- `Member.cash_spend` changed from `Float` to `Int`
+- `Member.credit_spend` changed from `Float` to `Int`
+- `Member.points` changed from `Float` to `Int`
+  - user said all three fields currently contain only `0`, so this conversion
+    is acceptable.
+- added `MemberPointLedgerType`
+- added `MemberPointLedger`
+
+Current intended ledger shape:
+
+```prisma
+enum MemberPointLedgerType {
+  EARN
+  REDEEM
+  ADJUST
+  EXPIRE
+  VOID
+}
+
+model MemberPointLedger {
+  id           String                @id @default(uuid())
+  companyId    Int
+  memberId     String
+  type         MemberPointLedgerType
+  pointsDelta  Int
+  balanceAfter Int?
+  entityType   String
+  entityId     String
+  entitySerial String
+  note         String?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @default(now()) @updatedAt
+
+  @@unique([companyId, entityType, entityId, type])
+  @@index([memberId])
+  @@index([companyId, memberId])
+  @@index([companyId, entitySerial])
+  @@index([companyId, type, createdAt])
+}
+```
+
+Rationale:
+
+- One point ledger handles earn, redeem, adjust, expire, and void.
+- `Member.points` remains a fast aggregate.
+- `pointsDelta` is signed:
+  - earn = positive
+  - redeem/expire = negative
+- `entityType/entityId/entitySerial` generalizes the source/target document.
+  Do not hard-code retail invoice columns into the ledger.
+- Expected entity examples:
+  - retail sale earn:
+    - `entityType = "retail-sale-invoice"`
+    - `entityId = String(dataServerRetailSaleInvoice.id)`
+    - `entitySerial = invoice.serial`
+  - points converted to customer voucher:
+    - `entityType = "customer-voucher"`
+    - `entityId = voucher id`
+    - `entitySerial = voucher serial`
+- Unique key `companyId + entityType + entityId + type` prevents duplicate
+  processing of the same point event.
+
+CRM schema validation was run:
+
+```bash
+cd /Users/dev/ktpv5/ktpv5-crm-server
+npx prisma validate
+```
+
+Result: passed.
+
+Important: user said they will handle CRM migrations. Do not create CRM
+migration files or regenerate Prisma client unless explicitly asked.
+
+### CRM/Data Communication Findings
+
+There are two existing communication directions:
+
+1. CRM app API pulls invoices from data-server:
+   - CRM route: `GET /api/invoice/member`
+   - CRM route: `GET /api/invoice/member/:id`
+   - CRM internally calls:
+     - `POST {DATA_SERVER}/api/invoice/:companyId/member/search`
+     - `POST {DATA_SERVER}/api/invoice/:companyId/member/get/:id`
+   - request body includes `{ memberId: user.id }`
+
+2. data-server pushes a member invoice signal to CRM:
+   - data-server `src/retail/invoice/invoice.service.ts`
+   - data-server `src/libs/crmClient.ts`
+   - CRM endpoint: `POST /push`
+   - signed with `CRM_PUSH_SECRET`
+   - headers:
+     - `x-ktp-timestamp`
+     - `x-ktp-signature`
+   - CRM validates in `src/libs/internalSignature.ts`
+   - CRM currently sends push notification after re-fetching invoice from
+     data-server.
+
+Current CRM `/push` only sends notifications. It does not update
+`Member.points` yet.
+
+### Next Session Implementation Plan
+
+Continue in this order:
+
+1. CRM server:
+   - update `/push` request parser to accept:
+     - `companyId`
+     - `memberId`
+     - `invoiceId`
+     - `serial`
+     - `pointsEarned`
+   - keep HMAC middleware unchanged.
+   - add point processing service that transactionally:
+     - ignores `pointsEarned <= 0` for ledger/aggregate purposes
+     - creates `MemberPointLedger` row:
+       - `type = EARN`
+       - `pointsDelta = pointsEarned`
+       - `entityType = "retail-sale-invoice"`
+       - `entityId = String(invoiceId)`
+       - `entitySerial = serial`
+       - `balanceAfter = previous Member.points + pointsEarned`
+     - increments `Member.points` only if the ledger row is newly created
+     - treats unique conflict as idempotent duplicate signal
+   - decide whether to include points in notification body, e.g.
+     `Purchase - $74.30 (+74 pts)`.
+
+2. data-server:
+   - extend `InvoicePushSignal` in `src/libs/crmClient.ts`
+   - send `serial` and `pointsEarned` from
+     `src/retail/invoice/invoice.service.ts`
+   - preserve best-effort behavior for now.
+
+3. CRM types:
+   - update `src/api/invoice/invoice.type.ts` so `RetailSaleInvoice` includes
+     `pointsEarned`
+   - consider adding row `isPointExcluded` if CRM UI may inspect rows later.
+
+4. POS retail:
+   - keep current PaymentModal UI edit or commit it with the broader point
+     work.
+
+5. Verification:
+   - CRM: `npm run build`
+   - data-server: `npm run build`
+   - POS app: `npm run build` if PaymentModal remains changed
+   - POS server: `npm run build` if sync payload changes require type updates
+
 ## Current State
 
 The sale point earning feature is implemented and committed on
