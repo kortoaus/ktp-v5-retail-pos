@@ -1,10 +1,28 @@
 import apiService, { ApiResponse } from "../libs/api";
 import { Member } from "../types/models";
 
+export interface MemberSearchResult {
+  id: string;
+  companyId: number;
+  phoneLast3: string | null;
+  name: string;
+  level: number;
+  points: number;
+}
+
 export async function searchMemberByPhone(
   phone: string,
 ): Promise<ApiResponse<Member>> {
   return apiService.post<Member>("/api/crm/member/search/phone", { phone });
+}
+
+export async function searchMembersByPhoneLast3(
+  phoneLast3: string,
+): Promise<ApiResponse<MemberSearchResult[]>> {
+  return apiService.post<MemberSearchResult[]>(
+    "/api/crm/member/search/phone-last3",
+    { phoneLast3 },
+  );
 }
 
 export async function searchMemberById(

@@ -26,10 +26,25 @@ export async function searchMemberService(data: any) {
   }
 }
 
+export async function searchMembersByPhoneLast3Service(data: {
+  phoneLast3: string;
+}) {
+  try {
+    const result = await crmApiService.post(
+      "/device/member/search/phone-last3",
+      data,
+    );
+    return result;
+  } catch (e) {
+    if (e instanceof HttpException) throw e;
+    console.error("Error searching members:", e);
+    throw new InternalServerException("Internal server error");
+  }
+}
+
 export async function searchMemberByIdService(data: any) {
   try {
     const result = await crmApiService.post("/device/member/search/id", data);
-    console.log(result);
     return result;
   } catch (e) {
     if (e instanceof HttpException) throw e;

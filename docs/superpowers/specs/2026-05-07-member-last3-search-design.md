@@ -11,7 +11,7 @@ The feature crosses:
 - `retail_pos_app`: member search UI and renderer CRM service.
 - `retail_pos_server`: local CRM proxy endpoint.
 - `/Users/dev/ktpv5/ktpv5-crm-server`: device member search endpoint backed by
-  `Member.phone_last4`.
+  the existing `Member.phone_last4` column.
 
 ## Goals
 
@@ -35,24 +35,24 @@ The feature crosses:
 Add a device route:
 
 ```text
-POST /device/member/search/phone-last4
+POST /device/member/search/phone-last3
 ```
 
 Request:
 
 ```ts
-{ phoneLast4: string }
+{ phoneLast3: string }
 ```
 
 Validation:
 
 - `companyId` comes from `deviceMiddleware` locals.
-- `phoneLast4` must be exactly 3 numeric digits.
+- `phoneLast3` must be exactly 3 numeric digits.
 
 Query:
 
 - `Member.companyId = companyId`
-- `Member.phone_last4 = phoneLast4`
+- `Member.phone_last4 = phoneLast3`
 - `Member.archived = false`
 - order by `createdAt desc`
 - limit 20
@@ -60,7 +60,18 @@ Query:
 Response uses the existing envelope:
 
 ```ts
-{ ok: true, msg: "Members found", result: Member[] }
+{
+  ok: true;
+  msg: "Members found";
+  result: Array<{
+    id: string;
+    companyId: number;
+    phoneLast3: string | null;
+    name: string;
+    level: number;
+    points: number;
+  }>;
+}
 ```
 
 If there are no matches, return `ok: true` with `result: []`. Reserve `ok:
@@ -71,10 +82,10 @@ false` for validation or server failures.
 Add a proxy route:
 
 ```text
-POST /api/crm/member/search/phone-last4
+POST /api/crm/member/search/phone-last3
 ```
 
-It forwards the body to CRM server `/device/member/search/phone-last4` through
+It forwards the body to CRM server `/device/member/search/phone-last3` through
 the existing `crmApiService`.
 
 ### POS Renderer Service
@@ -82,7 +93,9 @@ the existing `crmApiService`.
 Add:
 
 ```ts
-searchMembersByPhoneLast4(phoneLast4: string): Promise<ApiResponse<Member[]>>
+searchMembersByPhoneLast3(
+  phoneLast3: string,
+): Promise<ApiResponse<MemberSearchResult[]>>
 ```
 
 The existing `searchMemberByPhone` function can remain for non-modal callers if
@@ -105,7 +118,7 @@ needed, but `MemberSearchModal` should stop using it.
 
 State changes:
 
-- Replace the single `foundMember` state with `foundMembers: Member[]`.
+- Replace the single `foundMember` state with `searchResults: MemberSearchResult[]`.
 - Clear prior results before each search.
 - Treat an empty successful result as "Member not found".
 
@@ -113,7 +126,7 @@ State changes:
 
 - The modal must not display or request a full phone number in search mode.
 - The modal must not call the full-phone search endpoint.
-- Result display is limited to name, `phone_last4`, and level.
+- Result display is limited to name, `phoneLast3`, and level.
 
 ## Error Handling
 

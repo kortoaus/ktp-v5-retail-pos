@@ -1,16 +1,28 @@
 import { useCallback, useEffect, useState } from "react";
-import { Member } from "../types/models";
-import { searchMemberByPhone, createMember } from "../service/crm.service";
+import {
+  createMember,
+  MemberSearchResult,
+  searchMembersByPhoneLast3,
+} from "../service/crm.service";
 import OnScreenKeyboard from "./OnScreenKeyboard";
 import { cn } from "../libs/cn";
 import { sanitizePhone } from "../libs/phone-utils";
 
 type Tab = "search" | "create";
+const SEARCH_PAGE_SIZE = 5;
+
+export interface MemberSearchSelection {
+  id: string;
+  name: string;
+  level: number;
+  points: number;
+  phone_last4: string | null;
+}
 
 interface MemberSearchModalProps {
   open: boolean;
   onClose: () => void;
-  onSelect: (member: Member) => void;
+  onSelect: (member: MemberSearchSelection) => void;
 }
 
 export default function MemberSearchModal({
@@ -21,7 +33,7 @@ export default function MemberSearchModal({
   const [tab, setTab] = useState<Tab>("search");
 
   const [searchPhone, setSearchPhone] = useState("");
-  const [foundMember, setFoundMember] = useState<Member | null>(null);
+  const [searchResults, setSearchResults] = useState<MemberSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [searched, setSearched] = useState(false);
@@ -36,7 +48,7 @@ export default function MemberSearchModal({
     if (!open) return;
     setTab("search");
     setSearchPhone("");
-    setFoundMember(null);
+    setSearchResults([]);
     setSearchLoading(false);
     setSearchError("");
     setSearched(false);
@@ -48,21 +60,26 @@ export default function MemberSearchModal({
   }, [open]);
 
   const handleSearch = useCallback(async () => {
-    const phone = sanitizePhone(searchPhone);
-    if (!phone) {
-      setSearchError("Invalid Australian mobile number");
+    const phoneLast3 = searchPhone.replace(/[^0-9]/g, "").slice(0, 3);
+    setSearchPhone(phoneLast3);
+    if (!/^\d{3}$/.test(phoneLast3)) {
+      setSearchResults([]);
+      setSearchError("Enter last 3 digits");
       setSearched(true);
       return;
     }
 
     setSearchLoading(true);
     setSearchError("");
-    setFoundMember(null);
+    setSearchResults([]);
     setSearched(true);
     try {
-      const res = await searchMemberByPhone(phone);
-      if (res.ok && res.result) {
-        setFoundMember(res.result);
+      const res = await searchMembersByPhoneLast3(phoneLast3);
+      if (res.ok && Array.isArray(res.result) && res.result.length > 0) {
+        setSearchResults(res.result);
+      } else if (res.ok && Array.isArray(res.result)) {
+        setSearchResults([]);
+        setSearchError("Member not found");
       } else {
         setSearchError(res.msg || "Member not found");
       }
@@ -73,17 +90,25 @@ export default function MemberSearchModal({
     }
   }, [searchPhone]);
 
-  const handleConfirm = useCallback(() => {
-    if (!foundMember) return;
-    onSelect(foundMember);
-  }, [foundMember, onSelect]);
+  const handleSelectSearchResult = useCallback(
+    (member: MemberSearchResult) => {
+      onSelect({
+        id: member.id,
+        name: member.name,
+        level: member.level,
+        points: member.points,
+        phone_last4: member.phoneLast3,
+      });
+    },
+    [onSelect],
+  );
 
   const handleCreate = useCallback(async () => {
     const phone = sanitizePhone(createPhone);
     const name = createName.trim();
     if (!name) return;
     if (!phone) {
-      setCreateError("Invalid Australian mobile number");
+      setCreateError("Enter a valid phone number");
       return;
     }
 
@@ -92,7 +117,13 @@ export default function MemberSearchModal({
     try {
       const res = await createMember({ phone, name });
       if (res.ok && res.result) {
-        onSelect(res.result);
+        onSelect({
+          id: res.result.id,
+          name: res.result.name,
+          level: res.result.level,
+          points: res.result.points,
+          phone_last4: res.result.phone_last4,
+        });
       } else {
         setCreateError(res.msg || "Failed to create member");
       }
@@ -114,7 +145,12 @@ export default function MemberSearchModal({
       className="fixed inset-0 bg-black/50 flex items-center justify-center p-4"
       style={{ zIndex: 999 }}
     >
-      <div className="bg-white rounded-2xl w-full max-w-lg flex flex-col overflow-hidden shadow-2xl">
+      <div
+        className={cn(
+          "bg-white rounded-2xl w-full flex flex-col overflow-hidden shadow-2xl",
+          tab === "search" ? "max-w-[1120px]" : "max-w-lg",
+        )}
+      >
         <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200">
           <h2 className="text-lg font-bold">Member</h2>
           <button
@@ -155,13 +191,15 @@ export default function MemberSearchModal({
           {tab === "search" ? (
             <SearchTab
               phone={searchPhone}
-              setPhone={setSearchPhone}
+              setPhone={(v) =>
+                setSearchPhone(v.replace(/[^0-9]/g, "").slice(0, 3))
+              }
               loading={searchLoading}
               error={searchError}
               searched={searched}
-              foundMember={foundMember}
+              searchResults={searchResults}
               onSearch={handleSearch}
-              onConfirm={handleConfirm}
+              onSelect={handleSelectSearchResult}
             />
           ) : (
             <CreateTab
@@ -178,33 +216,27 @@ export default function MemberSearchModal({
           )}
         </div>
 
-        <div className="border-t border-gray-200 p-2">
-          {tab === "search" ? (
-            <OnScreenKeyboard
-              key="search-phone"
-              value={searchPhone}
-              onChange={(v) => setSearchPhone(v.replace(/[^0-9]/g, ""))}
-              onEnter={handleSearch}
-              initialLayout="numpad"
-            />
-          ) : nameFieldFocused ? (
-            <OnScreenKeyboard
-              key="create-name"
-              value={createName}
-              onChange={setCreateName}
-              onEnter={() => setNameFieldFocused(false)}
-              initialLayout="korean"
-            />
-          ) : (
-            <OnScreenKeyboard
-              key="create-phone"
-              value={createPhone}
-              onChange={(v) => setCreatePhone(v.replace(/[^0-9]/g, ""))}
-              onEnter={handleCreate}
-              initialLayout="numpad"
-            />
-          )}
-        </div>
+        {tab === "create" && (
+          <div className="border-t border-gray-200 p-2">
+            {nameFieldFocused ? (
+              <OnScreenKeyboard
+                key="create-name"
+                value={createName}
+                onChange={setCreateName}
+                onEnter={() => setNameFieldFocused(false)}
+                initialLayout="korean"
+              />
+            ) : (
+              <OnScreenKeyboard
+                key="create-phone"
+                value={createPhone}
+                onChange={(v) => setCreatePhone(v.replace(/[^0-9]/g, ""))}
+                onEnter={handleCreate}
+                initialLayout="numpad"
+              />
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -216,9 +248,9 @@ interface SearchTabProps {
   loading: boolean;
   error: string;
   searched: boolean;
-  foundMember: Member | null;
+  searchResults: MemberSearchResult[];
   onSearch: () => void;
-  onConfirm: () => void;
+  onSelect: (member: MemberSearchResult) => void;
 }
 
 function SearchTab({
@@ -227,77 +259,131 @@ function SearchTab({
   loading,
   error,
   searched,
-  foundMember,
+  searchResults,
   onSearch,
-  onConfirm,
+  onSelect,
 }: SearchTabProps) {
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(searchResults.length / SEARCH_PAGE_SIZE),
+  );
+  const currentPage = Math.min(page, totalPages - 1);
+  const pageResults = searchResults.slice(
+    currentPage * SEARCH_PAGE_SIZE,
+    currentPage * SEARCH_PAGE_SIZE + SEARCH_PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchResults]);
+
   return (
-    <div className="px-4 py-3 space-y-3">
-      <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 h-12">
-        <span className="text-gray-400 text-lg">📱</span>
-        <div className="flex-1 text-lg min-h-[28px]">
-          {phone || <span className="text-gray-400">Phone number</span>}
-        </div>
-        {phone && (
-          <button
-            type="button"
-            onPointerDown={() => setPhone("")}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 active:bg-gray-300 text-sm"
-          >
-            ✕
-          </button>
-        )}
-      </div>
-
-      <button
-        type="button"
-        onPointerDown={onSearch}
-        disabled={!phone.trim() || loading}
-        className="w-full h-12 rounded-lg bg-blue-600 text-white font-semibold active:bg-blue-700 disabled:opacity-40 text-sm"
-      >
-        {loading ? "Searching..." : "Search"}
-      </button>
-
-      <div className="min-h-[100px] flex items-center justify-center">
-        {!searched && (
-          <span className="text-gray-400 text-sm">
-            Enter phone number to search
-          </span>
-        )}
-        {searched && loading && (
-          <span className="text-gray-400 text-sm">Searching...</span>
-        )}
-        {searched && !loading && error && !foundMember && (
-          <span className="text-red-500 text-sm">{error}</span>
-        )}
-        {foundMember && (
-          <div className="w-full space-y-3">
-            <div className="bg-gray-50 rounded-xl p-4 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-lg font-bold">
-                {foundMember.name.charAt(0)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-bold text-base truncate">
-                  {foundMember.name}
-                </div>
-                <div className="text-sm text-gray-500">
-                  ****{foundMember.phone_last4}
-                </div>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="text-xs text-gray-400">Level</div>
-                <div className="font-bold text-sm">{foundMember.level}</div>
-              </div>
-            </div>
+    <div className="grid grid-cols-[minmax(0,1fr)_420px] gap-4 p-4">
+      <div className="min-w-0 space-y-3">
+        <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 h-12">
+          <span className="text-gray-400 text-lg">📱</span>
+          <div className="flex-1 text-lg min-h-[28px]">
+            {phone || <span className="text-gray-400">Last 3 digits</span>}
+          </div>
+          {phone && (
             <button
               type="button"
-              onPointerDown={onConfirm}
-              className="w-full h-12 rounded-lg bg-green-600 text-white font-semibold active:bg-green-700 text-sm"
+              onPointerDown={() => setPhone("")}
+              className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 active:bg-gray-300 text-sm"
             >
-              Confirm
+              ✕
             </button>
-          </div>
-        )}
+          )}
+        </div>
+
+        <button
+          type="button"
+          onPointerDown={onSearch}
+          disabled={!/^\d{3}$/.test(phone) || loading}
+          className="w-full h-12 rounded-lg bg-blue-600 text-white font-semibold active:bg-blue-700 disabled:opacity-40 text-sm"
+        >
+          {loading ? "Searching..." : "Search"}
+        </button>
+
+        <div className="h-[360px] flex items-center justify-center">
+          {!searched && (
+            <span className="text-gray-400 text-sm">
+              Enter customer's last 3 digits
+            </span>
+          )}
+          {searched && loading && (
+            <span className="text-gray-400 text-sm">Searching...</span>
+          )}
+          {searched && !loading && error && searchResults.length === 0 && (
+            <span className="text-red-500 text-sm">{error}</span>
+          )}
+          {searchResults.length > 0 && (
+            <div className="w-full h-full overflow-y-auto space-y-2 pr-1">
+              {pageResults.map((member) => (
+                <button
+                  key={member.id}
+                  type="button"
+                  onPointerDown={() => onSelect(member)}
+                  className="w-full bg-gray-50 rounded-xl p-4 flex items-center gap-4 text-left active:bg-blue-50"
+                >
+                  <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-lg font-bold shrink-0">
+                    {member.name.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-base truncate">
+                      {member.name}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      ***{member.phoneLast3 ?? ""}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-xs text-gray-400">Level</div>
+                    <div className="font-bold text-sm">{member.level}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="h-10 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onPointerDown={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={currentPage === 0 || searchResults.length === 0}
+            className="h-9 px-4 rounded-lg bg-gray-100 active:bg-gray-300 disabled:opacity-30 text-sm"
+          >
+            Prev
+          </button>
+          <span className="text-sm text-gray-500">
+            {currentPage + 1} / {totalPages}
+          </span>
+          <button
+            type="button"
+            onPointerDown={() =>
+              setPage((p) => Math.min(totalPages - 1, p + 1))
+            }
+            disabled={
+              currentPage >= totalPages - 1 || searchResults.length === 0
+            }
+            className="h-9 px-4 rounded-lg bg-gray-100 active:bg-gray-300 disabled:opacity-30 text-sm"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+
+      <div className="border-l border-gray-200 pl-4 flex items-start">
+        <OnScreenKeyboard
+          key="search-phone"
+          value={phone}
+          onChange={(v) => setPhone(v.replace(/[^0-9]/g, "").slice(0, 3))}
+          onEnter={onSearch}
+          initialLayout="numpad"
+          className="shrink-0"
+        />
       </div>
     </div>
   );

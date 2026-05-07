@@ -14,11 +14,12 @@ import { useCallback, useEffect, useState } from "react";
 import type { Dayjs } from "dayjs";
 import KeyboardInputText from "./KeyboardInputText";
 import DateRangeSelector from "./DateRangeSelector";
-import MemberSearchModal from "./MemberSearchModal";
+import MemberSearchModal, {
+  type MemberSearchSelection,
+} from "./MemberSearchModal";
 import MoneyNumpad from "./Numpads/MoneyNumpad";
 import LoadingOverlay from "./LoadingOverlay";
 import { useBarcodeScanner } from "../hooks/useBarcodeScanner";
-import { Member } from "../types/models";
 import {
   InvoiceTypeWire,
   SaleInvoiceListItem,
@@ -54,7 +55,7 @@ export default function SaleInvoiceSearchPanel({
   const [keyword, setKeyword] = useState("");
   const [from, setFrom] = useState<Dayjs | null>(null);
   const [to, setTo] = useState<Dayjs | null>(null);
-  const [member, setMember] = useState<Member | null>(null);
+  const [member, setMember] = useState<MemberSearchSelection | null>(null);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [minTotalStr, setMinTotalStr] = useState(""); // cents string
   const [maxTotalStr, setMaxTotalStr] = useState("");
