@@ -167,6 +167,8 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
   const other_point_rate = storeSetting?.other_point_rate ?? 10;
   const activeMember = carts[activeCartIndex]?.member ?? null;
   const activeMemberId = activeMember?.id ?? null;
+  const hasAvailableCustomerVoucher =
+    activeMember != null && activeMember.points >= 1000;
   const previousMemberIdRef = useRef<string | null>(activeMemberId);
   const voucherSlot: TenderSlot = activeMember
     ? "CUSTOMER_VOUCHER"
@@ -633,8 +635,15 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-semibold">Payment</h2>
             {activeMember && (
-              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
-                Member
+              <span
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide",
+                  hasAvailableCustomerVoucher
+                    ? "animate-bounce bg-red-500 text-white"
+                    : "bg-emerald-100 text-emerald-700",
+                )}
+              >
+                {hasAvailableCustomerVoucher ? "Voucher available" : "Member"}
               </span>
             )}
           </div>

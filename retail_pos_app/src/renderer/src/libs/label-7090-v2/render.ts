@@ -401,13 +401,14 @@ export async function renderPriceTag7090Canvas(
     drawCenteredFittedText(ctx, `/${model.uom}`, 280, 382, 28, 20, 800, 160);
     nameY = 440;
   } else if (model.caseName === "normal-member" && model.member) {
-    drawCompactPriceLine(ctx, "GUEST", model.guest.priceCents, model.uom, 224);
-    drawCenteredFittedText(ctx, "MEMBER", 280, 268, 32, 24, 900, 300);
-    drawCenteredSplitPrice(ctx, model.member.priceCents, 280, 382, 136, 76, 510);
-    drawCenteredFittedText(ctx, `/${model.uom}`, 280, 426, 26, 20, 800, 160);
+    drawCompactPriceLine(ctx, "GUEST", model.guest.priceCents, model.uom, 226);
+    drawCenteredFittedText(ctx, "MEMBER", 280, 270, 32, 24, 900, 300);
+    drawCenteredSplitPrice(ctx, model.member.priceCents, 280, 374, 136, 76, 510);
+    drawCenteredFittedText(ctx, `/${model.uom}`, 280, 416, 26, 20, 800, 160);
     const save = fmtSave(model.member.saveCents);
-    if (save) drawCenteredFittedText(ctx, save, 280, 466, 28, 22, 900, 340);
-    nameY = 505;
+    if (save) drawFittedText(ctx, save, 330, 454, 30, 22, 900, 205);
+    drawDottedDivider(ctx, 504);
+    nameY = 548;
   } else if (model.caseName === "promo-guest") {
     drawCenteredSplitPrice(ctx, model.guest.priceCents, 280, 334, 146, 82, 510);
     drawCenteredFittedText(ctx, `/${model.uom}`, 280, 380, 26, 20, 800, 160);
