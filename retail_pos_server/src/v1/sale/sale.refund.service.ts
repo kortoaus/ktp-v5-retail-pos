@@ -22,6 +22,7 @@ import type { Prisma } from "../../generated/prisma/client";
 import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
 import { calculateRefundPointsReversed } from "./sale.refund.points";
 import { issueRefundCustomerVoucherService } from "../customer-voucher/customer-voucher.service";
+import { nextDocCounter } from "./sale.doc-counter";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Sale refund — REFUND invoice 생성 서비스
@@ -444,12 +445,8 @@ export async function buildRefundInTx(
   } = opts;
   const { terminal, storeSetting, user, shift } = context;
 
-  const doc = await tx.docCounter.upsert({
-    where: { date: dayStart },
-    update: { counter: { increment: 1 } },
-    create: { date: dayStart, counter: 1 },
-  });
-  const seq = String(doc.counter).padStart(6, "0");
+  const counter = await nextDocCounter(tx, dayStart);
+  const seq = String(counter).padStart(6, "0");
   const serial = `${shift.id}-${yyyymmdd}-R${seq}`;
 
   const inv = await tx.saleInvoice.create({

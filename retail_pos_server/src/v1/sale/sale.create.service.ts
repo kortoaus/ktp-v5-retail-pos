@@ -21,6 +21,7 @@ import {
   redeemCustomerVouchersForSale,
   voidRedeemedCustomerVouchersForSale,
 } from "../customer-voucher/customer-voucher.service";
+import { nextDocCounter } from "./sale.doc-counter";
 
 // ──────────────────────────────────────────────────────────────
 // Sale create — 순서:
@@ -244,12 +245,8 @@ export async function buildSaleInTx(
   );
 
   // Serial
-  const doc = await tx.docCounter.upsert({
-    where: { date: dayStart },
-    update: { counter: { increment: 1 } },
-    create: { date: dayStart, counter: 1 },
-  });
-  const seq = String(doc.counter).padStart(6, "0");
+  const counter = await nextDocCounter(tx, dayStart);
+  const seq = String(counter).padStart(6, "0");
   const typePrefix = payload.type === "SPEND" ? "P" : "S";
   const serial = `${shift.id}-${yyyymmdd}-${typePrefix}${seq}`;
 

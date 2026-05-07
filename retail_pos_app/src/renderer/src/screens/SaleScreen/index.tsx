@@ -344,7 +344,7 @@ export default function SaleScreen() {
 
       {/* ── Body ─────────────────────────────────────────── */}
       <div className="flex-1 flex divide-x divide-gray-200 overflow-hidden">
-        <div className="w-[500px] bg-white flex flex-col">
+        <div className="w-[600px] bg-white flex flex-col">
           <div className="flex-1">
             <LineViewer
               lines={lines}

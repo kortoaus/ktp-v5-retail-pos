@@ -735,9 +735,9 @@ ATO: surcharge 는 supply 의 일부 → 동일 세율. Tax-inclusive 관례:
 **D-28. DocCounter 기반 serial 발급 — two-phase write 폐기**
 신규 `DocCounter { date @unique, counter }` 모델. Sale create transaction 첫
 동작으로 `upsert({ where: { date: startOfDay(AU) }, update: { counter:
-{ increment: 1 } }, create: { date, counter: 1 } })` — atomic, 날짜 바뀌면
-자연스럽게 새 row 에 counter=1 시작. 모든 InvoiceType 이 counter 공유 (prefix
-로 구분). Format:
+{ increment: 1 } }, create: { date, counter: random(101..999) } })` —
+atomic, 날짜 바뀌면 자연스럽게 새 row 에 100 초과 1000 미만 난수로 시작.
+모든 InvoiceType 이 counter 공유 (prefix 로 구분). Format:
 ```
 {shift.id}-{YYYYMMDD}-{typePrefix}{seq6}
 ```

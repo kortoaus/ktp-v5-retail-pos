@@ -31,6 +31,7 @@ export default function LineViewer({
         <div className="w-20">U. Price</div>
         <div className="w-20">Qty</div>
         <div className="w-20">Total</div>
+        <div className="w-14">DC</div>
       </div>
       <div
         className="flex-1 h-full overflow-hidden divide-y divide-gray-200"
@@ -89,6 +90,18 @@ function LineCaption({
   const displayQty = qty;
   const displayPrice = unit_price_effective;
 
+  const discountPercentage =
+    unit_price_original === 0
+      ? 0
+      : Math.max(
+          0,
+          ((unit_price_original - unit_price_effective) / unit_price_original) *
+            100,
+        );
+
+  const discountText =
+    discountPercentage > 0 ? `-${discountPercentage.toFixed(0)}%` : "";
+
   return (
     <div
       onClick={onClick}
@@ -132,6 +145,11 @@ function LineCaption({
         <div className="text-sm font-medium">
           {taxable && <span className="text-red-500">*</span>}
           {fmtMoney(total)}
+        </div>
+      </div>
+      <div className="flex flex-col items-end justify-center w-14 p-1">
+        <div className="text-sm font-medium">
+          {discountText && <span className="text-red-500">{discountText}</span>}
         </div>
       </div>
     </div>

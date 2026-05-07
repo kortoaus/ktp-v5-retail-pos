@@ -166,7 +166,7 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - `payment.amount` CASH 는 split 여부 무관 단일 payment 로 집약 (amount = cashApplied, change 는 invoice.cashChange, D-32)
 - PaymentModal interactive controls are div-based tap targets, not `<button>`, to prevent HID scanner Enter suffixes from triggering focused actions.
 - Points: voucher redemption does not earn points; cash and eligible exact-tender bill portions use the configured cash/other rates.
-- Serial: `{shift.id}-{YYYYMMDD}-{S|R|P}{seq6}` via `DocCounter` atomic increment (D-28)
+- Serial: `{shift.id}-{YYYYMMDD}-{S|R|P}{seq6}` via `DocCounter` atomic increment; each new business day starts at a random 101-999 value (D-28)
 - Server 가 invariant 검증 + row 별 `surcharge_share` 비례 배분 저장 + voucher REDEEM 트랜잭션 처리
 
 ### Refunds and Repay

@@ -12,6 +12,7 @@ import {
   UserModel,
 } from "../../generated/prisma/models";
 import { SaleCreatePayload } from "./sale.types";
+import { nextDocCounter } from "./sale.doc-counter";
 
 // ──────────────────────────────────────────────────────────────
 // Spend create — 매장 내부 소비 (kitchen / cafe / office, D-14~16).
@@ -58,12 +59,8 @@ export async function createSpendService(
 
     const invoice = await db.$transaction(async (tx) => {
       // Serial — SALE 과 동일 DocCounter, prefix 만 "P".
-      const doc = await tx.docCounter.upsert({
-        where: { date: dayStart },
-        update: { counter: { increment: 1 } },
-        create: { date: dayStart, counter: 1 },
-      });
-      const seq = String(doc.counter).padStart(6, "0");
+      const counter = await nextDocCounter(tx, dayStart);
+      const seq = String(counter).padStart(6, "0");
       const serial = `${shift.id}-${yyyymmdd}-P${seq}`;
 
       return await tx.saleInvoice.create({

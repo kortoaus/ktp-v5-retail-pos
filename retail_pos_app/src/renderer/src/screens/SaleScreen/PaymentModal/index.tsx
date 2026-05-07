@@ -291,9 +291,8 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
 
   // Completion flow state:
   //   processing     — createSale 요청 중. LoadingOverlay 로 유저 행동 블락.
-  //   completedInfo  — change > 0 인 경우의 snapshot. ChangeOverlay 에서
-  //                    drawer kick / reprint / close 제공. close → cart clear +
-  //                    modal 종료. change === 0 이면 overlay 없이 바로 종료.
+  //   completedInfo  — sale 저장 후 snapshot. ChangeOverlay 에서 receipt print
+  //                    여부를 cashier 가 선택. close → cart clear + modal 종료.
   const [processing, setProcessing] = useState(false);
   const [completedInfo, setCompletedInfo] = useState<{
     invoice: SaleInvoiceCreated;
@@ -302,6 +301,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     paid: number;
     cashReceived: number;
     change: number;
+    receiptPrinted: boolean;
   } | null>(null);
 
   async function handleCompleteSale() {
@@ -348,34 +348,15 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
         }
       }
 
-      // Print receipt — 거래는 이미 저장됐으므로 실패해도 flow 중단 X. 같은
-      // ESC/POS 채널이라 drawer 가 끝난 뒤 직렬 전송. belowText 는 current
-      // storeSetting 에서 읽음 (snapshot 불필요 — 재출력 시에도 current 값 사용).
-      if (detail) {
-        try {
-          await printSaleInvoiceReceipt(
-            detail,
-            false,
-            storeSetting?.receipt_below_text || undefined,
-          );
-        } catch (e) {
-          console.error("printSaleInvoiceReceipt failed:", e);
-        }
-      }
-
-      if (cal.change > 0) {
-        setCompletedInfo({
-          invoice: res.result,
-          detail,
-          total: cal.total,
-          paid: cal.paid,
-          cashReceived: cal.cashIntent,
-          change: cal.change,
-        });
-      } else {
-        clearActiveCart();
-        onCancel();
-      }
+      setCompletedInfo({
+        invoice: res.result,
+        detail,
+        total: cal.total,
+        paid: cal.paid,
+        cashReceived: cal.cashIntent,
+        change: cal.change,
+        receiptPrinted: false,
+      });
     } finally {
       setProcessing(false);
     }
@@ -396,7 +377,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     }
   }
 
-  async function handleReprint() {
+  async function handlePrintReceipt() {
     if (!completedInfo) return;
     try {
       let detail = completedInfo.detail;
@@ -404,14 +385,20 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
         const res = await getSaleInvoiceById(completedInfo.invoice.id);
         if (res.ok && res.result) detail = res.result;
       }
-      if (detail)
-        await printSaleInvoiceReceipt(
-          detail,
-          true,
-          storeSetting?.receipt_below_text || undefined,
-        );
+      if (!detail) {
+        window.alert("Failed to load receipt detail");
+        return;
+      }
+      await printSaleInvoiceReceipt(
+        detail,
+        completedInfo.receiptPrinted,
+        storeSetting?.receipt_below_text || undefined,
+      );
+      setCompletedInfo((prev) =>
+        prev ? { ...prev, detail, receiptPrinted: true } : prev,
+      );
     } catch (e) {
-      console.error("reprint failed:", e);
+      console.error("print receipt failed:", e);
     }
   }
 
@@ -626,7 +613,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
         <ChangeOverlay
           info={completedInfo}
           onKickDrawer={handleKickDrawer}
-          onReprint={handleReprint}
+          onPrintReceipt={handlePrintReceipt}
           onClose={finishSale}
         />
       )}
@@ -661,29 +648,51 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
               Lines ({lines.length})
             </div>
             <div className="flex-1 overflow-y-auto">
-              {lines.map((li) => (
-                <div
-                  key={li.lineKey}
-                  className="flex items-start justify-between px-3 py-2 gap-2 border-b border-gray-100 last:border-b-0"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate text-xs">
-                      {li.name_ko}
+              {lines.map((li) => {
+                const { unit_price_effective, unit_price_original } = li;
+                // how much discount in percentage
+                const discountPercentage =
+                  unit_price_original === 0
+                    ? 0
+                    : Math.max(
+                        0,
+                        ((unit_price_original - unit_price_effective) /
+                          unit_price_original) *
+                          100,
+                      );
+
+                const discountText =
+                  discountPercentage > 0
+                    ? `${discountPercentage.toFixed(0)}%`
+                    : "";
+
+                return (
+                  <div
+                    key={li.lineKey}
+                    className="flex items-start justify-between px-3 py-2 gap-2 border-b border-gray-100 last:border-b-0"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate text-xs">
+                        {li.name_ko}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {li.name_en}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500 truncate">
-                      {li.name_en}
+                    <div className="text-right shrink-0 text-xs leading-tight">
+                      <div className="text-gray-500">
+                        ${fmtMoney(li.unit_price_effective)} × {fmtQty(li.qty)}
+                      </div>
+                      <div className="font-bold text-sm">
+                        {`$${fmtMoney(li.total)}`}
+                        {discountText && (
+                          <span className="text-red-500">{`(${discountText})`}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right shrink-0 text-xs leading-tight">
-                    <div className="text-gray-500">
-                      ${fmtMoney(li.unit_price_effective)} × {fmtQty(li.qty)}
-                    </div>
-                    <div className="font-bold text-sm">
-                      = ${fmtMoney(li.total)}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -775,22 +784,21 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
                 />
               )}
             {stagedPayment.tender === "VOUCHER" &&
-              stagedPayment.entityType === "customer-voucher" && (
-                activeMemberId && (
-                  <CustomerVoucherInput
-                    amount={stagedPayment.amount}
-                    setAmount={setStagedCustomerVoucherAmount}
-                    left={left}
-                    voucher={stagedCustomerVoucher}
-                    memberId={activeMemberId}
-                    memberPoints={
-                      customerVoucherMemberPoints ?? activeMember?.points ?? 0
-                    }
-                    usedVoucherIds={usedCustomerVoucherIds}
-                    onSelectVoucher={selectCustomerVoucher}
-                    onCommit={commitStaged}
-                  />
-                )
+              stagedPayment.entityType === "customer-voucher" &&
+              activeMemberId && (
+                <CustomerVoucherInput
+                  amount={stagedPayment.amount}
+                  setAmount={setStagedCustomerVoucherAmount}
+                  left={left}
+                  voucher={stagedCustomerVoucher}
+                  memberId={activeMemberId}
+                  memberPoints={
+                    customerVoucherMemberPoints ?? activeMember?.points ?? 0
+                  }
+                  usedVoucherIds={usedCustomerVoucherIds}
+                  onSelectVoucher={selectCustomerVoucher}
+                  onCommit={commitStaged}
+                />
               )}
             {spendMode && (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-sm font-bold uppercase tracking-widest">
@@ -995,7 +1003,7 @@ function PaymentRow({
 function ChangeOverlay({
   info,
   onKickDrawer,
-  onReprint,
+  onPrintReceipt,
   onClose,
 }: {
   info: {
@@ -1004,11 +1012,15 @@ function ChangeOverlay({
     paid: number;
     cashReceived: number;
     change: number;
+    receiptPrinted: boolean;
   };
   onKickDrawer: () => void;
-  onReprint: () => void;
+  onPrintReceipt: () => void;
   onClose: () => void;
 }) {
+  const hasChange = info.change > 0;
+  const hasCash = info.cashReceived > 0;
+
   return (
     <div
       className="fixed inset-0 bg-black/60 flex items-center justify-center p-6"
@@ -1017,10 +1029,15 @@ function ChangeOverlay({
       <div className="bg-white rounded-xl w-full max-w-md p-6 flex flex-col gap-4">
         <div className="text-center">
           <div className="text-xs uppercase tracking-widest text-gray-500">
-            Change Due
+            {hasChange ? "Change Due" : "Sale Complete"}
           </div>
-          <div className="text-5xl font-bold text-emerald-600 font-mono mt-1">
-            ${fmtMoney(info.change)}
+          <div
+            className={cn(
+              "font-bold text-emerald-600 font-mono mt-1",
+              hasChange ? "text-5xl" : "text-3xl",
+            )}
+          >
+            {hasChange ? `$${fmtMoney(info.change)}` : "Receipt?"}
           </div>
         </div>
         <div className="bg-gray-50 rounded p-3 space-y-1 font-mono text-sm">
@@ -1028,23 +1045,33 @@ function ChangeOverlay({
             <span>TOTAL</span>
             <span>${fmtMoney(info.total)}</span>
           </div>
-          <div className="flex justify-between">
-            <span>CASH RCVD</span>
-            <span>${fmtMoney(info.cashReceived)}</span>
-          </div>
+          {hasCash && (
+            <div className="flex justify-between">
+              <span>CASH RCVD</span>
+              <span>${fmtMoney(info.cashReceived)}</span>
+            </div>
+          )}
+          {info.receiptPrinted && (
+            <div className="flex justify-between text-emerald-700">
+              <span>RECEIPT</span>
+              <span>PRINTED</span>
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
+          {hasCash && (
+            <TapTarget
+              onClick={onKickDrawer}
+              className="flex-1 h-12 rounded-md bg-blue-600 text-white font-bold text-sm active:bg-blue-700 flex items-center justify-center"
+            >
+              Open Drawer
+            </TapTarget>
+          )}
           <TapTarget
-            onClick={onKickDrawer}
-            className="flex-1 h-12 rounded-md bg-blue-600 text-white font-bold text-sm active:bg-blue-700 flex items-center justify-center"
-          >
-            Open Drawer
-          </TapTarget>
-          <TapTarget
-            onClick={onReprint}
+            onClick={onPrintReceipt}
             className="flex-1 h-12 rounded-md bg-gray-200 text-gray-800 font-bold text-sm active:bg-gray-300 flex items-center justify-center"
           >
-            Reprint
+            {info.receiptPrinted ? "Reprint" : "Print Receipt"}
           </TapTarget>
         </div>
         <TapTarget
