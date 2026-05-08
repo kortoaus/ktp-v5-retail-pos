@@ -332,7 +332,10 @@ function printEscposSerial(request: EscposPrintRequest): Promise<void> {
         `${LOG_PREFIX} Serial settings: ${jobLabel}, dataBits=${request.printer.dataBits}, parity=${request.printer.parity}, stopBits=${request.printer.stopBits}, handshaking=${request.printer.handshaking}, dtr=${request.printer.dtr}, rts=${request.printer.rts}`,
       )
       console.log(`${LOG_PREFIX} Setting configured DTR/RTS: ${jobLabel}`)
-      setConfiguredControlLines(port, request.printer).then(() => {
+      setConfiguredControlLines(port, request.printer).then(async () => {
+        if (settled || closingForError) return
+
+        await delay(CONTROL_LINE_SETTLE_MS)
         if (settled || closingForError) return
 
         port.get((getErr, status) => {
