@@ -55,9 +55,11 @@ such as `../generated/prisma/client`, not `@prisma/client`.
 - Server `/api/*` handlers assume `terminalMiddleware` populated
   `res.locals.terminal`, `company`, `storeSetting`, and current `shift`.
 - Receipt printing renders 576px canvases in the renderer, converts them to
-  ESC/POS raster slices in `libs/printer/escpos.ts`, then sends raw bytes through
-  the local server `/api/printer/print` TCP bridge. Keep long documents sliced
-  rather than sending one giant raster command.
+  ESC/POS raster slices in `libs/printer/escpos.ts`, then sends raw bytes either
+  through the local server `/api/printer/print` TCP bridge for network printers
+  or through Electron main IPC `escpos:print` for serial printers. Keep long
+  documents sliced rather than sending one giant raster command. Serial ESC/POS
+  QA notes live in `docs/superpowers/handoffs/2026-05-08-escpos-serial-qa-handoff.md`.
 - Sale Screen cloud hotkeys use `CloudHotkeyViewerV2`: parent groups stay
   visible in an 8x2 paged group grid, while the selected group renders a 5x5
   paged item grid. Interactive cells are `div`-based rather than native
