@@ -4,7 +4,11 @@ import { registerConfigHandlers } from './config'
 import { registerSerialHandlers, closeActivePort } from './serial'
 import { registerScaleHandlers, autoConnectScale, disconnectScale } from './scale'
 import { registerLabelHandlers } from './label'
-import { registerEscposHandlers } from './escpos'
+import {
+  autoConnectEscposPrinter,
+  disconnectEscposSerialPrinter,
+  registerEscposHandlers,
+} from './escpos'
 import { registerTextEncodingHandlers } from './text-encoding'
 
 export function registerAllHandlers(
@@ -20,9 +24,12 @@ export function registerAllHandlers(
   registerEscposHandlers()
 }
 
-export { autoConnectScale }
+export { autoConnectEscposPrinter, autoConnectScale }
 
-export function cleanupAll(): void {
+export async function cleanupAll(): Promise<void> {
   closeActivePort()
-  disconnectScale()
+  await Promise.all([
+    disconnectScale(),
+    disconnectEscposSerialPrinter(),
+  ])
 }

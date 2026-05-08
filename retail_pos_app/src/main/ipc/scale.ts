@@ -66,9 +66,10 @@ export async function autoConnectScale(): Promise<void> {
   }
 }
 
-export function disconnectScale(): void {
-  if (activeScale) {
-    activeScale.disconnect()
-    activeScale = null
+export async function disconnectScale(): Promise<void> {
+  const scale = activeScale
+  activeScale = null
+  if (scale) {
+    await scale.disconnect()
   }
 }

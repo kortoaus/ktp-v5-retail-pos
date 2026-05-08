@@ -1,5 +1,4 @@
 interface PrintEscposOptions {
-  serialCopies?: number;
   stripSerialInit?: boolean;
 }
 
@@ -9,16 +8,6 @@ function stripLeadingInit(data: Uint8Array): Uint8Array {
   }
 
   return data;
-}
-
-function repeatBytes(data: Uint8Array, copies: number): Uint8Array {
-  if (copies <= 1) return data;
-
-  const output = new Uint8Array(data.length * copies);
-  for (let index = 0; index < copies; index++) {
-    output.set(data, data.length * index);
-  }
-  return output;
 }
 
 export async function printESCPOS(
@@ -34,11 +23,7 @@ export async function printESCPOS(
   }
 
   if (printer.type === "serial") {
-    const serialCopies = Math.max(1, Math.floor(options.serialCopies ?? 1));
-    const serialData = repeatBytes(
-      options.stripSerialInit ? stripLeadingInit(data) : data,
-      serialCopies,
-    );
+    const serialData = options.stripSerialInit ? stripLeadingInit(data) : data;
     const result = await window.electronAPI.printEscpos({
       printer,
       data: Array.from(serialData),

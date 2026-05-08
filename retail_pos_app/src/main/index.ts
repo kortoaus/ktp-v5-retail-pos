@@ -1,10 +1,16 @@
 import { app, BrowserWindow, screen } from "electron";
 import path from "node:path";
-import { registerAllHandlers, autoConnectScale, cleanupAll } from "./ipc";
+import {
+  registerAllHandlers,
+  autoConnectEscposPrinter,
+  autoConnectScale,
+  cleanupAll,
+} from "./ipc";
 import { checkForBootUpdate } from "./updater";
 
 let mainWindow: BrowserWindow | null = null;
 let customerWindow: BrowserWindow | null = null;
+let cleanupStarted = false;
 
 function closeCustomerWindow(): void {
   if (customerWindow && !customerWindow.isDestroyed()) {
@@ -88,6 +94,7 @@ app.whenReady().then(() => {
   createWindow();
   createCustomerWindow();
   autoConnectScale();
+  autoConnectEscposPrinter();
   checkForBootUpdate();
 
   app.on("activate", () => {
@@ -97,9 +104,19 @@ app.whenReady().then(() => {
   });
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  if (cleanupStarted) return;
+  cleanupStarted = true;
+  event.preventDefault();
   closeCustomerWindow();
-  cleanupAll();
+  cleanupAll()
+    .catch((err) => {
+      const message = err instanceof Error ? err.message : "Unknown cleanup error";
+      console.log(`[App] Cleanup failed: ${message}`);
+    })
+    .finally(() => {
+      app.quit();
+    });
 });
 
 app.on("window-all-closed", () => {

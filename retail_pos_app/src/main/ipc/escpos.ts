@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { SerialPort } from 'serialport'
+import { loadConfig } from '../store'
 import type {
   EscposControlLineMatrixEntry,
   EscposControlLineMatrixRequest,
@@ -9,7 +10,6 @@ import type {
 } from '../types'
 
 const MIN_SERIAL_TIMEOUT_MS = 5000
-const SERIAL_CLOSE_TIMEOUT_MS = 5000
 const SERIAL_TIMEOUT_MARGIN_MS = 10000
 const BITS_PER_BYTE_ON_WIRE = 10
 const LOG_PREFIX = '[ESC/POS:Serial]'
@@ -26,6 +26,10 @@ const CONTROL_LINE_MATRIX = [
   { label: 'DTR=true RTS=true', dtr: true, rts: true },
 ] as const
 
+let activeEscposPort: SerialPort | null = null
+let activeEscposPrinterKey: string | null = null
+let serialPrintQueue: Promise<void> = Promise.resolve()
+
 function getSerialTimeoutMs(bytes: number, baudRate: number): number {
   const bytesPerSecond = Math.max(1, baudRate / BITS_PER_BYTE_ON_WIRE)
   const estimatedMs = Math.ceil((bytes / bytesPerSecond) * 1000)
@@ -34,13 +38,6 @@ function getSerialTimeoutMs(bytes: number, baudRate: number): number {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-function closePort(port: SerialPort): void {
-  if (!port.isOpen) return
-  try {
-    port.close()
-  } catch {}
 }
 
 function createEscposSerialPort(printer: EscposPrintRequest['printer']): SerialPort {
@@ -55,6 +52,19 @@ function createEscposSerialPort(printer: EscposPrintRequest['printer']): SerialP
     xoff: printer.handshaking === 'xon-xoff',
     autoOpen: false,
   })
+}
+
+function getEscposPrinterKey(printer: EscposPrintRequest['printer']): string {
+  return [
+    printer.path,
+    printer.baudRate,
+    printer.dataBits,
+    printer.parity,
+    printer.stopBits,
+    printer.handshaking,
+    printer.dtr,
+    printer.rts,
+  ].join('|')
 }
 
 function closePortAsync(port: SerialPort): Promise<void> {
@@ -175,6 +185,98 @@ async function writeEscposPayload(port: SerialPort, data: Buffer): Promise<void>
   await writeAndDrain(port, data)
 }
 
+async function connectEscposSerialPrinter(
+  printer: EscposPrintRequest['printer'],
+): Promise<SerialPort> {
+  const key = getEscposPrinterKey(printer)
+  const jobLabel = `${printer.path} @ ${printer.baudRate}`
+
+  if (activeEscposPort?.isOpen && activeEscposPrinterKey === key) {
+    return activeEscposPort
+  }
+
+  if (activeEscposPort) {
+    console.log(`${LOG_PREFIX} Reconnecting persistent port: ${jobLabel}`)
+    await disconnectEscposSerialPrinter()
+  }
+
+  const port = createEscposSerialPort(printer)
+  console.log(`${LOG_PREFIX} Opening persistent port: ${jobLabel}`)
+  await openPort(port)
+  console.log(`${LOG_PREFIX} Persistent port opened: ${jobLabel}`)
+  console.log(
+    `${LOG_PREFIX} Serial settings: ${jobLabel}, dataBits=${printer.dataBits}, parity=${printer.parity}, stopBits=${printer.stopBits}, handshaking=${printer.handshaking}, dtr=${printer.dtr}, rts=${printer.rts}`,
+  )
+
+  port.on('error', (err) => {
+    console.log(`${LOG_PREFIX} Persistent port error: ${jobLabel}: ${err.message}`)
+    if (activeEscposPort === port) {
+      activeEscposPort = null
+      activeEscposPrinterKey = null
+    }
+  })
+
+  port.on('close', () => {
+    console.log(`${LOG_PREFIX} Persistent port closed: ${jobLabel}`)
+    if (activeEscposPort === port) {
+      activeEscposPort = null
+      activeEscposPrinterKey = null
+    }
+  })
+
+  console.log(`${LOG_PREFIX} Setting configured DTR/RTS: ${jobLabel}`)
+  await setConfiguredControlLines(port, printer)
+  await delay(CONTROL_LINE_SETTLE_MS)
+
+  try {
+    const status = await getModemStatus(port)
+    console.log(
+      `${LOG_PREFIX} Modem status: ${jobLabel}, cts=${status.cts}, dsr=${status.dsr}, dcd=${status.dcd}`,
+    )
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown modem status error'
+    console.log(`${LOG_PREFIX} Modem status read failed: ${jobLabel}: ${message}`)
+  }
+
+  activeEscposPort = port
+  activeEscposPrinterKey = key
+  return port
+}
+
+export async function autoConnectEscposPrinter(): Promise<void> {
+  const config = loadConfig()
+  const printer = config.devices.escposPrinter
+  if (!printer || printer.type !== 'serial') return
+
+  const connectJob = serialPrintQueue.then(async () => {
+    await connectEscposSerialPrinter(printer)
+    console.log(`${LOG_PREFIX} Auto-connect: Connected`)
+  })
+  serialPrintQueue = connectJob.catch(() => {})
+
+  try {
+    await connectJob
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown auto-connect error'
+    console.log(`${LOG_PREFIX} Auto-connect failed: ${message}`)
+  }
+}
+
+export function disconnectEscposSerialPrinter(): Promise<void> {
+  const port = activeEscposPort
+  activeEscposPort = null
+  activeEscposPrinterKey = null
+
+  if (!port?.isOpen) return Promise.resolve()
+
+  const path = port.path
+  console.log(`${LOG_PREFIX} Closing persistent port: ${path}`)
+  return closePortAsync(port).catch((err) => {
+    const message = err instanceof Error ? err.message : 'Unknown close error'
+    console.log(`${LOG_PREFIX} Persistent port close failed: ${path}: ${message}`)
+  })
+}
+
 async function testEscposControlLineMatrix(
   request: EscposControlLineMatrixRequest,
 ): Promise<EscposControlLineMatrixResult> {
@@ -193,6 +295,7 @@ async function testEscposControlLineMatrix(
     `${LOG_PREFIX} Control matrix serial settings: ${jobLabel}, dataBits=${request.printer.dataBits}, parity=${request.printer.parity}, stopBits=${request.printer.stopBits}, handshaking=${request.printer.handshaking}, configuredDtr=${request.printer.dtr}, configuredRts=${request.printer.rts}`,
   )
 
+  await disconnectEscposSerialPrinter()
   const port = createEscposSerialPort(request.printer)
 
   let timeout: NodeJS.Timeout | null = null
@@ -290,7 +393,7 @@ async function testEscposControlLineMatrix(
   }
 }
 
-function printEscposSerial(request: EscposPrintRequest): Promise<void> {
+async function printEscposSerialNow(request: EscposPrintRequest): Promise<void> {
   const data = Buffer.from(request.data)
   const timeoutMs = getSerialTimeoutMs(data.length, request.printer.baudRate)
   const jobLabel = `${request.printer.path} @ ${request.printer.baudRate}`
@@ -299,146 +402,41 @@ function printEscposSerial(request: EscposPrintRequest): Promise<void> {
     `${LOG_PREFIX} Job start: ${jobLabel}, bytes=${data.length}, timeout=${timeoutMs}ms`,
   )
 
-  return new Promise((resolve, reject) => {
-    let settled = false
-    let closingForError = false
-    let closeTimeout: NodeJS.Timeout | null = null
+  let timeout: NodeJS.Timeout | null = null
+  try {
+    await Promise.race([
+      (async () => {
+        const port = await connectEscposSerialPrinter(request.printer)
+        console.log(`${LOG_PREFIX} Writing bytes: ${jobLabel}, bytes=${data.length}`)
+        await writeEscposPayload(port, data)
+        console.log(`${LOG_PREFIX} Write and drain complete: ${jobLabel}`)
+      })(),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          reject(
+            new Error(
+              `ESC/POS serial timeout on ${request.printer.path} after ${timeoutMs}ms`,
+            ),
+          )
+        }, timeoutMs)
+      }),
+    ])
 
-    const port = createEscposSerialPort(request.printer)
+    console.log(`${LOG_PREFIX} Job done: ${jobLabel}`)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown serial print error'
+    console.log(`${LOG_PREFIX} Job failed: ${jobLabel}: ${message}`)
+    await disconnectEscposSerialPrinter()
+    throw err
+  } finally {
+    if (timeout) clearTimeout(timeout)
+  }
+}
 
-    function finish(): void {
-      if (settled) return
-      settled = true
-      clearTimeout(timeout)
-      if (closeTimeout) clearTimeout(closeTimeout)
-      console.log(`${LOG_PREFIX} Job done: ${jobLabel}`)
-      resolve()
-    }
-
-    function fail(error: Error): void {
-      if (settled) return
-      settled = true
-      clearTimeout(timeout)
-      if (closeTimeout) clearTimeout(closeTimeout)
-      console.log(`${LOG_PREFIX} Job failed: ${jobLabel}: ${error.message}`)
-      reject(error)
-    }
-
-    function failAndClose(error: Error): void {
-      if (settled) return
-
-      if (!port.isOpen) {
-        fail(error)
-        return
-      }
-
-      closingForError = true
-      try {
-        port.close(() => {
-          if (settled) return
-          closingForError = false
-          fail(error)
-        })
-      } catch {
-        closingForError = false
-        fail(error)
-      }
-    }
-
-    const timeout = setTimeout(() => {
-      if (settled) return
-      console.log(`${LOG_PREFIX} Timeout: ${jobLabel}, closing port`)
-      closePort(port)
-      fail(
-        new Error(
-          `ESC/POS serial timeout on ${request.printer.path} after ${timeoutMs}ms`,
-        ),
-      )
-    }, timeoutMs)
-
-    console.log(`${LOG_PREFIX} Opening port: ${jobLabel}`)
-    port.open((openErr) => {
-      if (settled) {
-        console.log(`${LOG_PREFIX} Open callback after settlement: ${jobLabel}`)
-        closePort(port)
-        return
-      }
-      if (closingForError) return
-      if (openErr) {
-        console.log(`${LOG_PREFIX} Open failed: ${jobLabel}: ${openErr.message}`)
-        fail(new Error(`ESC/POS serial open failed: ${openErr.message}`))
-        return
-      }
-
-      console.log(`${LOG_PREFIX} Port opened: ${jobLabel}`)
-      console.log(
-        `${LOG_PREFIX} Serial settings: ${jobLabel}, dataBits=${request.printer.dataBits}, parity=${request.printer.parity}, stopBits=${request.printer.stopBits}, handshaking=${request.printer.handshaking}, dtr=${request.printer.dtr}, rts=${request.printer.rts}`,
-      )
-      console.log(`${LOG_PREFIX} Setting configured DTR/RTS: ${jobLabel}`)
-      setConfiguredControlLines(port, request.printer).then(async () => {
-        if (settled || closingForError) return
-
-        await delay(CONTROL_LINE_SETTLE_MS)
-        if (settled || closingForError) return
-
-        port.get((getErr, status) => {
-          if (getErr) {
-            console.log(`${LOG_PREFIX} Modem status read failed: ${jobLabel}: ${getErr.message}`)
-          } else if (!status) {
-            console.log(`${LOG_PREFIX} Modem status read failed: ${jobLabel}: unavailable`)
-          } else {
-            console.log(
-              `${LOG_PREFIX} Modem status: ${jobLabel}, cts=${status.cts}, dsr=${status.dsr}, dcd=${status.dcd}`,
-            )
-          }
-
-          console.log(`${LOG_PREFIX} Writing bytes: ${jobLabel}, bytes=${data.length}`)
-          writeEscposPayload(port, data).then(() => {
-              if (settled || closingForError) return
-
-              console.log(`${LOG_PREFIX} Write and drain complete: ${jobLabel}`)
-              clearTimeout(timeout)
-              closeTimeout = setTimeout(() => {
-                console.log(`${LOG_PREFIX} Close timeout: ${jobLabel}`)
-                fail(
-                  new Error(
-                    `ESC/POS serial close timeout on ${request.printer.path} after ${SERIAL_CLOSE_TIMEOUT_MS}ms`,
-                  ),
-                )
-              }, SERIAL_CLOSE_TIMEOUT_MS)
-
-              try {
-                console.log(`${LOG_PREFIX} Closing port: ${jobLabel}`)
-                port.close((closeErr) => {
-                  if (settled) return
-                  if (closeErr) {
-                    console.log(`${LOG_PREFIX} Close failed: ${jobLabel}: ${closeErr.message}`)
-                    fail(new Error(`ESC/POS serial close failed: ${closeErr.message}`))
-                    return
-                  }
-                  console.log(`${LOG_PREFIX} Port closed: ${jobLabel}`)
-                  finish()
-                })
-              } catch (err) {
-                const message = err instanceof Error ? err.message : 'Unknown close error'
-                console.log(`${LOG_PREFIX} Close threw: ${jobLabel}: ${message}`)
-                fail(new Error(`ESC/POS serial close failed: ${message}`))
-              }
-          }).catch((writeErr) => {
-            if (settled || closingForError) return
-            const message = writeErr instanceof Error ? writeErr.message : 'Unknown write error'
-            console.log(`${LOG_PREFIX} Write failed: ${jobLabel}: ${message}`)
-            failAndClose(new Error(`ESC/POS serial write failed: ${message}`))
-          })
-        })
-      }).catch((setErr) => {
-        if (settled || closingForError) return
-        const message = setErr instanceof Error ? setErr.message : 'Unknown DTR/RTS error'
-        console.log(`${LOG_PREFIX} Set configured DTR/RTS failed: ${jobLabel}: ${message}`)
-        failAndClose(new Error(`ESC/POS serial DTR/RTS failed: ${message}`))
-      })
-    })
-  })
+function printEscposSerial(request: EscposPrintRequest): Promise<void> {
+  const printJob = serialPrintQueue.then(() => printEscposSerialNow(request))
+  serialPrintQueue = printJob.catch(() => {})
+  return printJob
 }
 
 export function registerEscposHandlers(): void {
