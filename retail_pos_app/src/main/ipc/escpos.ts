@@ -3,6 +3,7 @@ import { SerialPort } from 'serialport'
 import type { EscposPrintRequest } from '../types'
 
 const MIN_SERIAL_TIMEOUT_MS = 5000
+const SERIAL_CLOSE_TIMEOUT_MS = 5000
 const SERIAL_TIMEOUT_MARGIN_MS = 10000
 const BITS_PER_BYTE_ON_WIRE = 10
 
@@ -26,6 +27,7 @@ function printEscposSerial(request: EscposPrintRequest): Promise<void> {
   return new Promise((resolve, reject) => {
     let settled = false
     let closingForError = false
+    let closeTimeout: NodeJS.Timeout | null = null
 
     const port = new SerialPort({
       path: request.printer.path,
@@ -40,6 +42,7 @@ function printEscposSerial(request: EscposPrintRequest): Promise<void> {
       if (settled) return
       settled = true
       clearTimeout(timeout)
+      if (closeTimeout) clearTimeout(closeTimeout)
       resolve()
     }
 
@@ -47,6 +50,7 @@ function printEscposSerial(request: EscposPrintRequest): Promise<void> {
       if (settled) return
       settled = true
       clearTimeout(timeout)
+      if (closeTimeout) clearTimeout(closeTimeout)
       reject(error)
     }
 
@@ -73,10 +77,8 @@ function printEscposSerial(request: EscposPrintRequest): Promise<void> {
 
     const timeout = setTimeout(() => {
       if (settled) return
-      settled = true
-      clearTimeout(timeout)
       closePort(port)
-      reject(
+      fail(
         new Error(
           `ESC/POS serial timeout on ${request.printer.path} after ${timeoutMs}ms`,
         ),
@@ -109,14 +111,27 @@ function printEscposSerial(request: EscposPrintRequest): Promise<void> {
           }
 
           clearTimeout(timeout)
-          port.close((closeErr) => {
-            if (settled) return
-            if (closeErr) {
-              fail(new Error(`ESC/POS serial close failed: ${closeErr.message}`))
-              return
-            }
-            finish()
-          })
+          closeTimeout = setTimeout(() => {
+            fail(
+              new Error(
+                `ESC/POS serial close timeout on ${request.printer.path} after ${SERIAL_CLOSE_TIMEOUT_MS}ms`,
+              ),
+            )
+          }, SERIAL_CLOSE_TIMEOUT_MS)
+
+          try {
+            port.close((closeErr) => {
+              if (settled) return
+              if (closeErr) {
+                fail(new Error(`ESC/POS serial close failed: ${closeErr.message}`))
+                return
+              }
+              finish()
+            })
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unknown close error'
+            fail(new Error(`ESC/POS serial close failed: ${message}`))
+          }
         })
       })
     })
