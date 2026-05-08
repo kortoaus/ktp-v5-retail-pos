@@ -1,0 +1,92 @@
+import { ipcMain } from 'electron'
+import { SerialPort } from 'serialport'
+import type { EscposPrintRequest } from '../types'
+
+const MIN_SERIAL_TIMEOUT_MS = 5000
+const SERIAL_TIMEOUT_MARGIN_MS = 10000
+const BITS_PER_BYTE_ON_WIRE = 10
+
+function getSerialTimeoutMs(bytes: number, baudRate: number): number {
+  const bytesPerSecond = Math.max(1, baudRate / BITS_PER_BYTE_ON_WIRE)
+  const estimatedMs = Math.ceil((bytes / bytesPerSecond) * 1000)
+  return Math.max(MIN_SERIAL_TIMEOUT_MS, estimatedMs + SERIAL_TIMEOUT_MARGIN_MS)
+}
+
+function closePort(port: SerialPort): void {
+  if (!port.isOpen) return
+  try {
+    port.close()
+  } catch {}
+}
+
+function printEscposSerial(request: EscposPrintRequest): Promise<void> {
+  const data = Buffer.from(request.data)
+  const timeoutMs = getSerialTimeoutMs(data.length, request.printer.baudRate)
+
+  return new Promise((resolve, reject) => {
+    const port = new SerialPort({
+      path: request.printer.path,
+      baudRate: request.printer.baudRate,
+      dataBits: 8,
+      parity: 'none',
+      stopBits: 1,
+      autoOpen: false,
+    })
+
+    const timeout = setTimeout(() => {
+      closePort(port)
+      reject(
+        new Error(
+          `ESC/POS serial timeout on ${request.printer.path} after ${timeoutMs}ms`,
+        ),
+      )
+    }, timeoutMs)
+
+    port.open((openErr) => {
+      if (openErr) {
+        clearTimeout(timeout)
+        reject(new Error(`ESC/POS serial open failed: ${openErr.message}`))
+        return
+      }
+
+      port.write(data, (writeErr) => {
+        if (writeErr) {
+          clearTimeout(timeout)
+          closePort(port)
+          reject(new Error(`ESC/POS serial write failed: ${writeErr.message}`))
+          return
+        }
+
+        port.drain((drainErr) => {
+          if (drainErr) {
+            clearTimeout(timeout)
+            closePort(port)
+            reject(new Error(`ESC/POS serial drain failed: ${drainErr.message}`))
+            return
+          }
+
+          clearTimeout(timeout)
+          port.close((closeErr) => {
+            if (closeErr) {
+              reject(new Error(`ESC/POS serial close failed: ${closeErr.message}`))
+              return
+            }
+            resolve()
+          })
+        })
+      })
+    })
+  })
+}
+
+export function registerEscposHandlers(): void {
+  ipcMain.handle('escpos:print', async (_event, request: EscposPrintRequest) => {
+    try {
+      await printEscposSerial(request)
+      return { ok: true, message: 'Printed' }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown ESC/POS error'
+      return { ok: false, message }
+    }
+  })
+}

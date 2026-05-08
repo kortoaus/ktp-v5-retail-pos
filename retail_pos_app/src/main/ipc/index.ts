@@ -4,6 +4,7 @@ import { registerConfigHandlers } from './config'
 import { registerSerialHandlers, closeActivePort } from './serial'
 import { registerScaleHandlers, autoConnectScale, disconnectScale } from './scale'
 import { registerLabelHandlers } from './label'
+import { registerEscposHandlers } from './escpos'
 
 export function registerAllHandlers(
   getMainWindow: () => BrowserWindow | null,
@@ -14,6 +15,7 @@ export function registerAllHandlers(
   registerSerialHandlers(getMainWindow)
   registerScaleHandlers(getMainWindow)
   registerLabelHandlers()
+  registerEscposHandlers()
 }
 
 export { autoConnectScale }
