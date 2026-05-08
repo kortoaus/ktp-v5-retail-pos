@@ -33,9 +33,21 @@ export interface ZplSerialConfig {
   mediaSize?: MediaSize
 }
 
-export interface EscposPrinterConfig {
-  host: string
-  port: number
+export type EscposPrinterConfig =
+  | {
+      type: 'net'
+      host: string
+      port: number
+    }
+  | {
+      type: 'serial'
+      path: string
+      baudRate: number
+    }
+
+export interface EscposPrintRequest {
+  printer: Extract<EscposPrinterConfig, { type: 'serial' }>
+  data: number[]
 }
 
 export interface DeviceConfig {
@@ -104,6 +116,7 @@ export interface ElectronAPI {
   onBarcodeScan: (callback: (barcode: string) => void) => () => void
 
   printLabel: (request: LabelSendRequest) => Promise<{ ok: boolean; message: string }>
+  printEscpos: (request: EscposPrintRequest) => Promise<{ ok: boolean; message: string }>
 }
 
 declare global {

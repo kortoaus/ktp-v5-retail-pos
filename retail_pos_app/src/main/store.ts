@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
-import type { AppConfig, ZplSerialConfig } from './types'
+import type { AppConfig, EscposPrinterConfig, ZplSerialConfig } from './types'
 
 const DEFAULT_CONFIG: AppConfig = {
   server: null,
@@ -21,6 +21,40 @@ function migrateZplSerial(raw: unknown): ZplSerialConfig[] {
     return [{ name: old.name ?? 'Serial', path: old.path, language: old.language }]
   }
   return []
+}
+
+function migrateEscposPrinter(raw: unknown): EscposPrinterConfig | null {
+  if (!raw || typeof raw !== 'object') return null
+
+  if ('type' in raw) {
+    const printer = raw as Partial<EscposPrinterConfig>
+    if (printer.type === 'net' && 'host' in printer && 'port' in printer) {
+      return {
+        type: 'net',
+        host: String(printer.host),
+        port: Number(printer.port),
+      }
+    }
+    if (printer.type === 'serial' && 'path' in printer && 'baudRate' in printer) {
+      return {
+        type: 'serial',
+        path: String(printer.path),
+        baudRate: Number(printer.baudRate),
+      }
+    }
+    return null
+  }
+
+  if ('host' in raw && 'port' in raw) {
+    const old = raw as { host: string; port: number }
+    return {
+      type: 'net',
+      host: old.host,
+      port: Number(old.port),
+    }
+  }
+
+  return null
 }
 
 function getConfigPath(): string {
@@ -43,7 +77,7 @@ export function loadConfig(): AppConfig {
         scale: parsed.devices?.scale ?? null,
         zplSerial: migrateZplSerial(parsed.devices?.zplSerial),
         zplNet: parsed.devices?.zplNet ?? [],
-        escposPrinter: parsed.devices?.escposPrinter ?? null
+        escposPrinter: migrateEscposPrinter(parsed.devices?.escposPrinter)
       }
     }
   } catch {
