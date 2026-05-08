@@ -249,7 +249,7 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 | USB HID Barcode Scanner      | Keyboard emulation | Done   |
 | Label Printer (ZPL)          | Network / Serial   | Done   |
 | Label Printer (SLCS/Bixolon) | Network / Serial   | Done   |
-| ESC/POS Receipt Printer      | Serial             | Done   |
+| ESC/POS Receipt Printer      | Network / Serial   | Done   |
 | Cash Drawer                  | Via ESC/POS kick   | Done   |
 
 ## Permissions

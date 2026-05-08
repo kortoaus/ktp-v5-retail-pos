@@ -375,6 +375,8 @@ export default function InterfaceSettingsScreen() {
   }, [fetchPorts]);
 
   const handleSave = async () => {
+    setSaved(false);
+
     let escposPrinter:
       | { type: "net"; host: string; port: number }
       | { type: "serial"; path: string; baudRate: number }
