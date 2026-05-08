@@ -43,10 +43,15 @@ interface ZplNetEntry {
   mediaSize?: MediaSize;
 }
 
+type EscposTransport = "net" | "serial";
+
 interface EscposForm {
   enabled: boolean;
+  type: EscposTransport;
   host: string;
   port: number;
+  path: string;
+  baudRate: number;
 }
 
 type LabelTestPrinter =
@@ -292,8 +297,11 @@ const SCALE_DEFAULTS: ScaleForm = {
 
 const ESCPOS_DEFAULTS: EscposForm = {
   enabled: false,
+  type: "net",
   host: "",
   port: 9100,
+  path: "",
+  baudRate: 115200,
 };
 
 const PARITIES: Parity[] = ["none", "even", "odd", "mark", "space"];
@@ -350,7 +358,15 @@ export default function InterfaceSettingsScreen() {
         setZplNet(config.devices.zplNet);
       }
       if (config.devices.escposPrinter) {
-        setEscpos({ enabled: true, ...config.devices.escposPrinter });
+        const printer = config.devices.escposPrinter;
+        setEscpos((prev) => ({
+          ...prev,
+          enabled: true,
+          type: printer.type,
+          ...(printer.type === "net"
+            ? { host: printer.host, port: printer.port }
+            : { path: printer.path, baudRate: printer.baudRate }),
+        }));
       }
 
       setLoading(false);
@@ -391,7 +407,13 @@ export default function InterfaceSettingsScreen() {
             ...(e.mediaSize ? { mediaSize: e.mediaSize } : {}),
           })),
         escposPrinter: escpos.enabled
-          ? { host: escpos.host, port: escpos.port }
+          ? escpos.type === "net"
+            ? { type: "net", host: escpos.host, port: escpos.port }
+            : {
+                type: "serial",
+                path: escpos.path,
+                baudRate: escpos.baudRate,
+              }
           : null,
       },
     });
@@ -1039,33 +1061,89 @@ export default function InterfaceSettingsScreen() {
               onChange={(v) => setEscpos((s) => ({ ...s, enabled: v }))}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Host</label>
-              <input
-                type="text"
-                className={inputClass}
-                disabled={!escpos.enabled}
-                value={escpos.host}
-                onChange={(e) =>
-                  setEscpos((s) => ({ ...s, host: e.target.value }))
-                }
-                placeholder="192.168.1.101"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Port</label>
-              <input
-                type="number"
-                className={inputClass}
-                disabled={!escpos.enabled}
-                value={escpos.port}
-                onChange={(e) =>
-                  setEscpos((s) => ({ ...s, port: Number(e.target.value) }))
-                }
-              />
-            </div>
+          <div className="mb-4">
+            <label className={labelClass}>Transport</label>
+            <select
+              className={selectClass}
+              disabled={!escpos.enabled}
+              value={escpos.type}
+              onChange={(e) =>
+                setEscpos((s) => ({
+                  ...s,
+                  type: e.target.value as EscposTransport,
+                }))
+              }
+            >
+              <option value="net">Network</option>
+              <option value="serial">Serial</option>
+            </select>
           </div>
+
+          {escpos.type === "net" ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Host</label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.host}
+                  onChange={(e) =>
+                    setEscpos((s) => ({ ...s, host: e.target.value }))
+                  }
+                  placeholder="192.168.1.101"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Port</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.port}
+                  onChange={(e) =>
+                    setEscpos((s) => ({ ...s, port: Number(e.target.value) }))
+                  }
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Serial Port</label>
+                <select
+                  className={selectClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.path}
+                  onChange={(e) =>
+                    setEscpos((s) => ({ ...s, path: e.target.value }))
+                  }
+                >
+                  <option value="">Select port</option>
+                  {ports.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Baud Rate</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.baudRate}
+                  onChange={(e) =>
+                    setEscpos((s) => ({
+                      ...s,
+                      baudRate: Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+            </div>
+          )}
         </section>
 
         <div className="flex items-center gap-3">
