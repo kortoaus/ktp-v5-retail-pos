@@ -16,7 +16,9 @@ const LOG_PREFIX = '[ESC/POS:Serial]'
 const CONTROL_LINE_SETTLE_MS = 250
 const ESC = 0x1b
 const ESC_INIT = 0x40
-const INIT_SETTLE_MS = 750
+const INIT_SETTLE_MS = 1500
+const SERIAL_BODY_GUARD_BYTES = 256
+const SERIAL_BODY_GUARD_SETTLE_MS = 250
 
 const CONTROL_LINE_MATRIX = [
   { label: 'DTR=true RTS=false', dtr: true, rts: false },
@@ -135,15 +137,41 @@ function writeAndDrain(port: SerialPort, data: Buffer): Promise<void> {
   })
 }
 
+function hexPreview(data: Buffer, length = 16): string {
+  return data
+    .subarray(0, length)
+    .toString('hex')
+    .match(/.{1,2}/g)
+    ?.join(' ') ?? ''
+}
+
 async function writeEscposPayload(port: SerialPort, data: Buffer): Promise<void> {
   if (data.length >= 2 && data[0] === ESC && data[1] === ESC_INIT) {
+    console.log(
+      `${LOG_PREFIX} Payload starts with ESC @, splitting init/body: bytes=${data.length}, first16=${hexPreview(data)}`,
+    )
     await writeAndDrain(port, data.subarray(0, 2))
+    console.log(`${LOG_PREFIX} Init write drained, settling ${INIT_SETTLE_MS}ms`)
     await delay(INIT_SETTLE_MS)
     if (data.length === 2) return
+
+    const guard = Buffer.alloc(SERIAL_BODY_GUARD_BYTES, 0)
+    console.log(
+      `${LOG_PREFIX} Writing serial body guard: bytes=${guard.length}, settle=${SERIAL_BODY_GUARD_SETTLE_MS}ms`,
+    )
+    await writeAndDrain(port, guard)
+    await delay(SERIAL_BODY_GUARD_SETTLE_MS)
+
+    console.log(
+      `${LOG_PREFIX} Writing serial body: bytes=${data.length - 2}, first16=${hexPreview(data.subarray(2))}`,
+    )
     await writeAndDrain(port, data.subarray(2))
     return
   }
 
+  console.log(
+    `${LOG_PREFIX} Writing payload without leading ESC @: bytes=${data.length}, first16=${hexPreview(data)}`,
+  )
   await writeAndDrain(port, data)
 }
 

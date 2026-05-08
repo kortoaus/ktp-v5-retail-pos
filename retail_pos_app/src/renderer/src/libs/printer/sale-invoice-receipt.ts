@@ -476,7 +476,7 @@ export async function printSaleInvoiceReceipt(
       encoding: receiptConfig.encoding,
       cut: true,
     });
-    await printESCPOS(buffer);
+    await printESCPOS(buffer, { serialCopies: 2, stripSerialInit: true });
     return;
   }
 
@@ -520,7 +520,7 @@ export async function printSaleInvoiceReprint(
         encoding: receiptConfig.encoding,
       },
     );
-    await printESCPOS(buffer);
+    await printESCPOS(buffer, { serialCopies: 2, stripSerialInit: true });
     return;
   }
 
