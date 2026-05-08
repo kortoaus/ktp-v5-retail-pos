@@ -65,8 +65,8 @@ function printEscposSerial(request: EscposPrintRequest): Promise<void> {
             return
           }
 
-          clearTimeout(timeout)
           port.close((closeErr) => {
+            clearTimeout(timeout)
             if (closeErr) {
               reject(new Error(`ESC/POS serial close failed: ${closeErr.message}`))
               return
