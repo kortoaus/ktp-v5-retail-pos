@@ -47,6 +47,8 @@ interface ZplNetEntry {
 type EscposTransport = "net" | "serial";
 type EscposSerialParity = "none" | "even" | "odd" | "mark" | "space";
 type EscposSerialHandshaking = "none" | "dtr-dsr" | "rts-cts" | "xon-xoff";
+type ReceiptPrintMode = "raster" | "escpos";
+type ReceiptTextEncoding = "ascii-replace" | "cp949" | "euc-kr";
 
 interface EscposForm {
   enabled: boolean;
@@ -61,6 +63,8 @@ interface EscposForm {
   handshaking: EscposSerialHandshaking;
   dtr: boolean;
   rts: boolean;
+  receiptPrintMode: ReceiptPrintMode;
+  receiptTextEncoding: ReceiptTextEncoding;
 }
 
 type LabelTestPrinter =
@@ -317,6 +321,8 @@ const ESCPOS_DEFAULTS: EscposForm = {
   handshaking: "dtr-dsr",
   dtr: true,
   rts: true,
+  receiptPrintMode: "raster",
+  receiptTextEncoding: "ascii-replace",
 };
 
 const PARITIES: Parity[] = ["none", "even", "odd", "mark", "space"];
@@ -338,6 +344,23 @@ const ESCPOS_HANDSHAKING: Array<{
   { value: "dtr-dsr", label: "DTR/DSR" },
   { value: "rts-cts", label: "RTS/CTS" },
   { value: "xon-xoff", label: "XON/XOFF" },
+];
+
+const RECEIPT_PRINT_MODES: Array<{
+  value: ReceiptPrintMode;
+  label: string;
+}> = [
+  { value: "raster", label: "Raster Image" },
+  { value: "escpos", label: "ESC/POS Command" },
+];
+
+const RECEIPT_TEXT_ENCODINGS: Array<{
+  value: ReceiptTextEncoding;
+  label: string;
+}> = [
+  { value: "ascii-replace", label: "ASCII replace" },
+  { value: "cp949", label: "CP949" },
+  { value: "euc-kr", label: "EUC-KR" },
 ];
 
 const inputClass =
@@ -419,6 +442,9 @@ export default function InterfaceSettingsScreen() {
         const printer = config.devices.escposPrinter;
         setEscpos((prev) => ({
           ...prev,
+          receiptPrintMode: config.devices.receiptPrintMode ?? "raster",
+          receiptTextEncoding:
+            config.devices.receiptTextEncoding ?? "ascii-replace",
           enabled: true,
           type: printer.type,
           ...(printer.type === "net"
@@ -433,6 +459,13 @@ export default function InterfaceSettingsScreen() {
                 dtr: printer.dtr,
                 rts: printer.rts,
               }),
+        }));
+      } else {
+        setEscpos((prev) => ({
+          ...prev,
+          receiptPrintMode: config.devices.receiptPrintMode ?? "raster",
+          receiptTextEncoding:
+            config.devices.receiptTextEncoding ?? "ascii-replace",
         }));
       }
 
@@ -535,6 +568,8 @@ export default function InterfaceSettingsScreen() {
             ...(e.mediaSize ? { mediaSize: e.mediaSize } : {}),
           })),
         escposPrinter,
+        receiptPrintMode: escpos.receiptPrintMode,
+        receiptTextEncoding: escpos.receiptTextEncoding,
       },
     });
 
@@ -1295,6 +1330,49 @@ export default function InterfaceSettingsScreen() {
               <option value="net">Network</option>
               <option value="serial">Serial</option>
             </select>
+          </div>
+
+          <div className="mb-4 grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Receipt Mode</label>
+              <select
+                className={selectClass}
+                disabled={!escpos.enabled}
+                value={escpos.receiptPrintMode}
+                onChange={(e) =>
+                  setEscpos((s) => ({
+                    ...s,
+                    receiptPrintMode: e.target.value as ReceiptPrintMode,
+                  }))
+                }
+              >
+                {RECEIPT_PRINT_MODES.map((mode) => (
+                  <option key={mode.value} value={mode.value}>
+                    {mode.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Text Encoding</label>
+              <select
+                className={selectClass}
+                disabled={!escpos.enabled}
+                value={escpos.receiptTextEncoding}
+                onChange={(e) =>
+                  setEscpos((s) => ({
+                    ...s,
+                    receiptTextEncoding: e.target.value as ReceiptTextEncoding,
+                  }))
+                }
+              >
+                {RECEIPT_TEXT_ENCODINGS.map((encoding) => (
+                  <option key={encoding.value} value={encoding.value}>
+                    {encoding.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {escpos.type === "net" ? (
