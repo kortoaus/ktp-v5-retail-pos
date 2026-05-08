@@ -19,6 +19,38 @@ function closePort(port: SerialPort): void {
   } catch {}
 }
 
+function closePortBeforeReject(
+  port: SerialPort,
+  reject: (reason?: unknown) => void,
+  timeout: NodeJS.Timeout,
+  originalError: Error | null,
+  closeErrorPrefix: string,
+): void {
+  const rejectWithOriginalOrClose = (closeErr?: Error | null): void => {
+    clearTimeout(timeout)
+    if (originalError) {
+      reject(originalError)
+      return
+    }
+    if (closeErr) {
+      reject(new Error(`${closeErrorPrefix}: ${closeErr.message}`))
+      return
+    }
+    reject(new Error('Unknown ESC/POS error'))
+  }
+
+  if (!port.isOpen) {
+    rejectWithOriginalOrClose(null)
+    return
+  }
+
+  try {
+    port.close(rejectWithOriginalOrClose)
+  } catch (err) {
+    rejectWithOriginalOrClose(err instanceof Error ? err : null)
+  }
+}
+
 function printEscposSerial(request: EscposPrintRequest): Promise<void> {
   const data = Buffer.from(request.data)
   const timeoutMs = getSerialTimeoutMs(data.length, request.printer.baudRate)
@@ -51,17 +83,25 @@ function printEscposSerial(request: EscposPrintRequest): Promise<void> {
 
       port.write(data, (writeErr) => {
         if (writeErr) {
-          clearTimeout(timeout)
-          closePort(port)
-          reject(new Error(`ESC/POS serial write failed: ${writeErr.message}`))
+          closePortBeforeReject(
+            port,
+            reject,
+            timeout,
+            new Error(`ESC/POS serial write failed: ${writeErr.message}`),
+            'ESC/POS serial close failed',
+          )
           return
         }
 
         port.drain((drainErr) => {
           if (drainErr) {
-            clearTimeout(timeout)
-            closePort(port)
-            reject(new Error(`ESC/POS serial drain failed: ${drainErr.message}`))
+            closePortBeforeReject(
+              port,
+              reject,
+              timeout,
+              new Error(`ESC/POS serial drain failed: ${drainErr.message}`),
+              'ESC/POS serial close failed',
+            )
             return
           }
 
