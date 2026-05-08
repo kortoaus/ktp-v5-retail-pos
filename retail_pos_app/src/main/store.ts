@@ -7,6 +7,8 @@ import type {
   EscposSerialHandshaking,
   EscposSerialParity,
   EscposSerialSettings,
+  ReceiptPrintMode,
+  ReceiptTextEncoding,
   ZplSerialConfig,
 } from './types'
 
@@ -16,7 +18,9 @@ const DEFAULT_CONFIG: AppConfig = {
     scale: null,
     zplSerial: [],
     zplNet: [],
-    escposPrinter: null
+    escposPrinter: null,
+    receiptPrintMode: 'raster',
+    receiptTextEncoding: 'ascii-replace',
   }
 }
 
@@ -36,6 +40,12 @@ const ESCPOS_HANDSHAKING: EscposSerialHandshaking[] = [
   'dtr-dsr',
   'rts-cts',
   'xon-xoff',
+]
+const RECEIPT_PRINT_MODES: ReceiptPrintMode[] = ['raster', 'escpos']
+const RECEIPT_TEXT_ENCODINGS: ReceiptTextEncoding[] = [
+  'ascii-replace',
+  'cp949',
+  'euc-kr',
 ]
 
 /** Backwards compat: old config stored zplSerial as a single object or null */
@@ -81,6 +91,20 @@ function parseEscposHandshaking(value: unknown): EscposSerialHandshaking {
 
 function parseBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
+}
+
+function parseReceiptPrintMode(value: unknown): ReceiptPrintMode {
+  return typeof value === 'string' &&
+    RECEIPT_PRINT_MODES.includes(value as ReceiptPrintMode)
+    ? (value as ReceiptPrintMode)
+    : DEFAULT_CONFIG.devices.receiptPrintMode
+}
+
+function parseReceiptTextEncoding(value: unknown): ReceiptTextEncoding {
+  return typeof value === 'string' &&
+    RECEIPT_TEXT_ENCODINGS.includes(value as ReceiptTextEncoding)
+    ? (value as ReceiptTextEncoding)
+    : DEFAULT_CONFIG.devices.receiptTextEncoding
 }
 
 function migrateEscposSerialSettings(printer: Record<string, unknown>): EscposSerialSettings {
@@ -158,7 +182,9 @@ export function loadConfig(): AppConfig {
         scale: parsed.devices?.scale ?? null,
         zplSerial: migrateZplSerial(parsed.devices?.zplSerial),
         zplNet: parsed.devices?.zplNet ?? [],
-        escposPrinter: migrateEscposPrinter(parsed.devices?.escposPrinter)
+        escposPrinter: migrateEscposPrinter(parsed.devices?.escposPrinter),
+        receiptPrintMode: parseReceiptPrintMode(parsed.devices?.receiptPrintMode),
+        receiptTextEncoding: parseReceiptTextEncoding(parsed.devices?.receiptTextEncoding),
       }
     }
   } catch {

@@ -19,6 +19,8 @@ export type LabelLanguage = 'zpl' | 'slcs'
 export type MediaSize = '7030' | '7090'
 export type EscposSerialParity = 'none' | 'even' | 'odd' | 'mark' | 'space'
 export type EscposSerialHandshaking = 'none' | 'dtr-dsr' | 'rts-cts' | 'xon-xoff'
+export type ReceiptPrintMode = 'raster' | 'escpos'
+export type ReceiptTextEncoding = 'ascii-replace' | 'cp949' | 'euc-kr'
 
 export interface EscposSerialSettings {
   baudRate: number
@@ -89,6 +91,8 @@ export interface DeviceConfig {
   zplSerial: ZplSerialConfig[]
   zplNet: ZplNetConfig[]
   escposPrinter: EscposPrinterConfig | null
+  receiptPrintMode: ReceiptPrintMode
+  receiptTextEncoding: ReceiptTextEncoding
 }
 
 export interface WeightResult {
