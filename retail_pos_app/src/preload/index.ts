@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppConfig, WeightResult, LabelSendRequest } from '../main/types'
+import type {
+  AppConfig,
+  EscposControlLineMatrixRequest,
+  EscposControlLineMatrixResult,
+  EscposPrintRequest,
+  LabelSendRequest,
+  WeightResult,
+} from '../main/types'
 
 contextBridge.exposeInMainWorld('electronAPI', {
   getSerialPorts: (): Promise<string[]> => ipcRenderer.invoke('serial:list-ports'),
@@ -36,5 +43,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   printLabel: (request: LabelSendRequest): Promise<{ ok: boolean; message: string }> =>
-    ipcRenderer.invoke('label:print', request)
+    ipcRenderer.invoke('label:print', request),
+
+  printEscpos: (request: EscposPrintRequest): Promise<{ ok: boolean; message: string }> =>
+    ipcRenderer.invoke('escpos:print', request),
+  testEscposControlLines: (
+    request: EscposControlLineMatrixRequest,
+  ): Promise<EscposControlLineMatrixResult> =>
+    ipcRenderer.invoke('escpos:test-control-lines', request)
 })

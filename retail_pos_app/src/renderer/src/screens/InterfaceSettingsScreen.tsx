@@ -9,6 +9,7 @@ import {
   buildKoreanVectorFontTest7090,
 } from "../libs/label-templates";
 import { buildPriceTag7090V2 } from "../libs/label-7090-v2";
+import { cutCommand, initPrinterCommand } from "../libs/printer/escpos";
 import type { Item } from "../types/models";
 import { useStoreSetting } from "../hooks/useStoreSetting";
 
@@ -43,10 +44,23 @@ interface ZplNetEntry {
   mediaSize?: MediaSize;
 }
 
+type EscposTransport = "net" | "serial";
+type EscposSerialParity = "none" | "even" | "odd" | "mark" | "space";
+type EscposSerialHandshaking = "none" | "dtr-dsr" | "rts-cts" | "xon-xoff";
+
 interface EscposForm {
   enabled: boolean;
+  type: EscposTransport;
   host: string;
   port: number;
+  path: string;
+  baudRate: number;
+  dataBits: 7 | 8;
+  parity: EscposSerialParity;
+  stopBits: 1 | 2;
+  handshaking: EscposSerialHandshaking;
+  dtr: boolean;
+  rts: boolean;
 }
 
 type LabelTestPrinter =
@@ -292,11 +306,39 @@ const SCALE_DEFAULTS: ScaleForm = {
 
 const ESCPOS_DEFAULTS: EscposForm = {
   enabled: false,
+  type: "net",
   host: "",
   port: 9100,
+  path: "",
+  baudRate: 38400,
+  dataBits: 8,
+  parity: "none",
+  stopBits: 1,
+  handshaking: "dtr-dsr",
+  dtr: true,
+  rts: true,
 };
 
 const PARITIES: Parity[] = ["none", "even", "odd", "mark", "space"];
+const ESCPOS_BAUD_RATES = [9600, 19200, 38400, 57600, 115200] as const;
+const ESCPOS_DATA_BITS = [7, 8] as const;
+const ESCPOS_STOP_BITS = [1, 2] as const;
+const ESCPOS_PARITIES: EscposSerialParity[] = [
+  "none",
+  "even",
+  "odd",
+  "mark",
+  "space",
+];
+const ESCPOS_HANDSHAKING: Array<{
+  value: EscposSerialHandshaking;
+  label: string;
+}> = [
+  { value: "none", label: "None" },
+  { value: "dtr-dsr", label: "DTR/DSR" },
+  { value: "rts-cts", label: "RTS/CTS" },
+  { value: "xon-xoff", label: "XON/XOFF" },
+];
 
 const inputClass =
   "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400";
@@ -304,6 +346,23 @@ const selectClass = inputClass;
 const labelClass = "block text-sm font-medium text-gray-700 mb-1";
 const btnSmClass =
   "text-xs font-medium px-3 py-1.5 rounded-lg transition-colors";
+
+function concatBytes(parts: Uint8Array[]): Uint8Array {
+  const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
+  const buffer = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const part of parts) {
+    buffer.set(part, offset);
+    offset += part.length;
+  }
+  return buffer;
+}
+
+function buildEscposSerialTestBuffer(): Uint8Array {
+  const text = "Hello World\n\n\n";
+  const textBytes = new Uint8Array([...text].map((char) => char.charCodeAt(0)));
+  return concatBytes([initPrinterCommand(), textBytes, cutCommand(3)]);
+}
 
 export default function InterfaceSettingsScreen() {
   const { user, loading: userLoading } = useUser();
@@ -321,8 +380,15 @@ export default function InterfaceSettingsScreen() {
   const [graphicTestMessage, setGraphicTestMessage] = useState("");
   const [graphicV2TestPrinting, setGraphicV2TestPrinting] = useState(false);
   const [graphicV2TestMessage, setGraphicV2TestMessage] = useState("");
+  const [escposTestPrinting, setEscposTestPrinting] = useState(false);
+  const [escposTestMessage, setEscposTestMessage] = useState("");
+  const [escposMatrixTesting, setEscposMatrixTesting] = useState(false);
   const isDiagnosticPrinting =
-    labelTestPrinting || graphicTestPrinting || graphicV2TestPrinting;
+    labelTestPrinting ||
+    graphicTestPrinting ||
+    graphicV2TestPrinting ||
+    escposTestPrinting ||
+    escposMatrixTesting;
   const [loading, setLoading] = useState(true);
 
   const fetchPorts = useCallback(async () => {
@@ -350,7 +416,24 @@ export default function InterfaceSettingsScreen() {
         setZplNet(config.devices.zplNet);
       }
       if (config.devices.escposPrinter) {
-        setEscpos({ enabled: true, ...config.devices.escposPrinter });
+        const printer = config.devices.escposPrinter;
+        setEscpos((prev) => ({
+          ...prev,
+          enabled: true,
+          type: printer.type,
+          ...(printer.type === "net"
+            ? { host: printer.host, port: printer.port }
+            : {
+                path: printer.path,
+                baudRate: printer.baudRate,
+                dataBits: printer.dataBits,
+                parity: printer.parity,
+                stopBits: printer.stopBits,
+                handshaking: printer.handshaking,
+                dtr: printer.dtr,
+                rts: printer.rts,
+              }),
+        }));
       }
 
       setLoading(false);
@@ -359,6 +442,67 @@ export default function InterfaceSettingsScreen() {
   }, [fetchPorts]);
 
   const handleSave = async () => {
+    setSaved(false);
+
+    let escposPrinter:
+      | { type: "net"; host: string; port: number }
+      | {
+          type: "serial";
+          path: string;
+          baudRate: number;
+          dataBits: 7 | 8;
+          parity: EscposSerialParity;
+          stopBits: 1 | 2;
+          handshaking: EscposSerialHandshaking;
+          dtr: boolean;
+          rts: boolean;
+        }
+      | null = null;
+
+    if (escpos.enabled) {
+      if (escpos.type === "net") {
+        const host = escpos.host.trim();
+        if (host === "") {
+          window.alert("Enter an ESC/POS printer host.");
+          return;
+        }
+        if (
+          !Number.isInteger(escpos.port) ||
+          escpos.port < 1 ||
+          escpos.port > 65535
+        ) {
+          window.alert("Enter an ESC/POS printer port from 1 to 65535.");
+          return;
+        }
+        escposPrinter = { type: "net", host, port: escpos.port };
+      } else {
+        const path = escpos.path.trim();
+        if (path === "") {
+          window.alert("Select an ESC/POS serial port.");
+          return;
+        }
+        if (
+          !Number.isInteger(escpos.baudRate) ||
+          escpos.baudRate < 1 ||
+          escpos.baudRate > 1000000
+        ) {
+          window.alert("Enter an ESC/POS baud rate from 1 to 1000000.");
+          return;
+        }
+        escposPrinter = {
+          type: "serial",
+          path,
+          baudRate: escpos.baudRate,
+          dataBits: escpos.dataBits,
+          parity: escpos.parity,
+          stopBits: escpos.stopBits,
+          handshaking: escpos.handshaking,
+          dtr: escpos.dtr,
+          rts: escpos.rts,
+        };
+      }
+    }
+
     const current = await window.electronAPI.getConfig();
     await window.electronAPI.setConfig({
       ...current,
@@ -390,9 +534,7 @@ export default function InterfaceSettingsScreen() {
             language: e.language,
             ...(e.mediaSize ? { mediaSize: e.mediaSize } : {}),
           })),
-        escposPrinter: escpos.enabled
-          ? { host: escpos.host, port: escpos.port }
-          : null,
+        escposPrinter,
       },
     });
 
@@ -403,6 +545,104 @@ export default function InterfaceSettingsScreen() {
 
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const getEscposSerialPrinter = (path: string) => ({
+    type: "serial" as const,
+    path,
+    baudRate: escpos.baudRate,
+    dataBits: escpos.dataBits,
+    parity: escpos.parity,
+    stopBits: escpos.stopBits,
+    handshaking: escpos.handshaking,
+    dtr: escpos.dtr,
+    rts: escpos.rts,
+  });
+
+  const handleEscposSerialTestPrint = async () => {
+    setEscposTestMessage("");
+    const path = escpos.path.trim();
+
+    if (!escpos.enabled || escpos.type !== "serial") {
+      setEscposTestMessage("Select Serial transport first.");
+      return;
+    }
+    if (path === "") {
+      setEscposTestMessage("Select an ESC/POS serial port.");
+      return;
+    }
+    if (
+      !Number.isInteger(escpos.baudRate) ||
+      escpos.baudRate < 1 ||
+      escpos.baudRate > 1000000
+    ) {
+      setEscposTestMessage("Enter an ESC/POS baud rate from 1 to 1000000.");
+      return;
+    }
+
+    setEscposTestPrinting(true);
+    try {
+      console.log(
+        `[ESC/POS:SerialTest] Sending Hello World: path=${path}, baudRate=${escpos.baudRate}`,
+      );
+      const result = await window.electronAPI.printEscpos({
+        printer: getEscposSerialPrinter(path),
+        data: Array.from(buildEscposSerialTestBuffer()),
+      });
+      console.log("[ESC/POS:SerialTest] Result:", result);
+      setEscposTestMessage(
+        result.ok ? "Sent Hello World test." : result.message,
+      );
+    } catch (err) {
+      console.error("[ESC/POS:SerialTest] IPC failed:", err);
+      setEscposTestMessage("Print failed: cannot reach serial printer bridge.");
+    } finally {
+      setEscposTestPrinting(false);
+    }
+  };
+
+  const handleEscposControlLineMatrixTest = async () => {
+    setEscposTestMessage("");
+    const path = escpos.path.trim();
+
+    if (!escpos.enabled || escpos.type !== "serial") {
+      setEscposTestMessage("Select Serial transport first.");
+      return;
+    }
+    if (path === "") {
+      setEscposTestMessage("Select an ESC/POS serial port.");
+      return;
+    }
+    if (
+      !Number.isInteger(escpos.baudRate) ||
+      escpos.baudRate < 1 ||
+      escpos.baudRate > 1000000
+    ) {
+      setEscposTestMessage("Enter an ESC/POS baud rate from 1 to 1000000.");
+      return;
+    }
+
+    setEscposMatrixTesting(true);
+    try {
+      console.log(
+        `[ESC/POS:SerialTest] Running control-line matrix: path=${path}, baudRate=${escpos.baudRate}`,
+      );
+      const result = await window.electronAPI.testEscposControlLines({
+        printer: getEscposSerialPrinter(path),
+        data: Array.from(buildEscposSerialTestBuffer()),
+      });
+      console.log("[ESC/POS:SerialTest] Control-line matrix result:", result);
+      setEscposTestMessage(
+        result.ok
+          ? "Control-line matrix sent. Check logs and printer output."
+          : `Control-line matrix failed: ${result.message}`,
+      );
+    } catch (err) {
+      console.error("[ESC/POS:SerialTest] Control-line matrix IPC failed:", err);
+      setEscposTestMessage("Matrix failed: cannot reach serial printer bridge.");
+    } finally {
+      setEscposMatrixTesting(false);
+    }
   };
 
   const addZplSerial = () => {
@@ -1039,33 +1279,244 @@ export default function InterfaceSettingsScreen() {
               onChange={(v) => setEscpos((s) => ({ ...s, enabled: v }))}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Host</label>
-              <input
-                type="text"
-                className={inputClass}
-                disabled={!escpos.enabled}
-                value={escpos.host}
-                onChange={(e) =>
-                  setEscpos((s) => ({ ...s, host: e.target.value }))
-                }
-                placeholder="192.168.1.101"
-              />
+          <div className="mb-4">
+            <label className={labelClass}>Transport</label>
+            <select
+              className={selectClass}
+              disabled={!escpos.enabled}
+              value={escpos.type}
+              onChange={(e) =>
+                setEscpos((s) => ({
+                  ...s,
+                  type: e.target.value as EscposTransport,
+                }))
+              }
+            >
+              <option value="net">Network</option>
+              <option value="serial">Serial</option>
+            </select>
+          </div>
+
+          {escpos.type === "net" ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Host</label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.host}
+                  onChange={(e) =>
+                    setEscpos((s) => ({ ...s, host: e.target.value }))
+                  }
+                  placeholder="192.168.1.101"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Port</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={65535}
+                  step={1}
+                  className={inputClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.port}
+                  onChange={(e) =>
+                    setEscpos((s) => ({ ...s, port: Number(e.target.value) }))
+                  }
+                />
+              </div>
             </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Serial Port</label>
+                <select
+                  className={selectClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.path}
+                  onChange={(e) =>
+                    setEscpos((s) => ({ ...s, path: e.target.value }))
+                  }
+                >
+                  <option value="">Select port</option>
+                  {ports.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Baud Rate</label>
+                <select
+                  className={selectClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.baudRate}
+                  onChange={(e) =>
+                    setEscpos((s) => ({
+                      ...s,
+                      baudRate: Number(e.target.value),
+                    }))
+                  }
+                >
+                  {!ESCPOS_BAUD_RATES.some(
+                    (rate) => rate === escpos.baudRate,
+                  ) && (
+                    <option value={escpos.baudRate}>
+                      {escpos.baudRate} (current)
+                    </option>
+                  )}
+                  {ESCPOS_BAUD_RATES.map((rate) => (
+                    <option key={rate} value={rate}>
+                      {rate}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Data Bits</label>
+                <select
+                  className={selectClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.dataBits}
+                  onChange={(e) =>
+                    setEscpos((s) => ({
+                      ...s,
+                      dataBits: Number(e.target.value) as 7 | 8,
+                    }))
+                  }
+                >
+                  {ESCPOS_DATA_BITS.map((bits) => (
+                    <option key={bits} value={bits}>
+                      {bits}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Parity</label>
+                <select
+                  className={selectClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.parity}
+                  onChange={(e) =>
+                    setEscpos((s) => ({
+                      ...s,
+                      parity: e.target.value as EscposSerialParity,
+                    }))
+                  }
+                >
+                  {ESCPOS_PARITIES.map((parity) => (
+                    <option key={parity} value={parity}>
+                      {parity}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Stop Bits</label>
+                <select
+                  className={selectClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.stopBits}
+                  onChange={(e) =>
+                    setEscpos((s) => ({
+                      ...s,
+                      stopBits: Number(e.target.value) as 1 | 2,
+                    }))
+                  }
+                >
+                  {ESCPOS_STOP_BITS.map((bits) => (
+                    <option key={bits} value={bits}>
+                      {bits}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Handshaking</label>
+                <select
+                  className={selectClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.handshaking}
+                  onChange={(e) =>
+                    setEscpos((s) => ({
+                      ...s,
+                      handshaking: e.target.value as EscposSerialHandshaking,
+                    }))
+                  }
+                >
+                  {ESCPOS_HANDSHAKING.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={escpos.dtr}
+                  disabled={!escpos.enabled}
+                  onChange={(e) =>
+                    setEscpos((s) => ({ ...s, dtr: e.target.checked }))
+                  }
+                />
+                <span className="text-sm font-medium text-gray-700">DTR on</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={escpos.rts}
+                  disabled={!escpos.enabled || escpos.handshaking === "rts-cts"}
+                  onChange={(e) =>
+                    setEscpos((s) => ({ ...s, rts: e.target.checked }))
+                  }
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  RTS on
+                </span>
+              </label>
+            </div>
+          )}
+          <div className="mt-4 flex items-center justify-between gap-4 border-t border-gray-100 pt-4">
             <div>
-              <label className={labelClass}>Port</label>
-              <input
-                type="number"
-                className={inputClass}
-                disabled={!escpos.enabled}
-                value={escpos.port}
-                onChange={(e) =>
-                  setEscpos((s) => ({ ...s, port: Number(e.target.value) }))
+              <h3 className="text-sm font-semibold text-gray-900">
+                Serial Test
+              </h3>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleEscposControlLineMatrixTest}
+                disabled={
+                  isDiagnosticPrinting || !escpos.enabled || escpos.type !== "serial"
                 }
-              />
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                <IoPrintOutline size={18} />
+                {escposMatrixTesting ? "Testing..." : "DTR/RTS Matrix"}
+              </button>
+              <button
+                type="button"
+                onClick={handleEscposSerialTestPrint}
+                disabled={
+                  isDiagnosticPrinting || !escpos.enabled || escpos.type !== "serial"
+                }
+                className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-900 disabled:cursor-not-allowed disabled:bg-gray-300"
+              >
+                <IoPrintOutline size={18} />
+                {escposTestPrinting ? "Printing..." : "Print Hello World"}
+              </button>
             </div>
           </div>
+          {escposTestMessage && (
+            <p className="mt-3 text-sm font-medium text-gray-600">
+              {escposTestMessage}
+            </p>
+          )}
         </section>
 
         <div className="flex items-center gap-3">
