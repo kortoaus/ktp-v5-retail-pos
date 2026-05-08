@@ -5,6 +5,7 @@ import type {
   EscposControlLineMatrixResult,
   EscposPrintRequest,
   LabelSendRequest,
+  TextEncodeRequest,
   WeightResult,
 } from '../main/types'
 
@@ -24,6 +25,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getConfig: (): Promise<AppConfig> => ipcRenderer.invoke('config:get'),
   setConfig: (config: AppConfig): Promise<AppConfig> =>
     ipcRenderer.invoke('config:set', config),
+  encodeText: (request: TextEncodeRequest): Promise<number[]> =>
+    ipcRenderer.invoke('text:encode', request),
 
   getNetworkIp: (): Promise<string | null> => ipcRenderer.invoke('app:get-network-ip'),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),

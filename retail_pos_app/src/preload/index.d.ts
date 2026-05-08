@@ -22,6 +22,11 @@ export type EscposSerialHandshaking = 'none' | 'dtr-dsr' | 'rts-cts' | 'xon-xoff
 export type ReceiptPrintMode = 'raster' | 'escpos'
 export type ReceiptTextEncoding = 'ascii-replace' | 'cp949' | 'euc-kr'
 
+export interface TextEncodeRequest {
+  text: string
+  encoding: ReceiptTextEncoding
+}
+
 export interface EscposSerialSettings {
   baudRate: number
   dataBits: 7 | 8
@@ -140,6 +145,7 @@ export interface ElectronAPI {
 
   getConfig: () => Promise<AppConfig>
   setConfig: (config: AppConfig) => Promise<AppConfig>
+  encodeText: (request: TextEncodeRequest) => Promise<number[]>
 
   getNetworkIp: () => Promise<string | null>
   getAppVersion: () => Promise<string>

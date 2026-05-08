@@ -5,6 +5,7 @@ import { registerSerialHandlers, closeActivePort } from './serial'
 import { registerScaleHandlers, autoConnectScale, disconnectScale } from './scale'
 import { registerLabelHandlers } from './label'
 import { registerEscposHandlers } from './escpos'
+import { registerTextEncodingHandlers } from './text-encoding'
 
 export function registerAllHandlers(
   getMainWindow: () => BrowserWindow | null,
@@ -12,6 +13,7 @@ export function registerAllHandlers(
 ): void {
   registerAppHandlers(getMainWindow, toggleCustomerDisplay)
   registerConfigHandlers()
+  registerTextEncodingHandlers()
   registerSerialHandlers(getMainWindow)
   registerScaleHandlers(getMainWindow)
   registerLabelHandlers()
