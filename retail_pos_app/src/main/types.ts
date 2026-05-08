@@ -16,6 +16,18 @@ export interface ScaleConfig {
 
 export type LabelLanguage = "zpl" | "slcs";
 export type MediaSize = "7030" | "7090";
+export type EscposSerialParity = "none" | "even" | "odd" | "mark" | "space";
+export type EscposSerialHandshaking = "none" | "dtr-dsr" | "rts-cts" | "xon-xoff";
+
+export interface EscposSerialSettings {
+  baudRate: number;
+  dataBits: 7 | 8;
+  parity: EscposSerialParity;
+  stopBits: 1 | 2;
+  handshaking: EscposSerialHandshaking;
+  dtr: boolean;
+  rts: boolean;
+}
 
 export interface ZplNetConfig {
   name: string;
@@ -38,15 +50,37 @@ export type EscposPrinterConfig =
       host: string;
       port: number;
     }
-  | {
+  | ({
       type: "serial";
       path: string;
-      baudRate: number;
-    };
+    } & EscposSerialSettings);
 
 export interface EscposPrintRequest {
   printer: Extract<EscposPrinterConfig, { type: "serial" }>;
   data: number[];
+}
+
+export interface EscposModemStatus {
+  cts: boolean;
+  dsr: boolean;
+  dcd: boolean;
+}
+
+export interface EscposControlLineMatrixEntry {
+  label: string;
+  dtr: boolean;
+  rts: boolean;
+  status: EscposModemStatus | null;
+  ok: boolean;
+  message: string;
+}
+
+export interface EscposControlLineMatrixRequest extends EscposPrintRequest {}
+
+export interface EscposControlLineMatrixResult {
+  ok: boolean;
+  message: string;
+  entries: EscposControlLineMatrixEntry[];
 }
 
 export interface DeviceConfig {

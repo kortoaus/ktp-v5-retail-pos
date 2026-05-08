@@ -45,6 +45,8 @@ interface ZplNetEntry {
 }
 
 type EscposTransport = "net" | "serial";
+type EscposSerialParity = "none" | "even" | "odd" | "mark" | "space";
+type EscposSerialHandshaking = "none" | "dtr-dsr" | "rts-cts" | "xon-xoff";
 
 interface EscposForm {
   enabled: boolean;
@@ -53,6 +55,12 @@ interface EscposForm {
   port: number;
   path: string;
   baudRate: number;
+  dataBits: 7 | 8;
+  parity: EscposSerialParity;
+  stopBits: 1 | 2;
+  handshaking: EscposSerialHandshaking;
+  dtr: boolean;
+  rts: boolean;
 }
 
 type LabelTestPrinter =
@@ -302,11 +310,35 @@ const ESCPOS_DEFAULTS: EscposForm = {
   host: "",
   port: 9100,
   path: "",
-  baudRate: 115200,
+  baudRate: 38400,
+  dataBits: 8,
+  parity: "none",
+  stopBits: 1,
+  handshaking: "dtr-dsr",
+  dtr: true,
+  rts: true,
 };
 
 const PARITIES: Parity[] = ["none", "even", "odd", "mark", "space"];
 const ESCPOS_BAUD_RATES = [9600, 19200, 38400, 57600, 115200] as const;
+const ESCPOS_DATA_BITS = [7, 8] as const;
+const ESCPOS_STOP_BITS = [1, 2] as const;
+const ESCPOS_PARITIES: EscposSerialParity[] = [
+  "none",
+  "even",
+  "odd",
+  "mark",
+  "space",
+];
+const ESCPOS_HANDSHAKING: Array<{
+  value: EscposSerialHandshaking;
+  label: string;
+}> = [
+  { value: "none", label: "None" },
+  { value: "dtr-dsr", label: "DTR/DSR" },
+  { value: "rts-cts", label: "RTS/CTS" },
+  { value: "xon-xoff", label: "XON/XOFF" },
+];
 
 const inputClass =
   "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400";
@@ -350,11 +382,13 @@ export default function InterfaceSettingsScreen() {
   const [graphicV2TestMessage, setGraphicV2TestMessage] = useState("");
   const [escposTestPrinting, setEscposTestPrinting] = useState(false);
   const [escposTestMessage, setEscposTestMessage] = useState("");
+  const [escposMatrixTesting, setEscposMatrixTesting] = useState(false);
   const isDiagnosticPrinting =
     labelTestPrinting ||
     graphicTestPrinting ||
     graphicV2TestPrinting ||
-    escposTestPrinting;
+    escposTestPrinting ||
+    escposMatrixTesting;
   const [loading, setLoading] = useState(true);
 
   const fetchPorts = useCallback(async () => {
@@ -389,7 +423,16 @@ export default function InterfaceSettingsScreen() {
           type: printer.type,
           ...(printer.type === "net"
             ? { host: printer.host, port: printer.port }
-            : { path: printer.path, baudRate: printer.baudRate }),
+            : {
+                path: printer.path,
+                baudRate: printer.baudRate,
+                dataBits: printer.dataBits,
+                parity: printer.parity,
+                stopBits: printer.stopBits,
+                handshaking: printer.handshaking,
+                dtr: printer.dtr,
+                rts: printer.rts,
+              }),
         }));
       }
 
@@ -403,7 +446,17 @@ export default function InterfaceSettingsScreen() {
 
     let escposPrinter:
       | { type: "net"; host: string; port: number }
-      | { type: "serial"; path: string; baudRate: number }
+      | {
+          type: "serial";
+          path: string;
+          baudRate: number;
+          dataBits: 7 | 8;
+          parity: EscposSerialParity;
+          stopBits: 1 | 2;
+          handshaking: EscposSerialHandshaking;
+          dtr: boolean;
+          rts: boolean;
+        }
       | null = null;
 
     if (escpos.enabled) {
@@ -440,6 +493,12 @@ export default function InterfaceSettingsScreen() {
           type: "serial",
           path,
           baudRate: escpos.baudRate,
+          dataBits: escpos.dataBits,
+          parity: escpos.parity,
+          stopBits: escpos.stopBits,
+          handshaking: escpos.handshaking,
+          dtr: escpos.dtr,
+          rts: escpos.rts,
         };
       }
     }
@@ -488,6 +547,18 @@ export default function InterfaceSettingsScreen() {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const getEscposSerialPrinter = (path: string) => ({
+    type: "serial" as const,
+    path,
+    baudRate: escpos.baudRate,
+    dataBits: escpos.dataBits,
+    parity: escpos.parity,
+    stopBits: escpos.stopBits,
+    handshaking: escpos.handshaking,
+    dtr: escpos.dtr,
+    rts: escpos.rts,
+  });
+
   const handleEscposSerialTestPrint = async () => {
     setEscposTestMessage("");
     const path = escpos.path.trim();
@@ -515,7 +586,7 @@ export default function InterfaceSettingsScreen() {
         `[ESC/POS:SerialTest] Sending Hello World: path=${path}, baudRate=${escpos.baudRate}`,
       );
       const result = await window.electronAPI.printEscpos({
-        printer: { type: "serial", path, baudRate: escpos.baudRate },
+        printer: getEscposSerialPrinter(path),
         data: Array.from(buildEscposSerialTestBuffer()),
       });
       console.log("[ESC/POS:SerialTest] Result:", result);
@@ -527,6 +598,50 @@ export default function InterfaceSettingsScreen() {
       setEscposTestMessage("Print failed: cannot reach serial printer bridge.");
     } finally {
       setEscposTestPrinting(false);
+    }
+  };
+
+  const handleEscposControlLineMatrixTest = async () => {
+    setEscposTestMessage("");
+    const path = escpos.path.trim();
+
+    if (!escpos.enabled || escpos.type !== "serial") {
+      setEscposTestMessage("Select Serial transport first.");
+      return;
+    }
+    if (path === "") {
+      setEscposTestMessage("Select an ESC/POS serial port.");
+      return;
+    }
+    if (
+      !Number.isInteger(escpos.baudRate) ||
+      escpos.baudRate < 1 ||
+      escpos.baudRate > 1000000
+    ) {
+      setEscposTestMessage("Enter an ESC/POS baud rate from 1 to 1000000.");
+      return;
+    }
+
+    setEscposMatrixTesting(true);
+    try {
+      console.log(
+        `[ESC/POS:SerialTest] Running control-line matrix: path=${path}, baudRate=${escpos.baudRate}`,
+      );
+      const result = await window.electronAPI.testEscposControlLines({
+        printer: getEscposSerialPrinter(path),
+        data: Array.from(buildEscposSerialTestBuffer()),
+      });
+      console.log("[ESC/POS:SerialTest] Control-line matrix result:", result);
+      setEscposTestMessage(
+        result.ok
+          ? "Control-line matrix sent. Check logs and printer output."
+          : `Control-line matrix failed: ${result.message}`,
+      );
+    } catch (err) {
+      console.error("[ESC/POS:SerialTest] Control-line matrix IPC failed:", err);
+      setEscposTestMessage("Matrix failed: cannot reach serial printer bridge.");
+    } finally {
+      setEscposMatrixTesting(false);
     }
   };
 
@@ -1260,6 +1375,110 @@ export default function InterfaceSettingsScreen() {
                   ))}
                 </select>
               </div>
+              <div>
+                <label className={labelClass}>Data Bits</label>
+                <select
+                  className={selectClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.dataBits}
+                  onChange={(e) =>
+                    setEscpos((s) => ({
+                      ...s,
+                      dataBits: Number(e.target.value) as 7 | 8,
+                    }))
+                  }
+                >
+                  {ESCPOS_DATA_BITS.map((bits) => (
+                    <option key={bits} value={bits}>
+                      {bits}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Parity</label>
+                <select
+                  className={selectClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.parity}
+                  onChange={(e) =>
+                    setEscpos((s) => ({
+                      ...s,
+                      parity: e.target.value as EscposSerialParity,
+                    }))
+                  }
+                >
+                  {ESCPOS_PARITIES.map((parity) => (
+                    <option key={parity} value={parity}>
+                      {parity}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Stop Bits</label>
+                <select
+                  className={selectClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.stopBits}
+                  onChange={(e) =>
+                    setEscpos((s) => ({
+                      ...s,
+                      stopBits: Number(e.target.value) as 1 | 2,
+                    }))
+                  }
+                >
+                  {ESCPOS_STOP_BITS.map((bits) => (
+                    <option key={bits} value={bits}>
+                      {bits}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Handshaking</label>
+                <select
+                  className={selectClass}
+                  disabled={!escpos.enabled}
+                  value={escpos.handshaking}
+                  onChange={(e) =>
+                    setEscpos((s) => ({
+                      ...s,
+                      handshaking: e.target.value as EscposSerialHandshaking,
+                    }))
+                  }
+                >
+                  {ESCPOS_HANDSHAKING.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={escpos.dtr}
+                  disabled={!escpos.enabled}
+                  onChange={(e) =>
+                    setEscpos((s) => ({ ...s, dtr: e.target.checked }))
+                  }
+                />
+                <span className="text-sm font-medium text-gray-700">DTR on</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={escpos.rts}
+                  disabled={!escpos.enabled || escpos.handshaking === "rts-cts"}
+                  onChange={(e) =>
+                    setEscpos((s) => ({ ...s, rts: e.target.checked }))
+                  }
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  RTS on
+                </span>
+              </label>
             </div>
           )}
           <div className="mt-4 flex items-center justify-between gap-4 border-t border-gray-100 pt-4">
@@ -1268,17 +1487,30 @@ export default function InterfaceSettingsScreen() {
                 Serial Test
               </h3>
             </div>
-            <button
-              type="button"
-              onClick={handleEscposSerialTestPrint}
-              disabled={
-                isDiagnosticPrinting || !escpos.enabled || escpos.type !== "serial"
-              }
-              className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-900 disabled:cursor-not-allowed disabled:bg-gray-300"
-            >
-              <IoPrintOutline size={18} />
-              {escposTestPrinting ? "Printing..." : "Print Hello World"}
-            </button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleEscposControlLineMatrixTest}
+                disabled={
+                  isDiagnosticPrinting || !escpos.enabled || escpos.type !== "serial"
+                }
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                <IoPrintOutline size={18} />
+                {escposMatrixTesting ? "Testing..." : "DTR/RTS Matrix"}
+              </button>
+              <button
+                type="button"
+                onClick={handleEscposSerialTestPrint}
+                disabled={
+                  isDiagnosticPrinting || !escpos.enabled || escpos.type !== "serial"
+                }
+                className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-900 disabled:cursor-not-allowed disabled:bg-gray-300"
+              >
+                <IoPrintOutline size={18} />
+                {escposTestPrinting ? "Printing..." : "Print Hello World"}
+              </button>
+            </div>
           </div>
           {escposTestMessage && (
             <p className="mt-3 text-sm font-medium text-gray-600">

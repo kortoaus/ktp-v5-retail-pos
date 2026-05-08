@@ -3,6 +3,7 @@ const GS = 0x1d;
 
 const BLACK_THRESHOLD = 220;
 const MAX_RASTER_SLICE_HEIGHT = 512;
+const BOTTOM_WHITE_ROWS_TO_KEEP = 16;
 
 function buildRasterCommand(
   widthBytes: number,
@@ -36,6 +37,7 @@ export const canvasToEscposRaster = (canvas: HTMLCanvasElement): Uint8Array => {
   const height = canvas.height;
   const imageData = ctx.getImageData(0, 0, width, height);
   const pixels = imageData.data;
+  const printableHeight = getPrintableHeight(pixels, width, height);
 
   const widthBytes = Math.ceil(width / 8);
   const commands: Uint8Array[] = [];
@@ -43,10 +45,13 @@ export const canvasToEscposRaster = (canvas: HTMLCanvasElement): Uint8Array => {
 
   for (
     let sliceTop = 0;
-    sliceTop < height;
+    sliceTop < printableHeight;
     sliceTop += MAX_RASTER_SLICE_HEIGHT
   ) {
-    const sliceHeight = Math.min(MAX_RASTER_SLICE_HEIGHT, height - sliceTop);
+    const sliceHeight = Math.min(
+      MAX_RASTER_SLICE_HEIGHT,
+      printableHeight - sliceTop,
+    );
     const rasterData = new Uint8Array(widthBytes * sliceHeight);
 
     for (let localY = 0; localY < sliceHeight; localY++) {
@@ -80,6 +85,27 @@ export const canvasToEscposRaster = (canvas: HTMLCanvasElement): Uint8Array => {
   }
   return buffer;
 };
+
+function getPrintableHeight(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+): number {
+  for (let y = height - 1; y >= 0; y--) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const r = pixels[idx];
+      const g = pixels[idx + 1];
+      const b = pixels[idx + 2];
+      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+      if (gray < BLACK_THRESHOLD) {
+        return Math.min(height, y + 1 + BOTTOM_WHITE_ROWS_TO_KEEP);
+      }
+    }
+  }
+
+  return 1;
+}
 
 export const kickDrawerPin2 = (): Uint8Array => {
   return new Uint8Array([ESC, 0x70, 0x00, 0x19, 0xfa]);

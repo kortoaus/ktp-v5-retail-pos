@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AppConfig,
+  EscposControlLineMatrixRequest,
+  EscposControlLineMatrixResult,
   EscposPrintRequest,
   LabelSendRequest,
   WeightResult,
@@ -44,5 +46,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('label:print', request),
 
   printEscpos: (request: EscposPrintRequest): Promise<{ ok: boolean; message: string }> =>
-    ipcRenderer.invoke('escpos:print', request)
+    ipcRenderer.invoke('escpos:print', request),
+  testEscposControlLines: (
+    request: EscposControlLineMatrixRequest,
+  ): Promise<EscposControlLineMatrixResult> =>
+    ipcRenderer.invoke('escpos:test-control-lines', request)
 })
