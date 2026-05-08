@@ -2,6 +2,8 @@ import { TerminalShift } from "../../types/models";
 import { buildPrintBuffer } from "./escpos";
 import { printESCPOS } from "./print.service";
 import dayjsAU from "../dayjsAU";
+import { buildShiftSettlementEscposReceipt } from "./shift-settlement-escpos";
+import type { ReceiptTextEncoding } from "./sale-invoice-escpos";
 
 const W = 576;
 const PAD = 20;
@@ -14,6 +16,19 @@ const fmtSigned = (cents: number) => {
   const sign = cents < 0 ? "-" : "";
   return `${sign}${fmt(cents)}`;
 };
+
+type ReceiptPrintMode = "raster" | "escpos";
+
+async function getReceiptPrintConfig(): Promise<{
+  mode: ReceiptPrintMode;
+  encoding: ReceiptTextEncoding;
+}> {
+  const config = await window.electronAPI.getConfig();
+  return {
+    mode: config.devices.receiptPrintMode ?? "raster",
+    encoding: config.devices.receiptTextEncoding ?? "ascii-replace",
+  };
+}
 
 function dashedLine(ctx: CanvasRenderingContext2D, y: number) {
   ctx.beginPath();
@@ -269,6 +284,16 @@ export function renderShiftSettlementReceipt(
 export async function printShiftSettlementReceipt(
   shift: TerminalShift,
 ): Promise<void> {
+  const receiptConfig = await getReceiptPrintConfig();
+
+  if (receiptConfig.mode === "escpos") {
+    const buffer = await buildShiftSettlementEscposReceipt(shift, {
+      encoding: receiptConfig.encoding,
+    });
+    await printESCPOS(buffer, { stripSerialInit: true });
+    return;
+  }
+
   const canvas = renderShiftSettlementReceipt(shift);
   const buffer = buildPrintBuffer(canvas);
   await printESCPOS(buffer);
