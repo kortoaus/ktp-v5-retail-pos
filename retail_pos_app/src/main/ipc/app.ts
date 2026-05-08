@@ -4,7 +4,7 @@ import os from 'node:os'
 export function registerAppHandlers(getMainWindow: () => BrowserWindow | null, toggleCustomerDisplay: () => void): void {
   ipcMain.handle('app:restart', () => {
     app.relaunch()
-    app.exit(0)
+    app.quit()
   })
 
   ipcMain.handle('app:get-network-ip', () => {

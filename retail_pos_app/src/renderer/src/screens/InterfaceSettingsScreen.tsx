@@ -573,13 +573,9 @@ export default function InterfaceSettingsScreen() {
       },
     });
 
-    await window.electronAPI.scaleDisconnect();
-    if (scale.enabled) {
-      await window.electronAPI.scaleConnect();
-    }
-
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    window.alert("Settings saved. The app will restart to apply changes.");
+    await window.electronAPI.restartApp();
   };
 
   const getEscposSerialPrinter = (path: string) => ({
