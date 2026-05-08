@@ -306,6 +306,7 @@ const ESCPOS_DEFAULTS: EscposForm = {
 };
 
 const PARITIES: Parity[] = ["none", "even", "odd", "mark", "space"];
+const ESCPOS_BAUD_RATES = [9600, 19200, 38400, 57600, 115200] as const;
 
 const inputClass =
   "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400";
@@ -1229,12 +1230,8 @@ export default function InterfaceSettingsScreen() {
               </div>
               <div>
                 <label className={labelClass}>Baud Rate</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={1000000}
-                  step={1}
-                  className={inputClass}
+                <select
+                  className={selectClass}
                   disabled={!escpos.enabled}
                   value={escpos.baudRate}
                   onChange={(e) =>
@@ -1243,7 +1240,20 @@ export default function InterfaceSettingsScreen() {
                       baudRate: Number(e.target.value),
                     }))
                   }
-                />
+                >
+                  {!ESCPOS_BAUD_RATES.some(
+                    (rate) => rate === escpos.baudRate,
+                  ) && (
+                    <option value={escpos.baudRate}>
+                      {escpos.baudRate} (current)
+                    </option>
+                  )}
+                  {ESCPOS_BAUD_RATES.map((rate) => (
+                    <option key={rate} value={rate}>
+                      {rate}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           )}
