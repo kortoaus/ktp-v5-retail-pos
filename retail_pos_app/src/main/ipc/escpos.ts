@@ -19,43 +19,14 @@ function closePort(port: SerialPort): void {
   } catch {}
 }
 
-function closePortBeforeReject(
-  port: SerialPort,
-  reject: (reason?: unknown) => void,
-  timeout: NodeJS.Timeout,
-  originalError: Error | null,
-  closeErrorPrefix: string,
-): void {
-  const rejectWithOriginalOrClose = (closeErr?: Error | null): void => {
-    clearTimeout(timeout)
-    if (originalError) {
-      reject(originalError)
-      return
-    }
-    if (closeErr) {
-      reject(new Error(`${closeErrorPrefix}: ${closeErr.message}`))
-      return
-    }
-    reject(new Error('Unknown ESC/POS error'))
-  }
-
-  if (!port.isOpen) {
-    rejectWithOriginalOrClose(null)
-    return
-  }
-
-  try {
-    port.close(rejectWithOriginalOrClose)
-  } catch (err) {
-    rejectWithOriginalOrClose(err instanceof Error ? err : null)
-  }
-}
-
 function printEscposSerial(request: EscposPrintRequest): Promise<void> {
   const data = Buffer.from(request.data)
   const timeoutMs = getSerialTimeoutMs(data.length, request.printer.baudRate)
 
   return new Promise((resolve, reject) => {
+    let settled = false
+    let closingForError = false
+
     const port = new SerialPort({
       path: request.printer.path,
       baudRate: request.printer.baudRate,
@@ -65,7 +36,45 @@ function printEscposSerial(request: EscposPrintRequest): Promise<void> {
       autoOpen: false,
     })
 
+    function finish(): void {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      resolve()
+    }
+
+    function fail(error: Error): void {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      reject(error)
+    }
+
+    function failAndClose(error: Error): void {
+      if (settled) return
+
+      if (!port.isOpen) {
+        fail(error)
+        return
+      }
+
+      closingForError = true
+      try {
+        port.close(() => {
+          if (settled) return
+          closingForError = false
+          fail(error)
+        })
+      } catch {
+        closingForError = false
+        fail(error)
+      }
+    }
+
     const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
       closePort(port)
       reject(
         new Error(
@@ -75,43 +84,38 @@ function printEscposSerial(request: EscposPrintRequest): Promise<void> {
     }, timeoutMs)
 
     port.open((openErr) => {
+      if (settled) {
+        closePort(port)
+        return
+      }
+      if (closingForError) return
       if (openErr) {
-        clearTimeout(timeout)
-        reject(new Error(`ESC/POS serial open failed: ${openErr.message}`))
+        fail(new Error(`ESC/POS serial open failed: ${openErr.message}`))
         return
       }
 
       port.write(data, (writeErr) => {
+        if (settled || closingForError) return
         if (writeErr) {
-          closePortBeforeReject(
-            port,
-            reject,
-            timeout,
-            new Error(`ESC/POS serial write failed: ${writeErr.message}`),
-            'ESC/POS serial close failed',
-          )
+          failAndClose(new Error(`ESC/POS serial write failed: ${writeErr.message}`))
           return
         }
 
         port.drain((drainErr) => {
+          if (settled || closingForError) return
           if (drainErr) {
-            closePortBeforeReject(
-              port,
-              reject,
-              timeout,
-              new Error(`ESC/POS serial drain failed: ${drainErr.message}`),
-              'ESC/POS serial close failed',
-            )
+            failAndClose(new Error(`ESC/POS serial drain failed: ${drainErr.message}`))
             return
           }
 
+          clearTimeout(timeout)
           port.close((closeErr) => {
-            clearTimeout(timeout)
+            if (settled) return
             if (closeErr) {
-              reject(new Error(`ESC/POS serial close failed: ${closeErr.message}`))
+              fail(new Error(`ESC/POS serial close failed: ${closeErr.message}`))
               return
             }
-            resolve()
+            finish()
           })
         })
       })
