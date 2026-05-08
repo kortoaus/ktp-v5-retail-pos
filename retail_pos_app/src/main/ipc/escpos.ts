@@ -109,53 +109,73 @@ function printEscposSerial(request: EscposPrintRequest): Promise<void> {
       }
 
       console.log(`${LOG_PREFIX} Port opened: ${jobLabel}`)
-      console.log(`${LOG_PREFIX} Writing bytes: ${jobLabel}, bytes=${data.length}`)
-      port.write(data, (writeErr) => {
+      console.log(`${LOG_PREFIX} Setting DTR/RTS: ${jobLabel}`)
+      port.set({ dtr: true, rts: true }, (setErr) => {
         if (settled || closingForError) return
-        if (writeErr) {
-          console.log(`${LOG_PREFIX} Write failed: ${jobLabel}: ${writeErr.message}`)
-          failAndClose(new Error(`ESC/POS serial write failed: ${writeErr.message}`))
+        if (setErr) {
+          console.log(`${LOG_PREFIX} Set DTR/RTS failed: ${jobLabel}: ${setErr.message}`)
+          failAndClose(new Error(`ESC/POS serial DTR/RTS failed: ${setErr.message}`))
           return
         }
 
-        console.log(`${LOG_PREFIX} Write callback ok: ${jobLabel}`)
-        console.log(`${LOG_PREFIX} Draining port: ${jobLabel}`)
-        port.drain((drainErr) => {
-          if (settled || closingForError) return
-          if (drainErr) {
-            console.log(`${LOG_PREFIX} Drain failed: ${jobLabel}: ${drainErr.message}`)
-            failAndClose(new Error(`ESC/POS serial drain failed: ${drainErr.message}`))
-            return
+        port.get((getErr, status) => {
+          if (getErr) {
+            console.log(`${LOG_PREFIX} Modem status read failed: ${jobLabel}: ${getErr.message}`)
+          } else {
+            console.log(
+              `${LOG_PREFIX} Modem status: ${jobLabel}, cts=${status.cts}, dsr=${status.dsr}, dcd=${status.dcd}`,
+            )
           }
 
-          console.log(`${LOG_PREFIX} Drain complete: ${jobLabel}`)
-          clearTimeout(timeout)
-          closeTimeout = setTimeout(() => {
-            console.log(`${LOG_PREFIX} Close timeout: ${jobLabel}`)
-            fail(
-              new Error(
-                `ESC/POS serial close timeout on ${request.printer.path} after ${SERIAL_CLOSE_TIMEOUT_MS}ms`,
-              ),
-            )
-          }, SERIAL_CLOSE_TIMEOUT_MS)
+          console.log(`${LOG_PREFIX} Writing bytes: ${jobLabel}, bytes=${data.length}`)
+          port.write(data, (writeErr) => {
+            if (settled || closingForError) return
+            if (writeErr) {
+              console.log(`${LOG_PREFIX} Write failed: ${jobLabel}: ${writeErr.message}`)
+              failAndClose(new Error(`ESC/POS serial write failed: ${writeErr.message}`))
+              return
+            }
 
-          try {
-            console.log(`${LOG_PREFIX} Closing port: ${jobLabel}`)
-            port.close((closeErr) => {
-              if (settled) return
-              if (closeErr) {
-                console.log(`${LOG_PREFIX} Close failed: ${jobLabel}: ${closeErr.message}`)
-                fail(new Error(`ESC/POS serial close failed: ${closeErr.message}`))
+            console.log(`${LOG_PREFIX} Write callback ok: ${jobLabel}`)
+            console.log(`${LOG_PREFIX} Draining port: ${jobLabel}`)
+            port.drain((drainErr) => {
+              if (settled || closingForError) return
+              if (drainErr) {
+                console.log(`${LOG_PREFIX} Drain failed: ${jobLabel}: ${drainErr.message}`)
+                failAndClose(new Error(`ESC/POS serial drain failed: ${drainErr.message}`))
                 return
               }
-              console.log(`${LOG_PREFIX} Port closed: ${jobLabel}`)
-              finish()
+
+              console.log(`${LOG_PREFIX} Drain complete: ${jobLabel}`)
+              clearTimeout(timeout)
+              closeTimeout = setTimeout(() => {
+                console.log(`${LOG_PREFIX} Close timeout: ${jobLabel}`)
+                fail(
+                  new Error(
+                    `ESC/POS serial close timeout on ${request.printer.path} after ${SERIAL_CLOSE_TIMEOUT_MS}ms`,
+                  ),
+                )
+              }, SERIAL_CLOSE_TIMEOUT_MS)
+
+              try {
+                console.log(`${LOG_PREFIX} Closing port: ${jobLabel}`)
+                port.close((closeErr) => {
+                  if (settled) return
+                  if (closeErr) {
+                    console.log(`${LOG_PREFIX} Close failed: ${jobLabel}: ${closeErr.message}`)
+                    fail(new Error(`ESC/POS serial close failed: ${closeErr.message}`))
+                    return
+                  }
+                  console.log(`${LOG_PREFIX} Port closed: ${jobLabel}`)
+                  finish()
+                })
+              } catch (err) {
+                const message = err instanceof Error ? err.message : 'Unknown close error'
+                console.log(`${LOG_PREFIX} Close threw: ${jobLabel}: ${message}`)
+                fail(new Error(`ESC/POS serial close failed: ${message}`))
+              }
             })
-          } catch (err) {
-            const message = err instanceof Error ? err.message : 'Unknown close error'
-            console.log(`${LOG_PREFIX} Close threw: ${jobLabel}: ${message}`)
-            fail(new Error(`ESC/POS serial close failed: ${message}`))
-          }
+          })
         })
       })
     })
