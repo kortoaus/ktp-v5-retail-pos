@@ -54,12 +54,16 @@ such as `../generated/prisma/client`, not `@prisma/client`.
 - API calls from renderer belong in `src/renderer/src/service/*.service.ts`.
 - Server `/api/*` handlers assume `terminalMiddleware` populated
   `res.locals.terminal`, `company`, `storeSetting`, and current `shift`.
-- Receipt printing renders 576px canvases in the renderer, converts them to
-  ESC/POS raster slices in `libs/printer/escpos.ts`, then sends raw bytes either
-  through the local server `/api/printer/print` TCP bridge for network printers
-  or through Electron main IPC `escpos:print` for serial printers. Keep long
-  documents sliced rather than sending one giant raster command. Serial ESC/POS
-  QA notes live in `docs/superpowers/handoffs/2026-05-08-escpos-serial-qa-handoff.md`.
+- Receipt printing supports Raster Image and ESC/POS Command modes. Raster mode
+  renders 576px canvases in the renderer, converts them to bounded ESC/POS
+  raster slices in `libs/printer/escpos.ts`, then sends raw bytes to the
+  configured receipt printer. Command mode builds native ESC/POS bytes for
+  sale/refund/spend receipts and shift settlement Z-reports. Network printers
+  still use the local server `/api/printer/print` TCP bridge; serial receipt
+  printers use Electron main IPC `escpos:print`, keep a persistent SerialPort
+  open, queue writes, and disconnect during app cleanup.
+- Interface Settings save persists the app config and restarts the Electron app
+  so scale, label, and ESC/POS printer lifecycle changes apply from a clean boot.
 - Sale Screen cloud hotkeys use `CloudHotkeyViewerV2`: parent groups stay
   visible in an 8x2 paged group grid, while the selected group renders a 5x5
   paged item grid. Interactive cells are `div`-based rather than native

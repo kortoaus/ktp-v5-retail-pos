@@ -235,9 +235,13 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - **Refund**: "**_ REFUND _**" banner, links original invoice id, same row/payment structure with "Refunded" labels
 - **Spend**: "**_ INTERNAL _**" banner, rows only (prices `-`), no totals/payments, footer "Internal consumption - no payment"
 - **Z-report**: shift settlement (tender별 sales/refunds/net total, cashio, drawer expected vs actual)
-- All: 576px canvas → ESC/POS thermal print. Tall receipt canvases are split
-  into bounded raster slices before sending, so long receipts/reprints do not
-  overflow printer buffers. `** COPY **` marker on reprint
+- Receipt output supports Raster Image and ESC/POS Command modes. Raster mode
+  renders 576px canvases and slices tall documents into bounded raster chunks.
+  Command mode is used for sale/refund/spend receipts and Z-reports, with native
+  text/QR/cut commands where applicable. `** COPY **` marker on reprint.
+- Serial ESC/POS printers are opened persistently by the Electron main process,
+  queued for writes, and safely disconnected on app quit. Interface Settings
+  save restarts the app so device lifecycle changes apply cleanly.
 - Touchscreen tap-through guard: ModalContainer keeps invisible backdrop 100ms after close
 
 ### Hardware
