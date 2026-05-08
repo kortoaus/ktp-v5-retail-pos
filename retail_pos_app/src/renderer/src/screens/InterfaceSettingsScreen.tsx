@@ -511,14 +511,19 @@ export default function InterfaceSettingsScreen() {
 
     setEscposTestPrinting(true);
     try {
+      console.log(
+        `[ESC/POS:SerialTest] Sending Hello World: path=${path}, baudRate=${escpos.baudRate}`,
+      );
       const result = await window.electronAPI.printEscpos({
         printer: { type: "serial", path, baudRate: escpos.baudRate },
         data: Array.from(buildEscposSerialTestBuffer()),
       });
+      console.log("[ESC/POS:SerialTest] Result:", result);
       setEscposTestMessage(
         result.ok ? "Sent Hello World test." : result.message,
       );
-    } catch {
+    } catch (err) {
+      console.error("[ESC/POS:SerialTest] IPC failed:", err);
       setEscposTestMessage("Print failed: cannot reach serial printer bridge.");
     } finally {
       setEscposTestPrinting(false);
