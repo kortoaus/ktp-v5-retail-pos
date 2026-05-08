@@ -30,8 +30,7 @@ function parseNonEmptyString(value: unknown): string | null {
 }
 
 function parsePositiveNumber(value: unknown): number | null {
-  const numberValue = Number(value)
-  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 }
 
 function migrateEscposPrinter(raw: unknown): EscposPrinterConfig | null {
