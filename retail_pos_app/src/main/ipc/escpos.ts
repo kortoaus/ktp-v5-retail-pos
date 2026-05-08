@@ -14,6 +14,9 @@ const SERIAL_TIMEOUT_MARGIN_MS = 10000
 const BITS_PER_BYTE_ON_WIRE = 10
 const LOG_PREFIX = '[ESC/POS:Serial]'
 const CONTROL_LINE_SETTLE_MS = 250
+const ESC = 0x1b
+const ESC_INIT = 0x40
+const INIT_SETTLE_MS = 750
 
 const CONTROL_LINE_MATRIX = [
   { label: 'DTR=true RTS=false', dtr: true, rts: false },
@@ -130,6 +133,18 @@ function writeAndDrain(port: SerialPort, data: Buffer): Promise<void> {
       })
     })
   })
+}
+
+async function writeEscposPayload(port: SerialPort, data: Buffer): Promise<void> {
+  if (data.length >= 2 && data[0] === ESC && data[1] === ESC_INIT) {
+    await writeAndDrain(port, data.subarray(0, 2))
+    await delay(INIT_SETTLE_MS)
+    if (data.length === 2) return
+    await writeAndDrain(port, data.subarray(2))
+    return
+  }
+
+  await writeAndDrain(port, data)
 }
 
 async function testEscposControlLineMatrix(
@@ -350,25 +365,10 @@ function printEscposSerial(request: EscposPrintRequest): Promise<void> {
           }
 
           console.log(`${LOG_PREFIX} Writing bytes: ${jobLabel}, bytes=${data.length}`)
-          port.write(data, (writeErr) => {
-            if (settled || closingForError) return
-            if (writeErr) {
-              console.log(`${LOG_PREFIX} Write failed: ${jobLabel}: ${writeErr.message}`)
-              failAndClose(new Error(`ESC/POS serial write failed: ${writeErr.message}`))
-              return
-            }
-
-            console.log(`${LOG_PREFIX} Write callback ok: ${jobLabel}`)
-            console.log(`${LOG_PREFIX} Draining port: ${jobLabel}`)
-            port.drain((drainErr) => {
+          writeEscposPayload(port, data).then(() => {
               if (settled || closingForError) return
-              if (drainErr) {
-                console.log(`${LOG_PREFIX} Drain failed: ${jobLabel}: ${drainErr.message}`)
-                failAndClose(new Error(`ESC/POS serial drain failed: ${drainErr.message}`))
-                return
-              }
 
-              console.log(`${LOG_PREFIX} Drain complete: ${jobLabel}`)
+              console.log(`${LOG_PREFIX} Write and drain complete: ${jobLabel}`)
               clearTimeout(timeout)
               closeTimeout = setTimeout(() => {
                 console.log(`${LOG_PREFIX} Close timeout: ${jobLabel}`)
@@ -396,7 +396,11 @@ function printEscposSerial(request: EscposPrintRequest): Promise<void> {
                 console.log(`${LOG_PREFIX} Close threw: ${jobLabel}: ${message}`)
                 fail(new Error(`ESC/POS serial close failed: ${message}`))
               }
-            })
+          }).catch((writeErr) => {
+            if (settled || closingForError) return
+            const message = writeErr instanceof Error ? writeErr.message : 'Unknown write error'
+            console.log(`${LOG_PREFIX} Write failed: ${jobLabel}: ${message}`)
+            failAndClose(new Error(`ESC/POS serial write failed: ${message}`))
           })
         })
       }).catch((setErr) => {
