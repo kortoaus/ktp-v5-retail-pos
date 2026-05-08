@@ -5,6 +5,11 @@ import {
   SaleInvoicePaymentItem,
 } from "../../service/sale.service";
 import { buildMultiReceiptBuffer, buildPrintBuffer } from "./escpos";
+import {
+  buildSaleInvoiceEscposReceipt,
+  buildSaleInvoiceEscposReceiptChain,
+} from "./sale-invoice-escpos";
+import type { ReceiptTextEncoding } from "./sale-invoice-escpos";
 import { printESCPOS } from "./print.service";
 import dayjsAU from "../dayjsAU";
 import { MONEY_DP, MONEY_SCALE, QTY_DP, QTY_SCALE } from "../constants";
@@ -22,6 +27,19 @@ const fmt = (cents: number) =>
 const fmtQty = (q: number) => (q / QTY_SCALE).toFixed(QTY_DP);
 
 const NAME_MAX = 40;
+
+type ReceiptPrintMode = "raster" | "escpos";
+
+async function getReceiptPrintConfig(): Promise<{
+  mode: ReceiptPrintMode;
+  encoding: ReceiptTextEncoding;
+}> {
+  const config = await window.electronAPI.getConfig();
+  return {
+    mode: config.devices.receiptPrintMode ?? "raster",
+    encoding: config.devices.receiptTextEncoding ?? "ascii-replace",
+  };
+}
 
 function wrapText(text: string, max: number): string[] {
   if (text.length <= max) return [text];
@@ -449,6 +467,19 @@ export async function printSaleInvoiceReceipt(
   isCopy: boolean = false,
   belowText: string = "Thank you!",
 ): Promise<void> {
+  const receiptConfig = await getReceiptPrintConfig();
+
+  if (receiptConfig.mode === "escpos") {
+    const buffer = await buildSaleInvoiceEscposReceipt(invoice, {
+      isCopy,
+      belowText,
+      encoding: receiptConfig.encoding,
+      cut: true,
+    });
+    await printESCPOS(buffer);
+    return;
+  }
+
   const canvas = await renderSaleInvoiceReceipt(invoice, isCopy, belowText);
   const buffer = buildPrintBuffer(canvas);
   await printESCPOS(buffer);
@@ -474,12 +505,25 @@ export async function printSaleInvoiceReprint(
   const childRes = await getSaleInvoiceChildren(invoice.id);
   const children = childRes.ok && childRes.result ? childRes.result : [];
 
+  const receiptConfig = await getReceiptPrintConfig();
+
   if (children.length === 0) {
-    // 자식 없으면 단독 출력.
     return printSaleInvoiceReceipt(invoice, true, belowText);
   }
 
-  // Parent + children 을 순서대로 render.
+  if (receiptConfig.mode === "escpos") {
+    const buffer = await buildSaleInvoiceEscposReceiptChain(
+      [invoice, ...children],
+      {
+        isCopy: true,
+        belowText,
+        encoding: receiptConfig.encoding,
+      },
+    );
+    await printESCPOS(buffer);
+    return;
+  }
+
   const canvases: HTMLCanvasElement[] = [];
   canvases.push(await renderSaleInvoiceReceipt(invoice, true, belowText));
   for (const child of children) {
