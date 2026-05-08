@@ -375,6 +375,49 @@ export default function InterfaceSettingsScreen() {
   }, [fetchPorts]);
 
   const handleSave = async () => {
+    let escposPrinter:
+      | { type: "net"; host: string; port: number }
+      | { type: "serial"; path: string; baudRate: number }
+      | null = null;
+
+    if (escpos.enabled) {
+      if (escpos.type === "net") {
+        const host = escpos.host.trim();
+        if (host === "") {
+          window.alert("Enter an ESC/POS printer host.");
+          return;
+        }
+        if (
+          !Number.isInteger(escpos.port) ||
+          escpos.port < 1 ||
+          escpos.port > 65535
+        ) {
+          window.alert("Enter an ESC/POS printer port from 1 to 65535.");
+          return;
+        }
+        escposPrinter = { type: "net", host, port: escpos.port };
+      } else {
+        const path = escpos.path.trim();
+        if (path === "") {
+          window.alert("Select an ESC/POS serial port.");
+          return;
+        }
+        if (
+          !Number.isInteger(escpos.baudRate) ||
+          escpos.baudRate < 1 ||
+          escpos.baudRate > 1000000
+        ) {
+          window.alert("Enter an ESC/POS baud rate from 1 to 1000000.");
+          return;
+        }
+        escposPrinter = {
+          type: "serial",
+          path,
+          baudRate: escpos.baudRate,
+        };
+      }
+    }
+
     const current = await window.electronAPI.getConfig();
     await window.electronAPI.setConfig({
       ...current,
@@ -406,15 +449,7 @@ export default function InterfaceSettingsScreen() {
             language: e.language,
             ...(e.mediaSize ? { mediaSize: e.mediaSize } : {}),
           })),
-        escposPrinter: escpos.enabled
-          ? escpos.type === "net"
-            ? { type: "net", host: escpos.host, port: escpos.port }
-            : {
-                type: "serial",
-                path: escpos.path,
-                baudRate: escpos.baudRate,
-              }
-          : null,
+        escposPrinter,
       },
     });
 
@@ -1098,6 +1133,9 @@ export default function InterfaceSettingsScreen() {
                 <label className={labelClass}>Port</label>
                 <input
                   type="number"
+                  min={1}
+                  max={65535}
+                  step={1}
                   className={inputClass}
                   disabled={!escpos.enabled}
                   value={escpos.port}
@@ -1131,6 +1169,9 @@ export default function InterfaceSettingsScreen() {
                 <label className={labelClass}>Baud Rate</label>
                 <input
                   type="number"
+                  min={1}
+                  max={1000000}
+                  step={1}
                   className={inputClass}
                   disabled={!escpos.enabled}
                   value={escpos.baudRate}
