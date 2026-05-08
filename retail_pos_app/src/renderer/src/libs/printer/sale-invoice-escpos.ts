@@ -8,6 +8,9 @@ import { cutCommand, initPrinterCommand } from "./escpos";
 
 export type ReceiptTextEncoding = "ascii-replace" | "cp949" | "euc-kr";
 
+// cp949/euc-kr only control byte encoding here. The printer must already be
+// configured for a compatible Korean code page/mode; model-specific ESC t n or
+// Korean-mode commands are intentionally not emitted by this builder yet.
 export interface BuildSaleInvoiceEscposOptions {
   isCopy?: boolean;
   belowText?: string;
@@ -68,39 +71,78 @@ function sanitizeLayoutText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-function center(text: string, width = LINE_CHARS): string {
-  const value = sanitizeLayoutText(text);
-  if (value.length >= width) return value.slice(0, width);
+function charPrintWidth(char: string): number {
+  const code = char.codePointAt(0) ?? 0;
+  return code >= 0x20 && code <= 0x7e ? 1 : 2;
+}
 
-  const left = Math.floor((width - value.length) / 2);
-  return " ".repeat(left) + value;
+function printWidth(text: string): number {
+  let width = 0;
+  for (const char of text) width += charPrintWidth(char);
+  return width;
+}
+
+function truncatePrintWidth(text: string, maxWidth: number): string {
+  if (maxWidth <= 0) return "";
+
+  let width = 0;
+  let output = "";
+  for (const char of text) {
+    const charWidth = charPrintWidth(char);
+    if (width + charWidth > maxWidth) break;
+    output += char;
+    width += charWidth;
+  }
+  return output.trimEnd();
+}
+
+function centerLine(text: string, width = LINE_CHARS): string {
+  const value = sanitizeLayoutText(text);
+  return truncatePrintWidth(value, width);
 }
 
 function leftRight(left: string, right: string, width = LINE_CHARS): string {
-  const l = sanitizeLayoutText(left);
-  const r = sanitizeLayoutText(right);
-  const space = width - l.length - r.length;
+  const r = truncatePrintWidth(sanitizeLayoutText(right), width);
+  const rightWidth = printWidth(r);
+  if (rightWidth >= width - 1) return truncatePrintWidth(r, width);
 
-  if (space <= 1) {
-    const leftWidth = Math.max(1, width - r.length - 1);
-    return `${l.slice(0, leftWidth)} ${r}`.slice(0, width);
-  }
+  const maxLeftWidth = width - rightWidth - 1;
+  const l = truncatePrintWidth(sanitizeLayoutText(left), maxLeftWidth);
+  const space = width - printWidth(l) - rightWidth;
+
+  if (space <= 1) return `${l} ${r}`;
 
   return l + " ".repeat(space) + r;
 }
 
 function wrapText(text: string, max: number): string[] {
   const value = sanitizeLayoutText(text);
-  if (value.length <= max) return [value];
+  if (printWidth(value) <= max) return [value];
 
   const lines: string[] = [];
-  let rest = value;
-  while (rest.length > max) {
-    let breakAt = rest.lastIndexOf(" ", max);
-    if (breakAt <= 0) breakAt = max;
-    lines.push(rest.slice(0, breakAt));
-    rest = rest.slice(breakAt).trimStart();
+  let chars = Array.from(value);
+  while (printWidth(chars.join("")) > max) {
+    let width = 0;
+    let breakAt = -1;
+    let take = 0;
+
+    for (let index = 0; index < chars.length; index++) {
+      const char = chars[index];
+      const charWidth = charPrintWidth(char);
+      if (width + charWidth > max) break;
+      width += charWidth;
+      take = index + 1;
+      if (char === " ") breakAt = index;
+    }
+
+    if (take <= 0) take = 1;
+    const splitAt = breakAt > 0 ? breakAt : take;
+    lines.push(chars.slice(0, splitAt).join("").trimEnd());
+    chars = chars.slice(splitAt);
+    while (chars[0] === " ") chars.shift();
   }
+
+  const rest = chars.join("").trimStart();
   if (rest.length > 0) lines.push(rest);
   return lines;
 }
@@ -187,7 +229,7 @@ async function appendHeader(
   writer.align("center");
   writer.bold(true);
   writer.size("double-height");
-  await writer.line(center(invoice.companyName));
+  await writer.line(centerLine(invoice.companyName));
   writer.size("normal");
   writer.bold(false);
 
@@ -196,13 +238,13 @@ async function appendHeader(
     .join(" ");
 
   for (const line of [invoice.address1, invoice.address2, locality]) {
-    if (line) await writer.line(center(line));
+    if (line) await writer.line(centerLine(line));
   }
 
   writer.bold(true);
-  await writer.line(center(headerLabel));
+  await writer.line(centerLine(headerLabel));
   writer.bold(false);
-  if (invoice.phone) await writer.line(center(`Ph: ${invoice.phone}`));
+  if (invoice.phone) await writer.line(centerLine(`Ph: ${invoice.phone}`));
   await writer.line();
 }
 
@@ -435,7 +477,7 @@ async function appendFooter(
 
   await writer.line();
   writer.align("center");
-  await writer.line(center(footerLabel));
+  await writer.line(centerLine(footerLabel));
   await writer.line();
 
   const qrPayload = `receipt%%%${invoice.serial ?? `INV-${invoice.id}`}`;
@@ -445,12 +487,12 @@ async function appendFooter(
 
   if (isCopy) {
     writer.bold(true);
-    await writer.line(center("** COPY **"));
+    await writer.line(centerLine("** COPY **"));
     writer.bold(false);
   }
 
   await writer.line(
-    center(`Printed: ${dayjsAU().format("DD/MM/YYYY hh:mm A")}`),
+    centerLine(`Printed: ${dayjsAU().format("DD/MM/YYYY hh:mm A")}`),
   );
   writer.align("left");
 }
