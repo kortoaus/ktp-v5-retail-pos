@@ -783,4 +783,3 @@ git commit -m "fix: complete escpos serial support"
 ```
 
 Expected: no uncommitted source changes remain after this step.
-
