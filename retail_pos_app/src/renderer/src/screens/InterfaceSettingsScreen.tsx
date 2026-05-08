@@ -9,6 +9,7 @@ import {
   buildKoreanVectorFontTest7090,
 } from "../libs/label-templates";
 import { buildPriceTag7090V2 } from "../libs/label-7090-v2";
+import { cutCommand, initPrinterCommand } from "../libs/printer/escpos";
 import type { Item } from "../types/models";
 import { useStoreSetting } from "../hooks/useStoreSetting";
 
@@ -313,6 +314,23 @@ const labelClass = "block text-sm font-medium text-gray-700 mb-1";
 const btnSmClass =
   "text-xs font-medium px-3 py-1.5 rounded-lg transition-colors";
 
+function concatBytes(parts: Uint8Array[]): Uint8Array {
+  const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
+  const buffer = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const part of parts) {
+    buffer.set(part, offset);
+    offset += part.length;
+  }
+  return buffer;
+}
+
+function buildEscposSerialTestBuffer(): Uint8Array {
+  const text = "Hello World\n\n\n";
+  const textBytes = new Uint8Array([...text].map((char) => char.charCodeAt(0)));
+  return concatBytes([initPrinterCommand(), textBytes, cutCommand(3)]);
+}
+
 export default function InterfaceSettingsScreen() {
   const { user, loading: userLoading } = useUser();
   const { storeSetting } = useStoreSetting();
@@ -329,8 +347,13 @@ export default function InterfaceSettingsScreen() {
   const [graphicTestMessage, setGraphicTestMessage] = useState("");
   const [graphicV2TestPrinting, setGraphicV2TestPrinting] = useState(false);
   const [graphicV2TestMessage, setGraphicV2TestMessage] = useState("");
+  const [escposTestPrinting, setEscposTestPrinting] = useState(false);
+  const [escposTestMessage, setEscposTestMessage] = useState("");
   const isDiagnosticPrinting =
-    labelTestPrinting || graphicTestPrinting || graphicV2TestPrinting;
+    labelTestPrinting ||
+    graphicTestPrinting ||
+    graphicV2TestPrinting ||
+    escposTestPrinting;
   const [loading, setLoading] = useState(true);
 
   const fetchPorts = useCallback(async () => {
@@ -462,6 +485,43 @@ export default function InterfaceSettingsScreen() {
 
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleEscposSerialTestPrint = async () => {
+    setEscposTestMessage("");
+    const path = escpos.path.trim();
+
+    if (!escpos.enabled || escpos.type !== "serial") {
+      setEscposTestMessage("Select Serial transport first.");
+      return;
+    }
+    if (path === "") {
+      setEscposTestMessage("Select an ESC/POS serial port.");
+      return;
+    }
+    if (
+      !Number.isInteger(escpos.baudRate) ||
+      escpos.baudRate < 1 ||
+      escpos.baudRate > 1000000
+    ) {
+      setEscposTestMessage("Enter an ESC/POS baud rate from 1 to 1000000.");
+      return;
+    }
+
+    setEscposTestPrinting(true);
+    try {
+      const result = await window.electronAPI.printEscpos({
+        printer: { type: "serial", path, baudRate: escpos.baudRate },
+        data: Array.from(buildEscposSerialTestBuffer()),
+      });
+      setEscposTestMessage(
+        result.ok ? "Sent Hello World test." : result.message,
+      );
+    } catch {
+      setEscposTestMessage("Print failed: cannot reach serial printer bridge.");
+    } finally {
+      setEscposTestPrinting(false);
+    }
   };
 
   const addZplSerial = () => {
@@ -1186,6 +1246,29 @@ export default function InterfaceSettingsScreen() {
                 />
               </div>
             </div>
+          )}
+          <div className="mt-4 flex items-center justify-between gap-4 border-t border-gray-100 pt-4">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">
+                Serial Test
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={handleEscposSerialTestPrint}
+              disabled={
+                isDiagnosticPrinting || !escpos.enabled || escpos.type !== "serial"
+              }
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-900 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              <IoPrintOutline size={18} />
+              {escposTestPrinting ? "Printing..." : "Print Hello World"}
+            </button>
+          </div>
+          {escposTestMessage && (
+            <p className="mt-3 text-sm font-medium text-gray-600">
+              {escposTestMessage}
+            </p>
           )}
         </section>
 
