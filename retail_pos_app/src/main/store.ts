@@ -23,34 +23,53 @@ function migrateZplSerial(raw: unknown): ZplSerialConfig[] {
   return []
 }
 
+function parseNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function parsePositiveNumber(value: unknown): number | null {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null
+}
+
 function migrateEscposPrinter(raw: unknown): EscposPrinterConfig | null {
   if (!raw || typeof raw !== 'object') return null
+  const printer = raw as Record<string, unknown>
 
-  if ('type' in raw) {
-    const printer = raw as Partial<EscposPrinterConfig>
-    if (printer.type === 'net' && 'host' in printer && 'port' in printer) {
+  if ('type' in printer) {
+    if (printer.type === 'net') {
+      const host = parseNonEmptyString(printer.host)
+      const port = parsePositiveNumber(printer.port)
+      if (!host || port === null) return null
       return {
         type: 'net',
-        host: String(printer.host),
-        port: Number(printer.port),
+        host,
+        port,
       }
     }
-    if (printer.type === 'serial' && 'path' in printer && 'baudRate' in printer) {
+    if (printer.type === 'serial') {
+      const path = parseNonEmptyString(printer.path)
+      const baudRate = parsePositiveNumber(printer.baudRate)
+      if (!path || baudRate === null) return null
       return {
         type: 'serial',
-        path: String(printer.path),
-        baudRate: Number(printer.baudRate),
+        path,
+        baudRate,
       }
     }
     return null
   }
 
-  if ('host' in raw && 'port' in raw) {
-    const old = raw as { host: string; port: number }
+  if ('host' in printer && 'port' in printer) {
+    const host = parseNonEmptyString(printer.host)
+    const port = parsePositiveNumber(printer.port)
+    if (!host || port === null) return null
     return {
       type: 'net',
-      host: old.host,
-      port: Number(old.port),
+      host,
+      port,
     }
   }
 
