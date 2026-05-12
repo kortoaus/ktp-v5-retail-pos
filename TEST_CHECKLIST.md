@@ -144,9 +144,11 @@
 ### 결제 완료
 - [ ] COMPLETE SALE → `POST /api/sale` → 성공 시:
   - [ ] cashIntent > 0 면 drawer 먼저 kick
-  - [ ] 영수증 인쇄 (80mm thermal, `^#!` 범례, QR)
-  - [ ] change > 0 면 ChangeOverlay (Open Drawer / Reprint / Done)
-  - [ ] change = 0 면 자동 cart clear + modal close
+  - [ ] API 성공 시 active cart 즉시 clear
+  - [ ] 결제 tender / change 여부와 상관없이 완료 overlay 표시
+  - [ ] overlay 에서 영수증 출력 선택 가능 (80mm thermal, `^#!` 범례, QR)
+  - [ ] change > 0 면 ChangeOverlay 에 change / Open Drawer / Reprint / Done 표시
+  - [ ] Done 은 overlay/modal close 만 수행 (cart 는 이미 clear)
 - [ ] Serial 형식: `{shift.id}-{YYYYMMDD}-S{seq6}`
 - [ ] RECORD SPEND → `POST /api/sale/spend` → 영수증 "*** INTERNAL ***"
 

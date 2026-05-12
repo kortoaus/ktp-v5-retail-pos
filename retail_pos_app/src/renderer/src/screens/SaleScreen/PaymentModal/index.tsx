@@ -333,9 +333,16 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
         return;
       }
 
-      // 영수증 / drawer 용 detail 재조회 (rows + payments 포함).
-      const detailRes = await getSaleInvoiceById(res.result.id);
-      const detail = detailRes.ok ? detailRes.result : null;
+      setCompletedInfo({
+        invoice: res.result,
+        detail: null,
+        total: cal.total,
+        paid: cal.paid,
+        cashReceived: cal.cashIntent,
+        change: cal.change,
+        receiptPrinted: false,
+      });
+      clearActiveCart();
 
       // Drawer 먼저 — 프린트는 수초 걸리므로 서랍을 앞세워 cashier 가 거스름돈
       // 꺼내는 동안 영수증이 뽑히게. cashIntent 기준 (cashApplied 아님) —
@@ -348,24 +355,24 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
         }
       }
 
-      setCompletedInfo({
-        invoice: res.result,
-        detail,
-        total: cal.total,
-        paid: cal.paid,
-        cashReceived: cal.cashIntent,
-        change: cal.change,
-        receiptPrinted: false,
-      });
+      // 영수증 용 detail 재조회 (rows + payments 포함). 실패해도 거래와 cart
+      // clear 는 이미 확정됐고, Print Receipt 에서 다시 조회할 수 있다.
+      const detailRes = await getSaleInvoiceById(res.result.id);
+      const detail = detailRes.ok ? detailRes.result : null;
+      if (detail) {
+        setCompletedInfo((prev) =>
+          prev && prev.invoice.id === res.result.id ? { ...prev, detail } : prev,
+        );
+      }
     } finally {
       setProcessing(false);
     }
   }
 
-  // ChangeOverlay 에서 "Done" 누를 때. cart clear + modal close.
+  // ChangeOverlay 에서 "Done" 누를 때. cart 는 저장 성공 시 이미 clear 됐고,
+  // 여기서는 completion UI 만 닫는다.
   function finishSale() {
     setCompletedInfo(null);
-    clearActiveCart();
     onCancel();
   }
 
