@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import {
   createMemberService,
-  searchMembersByPhoneLast3Service,
+  searchMembersByKeywordService,
   searchMemberByIdService,
   searchMemberService,
 } from "./crm.service";
@@ -16,11 +16,11 @@ export async function searchMemberController(req: Request, res: Response) {
   res.json(result);
 }
 
-export async function searchMembersByPhoneLast3Controller(
+export async function searchMembersByKeywordController(
   req: Request,
   res: Response,
 ) {
-  const result = await searchMembersByPhoneLast3Service(req.body);
+  const result = await searchMembersByKeywordService(req.body);
   res.json(result);
 }
 

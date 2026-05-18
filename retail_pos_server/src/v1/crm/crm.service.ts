@@ -26,12 +26,12 @@ export async function searchMemberService(data: any) {
   }
 }
 
-export async function searchMembersByPhoneLast3Service(data: {
-  phoneLast3: string;
+export async function searchMembersByKeywordService(data: {
+  keyword: string;
 }) {
   try {
     const result = await crmApiService.post(
-      "/device/member/search/phone-last3",
+      "/device/member/search/keyword",
       data,
     );
     return result;

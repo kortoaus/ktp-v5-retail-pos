@@ -16,12 +16,12 @@ export async function searchMemberByPhone(
   return apiService.post<Member>("/api/crm/member/search/phone", { phone });
 }
 
-export async function searchMembersByPhoneLast3(
-  phoneLast3: string,
+export async function searchMembersByKeyword(
+  keyword: string,
 ): Promise<ApiResponse<MemberSearchResult[]>> {
   return apiService.post<MemberSearchResult[]>(
-    "/api/crm/member/search/phone-last3",
-    { phoneLast3 },
+    "/api/crm/member/search/keyword",
+    { keyword },
   );
 }
 

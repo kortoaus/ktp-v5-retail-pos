@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   createMember,
   MemberSearchResult,
-  searchMembersByPhoneLast3,
+  searchMembersByKeyword,
 } from "../service/crm.service";
 import OnScreenKeyboard from "./OnScreenKeyboard";
 import { cn } from "../libs/cn";
@@ -32,7 +32,7 @@ export default function MemberSearchModal({
 }: MemberSearchModalProps) {
   const [tab, setTab] = useState<Tab>("search");
 
-  const [searchPhone, setSearchPhone] = useState("");
+  const [searchKeyword, setSearchKeyword] = useState("");
   const [searchResults, setSearchResults] = useState<MemberSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
@@ -47,7 +47,7 @@ export default function MemberSearchModal({
   useEffect(() => {
     if (!open) return;
     setTab("search");
-    setSearchPhone("");
+    setSearchKeyword("");
     setSearchResults([]);
     setSearchLoading(false);
     setSearchError("");
@@ -60,11 +60,11 @@ export default function MemberSearchModal({
   }, [open]);
 
   const handleSearch = useCallback(async () => {
-    const phoneLast3 = searchPhone.replace(/[^0-9]/g, "").slice(0, 3);
-    setSearchPhone(phoneLast3);
-    if (!/^\d{3}$/.test(phoneLast3)) {
+    const keyword = searchKeyword.trim().replace(/\s+/g, " ");
+    setSearchKeyword(keyword);
+    if (!keyword) {
       setSearchResults([]);
-      setSearchError("Enter last 3 digits");
+      setSearchError("Enter member name or phone digits");
       setSearched(true);
       return;
     }
@@ -74,7 +74,7 @@ export default function MemberSearchModal({
     setSearchResults([]);
     setSearched(true);
     try {
-      const res = await searchMembersByPhoneLast3(phoneLast3);
+      const res = await searchMembersByKeyword(keyword);
       if (res.ok && Array.isArray(res.result) && res.result.length > 0) {
         setSearchResults(res.result);
       } else if (res.ok && Array.isArray(res.result)) {
@@ -88,7 +88,7 @@ export default function MemberSearchModal({
     } finally {
       setSearchLoading(false);
     }
-  }, [searchPhone]);
+  }, [searchKeyword]);
 
   const handleSelectSearchResult = useCallback(
     (member: MemberSearchResult) => {
@@ -152,7 +152,7 @@ export default function MemberSearchModal({
         )}
       >
         <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200">
-          <h2 className="text-lg font-bold">Member</h2>
+          <h2 className="text-lg font-bold">Customer Search</h2>
           <button
             type="button"
             onPointerDown={handleClose}
@@ -190,10 +190,8 @@ export default function MemberSearchModal({
         <div className="flex-1">
           {tab === "search" ? (
             <SearchTab
-              phone={searchPhone}
-              setPhone={(v) =>
-                setSearchPhone(v.replace(/[^0-9]/g, "").slice(0, 3))
-              }
+              keyword={searchKeyword}
+              setKeyword={setSearchKeyword}
               loading={searchLoading}
               error={searchError}
               searched={searched}
@@ -243,8 +241,8 @@ export default function MemberSearchModal({
 }
 
 interface SearchTabProps {
-  phone: string;
-  setPhone: (v: string) => void;
+  keyword: string;
+  setKeyword: (v: string) => void;
   loading: boolean;
   error: string;
   searched: boolean;
@@ -254,8 +252,8 @@ interface SearchTabProps {
 }
 
 function SearchTab({
-  phone,
-  setPhone,
+  keyword,
+  setKeyword,
   loading,
   error,
   searched,
@@ -279,17 +277,19 @@ function SearchTab({
   }, [searchResults]);
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_420px] gap-4 p-4">
+    <div className="grid grid-cols-[360px_minmax(560px,1fr)] gap-4 p-4">
       <div className="min-w-0 space-y-3">
         <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 h-12">
-          <span className="text-gray-400 text-lg">📱</span>
-          <div className="flex-1 text-lg min-h-[28px]">
-            {phone || <span className="text-gray-400">Last 3 digits</span>}
+          <span className="text-gray-400 text-lg">🔎</span>
+          <div className="flex-1 text-lg min-h-[28px] truncate">
+            {keyword || (
+              <span className="text-gray-400">Name or phone digits</span>
+            )}
           </div>
-          {phone && (
+          {keyword && (
             <button
               type="button"
-              onPointerDown={() => setPhone("")}
+              onPointerDown={() => setKeyword("")}
               className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 active:bg-gray-300 text-sm"
             >
               ✕
@@ -300,7 +300,7 @@ function SearchTab({
         <button
           type="button"
           onPointerDown={onSearch}
-          disabled={!/^\d{3}$/.test(phone) || loading}
+          disabled={!keyword.trim() || loading}
           className="w-full h-12 rounded-lg bg-blue-600 text-white font-semibold active:bg-blue-700 disabled:opacity-40 text-sm"
         >
           {loading ? "Searching..." : "Search"}
@@ -309,7 +309,7 @@ function SearchTab({
         <div className="h-[360px] flex items-center justify-center">
           {!searched && (
             <span className="text-gray-400 text-sm">
-              Enter customer's last 3 digits
+              Enter customer name or phone digits
             </span>
           )}
           {searched && loading && (
@@ -377,11 +377,11 @@ function SearchTab({
 
       <div className="border-l border-gray-200 pl-4 flex items-start">
         <OnScreenKeyboard
-          key="search-phone"
-          value={phone}
-          onChange={(v) => setPhone(v.replace(/[^0-9]/g, "").slice(0, 3))}
+          key="search-keyword"
+          value={keyword}
+          onChange={setKeyword}
           onEnter={onSearch}
-          initialLayout="numpad"
+          initialLayout="korean"
           className="shrink-0"
         />
       </div>
