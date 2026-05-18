@@ -35,6 +35,20 @@ const ALL_TYPE_FILTERS: TypeFilter[] = ["ALL", "SALE", "REFUND", "SPEND"];
 const PAGE_SIZE = 20;
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
+const fmtTenderMoney = (cents: number) =>
+  cents > 0 ? `$${fmtMoney(cents)}` : "—";
+
+function tenderSummary(inv: SaleInvoiceListItem) {
+  return inv.payments.reduce(
+    (summary, payment) => {
+      if (payment.type === "CASH") summary.cash += payment.amount;
+      else if (payment.type === "CREDIT") summary.credit += payment.amount;
+      else summary.others += payment.amount;
+      return summary;
+    },
+    { cash: 0, credit: 0, others: 0 },
+  );
+}
 
 // 영수증 QR payload prefix — sale-invoice-receipt.ts 의 `receipt%%%<serial>` 와 일치.
 const QR_PREFIX = "receipt%%%";
@@ -273,40 +287,55 @@ export default function SaleInvoiceSearchPanel({
                 <th className="text-left p-2">Date</th>
                 <th className="text-left p-2">Member</th>
                 <th className="text-right p-2">Total</th>
+                <th className="text-right p-2">Cash</th>
+                <th className="text-right p-2">Credit</th>
+                <th className="text-right p-2">Others</th>
                 <th className="text-left p-2">Terminal / Cashier</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((inv) => (
-                <tr
-                  key={inv.id}
-                  onPointerDown={() => onSelect(inv)}
-                  className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 active:bg-blue-50"
-                >
-                  {!lockedTypeFilter && (
-                    <td className="p-2">
-                      <TypeBadge type={inv.type} />
-                    </td>
-                  )}
-                  <td className="p-2 font-mono text-xs">
-                    {inv.serial ?? `#${inv.id}`}
-                  </td>
-                  <td className="p-2 text-xs text-gray-500">
-                    {new Date(inv.createdAt).toLocaleString()}
-                  </td>
-                  <td className="p-2">
-                    {inv.memberName ?? (
-                      <span className="text-gray-400">—</span>
+              {items.map((inv) => {
+                const tenders = tenderSummary(inv);
+                return (
+                  <tr
+                    key={inv.id}
+                    onPointerDown={() => onSelect(inv)}
+                    className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 active:bg-blue-50"
+                  >
+                    {!lockedTypeFilter && (
+                      <td className="p-2">
+                        <TypeBadge type={inv.type} />
+                      </td>
                     )}
-                  </td>
-                  <td className="p-2 text-right font-mono">
-                    ${fmtMoney(inv.total)}
-                  </td>
-                  <td className="p-2 text-xs text-gray-500">
-                    {inv.terminalName ?? "—"} / {inv.userName ?? "—"}
-                  </td>
-                </tr>
-              ))}
+                    <td className="p-2 font-mono text-xs">
+                      {inv.serial ?? `#${inv.id}`}
+                    </td>
+                    <td className="p-2 text-xs text-gray-500">
+                      {new Date(inv.createdAt).toLocaleString()}
+                    </td>
+                    <td className="p-2">
+                      {inv.memberName ?? (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="p-2 text-right font-mono">
+                      ${fmtMoney(inv.total)}
+                    </td>
+                    <td className="p-2 text-right font-mono text-xs text-gray-700">
+                      {fmtTenderMoney(tenders.cash)}
+                    </td>
+                    <td className="p-2 text-right font-mono text-xs text-gray-700">
+                      {fmtTenderMoney(tenders.credit)}
+                    </td>
+                    <td className="p-2 text-right font-mono text-xs text-gray-700">
+                      {fmtTenderMoney(tenders.others)}
+                    </td>
+                    <td className="p-2 text-xs text-gray-500">
+                      {inv.terminalName ?? "—"} / {inv.userName ?? "—"}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

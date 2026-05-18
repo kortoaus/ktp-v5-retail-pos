@@ -45,6 +45,7 @@ export interface SaleInvoiceListItem {
   pointsReversed: number;
   note: string | null;
   createdAt: string;
+  payments: SaleInvoicePaymentItem[];
 }
 
 export interface SaleSearchParams {
