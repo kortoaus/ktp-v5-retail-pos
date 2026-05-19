@@ -33,6 +33,10 @@ import LoadingOverlay from "../../../components/LoadingOverlay";
 import { kickDrawer } from "../../../libs/printer/kick-drawer";
 import { printSaleInvoiceReceipt } from "../../../libs/printer/sale-invoice-receipt";
 import TapTarget from "./TapTarget";
+import {
+  getDominantPaymentCategory,
+  PAYMENT_CATEGORY_CLASSES,
+} from "../../../libs/payment-colors";
 
 // UI-level tender slot. Distinct from PaymentType in the schema:
 //   USER_VOUCHER + CUSTOMER_VOUCHER both map to tender="VOUCHER" in the
@@ -284,6 +288,19 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     }
     return sums;
   }, [payments, cal.cashApplied]);
+
+  const completePaymentCategory = useMemo(
+    () =>
+      getDominantPaymentCategory({
+        cash: tenderSums.get("CASH") ?? 0,
+        credit: tenderSums.get("CREDIT") ?? 0,
+        others:
+          (tenderSums.get("USER_VOUCHER") ?? 0) +
+          (tenderSums.get("CUSTOMER_VOUCHER") ?? 0) +
+          (tenderSums.get("GIFTCARD") ?? 0),
+      }),
+    [tenderSums],
+  );
 
   // Complete Sale — 완납 + 라인 존재 시 활성. 항상 버튼 노출, 불만족 시 disabled.
   const completeDisabled =
@@ -924,7 +941,13 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
                   "mt-auto h-16 rounded-lg font-bold text-sm tracking-wide transition",
                   completeDisabled
                     ? "bg-gray-200 text-gray-400 cursor-not-allowed flex items-center justify-center"
-                    : "bg-emerald-600 text-white active:bg-emerald-700 flex items-center justify-center",
+                    : cn(
+                        "flex items-center justify-center",
+                        completePaymentCategory
+                          ? PAYMENT_CATEGORY_CLASSES[completePaymentCategory]
+                              .button
+                          : PAYMENT_CATEGORY_CLASSES.cash.button,
+                      ),
                 )}
               >
                 COMPLETE

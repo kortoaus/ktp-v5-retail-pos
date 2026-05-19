@@ -29,6 +29,11 @@ import {
 import { PagingType } from "../libs/api";
 import { MONEY_DP, MONEY_SCALE } from "../libs/constants";
 import { cn } from "../libs/cn";
+import {
+  getDominantPaymentCategory,
+  PAYMENT_CATEGORY_CLASSES,
+  type PaymentCategoryAmounts,
+} from "../libs/payment-colors";
 
 type TypeFilter = "ALL" | InvoiceTypeWire;
 const ALL_TYPE_FILTERS: TypeFilter[] = ["ALL", "SALE", "REFUND", "SPEND"];
@@ -38,7 +43,7 @@ const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 const fmtTenderMoney = (cents: number) =>
   cents > 0 ? `$${fmtMoney(cents)}` : "—";
 
-function tenderSummary(inv: SaleInvoiceListItem) {
+function tenderSummary(inv: SaleInvoiceListItem): PaymentCategoryAmounts {
   return inv.payments.reduce(
     (summary, payment) => {
       if (payment.type === "CASH") summary.cash += payment.amount;
@@ -296,11 +301,16 @@ export default function SaleInvoiceSearchPanel({
             <tbody>
               {items.map((inv) => {
                 const tenders = tenderSummary(inv);
+                const dominantCategory = getDominantPaymentCategory(tenders);
                 return (
                   <tr
                     key={inv.id}
                     onPointerDown={() => onSelect(inv)}
-                    className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 active:bg-blue-50"
+                    className={cn(
+                      "border-b border-l-4 border-l-transparent border-gray-100 cursor-pointer hover:bg-gray-50 active:bg-blue-50",
+                      dominantCategory &&
+                        PAYMENT_CATEGORY_CLASSES[dominantCategory].rowBorder,
+                    )}
                   >
                     {!lockedTypeFilter && (
                       <td className="p-2">
@@ -321,13 +331,40 @@ export default function SaleInvoiceSearchPanel({
                     <td className="p-2 text-right font-mono">
                       ${fmtMoney(inv.total)}
                     </td>
-                    <td className="p-2 text-right font-mono text-xs text-gray-700">
+                    <td
+                      className={cn(
+                        "p-2 text-right font-mono text-xs",
+                        tenders.cash > 0
+                          ? dominantCategory === "cash"
+                            ? PAYMENT_CATEGORY_CLASSES.cash.strongText
+                            : PAYMENT_CATEGORY_CLASSES.cash.text
+                          : "text-gray-400",
+                      )}
+                    >
                       {fmtTenderMoney(tenders.cash)}
                     </td>
-                    <td className="p-2 text-right font-mono text-xs text-gray-700">
+                    <td
+                      className={cn(
+                        "p-2 text-right font-mono text-xs",
+                        tenders.credit > 0
+                          ? dominantCategory === "credit"
+                            ? PAYMENT_CATEGORY_CLASSES.credit.strongText
+                            : PAYMENT_CATEGORY_CLASSES.credit.text
+                          : "text-gray-400",
+                      )}
+                    >
                       {fmtTenderMoney(tenders.credit)}
                     </td>
-                    <td className="p-2 text-right font-mono text-xs text-gray-700">
+                    <td
+                      className={cn(
+                        "p-2 text-right font-mono text-xs",
+                        tenders.others > 0
+                          ? dominantCategory === "others"
+                            ? PAYMENT_CATEGORY_CLASSES.others.strongText
+                            : PAYMENT_CATEGORY_CLASSES.others.text
+                          : "text-gray-400",
+                      )}
+                    >
                       {fmtTenderMoney(tenders.others)}
                     </td>
                     <td className="p-2 text-xs text-gray-500">
