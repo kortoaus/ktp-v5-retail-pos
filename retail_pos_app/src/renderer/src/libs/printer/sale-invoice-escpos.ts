@@ -21,7 +21,7 @@ export interface BuildSaleInvoiceEscposOptions {
 const ESC = 0x1b;
 const GS = 0x1d;
 const LF = 0x0a;
-const LINE_CHARS = 48;
+const LINE_CHARS = 42;
 const NAME_MAX = 32;
 
 const fmt = (cents: number) =>

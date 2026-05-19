@@ -6,7 +6,7 @@ import type { ReceiptTextEncoding } from "./sale-invoice-escpos";
 const ESC = 0x1b;
 const GS = 0x1d;
 const LF = 0x0a;
-const LINE_CHARS = 48;
+const LINE_CHARS = 42;
 
 const fmt = (cents: number) => `$${(Math.abs(cents) / 100).toFixed(2)}`;
 const fmtSigned = (cents: number) => {

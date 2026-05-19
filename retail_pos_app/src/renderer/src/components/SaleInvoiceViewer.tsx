@@ -12,7 +12,7 @@ import { useStoreSetting } from "../hooks/useStoreSetting";
 import PaymentModalForRepay from "./PaymentModalForRepay";
 
 // 80mm thermal receipt 레이아웃. Direct-print 가능한 밀도/폭으로 구성.
-// 한 줄 width ≈ 380px (thermal 48-char 기준), font-mono, dashed separator.
+// 한 줄 width ≈ 380px (thermal 42-char safe 기준), font-mono, dashed separator.
 //
 // Prefix 규칙 (row 이름 앞):
 //   ^  price 변경됨 (override / markdown / member discount)
