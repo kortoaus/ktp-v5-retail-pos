@@ -276,18 +276,16 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     [payments],
   );
 
-  // Summary 패널 — tender slot 별 합계 (CASH 는 cashApplied 로 집약, 나머지는
-  // per-payment amount 합). 0 인 slot 은 렌더 단계에서 filter.
+  // Summary 패널 — active staged draft까지 포함한 tender slot 별 합계.
+  // CASH 는 derivedPayments 에서 FIFO allocation 으로 정규화된 amount 를 사용한다.
   const tenderSums = useMemo(() => {
     const sums = new Map<TenderSlot, number>();
-    sums.set("CASH", cal.cashApplied);
-    for (const p of payments) {
-      if (p.tender === "CASH") continue;
+    for (const p of derivedPayments) {
       const slot = slotOf(p);
       sums.set(slot, (sums.get(slot) ?? 0) + p.amount);
     }
     return sums;
-  }, [payments, cal.cashApplied]);
+  }, [derivedPayments]);
 
   const completePaymentCategory = useMemo(
     () =>
