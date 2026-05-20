@@ -15,6 +15,7 @@ import {
   IoTvOutline,
   IoPrintOutline,
   IoReceiptOutline,
+  IoBarcodeOutline,
 } from "react-icons/io5";
 
 const btn =
@@ -97,6 +98,13 @@ export default function HomeScreen() {
           className="bg-amber-50 text-amber-800 hover:bg-amber-100"
         >
           Price Tag
+        </NavBtn>
+        <NavBtn
+          to="/barcode-print"
+          icon={<IoBarcodeOutline size={24} />}
+          className="bg-amber-50 text-amber-800 hover:bg-amber-100"
+        >
+          Barcode Print
         </NavBtn>
         <div className="flex-1 min-w-0">
           <button

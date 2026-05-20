@@ -20,6 +20,7 @@ import { getCloudPosts } from "./service/cloud.service";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CloudPost } from "./types/models";
 import PriceTagScreen from "./screens/PriceTagScreen";
+import BarcodePrintScreen from "./screens/BarcodePrintScreen";
 import SaleScreen from "./screens/SaleScreen";
 import SaleInvoiceSearchScreen from "./screens/SaleInvoiceSearchScreen";
 import SaleRefundDetailScreen from "./screens/SaleRefundDetailScreen";
@@ -47,6 +48,7 @@ function MainApp() {
             <Route path="/" element={<HomeScreen />} />
 
             <Route path="/price-tag" element={<PriceTagScreen />} />
+            <Route path="/barcode-print" element={<BarcodePrintScreen />} />
             <Route path="/server-setup" element={<ServerSetupScreen />} />
 
             <Route path="/sale" element={<ManagerLayout />}>
