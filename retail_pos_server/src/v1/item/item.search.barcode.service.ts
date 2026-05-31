@@ -51,6 +51,7 @@ export async function getItemByGTIN(gtin14: string) {
   const item = await db.item.findFirst({
     where: {
       barcodeGTIN: gtin14,
+      archived: false,
     },
     include: ItemInclude,
   });
@@ -67,6 +68,7 @@ export async function getItemByPLU(plu: string) {
   const item = await db.item.findFirst({
     where: {
       barcodePLU: plu,
+      archived: false,
     },
     include: ItemInclude,
   });
