@@ -69,6 +69,10 @@ such as `../generated/prisma/client`, not `@prisma/client`.
   paged item grid. Interactive cells are `div`-based rather than native
   buttons so HID barcode scanner keyboard input cannot activate focused
   controls.
+- `MemberSearchModal` owns cashier-assisted CRM member signup. Search and QR
+  member assignment still select existing members immediately, but creating a
+  new member is OTP-gated: stage name/phone, send CRM SMS OTP, enter the
+  customer-provided code, then select the created member returned by CRM.
 - `useBarcodeScanner` is the single scanner boundary for serial scanner events
   and HID keyboard-emulated scans. It also updates `DeviceMonitorStore` with the
   last scanner payload so the bottom `DeviceMonitor` can show "Last Scan"

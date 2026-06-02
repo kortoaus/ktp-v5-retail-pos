@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  createMember,
   MemberSearchResult,
+  requestMemberSignupOtp,
   searchMembersByKeyword,
+  stageMemberSignup,
+  verifyMemberSignup,
 } from "../service/crm.service";
 import OnScreenKeyboard from "./OnScreenKeyboard";
 import { cn } from "../libs/cn";
 import { sanitizePhone } from "../libs/phone-utils";
 
 type Tab = "search" | "create";
+type CreateStep = "form" | "otp";
 const SEARCH_PAGE_SIZE = 5;
 
 export interface MemberSearchSelection {
@@ -40,6 +43,8 @@ export default function MemberSearchModal({
 
   const [createPhone, setCreatePhone] = useState("");
   const [createName, setCreateName] = useState("");
+  const [createOtp, setCreateOtp] = useState("");
+  const [createStep, setCreateStep] = useState<CreateStep>("form");
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState("");
   const [nameFieldFocused, setNameFieldFocused] = useState(false);
@@ -54,6 +59,8 @@ export default function MemberSearchModal({
     setSearched(false);
     setCreatePhone("");
     setCreateName("");
+    setCreateOtp("");
+    setCreateStep("form");
     setCreateLoading(false);
     setCreateError("");
     setNameFieldFocused(false);
@@ -103,7 +110,7 @@ export default function MemberSearchModal({
     [onSelect],
   );
 
-  const handleCreate = useCallback(async () => {
+  const handleStartSignup = useCallback(async () => {
     const phone = sanitizePhone(createPhone);
     const name = createName.trim();
     if (!name) return;
@@ -115,7 +122,36 @@ export default function MemberSearchModal({
     setCreateLoading(true);
     setCreateError("");
     try {
-      const res = await createMember({ phone, name });
+      const stageRes = await stageMemberSignup({ phone, name });
+      if (!stageRes.ok) {
+        setCreateError(stageRes.msg || "Failed to start member signup");
+        return;
+      }
+
+      const otpRes = await requestMemberSignupOtp(phone);
+      if (otpRes.ok) {
+        setCreateStep("otp");
+        setCreateOtp("");
+        setNameFieldFocused(false);
+      } else {
+        setCreateError(otpRes.msg || "Failed to send verification code");
+      }
+    } catch {
+      setCreateError("Network error");
+    } finally {
+      setCreateLoading(false);
+    }
+  }, [createPhone, createName]);
+
+  const handleVerifySignup = useCallback(async () => {
+    const phone = sanitizePhone(createPhone);
+    const code = createOtp.trim();
+    if (!phone || !code) return;
+
+    setCreateLoading(true);
+    setCreateError("");
+    try {
+      const res = await verifyMemberSignup({ phone, code });
       if (res.ok && res.result) {
         onSelect({
           id: res.result.id,
@@ -125,14 +161,14 @@ export default function MemberSearchModal({
           phone_last4: res.result.phone_last4,
         });
       } else {
-        setCreateError(res.msg || "Failed to create member");
+        setCreateError(res.msg || "Failed to verify member signup");
       }
     } catch {
       setCreateError("Network error");
     } finally {
       setCreateLoading(false);
     }
-  }, [createPhone, createName, onSelect]);
+  }, [createPhone, createOtp, onSelect]);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -205,18 +241,35 @@ export default function MemberSearchModal({
               setPhone={setCreatePhone}
               name={createName}
               setName={setCreateName}
+              otp={createOtp}
+              setOtp={setCreateOtp}
+              step={createStep}
               loading={createLoading}
               error={createError}
               nameFieldFocused={nameFieldFocused}
               setNameFieldFocused={setNameFieldFocused}
-              onCreate={handleCreate}
+              onBackToForm={() => {
+                setCreateStep("form");
+                setCreateOtp("");
+                setCreateError("");
+              }}
+              onStartSignup={handleStartSignup}
+              onVerifySignup={handleVerifySignup}
             />
           )}
         </div>
 
         {tab === "create" && (
           <div className="border-t border-gray-200 p-2">
-            {nameFieldFocused ? (
+            {createStep === "otp" ? (
+              <OnScreenKeyboard
+                key="create-otp"
+                value={createOtp}
+                onChange={(v) => setCreateOtp(v.replace(/[^0-9]/g, ""))}
+                onEnter={handleVerifySignup}
+                initialLayout="numpad"
+              />
+            ) : nameFieldFocused ? (
               <OnScreenKeyboard
                 key="create-name"
                 value={createName}
@@ -229,7 +282,7 @@ export default function MemberSearchModal({
                 key="create-phone"
                 value={createPhone}
                 onChange={(v) => setCreatePhone(v.replace(/[^0-9]/g, ""))}
-                onEnter={handleCreate}
+                onEnter={handleStartSignup}
                 initialLayout="numpad"
               />
             )}
@@ -394,11 +447,16 @@ interface CreateTabProps {
   setPhone: (v: string) => void;
   name: string;
   setName: (v: string) => void;
+  otp: string;
+  setOtp: (v: string) => void;
+  step: CreateStep;
   loading: boolean;
   error: string;
   nameFieldFocused: boolean;
   setNameFieldFocused: (v: boolean) => void;
-  onCreate: () => void;
+  onBackToForm: () => void;
+  onStartSignup: () => void;
+  onVerifySignup: () => void;
 }
 
 function CreateTab({
@@ -406,74 +464,125 @@ function CreateTab({
   setPhone,
   name,
   setName,
+  otp,
+  setOtp,
+  step,
   loading,
   error,
   nameFieldFocused,
   setNameFieldFocused,
-  onCreate,
+  onBackToForm,
+  onStartSignup,
+  onVerifySignup,
 }: CreateTabProps) {
   return (
     <div className="px-4 py-3 space-y-3">
-      <div
-        onPointerDown={() => setNameFieldFocused(true)}
-        className={cn(
-          "flex items-center gap-2 bg-gray-100 rounded-lg px-3 h-12 cursor-pointer",
-          nameFieldFocused && "ring-2 ring-blue-400",
-        )}
-      >
-        <span className="text-gray-400 text-lg">👤</span>
-        <div className="flex-1 text-lg min-h-[28px]">
-          {name || <span className="text-gray-400">Name</span>}
-        </div>
-        {name && (
-          <button
-            type="button"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              setName("");
-            }}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 active:bg-gray-300 text-sm"
+      {step === "form" ? (
+        <>
+          <div
+            onPointerDown={() => setNameFieldFocused(true)}
+            className={cn(
+              "flex items-center gap-2 bg-gray-100 rounded-lg px-3 h-12 cursor-pointer",
+              nameFieldFocused && "ring-2 ring-blue-400",
+            )}
           >
-            ✕
-          </button>
-        )}
-      </div>
+            <span className="text-gray-400 text-lg">👤</span>
+            <div className="flex-1 text-lg min-h-[28px]">
+              {name || <span className="text-gray-400">Name</span>}
+            </div>
+            {name && (
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  setName("");
+                }}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 active:bg-gray-300 text-sm"
+              >
+                ✕
+              </button>
+            )}
+          </div>
 
-      <div
-        onPointerDown={() => setNameFieldFocused(false)}
-        className={cn(
-          "flex items-center gap-2 bg-gray-100 rounded-lg px-3 h-12 cursor-pointer",
-          !nameFieldFocused && "ring-2 ring-blue-400",
-        )}
-      >
-        <span className="text-gray-400 text-lg">📱</span>
-        <div className="flex-1 text-lg min-h-[28px]">
-          {phone || <span className="text-gray-400">Phone number</span>}
-        </div>
-        {phone && (
-          <button
-            type="button"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              setPhone("");
-            }}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 active:bg-gray-300 text-sm"
+          <div
+            onPointerDown={() => setNameFieldFocused(false)}
+            className={cn(
+              "flex items-center gap-2 bg-gray-100 rounded-lg px-3 h-12 cursor-pointer",
+              !nameFieldFocused && "ring-2 ring-blue-400",
+            )}
           >
-            ✕
-          </button>
-        )}
-      </div>
+            <span className="text-gray-400 text-lg">📱</span>
+            <div className="flex-1 text-lg min-h-[28px]">
+              {phone || <span className="text-gray-400">Phone number</span>}
+            </div>
+            {phone && (
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  setPhone("");
+                }}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 active:bg-gray-300 text-sm"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="text-sm text-gray-500 text-center">
+            Enter the SMS code from the customer
+          </div>
+          <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 h-12 ring-2 ring-blue-400">
+            <span className="text-gray-400 text-lg">#</span>
+            <div className="flex-1 text-lg min-h-[28px]">
+              {otp || <span className="text-gray-400">OTP code</span>}
+            </div>
+            {otp && (
+              <button
+                type="button"
+                onPointerDown={() => setOtp("")}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 active:bg-gray-300 text-sm"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </>
+      )}
 
       {error && <div className="text-red-500 text-sm text-center">{error}</div>}
 
-      <button
-        type="button"
-        onPointerDown={onCreate}
-        disabled={!phone.trim() || !name.trim() || loading}
-        className="w-full h-12 rounded-lg bg-blue-600 text-white font-semibold active:bg-blue-700 disabled:opacity-40 text-sm"
-      >
-        {loading ? "Creating..." : "Create Member"}
-      </button>
+      {step === "form" ? (
+        <button
+          type="button"
+          onPointerDown={onStartSignup}
+          disabled={!phone.trim() || !name.trim() || loading}
+          className="w-full h-12 rounded-lg bg-blue-600 text-white font-semibold active:bg-blue-700 disabled:opacity-40 text-sm"
+        >
+          {loading ? "Sending..." : "Send OTP"}
+        </button>
+      ) : (
+        <div className="grid grid-cols-[120px_1fr] gap-2">
+          <button
+            type="button"
+            onPointerDown={onBackToForm}
+            disabled={loading}
+            className="h-12 rounded-lg bg-gray-100 text-gray-700 font-semibold active:bg-gray-200 disabled:opacity-40 text-sm"
+          >
+            Back
+          </button>
+          <button
+            type="button"
+            onPointerDown={onVerifySignup}
+            disabled={!otp.trim() || loading}
+            className="h-12 rounded-lg bg-blue-600 text-white font-semibold active:bg-blue-700 disabled:opacity-40 text-sm"
+          >
+            {loading ? "Verifying..." : "Complete Signup"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

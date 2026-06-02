@@ -98,7 +98,7 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 | `/item`     | Item     | —             | Item search, barcode/batch/id lookup         |
 | `/brand`    | Brand    | —             | Brand search/list data                       |
 | `/hotkey`   | Hotkey   | —             | Quick-select grid CRUD; `/hotkey/cloud` returns cloud hotkeys with item default/promo price data |
-| `/crm`      | CRM      | —             | Member lookup (by phone, by ID)              |
+| `/crm`      | CRM      | —             | Member lookup and OTP-gated member signup    |
 | `/user`     | User     | user + user   | User CRUD, auth by code                      |
 | `/sale`     | Sale     | user + sale   | Create, spend, refund, repay, query, latest  |
 | `/voucher`  | Voucher  | user + sale   | Staff daily voucher list / issue             |
@@ -112,6 +112,11 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 ### Sales
 
 - 4 independent carts with per-cart member assignment
+- Member lookup supports QR scan, keyword/phone-tail search, and cashier-assisted
+  new member signup. New members are not created immediately: the cashier enters
+  name/phone, POS sends an SMS OTP through CRM, the customer tells the cashier
+  the code, and POS selects the member only after CRM verifies the code and
+  creates the member.
 - Barcode scan → GTIN → PLU → raw lookup chain (한글 IME 무관 — `e.code` 기반)
 - Last scanner payload is shown on the bottom DeviceMonitor for quick operator
   diagnostics; the shared scanner hook updates it for both serial and HID input.

@@ -37,3 +37,23 @@ export async function createMember(data: {
 }): Promise<ApiResponse<Member>> {
   return apiService.post<Member>("/api/crm/member/create", data);
 }
+
+export async function stageMemberSignup(data: {
+  phone: string;
+  name: string;
+}): Promise<ApiResponse<null>> {
+  return apiService.post<null>("/api/crm/member/signup/stage", data);
+}
+
+export async function requestMemberSignupOtp(
+  phone: string,
+): Promise<ApiResponse<null>> {
+  return apiService.post<null>("/api/crm/member/signup/request-otp", { phone });
+}
+
+export async function verifyMemberSignup(data: {
+  phone: string;
+  code: string;
+}): Promise<ApiResponse<Member>> {
+  return apiService.post<Member>("/api/crm/member/signup/verify", data);
+}
