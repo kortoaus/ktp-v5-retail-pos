@@ -20,6 +20,41 @@ type ItemWithRelations = Item & {
   categories: ItemCategory[];
 };
 
+function toLocalItemData(
+  item: ItemWithRelations,
+): Omit<Item, "parent" | "children" | "brand" | "scaleData" | "categories"> {
+  return {
+    id: item.id,
+    companyId: item.companyId,
+    name_en: item.name_en,
+    name_ko: item.name_ko,
+    name_invoice: item.name_invoice,
+    barcode: item.barcode,
+    code: item.code,
+    thumb: item.thumb,
+    barcodeGTIN: item.barcodeGTIN,
+    barcodePLU: item.barcodePLU,
+    barcodeType: item.barcodeType,
+    uom: item.uom,
+    defaultRFD: item.defaultRFD,
+    isScale: item.isScale,
+    isBundle: item.isBundle,
+    useBatch: item.useBatch,
+    archived: item.archived,
+    bundleQty: item.bundleQty,
+    parentId: item.parentId,
+    brandId: item.brandId,
+    categoryIds: item.categoryIds,
+    categoryMarks: item.categoryMarks,
+    taxable: item.taxable,
+    wholesaleTaxable: item.wholesaleTaxable,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    isTemporary: item.isTemporary,
+    isPointExcluded: item.isPointExcluded,
+  };
+}
+
 export async function cloudItemMigrateService() {
   try {
     const lastUpdatedAt = await db.item
@@ -44,7 +79,8 @@ export async function cloudItemMigrateService() {
     console.log(`${tag} items: ${result.length} received`);
 
     for (const item of result) {
-      const { scaleData, categories, ...itemData } = item;
+      const { scaleData, categories } = item;
+      const itemData = toLocalItemData(item);
       const { type, gtin14, plu } = getNormalizedBarcode(item.barcode);
 
       await db.item.upsert({
