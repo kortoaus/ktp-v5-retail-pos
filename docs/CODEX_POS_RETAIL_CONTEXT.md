@@ -144,6 +144,13 @@ The POS server is a LAN-local cache/proxy:
 
 - Down-sync: items, categories, brands, users, CRM members, hotkeys, posts, and
   item sheets.
+- Item down-sync is intentionally allowlisted in
+  `retail_pos_server/src/v1/cloud/cloud.migrate.service.ts`. Do not spread raw
+  cloud item payloads into local `db.item.upsert`; the cloud item server may add
+  fields before the local POS Prisma schema supports them.
+- Catalog/report category fields from the cloud item server are not POS-local
+  item fields. POS category migration continues to use the legacy category data
+  and `ItemCategory` rows.
 - `/api/hotkey/cloud` patches each hotkey key's item with active default price
   and current promo price data, trimmed to `prices[0]`, so the POS can display
   `$price/uom` on cloud hotkey item tiles.
