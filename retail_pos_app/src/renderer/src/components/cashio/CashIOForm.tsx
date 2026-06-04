@@ -15,7 +15,7 @@ type ActiveField = "amount" | "note";
 
 export default function CashIOForm({ onSave, onCancel }: CashIOFormProps) {
   const [loading, setLoading] = useState(false);
-  const [type, setType] = useState<CashIOType>("in");
+  const [type, setType] = useState<CashIOType>("out");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [activeField, setActiveField] = useState<ActiveField>("amount");

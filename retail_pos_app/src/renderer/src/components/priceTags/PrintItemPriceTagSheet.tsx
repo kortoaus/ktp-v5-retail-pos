@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { QTY_DP, QTY_SCALE } from "../../libs/constants";
 import {
   getCloudLabelUpdateSheetById,
+  getPrintedLabelUpdateSheetIds,
+  markLabelUpdateSheetPrinted,
   migrateDataFromCloudServer,
 } from "../../service/cloud.service";
 import { getItemsByIds } from "../../service/item.service";
@@ -19,6 +21,7 @@ import { useStoreSetting } from "../../hooks/useStoreSetting";
 
 const QUEUE_PAGE_SIZE = 10;
 const PRINTED_SHEET_STORAGE_PREFIX = "pos.printedItemSheetIds";
+const PRINTED_SHEET_MIGRATION_PREFIX = "pos.printedItemSheetIdsMigrated";
 
 export default function PrintItemPriceTagSheet() {
   const { terminal } = useTerminal();
@@ -49,11 +52,71 @@ export default function PrintItemPriceTagSheet() {
   const printedSheetStorageKey = terminal
     ? `${PRINTED_SHEET_STORAGE_PREFIX}.${terminal.id}`
     : null;
+  const printedSheetMigrationKey = terminal
+    ? `${PRINTED_SHEET_MIGRATION_PREFIX}.${terminal.id}`
+    : null;
 
   useEffect(() => {
-    if (!printedSheetStorageKey) return;
-    setPrintedSheetIds(readPrintedSheetIds(printedSheetStorageKey));
-  }, [printedSheetStorageKey]);
+    let cancelled = false;
+
+    async function loadPrintedSheetIds() {
+      const res = await getPrintedLabelUpdateSheetIds();
+      if (cancelled) return;
+
+      if (res.ok && res.result) {
+        setPrintedSheetIds(new Set(res.result));
+      }
+    }
+
+    loadPrintedSheetIds().catch((err) => {
+      console.error("Failed to load printed item sheet ids:", err);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!printedSheetStorageKey || !printedSheetMigrationKey) return;
+    if (localStorage.getItem(printedSheetMigrationKey) === "1") return;
+
+    const oldIds = [...readPrintedSheetIds(printedSheetStorageKey)];
+    if (oldIds.length === 0) {
+      localStorage.setItem(printedSheetMigrationKey, "1");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function migratePrintedSheetIds() {
+      const migratedIds: number[] = [];
+      for (const sheetId of oldIds) {
+        const res = await markLabelUpdateSheetPrinted(sheetId);
+        if (!res.ok || !res.result) {
+          throw new Error(res.msg || "Failed to migrate printed sheet id");
+        }
+        migratedIds.push(res.result.sheetId);
+      }
+
+      if (cancelled) return;
+
+      setPrintedSheetIds((prev) => {
+        const next = new Set(prev);
+        for (const sheetId of migratedIds) next.add(sheetId);
+        return next;
+      });
+      localStorage.setItem(printedSheetMigrationKey, "1");
+    }
+
+    migratePrintedSheetIds().catch((err) => {
+      console.error("Failed to migrate printed item sheet ids:", err);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [printedSheetMigrationKey, printedSheetStorageKey]);
 
   useEffect(() => {
     setSelectedPrinter7030((prev) => {
@@ -182,7 +245,7 @@ export default function PrintItemPriceTagSheet() {
         }
       }
 
-      markSheetPrinted(selectedSheet.id);
+      await markSheetPrinted(selectedSheet.id);
     } catch (err) {
       window.alert(
         err instanceof Error ? err.message : "Failed to print labels",
@@ -192,17 +255,28 @@ export default function PrintItemPriceTagSheet() {
     }
   };
 
-  const markSheetPrinted = (sheetId: number) => {
-    if (!printedSheetStorageKey) return;
-    setPrintedSheetIds((prev) => {
-      const next = new Set(prev);
-      next.add(sheetId);
-      localStorage.setItem(
-        printedSheetStorageKey,
-        JSON.stringify([...next].sort((a, b) => a - b)),
+  const markSheetPrinted = async (sheetId: number) => {
+    try {
+      const res = await markLabelUpdateSheetPrinted(sheetId);
+      if (!res.ok || !res.result) {
+        window.alert(
+          res.msg ||
+            "Labels were printed, but the Printed marker could not be saved.",
+        );
+        return;
+      }
+
+      setPrintedSheetIds((prev) => {
+        const next = new Set(prev);
+        next.add(res.result.sheetId);
+        return next;
+      });
+    } catch (err) {
+      console.error("Failed to mark printed item sheet:", err);
+      window.alert(
+        "Labels were printed, but the Printed marker could not be saved.",
       );
-      return next;
-    });
+    }
   };
 
   return (

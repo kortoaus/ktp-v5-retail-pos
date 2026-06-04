@@ -5,6 +5,8 @@ import terminalMiddleware from "../terminal.middleware";
 import {
   getLabelUpdateByIdController,
   getLabelUpdatesController,
+  getPrintedLabelUpdateSheetIdsController,
+  markLabelUpdateSheetPrintedController,
 } from "./cloud.item-sheet.controller";
 
 const cloudRouter = Router();
@@ -12,5 +14,13 @@ const cloudRouter = Router();
 cloudRouter.post("/migrate/item", cloudItemMigrateController);
 cloudRouter.get("/post", terminalMiddleware, getCloudPostsController);
 cloudRouter.get("/item-sheet/label-update", getLabelUpdatesController);
+cloudRouter.get(
+  "/item-sheet/label-update/printed",
+  getPrintedLabelUpdateSheetIdsController,
+);
+cloudRouter.post(
+  "/item-sheet/label-update/:id/printed",
+  markLabelUpdateSheetPrintedController,
+);
 cloudRouter.get("/item-sheet/label-update/:id", getLabelUpdateByIdController);
 export default cloudRouter;

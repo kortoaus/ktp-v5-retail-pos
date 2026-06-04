@@ -29,6 +29,10 @@ export default function LineFunctionPanel({
 
   return (
     <div className="flex flex-col gap-8 p-2 h-full bg-zinc-200">
+      <div className="grid grid-cols-1 gap-2">
+        <Btn onClick={onCancel} label="Close" bg="bg-blue-500 text-white" />
+      </div>
+
       {ALLOWED_CHANGE_QTY_TYPES.includes(line.type) && (
         <div className="grid grid-cols-3 gap-2">
           <Btn
@@ -59,13 +63,12 @@ export default function LineFunctionPanel({
       </div>
 
       <div className="flex-1 flex flex-col items-end justify-end">
-        <div className="grid grid-cols-2 gap-2 w-full">
+        <div className="grid grid-cols-1 gap-2 w-full">
           <Btn
             onClick={() => removeLine(line.lineKey)}
             bg="bg-red-500 text-white"
             label="Remove"
           />
-          <Btn onClick={onCancel} label="Close" bg="bg-blue-500 text-white" />
         </div>
       </div>
     </div>

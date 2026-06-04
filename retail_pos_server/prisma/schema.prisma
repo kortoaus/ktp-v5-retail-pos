@@ -261,6 +261,16 @@ model StoreSetting {
   updatedAt                  DateTime @updatedAt
 }
 
+model PrintedItemSheet {
+  id        Int      @id @default(autoincrement())
+  sheetId   Int      @unique
+  printedAt DateTime @default(now())
+  userId    Int?
+  userName  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model User {
   id        Int           @id @default(autoincrement())
   name      String

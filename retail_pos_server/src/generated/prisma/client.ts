@@ -108,6 +108,11 @@ export type HotkeyItem = Prisma.HotkeyItemModel
  */
 export type StoreSetting = Prisma.StoreSettingModel
 /**
+ * Model PrintedItemSheet
+ * 
+ */
+export type PrintedItemSheet = Prisma.PrintedItemSheetModel
+/**
  * Model User
  * 
  */

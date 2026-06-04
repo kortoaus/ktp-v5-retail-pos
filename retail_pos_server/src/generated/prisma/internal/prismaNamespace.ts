@@ -398,6 +398,7 @@ export const ModelName = {
   Hotkey: 'Hotkey',
   HotkeyItem: 'HotkeyItem',
   StoreSetting: 'StoreSetting',
+  PrintedItemSheet: 'PrintedItemSheet',
   User: 'User',
   TerminalShift: 'TerminalShift',
   CashInOut: 'CashInOut',
@@ -422,7 +423,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "company" | "category" | "brand" | "item" | "itemScaleData" | "itemCategory" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter"
+    modelProps: "company" | "category" | "brand" | "item" | "itemScaleData" | "itemCategory" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1462,6 +1463,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    PrintedItemSheet: {
+      payload: Prisma.$PrintedItemSheetPayload<ExtArgs>
+      fields: Prisma.PrintedItemSheetFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PrintedItemSheetFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedItemSheetPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PrintedItemSheetFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedItemSheetPayload>
+        }
+        findFirst: {
+          args: Prisma.PrintedItemSheetFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedItemSheetPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PrintedItemSheetFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedItemSheetPayload>
+        }
+        findMany: {
+          args: Prisma.PrintedItemSheetFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedItemSheetPayload>[]
+        }
+        create: {
+          args: Prisma.PrintedItemSheetCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedItemSheetPayload>
+        }
+        createMany: {
+          args: Prisma.PrintedItemSheetCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PrintedItemSheetCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedItemSheetPayload>[]
+        }
+        delete: {
+          args: Prisma.PrintedItemSheetDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedItemSheetPayload>
+        }
+        update: {
+          args: Prisma.PrintedItemSheetUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedItemSheetPayload>
+        }
+        deleteMany: {
+          args: Prisma.PrintedItemSheetDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PrintedItemSheetUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PrintedItemSheetUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedItemSheetPayload>[]
+        }
+        upsert: {
+          args: Prisma.PrintedItemSheetUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedItemSheetPayload>
+        }
+        aggregate: {
+          args: Prisma.PrintedItemSheetAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePrintedItemSheet>
+        }
+        groupBy: {
+          args: Prisma.PrintedItemSheetGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PrintedItemSheetGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PrintedItemSheetCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PrintedItemSheetCountAggregateOutputType> | number
+        }
+      }
+    }
     User: {
       payload: Prisma.$UserPayload<ExtArgs>
       fields: Prisma.UserFieldRefs
@@ -2393,6 +2468,19 @@ export const StoreSettingScalarFieldEnum = {
 export type StoreSettingScalarFieldEnum = (typeof StoreSettingScalarFieldEnum)[keyof typeof StoreSettingScalarFieldEnum]
 
 
+export const PrintedItemSheetScalarFieldEnum = {
+  id: 'id',
+  sheetId: 'sheetId',
+  printedAt: 'printedAt',
+  userId: 'userId',
+  userName: 'userName',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PrintedItemSheetScalarFieldEnum = (typeof PrintedItemSheetScalarFieldEnum)[keyof typeof PrintedItemSheetScalarFieldEnum]
+
+
 export const UserScalarFieldEnum = {
   id: 'id',
   name: 'name',
@@ -2933,6 +3021,7 @@ export type GlobalOmitConfig = {
   hotkey?: Prisma.HotkeyOmit
   hotkeyItem?: Prisma.HotkeyItemOmit
   storeSetting?: Prisma.StoreSettingOmit
+  printedItemSheet?: Prisma.PrintedItemSheetOmit
   user?: Prisma.UserOmit
   terminalShift?: Prisma.TerminalShiftOmit
   cashInOut?: Prisma.CashInOutOmit

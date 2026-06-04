@@ -65,6 +65,7 @@ export const ModelName = {
   Hotkey: 'Hotkey',
   HotkeyItem: 'HotkeyItem',
   StoreSetting: 'StoreSetting',
+  PrintedItemSheet: 'PrintedItemSheet',
   User: 'User',
   TerminalShift: 'TerminalShift',
   CashInOut: 'CashInOut',
@@ -316,6 +317,19 @@ export const StoreSettingScalarFieldEnum = {
 } as const
 
 export type StoreSettingScalarFieldEnum = (typeof StoreSettingScalarFieldEnum)[keyof typeof StoreSettingScalarFieldEnum]
+
+
+export const PrintedItemSheetScalarFieldEnum = {
+  id: 'id',
+  sheetId: 'sheetId',
+  printedAt: 'printedAt',
+  userId: 'userId',
+  userName: 'userName',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PrintedItemSheetScalarFieldEnum = (typeof PrintedItemSheetScalarFieldEnum)[keyof typeof PrintedItemSheetScalarFieldEnum]
 
 
 export const UserScalarFieldEnum = {

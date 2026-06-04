@@ -17,6 +17,7 @@ const signedFmt = (cents: number) => {
   if (cents === 0) return fmt(0);
   return (cents > 0 ? "+" : "-") + fmt(cents);
 };
+const netFmt = (cents: number) => (cents < 0 ? `-${fmt(cents)}` : fmt(cents));
 
 export default function CloseShiftScreen() {
   const navigate = useNavigate();
@@ -66,6 +67,16 @@ export default function CloseShiftScreen() {
   const salesVoucher = aggregate.salesUserVoucher + aggregate.salesCustomerVoucher;
   const refundsVoucher =
     aggregate.refundsUserVoucher + aggregate.refundsCustomerVoucher;
+  const netCredit = aggregate.salesCredit - aggregate.refundsCredit;
+  const netVoucher = salesVoucher - refundsVoucher;
+  const netGiftcard = aggregate.salesGiftcard - aggregate.refundsGiftcard;
+
+  const tenderSummaryRows: [string, string][] = [
+    ["Cash Drawer", fmt(endedCashExpected)],
+    ["Card Terminal", netFmt(netCredit)],
+    ["Voucher", netFmt(netVoucher)],
+    ["Gift Card", netFmt(netGiftcard)],
+  ];
 
   const handleClose = async () => {
     if (!confirmClose) {
@@ -157,8 +168,18 @@ export default function CloseShiftScreen() {
       <div className="flex-1 flex overflow-hidden">
         {/* Summary */}
         <div className="w-[340px] border-r border-gray-200 p-4 flex flex-col">
+          <h3 className="text-sm font-bold mb-3">Tender Summary</h3>
+          <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 flex flex-col gap-2 text-base">
+            {tenderSummaryRows.map(([label, value]) => (
+              <div key={label} className="flex justify-between">
+                <span className="text-gray-600">{label}</span>
+                <span className="font-bold font-mono">{value}</span>
+              </div>
+            ))}
+          </div>
+
           <h3 className="text-sm font-bold mb-3">Shift Summary</h3>
-          <div className="flex flex-col gap-1 text-base overflow-y-auto">
+          <div className="min-h-0 flex-1 flex flex-col gap-1 text-base overflow-y-auto">
             {summaryRows.map(([label, value], idx) => (
               <div
                 key={`${label}-${idx}`}
@@ -170,7 +191,7 @@ export default function CloseShiftScreen() {
             ))}
           </div>
 
-          <div className="mt-auto pt-3 border-t border-gray-200 flex flex-col gap-1">
+          <div className="pt-3 border-t border-gray-200 flex flex-col gap-1">
             <div className="flex justify-between text-lg font-bold">
               <span>Expected</span>
               <span className="font-mono">{fmt(endedCashExpected)}</span>
@@ -193,7 +214,7 @@ export default function CloseShiftScreen() {
             </div>
           </div>
 
-          <div className="mt-auto pt-3">
+          <div className="pt-3">
             <label className="text-xs font-medium text-gray-500 mb-1 block">
               Note
             </label>

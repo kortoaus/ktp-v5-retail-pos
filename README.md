@@ -155,8 +155,10 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 - Item Sheet printing syncs items from cloud first, resolves queued rows through
   `POST /api/item/search/ids`, and sends 70×30 before 70×90. Promo items use
   70×90 when selected; otherwise they fall back to 70×30.
-- Printed sheet markers are stored client-side per terminal in localStorage using
-  sheet ids, so each terminal can show whether it has already printed a sheet.
+- Printed sheet markers are stored in the local POS server database by cloud
+  sheet id, so once any terminal prints a sheet every terminal on the same POS
+  server shows it as printed. Existing per-terminal localStorage markers are
+  migrated once into the server-backed state.
 
 ### Payment
 
