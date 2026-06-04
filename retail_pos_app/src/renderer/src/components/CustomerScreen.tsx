@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSalesStore, LINE_PAGE_SIZE } from "../store/SalesStore";
+import { useSalesStore } from "../store/SalesStore";
 import { CloudPost, StoreSetting } from "../types/models";
 import CustomerIdleScreen from "./CustomerIdleScreen";
 import LineViewer from "../screens/SaleScreen/LineViewer";
 import DocumentMonitor from "../screens/SaleScreen/DocumentMonitor";
-import { MONEY_DP, MONEY_SCALE } from "../libs/constants";
 
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+const CUSTOMER_LINE_PAGE_SIZE = 7;
 
 export default function CustomerScreen() {
   const [storeSetting, setStoreSetting] = useState<StoreSetting | null>(null);
@@ -46,12 +46,15 @@ export default function CustomerScreen() {
     };
   }, []);
 
-  const { carts, activeCartIndex, lineOffset } = useSalesStore();
+  const { carts, activeCartIndex } = useSalesStore();
   const lines = useMemo(() => {
     return carts[activeCartIndex]?.lines ?? [];
   }, [carts, activeCartIndex]);
 
-  const maxOffset = Math.max(0, lines.length - LINE_PAGE_SIZE);
+  const customerLineOffset = Math.max(
+    0,
+    lines.length - CUSTOMER_LINE_PAGE_SIZE,
+  );
 
   if (lines.length === 0) {
     return <CustomerIdleScreen storeSetting={storeSetting} posts={posts} />;
@@ -63,14 +66,16 @@ export default function CustomerScreen() {
         <div className="flex-1 bg-white">
           <LineViewer
             lines={lines}
-            lineOffset={lineOffset}
+            lineOffset={customerLineOffset}
             selectedLineKey={null}
             setSelectedLineKey={() => {}}
+            displayMode="customer"
+            pageSize={CUSTOMER_LINE_PAGE_SIZE}
           />
         </div>
       </div>
-      <div className="h-24">
-        <DocumentMonitor />
+      <div className="h-[116px] shrink-0">
+        <DocumentMonitor displayMode="customer" />
       </div>
     </div>
   );
