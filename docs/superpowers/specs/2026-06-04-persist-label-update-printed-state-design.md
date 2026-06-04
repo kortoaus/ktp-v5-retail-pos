@@ -75,11 +75,18 @@ Notes:
 - No relation to a local item-sheet table is needed because the POS server does not store cloud item sheets locally today; it proxies label-update sheet reads.
 - `userId` and `userName` are optional metadata. If the request has an authenticated user in `res.locals`, store it. If not, still mark the sheet printed.
 
-Apply the schema with the repo's current POS-server workflow:
+The committed schema change is accompanied by a Prisma migration:
+
+```text
+retail_pos_server/prisma/migrations/20260604050000_add_printed_item_sheet/migration.sql
+```
+
+For a fresh database, apply it with Prisma's migration flow. During the initial local implementation, the table was first applied with `db push`; that already-created local database was then marked with `migrate resolve --applied` for this migration.
+
+The repo's current POS-server generation workflow remains:
 
 ```bash
 cd retail_pos_server
-npx prisma db push
 npx prisma generate
 ```
 

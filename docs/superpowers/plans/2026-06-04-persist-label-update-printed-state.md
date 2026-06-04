@@ -8,7 +8,7 @@
 
 **Tech Stack:** Express 5, Prisma 7 generated client in `retail_pos_server/src/generated/prisma`, PostgreSQL, React 19, TypeScript 5, axios singleton `apiService`, Tailwind CSS.
 
-**Execution Status:** Implemented on 2026-06-04. `npx prisma db push`, `npx prisma generate`, `npm run build` in `retail_pos_server`, and `npm run build` in `retail_pos_app` completed successfully. A read-only database check confirmed the local `PrintedItemSheet` table exists. Manual multi-terminal print QA remains a deployment-floor check.
+**Execution Status:** Implemented on 2026-06-04. `npx prisma db push`, `npx prisma generate`, `npm run build` in `retail_pos_server`, and `npm run build` in `retail_pos_app` completed successfully. A read-only database check confirmed the local `PrintedItemSheet` table exists. A follow-up migration file was added at `retail_pos_server/prisma/migrations/20260604050000_add_printed_item_sheet/migration.sql`; because the local table had already been created by `db push`, the local database was marked with `npx prisma migrate resolve --applied 20260604050000_add_printed_item_sheet`. Manual multi-terminal print QA remains a deployment-floor check.
 
 ---
 
