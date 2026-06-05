@@ -17,11 +17,15 @@ export async function searchMemberByPhone(
 }
 
 export async function searchMembersByKeyword(
-  keyword: string,
+  data: {
+    keyword: string;
+    page: number;
+    limit: number;
+  },
 ): Promise<ApiResponse<MemberSearchResult[]>> {
   return apiService.post<MemberSearchResult[]>(
     "/api/crm/member/search/keyword",
-    { keyword },
+    data,
   );
 }
 

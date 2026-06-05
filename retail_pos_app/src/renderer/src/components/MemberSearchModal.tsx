@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { PagingType } from "../libs/api";
 import {
   MemberSearchResult,
   requestMemberSignupOtp,
@@ -37,6 +38,7 @@ export default function MemberSearchModal({
 
   const [searchKeyword, setSearchKeyword] = useState("");
   const [searchResults, setSearchResults] = useState<MemberSearchResult[]>([]);
+  const [searchPaging, setSearchPaging] = useState<PagingType | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [searched, setSearched] = useState(false);
@@ -54,6 +56,7 @@ export default function MemberSearchModal({
     setTab("search");
     setSearchKeyword("");
     setSearchResults([]);
+    setSearchPaging(null);
     setSearchLoading(false);
     setSearchError("");
     setSearched(false);
@@ -66,36 +69,54 @@ export default function MemberSearchModal({
     setNameFieldFocused(false);
   }, [open]);
 
-  const handleSearch = useCallback(async () => {
-    const keyword = searchKeyword.trim().replace(/\s+/g, " ");
-    setSearchKeyword(keyword);
-    if (!keyword) {
-      setSearchResults([]);
-      setSearchError("Enter member name or phone digits");
-      setSearched(true);
-      return;
-    }
-
-    setSearchLoading(true);
-    setSearchError("");
-    setSearchResults([]);
-    setSearched(true);
-    try {
-      const res = await searchMembersByKeyword(keyword);
-      if (res.ok && Array.isArray(res.result) && res.result.length > 0) {
-        setSearchResults(res.result);
-      } else if (res.ok && Array.isArray(res.result)) {
+  const runSearch = useCallback(
+    async (page: number) => {
+      const keyword = searchKeyword.trim().replace(/\s+/g, " ");
+      setSearchKeyword(keyword);
+      if (!keyword) {
         setSearchResults([]);
-        setSearchError("Member not found");
-      } else {
-        setSearchError(res.msg || "Member not found");
+        setSearchPaging(null);
+        setSearchError("Enter member name or phone digits");
+        setSearched(true);
+        return;
       }
-    } catch {
-      setSearchError("Network error");
-    } finally {
-      setSearchLoading(false);
-    }
-  }, [searchKeyword]);
+
+      setSearchLoading(true);
+      setSearchError("");
+      setSearchResults([]);
+      setSearched(true);
+      try {
+        const res = await searchMembersByKeyword({
+          keyword,
+          page,
+          limit: SEARCH_PAGE_SIZE,
+        });
+        if (res.ok && Array.isArray(res.result) && res.result.length > 0) {
+          setSearchResults(res.result);
+          setSearchPaging(res.paging);
+        } else if (res.ok && Array.isArray(res.result)) {
+          setSearchResults([]);
+          setSearchPaging(res.paging);
+          setSearchError("Member not found");
+        } else {
+          setSearchResults([]);
+          setSearchPaging(res.paging);
+          setSearchError(res.msg || "Member not found");
+        }
+      } catch {
+        setSearchResults([]);
+        setSearchPaging(null);
+        setSearchError("Network error");
+      } finally {
+        setSearchLoading(false);
+      }
+    },
+    [searchKeyword],
+  );
+
+  const handleSearch = useCallback(() => {
+    void runSearch(1);
+  }, [runSearch]);
 
   const handleSelectSearchResult = useCallback(
     (member: MemberSearchResult) => {
@@ -232,7 +253,9 @@ export default function MemberSearchModal({
               error={searchError}
               searched={searched}
               searchResults={searchResults}
+              paging={searchPaging}
               onSearch={handleSearch}
+              onPageChange={runSearch}
               onSelect={handleSelectSearchResult}
             />
           ) : (
@@ -300,7 +323,9 @@ interface SearchTabProps {
   error: string;
   searched: boolean;
   searchResults: MemberSearchResult[];
+  paging: PagingType | null;
   onSearch: () => void;
+  onPageChange: (page: number) => void;
   onSelect: (member: MemberSearchResult) => void;
 }
 
@@ -311,23 +336,15 @@ function SearchTab({
   error,
   searched,
   searchResults,
+  paging,
   onSearch,
+  onPageChange,
   onSelect,
 }: SearchTabProps) {
-  const [page, setPage] = useState(0);
-  const totalPages = Math.max(
-    1,
-    Math.ceil(searchResults.length / SEARCH_PAGE_SIZE),
-  );
-  const currentPage = Math.min(page, totalPages - 1);
-  const pageResults = searchResults.slice(
-    currentPage * SEARCH_PAGE_SIZE,
-    currentPage * SEARCH_PAGE_SIZE + SEARCH_PAGE_SIZE,
-  );
-
-  useEffect(() => {
-    setPage(0);
-  }, [searchResults]);
+  const currentPage = paging?.currentPage ?? 1;
+  const totalPages = Math.max(1, paging?.totalPages ?? 1);
+  const hasPrev = paging?.hasPrev ?? false;
+  const hasNext = paging?.hasNext ?? false;
 
   return (
     <div className="grid grid-cols-[360px_minmax(560px,1fr)] gap-4 p-4">
@@ -373,7 +390,7 @@ function SearchTab({
           )}
           {searchResults.length > 0 && (
             <div className="w-full h-full grid grid-rows-4 gap-2">
-              {pageResults.map((member) => (
+              {searchResults.map((member) => (
                 <button
                   key={member.id}
                   type="button"
@@ -404,23 +421,23 @@ function SearchTab({
         <div className="h-10 flex items-center justify-between gap-2">
           <button
             type="button"
-            onPointerDown={() => setPage((p) => Math.max(0, p - 1))}
-            disabled={currentPage === 0 || searchResults.length === 0}
+            onPointerDown={() => {
+              if (hasPrev && !loading) void onPageChange(currentPage - 1);
+            }}
+            disabled={!hasPrev || loading}
             className="h-9 px-4 rounded-lg bg-gray-100 active:bg-gray-300 disabled:opacity-30 text-sm"
           >
             Prev
           </button>
           <span className="text-sm text-gray-500">
-            {currentPage + 1} / {totalPages}
+            {currentPage} / {totalPages}
           </span>
           <button
             type="button"
-            onPointerDown={() =>
-              setPage((p) => Math.min(totalPages - 1, p + 1))
-            }
-            disabled={
-              currentPage >= totalPages - 1 || searchResults.length === 0
-            }
+            onPointerDown={() => {
+              if (hasNext && !loading) void onPageChange(currentPage + 1);
+            }}
+            disabled={!hasNext || loading}
             className="h-9 px-4 rounded-lg bg-gray-100 active:bg-gray-300 disabled:opacity-30 text-sm"
           >
             Next
