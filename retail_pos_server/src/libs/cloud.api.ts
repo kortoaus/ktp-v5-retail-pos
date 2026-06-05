@@ -45,7 +45,7 @@ class ApiService {
       const msg = responseData.message || responseData.msg || "Success";
 
       return {
-        ok: true,
+        ok: responseData.ok ?? true,
         msg,
         message: msg,
         status: response.status,

@@ -67,6 +67,8 @@ export async function searchMemberService(data: any) {
 
 export async function searchMembersByKeywordService(data: {
   keyword: string;
+  page?: number;
+  limit?: number;
 }) {
   try {
     const result = await crmApiService.post(
