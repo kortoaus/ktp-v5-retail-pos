@@ -12,7 +12,7 @@ import { sanitizePhone } from "../libs/phone-utils";
 
 type Tab = "search" | "create";
 type CreateStep = "form" | "otp";
-const SEARCH_PAGE_SIZE = 5;
+const SEARCH_PAGE_SIZE = 4;
 
 export interface MemberSearchSelection {
   id: string;
@@ -372,13 +372,13 @@ function SearchTab({
             <span className="text-red-500 text-sm">{error}</span>
           )}
           {searchResults.length > 0 && (
-            <div className="w-full h-full overflow-y-auto space-y-2 pr-1">
+            <div className="w-full h-full grid grid-rows-4 gap-2">
               {pageResults.map((member) => (
                 <button
                   key={member.id}
                   type="button"
                   onPointerDown={() => onSelect(member)}
-                  className="w-full bg-gray-50 rounded-xl p-4 flex items-center gap-4 text-left active:bg-blue-50"
+                  className="w-full min-h-0 bg-gray-50 rounded-xl p-4 flex items-center gap-4 text-left active:bg-blue-50"
                 >
                   <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-lg font-bold shrink-0">
                     {member.name.charAt(0)}
