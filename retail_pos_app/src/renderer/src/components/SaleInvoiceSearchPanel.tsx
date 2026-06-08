@@ -20,6 +20,7 @@ import MemberSearchModal, {
 import MoneyNumpad from "./Numpads/MoneyNumpad";
 import LoadingOverlay from "./LoadingOverlay";
 import { useBarcodeScanner } from "../hooks/useBarcodeScanner";
+import { searchMemberById } from "../service/crm.service";
 import {
   InvoiceTypeWire,
   SaleInvoiceListItem,
@@ -34,6 +35,7 @@ import {
   PAYMENT_CATEGORY_CLASSES,
   type PaymentCategoryAmounts,
 } from "../libs/payment-colors";
+import { parseInvoiceSearchScan } from "../libs/invoice-search-scan";
 
 type TypeFilter = "ALL" | InvoiceTypeWire;
 const ALL_TYPE_FILTERS: TypeFilter[] = ["ALL", "SALE", "REFUND", "SPEND"];
@@ -54,9 +56,6 @@ function tenderSummary(inv: SaleInvoiceListItem): PaymentCategoryAmounts {
     { cash: 0, credit: 0, others: 0 },
   );
 }
-
-// 영수증 QR payload prefix — sale-invoice-receipt.ts 의 `receipt%%%<serial>` 와 일치.
-const QR_PREFIX = "receipt%%%";
 
 interface Props {
   onSelect: (inv: SaleInvoiceListItem) => void;
@@ -147,26 +146,69 @@ export default function SaleInvoiceSearchPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // QR 스캔 → 해당 serial 로 즉시 검색. 기존 filter 는 리셋. 결과 1건이면
-  // onSelect 호출로 parent 가 알아서 (viewer open / navigate 등) 처리.
+  // QR 스캔:
+  // - receipt%%%<serial> → serial 로 즉시 검색. 단일 결과면 parent 가 처리.
+  // - member%%%<memberId> → member filter 를 적용하고 해당 member invoice 검색.
   const handleScan = useCallback(
     async (barcode: string) => {
-      const serial = barcode.startsWith(QR_PREFIX)
-        ? barcode.slice(QR_PREFIX.length)
-        : barcode;
-      setKeyword(serial);
-      setFrom(null);
-      setTo(null);
-      setMember(null);
-      setMinTotalStr("");
-      setMaxTotalStr("");
-      if (!lockedTypeFilter) setTypeFilter("ALL");
+      const parsed = parseInvoiceSearchScan(barcode);
       setLoading(true);
       try {
+        if (parsed.type === "member") {
+          const memberRes = await searchMemberById(parsed.memberId);
+          if (!memberRes.ok || !memberRes.result) {
+            window.alert(memberRes.msg || "Member not found");
+            setItems([]);
+            setPaging(null);
+            return;
+          }
+
+          const selectedMember: MemberSearchSelection = {
+            id: memberRes.result.id,
+            name: memberRes.result.name,
+            level: memberRes.result.level,
+            points: memberRes.result.points,
+            phone_last4: memberRes.result.phone_last4,
+          };
+
+          setKeyword("");
+          setFrom(null);
+          setTo(null);
+          setMember(selectedMember);
+          setMinTotalStr("");
+          setMaxTotalStr("");
+          if (!lockedTypeFilter) setTypeFilter("ALL");
+
+          const res = await searchSaleInvoices({
+            page: 1,
+            limit: PAGE_SIZE,
+            memberId: selectedMember.id,
+            type: lockedTypeFilter,
+          });
+          if (res.ok && res.result) {
+            setItems(res.result);
+            setPaging(res.paging);
+          } else {
+            setItems([]);
+            setPaging(null);
+          }
+          return;
+        }
+
+        const keyword =
+          parsed.type === "receipt" ? parsed.serial : parsed.keyword;
+        setKeyword(keyword);
+        setFrom(null);
+        setTo(null);
+        setMember(null);
+        setMinTotalStr("");
+        setMaxTotalStr("");
+        if (!lockedTypeFilter) setTypeFilter("ALL");
+
         const res = await searchSaleInvoices({
           page: 1,
           limit: PAGE_SIZE,
-          keyword: serial,
+          keyword,
           type: lockedTypeFilter,
         });
         if (res.ok && res.result) {
@@ -177,6 +219,13 @@ export default function SaleInvoiceSearchPanel({
           setItems([]);
           setPaging(null);
         }
+      } catch (e) {
+        console.error(e);
+        window.alert(
+          parsed.type === "member"
+            ? "Failed to search member invoices"
+            : "Failed to search invoice",
+        );
       } finally {
         setLoading(false);
       }
