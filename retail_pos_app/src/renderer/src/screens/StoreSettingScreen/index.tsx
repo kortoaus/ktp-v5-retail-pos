@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useState } from "react";
 import {
   getStoreSetting,
   updateStoreSetting,
@@ -7,6 +7,11 @@ import { StoreSetting } from "../../types/models";
 import OnScreenKeyboard from "../../components/OnScreenKeyboard";
 import { cn } from "../../libs/cn";
 import { MONEY_SCALE, PCT_SCALE } from "../../libs/constants";
+import {
+  RECEIPT_EXTRA_FOOTER_LINE_WIDTH,
+  normalizeReceiptExtraFooterPayload,
+  validateReceiptExtraFooterText,
+} from "../../libs/receipt-extra-footer";
 import { Link } from "react-router-dom";
 import { useUser } from "../../contexts/UserContext";
 import BlockScreen from "../../components/BlockScreen";
@@ -53,7 +58,9 @@ const FIELDS = [
 
 type FieldKey = (typeof FIELDS)[number]["key"];
 
-type FormState = Record<FieldKey, string>;
+type ExtraFieldKey = "receipt_extra_footer_text";
+
+type FormState = Record<FieldKey | ExtraFieldKey, string>;
 
 function settingToForm(s: StoreSetting): FormState {
   return {
@@ -85,6 +92,7 @@ function settingToForm(s: StoreSetting): FormState {
         ? String(s.user_daily_voucher_default / MONEY_SCALE)
         : "",
     receipt_below_text: s.receipt_below_text ?? "",
+    receipt_extra_footer_text: s.receipt_extra_footer_text ?? "",
   };
 }
 
@@ -114,6 +122,9 @@ function formToPayload(form: FormState) {
       ? undefined
       : Math.round((other_point_rate * PCT_SCALE) / 100),
     receipt_below_text: form.receipt_below_text || undefined,
+    receipt_extra_footer_text: normalizeReceiptExtraFooterPayload(
+      form.receipt_extra_footer_text,
+    ),
     user_daily_voucher_default:
       form.user_daily_voucher_default != null
         ? Math.round(parseFloat(form.user_daily_voucher_default) * MONEY_SCALE)
@@ -127,6 +138,9 @@ export default function StoreSettingScreen() {
   const [activeField, setActiveField] = useState<FieldKey>("name");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const extraFooterValidation = form
+    ? validateReceiptExtraFooterText(form.receipt_extra_footer_text)
+    : { ok: true, errors: [] };
 
   const fetchSetting = useCallback(async () => {
     setLoading(true);
@@ -169,6 +183,10 @@ export default function StoreSettingScreen() {
       window.alert("Store name is required");
       return;
     }
+    if (!extraFooterValidation.ok) {
+      window.alert("Receipt extra footer has lines that are too long");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -184,6 +202,14 @@ export default function StoreSettingScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleExtraFooterChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    if (!form) return;
+    setForm({
+      ...form,
+      receipt_extra_footer_text: event.target.value,
+    });
   };
 
   if (userLoading || loading) {
@@ -259,6 +285,41 @@ export default function StoreSettingScreen() {
               />
             </div>
           ))}
+          <div className="col-span-2 flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-gray-500">
+                Receipt Extra Footer
+              </label>
+              <span
+                className={cn(
+                  "text-[11px]",
+                  extraFooterValidation.ok ? "text-gray-400" : "text-red-600",
+                )}
+              >
+                Max {RECEIPT_EXTRA_FOOTER_LINE_WIDTH} columns per line
+              </span>
+            </div>
+            <textarea
+              value={form.receipt_extra_footer_text}
+              onChange={handleExtraFooterChange}
+              rows={6}
+              className={cn(
+                "w-full resize-none rounded-lg border px-3 py-2 font-mono text-sm outline-none",
+                extraFooterValidation.ok
+                  ? "border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  : "border-red-500 ring-1 ring-red-500",
+              )}
+            />
+            {!extraFooterValidation.ok && (
+              <div className="space-y-0.5 text-xs text-red-600">
+                {extraFooterValidation.errors.map((error) => (
+                  <div key={error.lineNumber}>
+                    Line {error.lineNumber}: {error.width}/{error.maxWidth} columns
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="w-[600px] flex flex-col border-l border-gray-200 p-3 shrink-0">
