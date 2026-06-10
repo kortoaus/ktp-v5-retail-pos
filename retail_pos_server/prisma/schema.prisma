@@ -254,6 +254,7 @@ model StoreSetting {
   email                      String?
   credit_surcharge_rate      Int?     @default(15) // permille (15 = 1.5%)
   receipt_below_text         String?  @default("Thank you!")
+  receipt_extra_footer_text  String?
   user_daily_voucher_default Int      @default(2000)
   cash_point_rate            Int      @default(10) // percent (10 = 1%)
   other_point_rate           Int      @default(10) // percent (10 = 1%)

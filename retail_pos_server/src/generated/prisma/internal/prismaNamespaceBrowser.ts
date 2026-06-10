@@ -309,6 +309,7 @@ export const StoreSettingScalarFieldEnum = {
   email: 'email',
   credit_surcharge_rate: 'credit_surcharge_rate',
   receipt_below_text: 'receipt_below_text',
+  receipt_extra_footer_text: 'receipt_extra_footer_text',
   user_daily_voucher_default: 'user_daily_voucher_default',
   cash_point_rate: 'cash_point_rate',
   other_point_rate: 'other_point_rate',

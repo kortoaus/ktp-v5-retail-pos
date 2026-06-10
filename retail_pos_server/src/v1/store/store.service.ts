@@ -19,6 +19,7 @@ type StoreSettingDTO = {
   email?: string;
   credit_surcharge_rate?: number; // permille (15 = 1.5%)
   receipt_below_text?: string;
+  receipt_extra_footer_text?: string | null;
   user_daily_voucher_default?: number; // cents (2000 = $20)
   cash_point_rate?: number; // percent (1 = 10%)
   other_point_rate?: number; // percent (1 = 10%)
@@ -40,6 +41,7 @@ export const updateStoreSettingService = async (dto: StoreSettingDTO) => {
       email,
       credit_surcharge_rate,
       receipt_below_text,
+      receipt_extra_footer_text,
       user_daily_voucher_default,
       cash_point_rate,
       other_point_rate,
@@ -61,6 +63,7 @@ export const updateStoreSettingService = async (dto: StoreSettingDTO) => {
         email,
         credit_surcharge_rate,
         receipt_below_text,
+        receipt_extra_footer_text,
         user_daily_voucher_default,
         cash_point_rate,
         other_point_rate,

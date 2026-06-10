@@ -61,6 +61,7 @@ export type StoreSettingMinAggregateOutputType = {
   email: string | null
   credit_surcharge_rate: number | null
   receipt_below_text: string | null
+  receipt_extra_footer_text: string | null
   user_daily_voucher_default: number | null
   cash_point_rate: number | null
   other_point_rate: number | null
@@ -85,6 +86,7 @@ export type StoreSettingMaxAggregateOutputType = {
   email: string | null
   credit_surcharge_rate: number | null
   receipt_below_text: string | null
+  receipt_extra_footer_text: string | null
   user_daily_voucher_default: number | null
   cash_point_rate: number | null
   other_point_rate: number | null
@@ -109,6 +111,7 @@ export type StoreSettingCountAggregateOutputType = {
   email: number
   credit_surcharge_rate: number
   receipt_below_text: number
+  receipt_extra_footer_text: number
   user_daily_voucher_default: number
   cash_point_rate: number
   other_point_rate: number
@@ -153,6 +156,7 @@ export type StoreSettingMinAggregateInputType = {
   email?: true
   credit_surcharge_rate?: true
   receipt_below_text?: true
+  receipt_extra_footer_text?: true
   user_daily_voucher_default?: true
   cash_point_rate?: true
   other_point_rate?: true
@@ -177,6 +181,7 @@ export type StoreSettingMaxAggregateInputType = {
   email?: true
   credit_surcharge_rate?: true
   receipt_below_text?: true
+  receipt_extra_footer_text?: true
   user_daily_voucher_default?: true
   cash_point_rate?: true
   other_point_rate?: true
@@ -201,6 +206,7 @@ export type StoreSettingCountAggregateInputType = {
   email?: true
   credit_surcharge_rate?: true
   receipt_below_text?: true
+  receipt_extra_footer_text?: true
   user_daily_voucher_default?: true
   cash_point_rate?: true
   other_point_rate?: true
@@ -312,6 +318,7 @@ export type StoreSettingGroupByOutputType = {
   email: string | null
   credit_surcharge_rate: number | null
   receipt_below_text: string | null
+  receipt_extra_footer_text: string | null
   user_daily_voucher_default: number
   cash_point_rate: number
   other_point_rate: number
@@ -359,6 +366,7 @@ export type StoreSettingWhereInput = {
   email?: Prisma.StringNullableFilter<"StoreSetting"> | string | null
   credit_surcharge_rate?: Prisma.IntNullableFilter<"StoreSetting"> | number | null
   receipt_below_text?: Prisma.StringNullableFilter<"StoreSetting"> | string | null
+  receipt_extra_footer_text?: Prisma.StringNullableFilter<"StoreSetting"> | string | null
   user_daily_voucher_default?: Prisma.IntFilter<"StoreSetting"> | number
   cash_point_rate?: Prisma.IntFilter<"StoreSetting"> | number
   other_point_rate?: Prisma.IntFilter<"StoreSetting"> | number
@@ -383,6 +391,7 @@ export type StoreSettingOrderByWithRelationInput = {
   email?: Prisma.SortOrderInput | Prisma.SortOrder
   credit_surcharge_rate?: Prisma.SortOrderInput | Prisma.SortOrder
   receipt_below_text?: Prisma.SortOrderInput | Prisma.SortOrder
+  receipt_extra_footer_text?: Prisma.SortOrderInput | Prisma.SortOrder
   user_daily_voucher_default?: Prisma.SortOrder
   cash_point_rate?: Prisma.SortOrder
   other_point_rate?: Prisma.SortOrder
@@ -410,6 +419,7 @@ export type StoreSettingWhereUniqueInput = Prisma.AtLeast<{
   email?: Prisma.StringNullableFilter<"StoreSetting"> | string | null
   credit_surcharge_rate?: Prisma.IntNullableFilter<"StoreSetting"> | number | null
   receipt_below_text?: Prisma.StringNullableFilter<"StoreSetting"> | string | null
+  receipt_extra_footer_text?: Prisma.StringNullableFilter<"StoreSetting"> | string | null
   user_daily_voucher_default?: Prisma.IntFilter<"StoreSetting"> | number
   cash_point_rate?: Prisma.IntFilter<"StoreSetting"> | number
   other_point_rate?: Prisma.IntFilter<"StoreSetting"> | number
@@ -434,6 +444,7 @@ export type StoreSettingOrderByWithAggregationInput = {
   email?: Prisma.SortOrderInput | Prisma.SortOrder
   credit_surcharge_rate?: Prisma.SortOrderInput | Prisma.SortOrder
   receipt_below_text?: Prisma.SortOrderInput | Prisma.SortOrder
+  receipt_extra_footer_text?: Prisma.SortOrderInput | Prisma.SortOrder
   user_daily_voucher_default?: Prisma.SortOrder
   cash_point_rate?: Prisma.SortOrder
   other_point_rate?: Prisma.SortOrder
@@ -466,6 +477,7 @@ export type StoreSettingScalarWhereWithAggregatesInput = {
   email?: Prisma.StringNullableWithAggregatesFilter<"StoreSetting"> | string | null
   credit_surcharge_rate?: Prisma.IntNullableWithAggregatesFilter<"StoreSetting"> | number | null
   receipt_below_text?: Prisma.StringNullableWithAggregatesFilter<"StoreSetting"> | string | null
+  receipt_extra_footer_text?: Prisma.StringNullableWithAggregatesFilter<"StoreSetting"> | string | null
   user_daily_voucher_default?: Prisma.IntWithAggregatesFilter<"StoreSetting"> | number
   cash_point_rate?: Prisma.IntWithAggregatesFilter<"StoreSetting"> | number
   other_point_rate?: Prisma.IntWithAggregatesFilter<"StoreSetting"> | number
@@ -489,6 +501,7 @@ export type StoreSettingCreateInput = {
   email?: string | null
   credit_surcharge_rate?: number | null
   receipt_below_text?: string | null
+  receipt_extra_footer_text?: string | null
   user_daily_voucher_default?: number
   cash_point_rate?: number
   other_point_rate?: number
@@ -513,6 +526,7 @@ export type StoreSettingUncheckedCreateInput = {
   email?: string | null
   credit_surcharge_rate?: number | null
   receipt_below_text?: string | null
+  receipt_extra_footer_text?: string | null
   user_daily_voucher_default?: number
   cash_point_rate?: number
   other_point_rate?: number
@@ -536,6 +550,7 @@ export type StoreSettingUpdateInput = {
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   credit_surcharge_rate?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   receipt_below_text?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  receipt_extra_footer_text?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   user_daily_voucher_default?: Prisma.IntFieldUpdateOperationsInput | number
   cash_point_rate?: Prisma.IntFieldUpdateOperationsInput | number
   other_point_rate?: Prisma.IntFieldUpdateOperationsInput | number
@@ -560,6 +575,7 @@ export type StoreSettingUncheckedUpdateInput = {
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   credit_surcharge_rate?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   receipt_below_text?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  receipt_extra_footer_text?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   user_daily_voucher_default?: Prisma.IntFieldUpdateOperationsInput | number
   cash_point_rate?: Prisma.IntFieldUpdateOperationsInput | number
   other_point_rate?: Prisma.IntFieldUpdateOperationsInput | number
@@ -584,6 +600,7 @@ export type StoreSettingCreateManyInput = {
   email?: string | null
   credit_surcharge_rate?: number | null
   receipt_below_text?: string | null
+  receipt_extra_footer_text?: string | null
   user_daily_voucher_default?: number
   cash_point_rate?: number
   other_point_rate?: number
@@ -607,6 +624,7 @@ export type StoreSettingUpdateManyMutationInput = {
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   credit_surcharge_rate?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   receipt_below_text?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  receipt_extra_footer_text?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   user_daily_voucher_default?: Prisma.IntFieldUpdateOperationsInput | number
   cash_point_rate?: Prisma.IntFieldUpdateOperationsInput | number
   other_point_rate?: Prisma.IntFieldUpdateOperationsInput | number
@@ -631,6 +649,7 @@ export type StoreSettingUncheckedUpdateManyInput = {
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   credit_surcharge_rate?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   receipt_below_text?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  receipt_extra_footer_text?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   user_daily_voucher_default?: Prisma.IntFieldUpdateOperationsInput | number
   cash_point_rate?: Prisma.IntFieldUpdateOperationsInput | number
   other_point_rate?: Prisma.IntFieldUpdateOperationsInput | number
@@ -655,6 +674,7 @@ export type StoreSettingCountOrderByAggregateInput = {
   email?: Prisma.SortOrder
   credit_surcharge_rate?: Prisma.SortOrder
   receipt_below_text?: Prisma.SortOrder
+  receipt_extra_footer_text?: Prisma.SortOrder
   user_daily_voucher_default?: Prisma.SortOrder
   cash_point_rate?: Prisma.SortOrder
   other_point_rate?: Prisma.SortOrder
@@ -688,6 +708,7 @@ export type StoreSettingMaxOrderByAggregateInput = {
   email?: Prisma.SortOrder
   credit_surcharge_rate?: Prisma.SortOrder
   receipt_below_text?: Prisma.SortOrder
+  receipt_extra_footer_text?: Prisma.SortOrder
   user_daily_voucher_default?: Prisma.SortOrder
   cash_point_rate?: Prisma.SortOrder
   other_point_rate?: Prisma.SortOrder
@@ -712,6 +733,7 @@ export type StoreSettingMinOrderByAggregateInput = {
   email?: Prisma.SortOrder
   credit_surcharge_rate?: Prisma.SortOrder
   receipt_below_text?: Prisma.SortOrder
+  receipt_extra_footer_text?: Prisma.SortOrder
   user_daily_voucher_default?: Prisma.SortOrder
   cash_point_rate?: Prisma.SortOrder
   other_point_rate?: Prisma.SortOrder
@@ -747,6 +769,7 @@ export type StoreSettingSelect<ExtArgs extends runtime.Types.Extensions.Internal
   email?: boolean
   credit_surcharge_rate?: boolean
   receipt_below_text?: boolean
+  receipt_extra_footer_text?: boolean
   user_daily_voucher_default?: boolean
   cash_point_rate?: boolean
   other_point_rate?: boolean
@@ -771,6 +794,7 @@ export type StoreSettingSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   email?: boolean
   credit_surcharge_rate?: boolean
   receipt_below_text?: boolean
+  receipt_extra_footer_text?: boolean
   user_daily_voucher_default?: boolean
   cash_point_rate?: boolean
   other_point_rate?: boolean
@@ -795,6 +819,7 @@ export type StoreSettingSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   email?: boolean
   credit_surcharge_rate?: boolean
   receipt_below_text?: boolean
+  receipt_extra_footer_text?: boolean
   user_daily_voucher_default?: boolean
   cash_point_rate?: boolean
   other_point_rate?: boolean
@@ -819,6 +844,7 @@ export type StoreSettingSelectScalar = {
   email?: boolean
   credit_surcharge_rate?: boolean
   receipt_below_text?: boolean
+  receipt_extra_footer_text?: boolean
   user_daily_voucher_default?: boolean
   cash_point_rate?: boolean
   other_point_rate?: boolean
@@ -826,7 +852,7 @@ export type StoreSettingSelectScalar = {
   updatedAt?: boolean
 }
 
-export type StoreSettingOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "companyId" | "companyName" | "name" | "phone" | "address1" | "address2" | "suburb" | "state" | "postcode" | "country" | "abn" | "website" | "email" | "credit_surcharge_rate" | "receipt_below_text" | "user_daily_voucher_default" | "cash_point_rate" | "other_point_rate" | "createdAt" | "updatedAt", ExtArgs["result"]["storeSetting"]>
+export type StoreSettingOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "companyId" | "companyName" | "name" | "phone" | "address1" | "address2" | "suburb" | "state" | "postcode" | "country" | "abn" | "website" | "email" | "credit_surcharge_rate" | "receipt_below_text" | "receipt_extra_footer_text" | "user_daily_voucher_default" | "cash_point_rate" | "other_point_rate" | "createdAt" | "updatedAt", ExtArgs["result"]["storeSetting"]>
 
 export type $StoreSettingPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "StoreSetting"
@@ -848,6 +874,7 @@ export type $StoreSettingPayload<ExtArgs extends runtime.Types.Extensions.Intern
     email: string | null
     credit_surcharge_rate: number | null
     receipt_below_text: string | null
+    receipt_extra_footer_text: string | null
     user_daily_voucher_default: number
     cash_point_rate: number
     other_point_rate: number
@@ -1292,6 +1319,7 @@ export interface StoreSettingFieldRefs {
   readonly email: Prisma.FieldRef<"StoreSetting", 'String'>
   readonly credit_surcharge_rate: Prisma.FieldRef<"StoreSetting", 'Int'>
   readonly receipt_below_text: Prisma.FieldRef<"StoreSetting", 'String'>
+  readonly receipt_extra_footer_text: Prisma.FieldRef<"StoreSetting", 'String'>
   readonly user_daily_voucher_default: Prisma.FieldRef<"StoreSetting", 'Int'>
   readonly cash_point_rate: Prisma.FieldRef<"StoreSetting", 'Int'>
   readonly other_point_rate: Prisma.FieldRef<"StoreSetting", 'Int'>
