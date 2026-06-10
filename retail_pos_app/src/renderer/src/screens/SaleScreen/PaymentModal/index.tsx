@@ -415,6 +415,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
         detail,
         completedInfo.receiptPrinted,
         storeSetting?.receipt_below_text || undefined,
+        storeSetting?.receipt_extra_footer_text || undefined,
       );
       setCompletedInfo((prev) =>
         prev ? { ...prev, detail, receiptPrinted: true } : prev,
@@ -452,6 +453,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
             detailRes.result,
             false,
             storeSetting?.receipt_below_text || undefined,
+            storeSetting?.receipt_extra_footer_text || undefined,
           );
         } catch (e) {
           console.error("printSaleInvoiceReceipt (SPEND) failed:", e);

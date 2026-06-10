@@ -269,6 +269,7 @@ export default function SaleRefundDetailScreen({
             detail,
             false,
             storeSetting?.receipt_below_text || undefined,
+            storeSetting?.receipt_extra_footer_text || undefined,
           );
         } catch (e) {
           console.error("printSaleInvoiceReceipt failed:", e);

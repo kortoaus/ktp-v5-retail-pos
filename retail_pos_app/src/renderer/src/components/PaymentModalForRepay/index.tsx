@@ -416,9 +416,16 @@ export default function PaymentModalForRepay({
       // Refund receipt → 1 초 → new sale receipt (R3).
       // belowText 는 current storeSetting (snapshot 불필요 — §4-4).
       const belowText = storeSetting?.receipt_below_text || undefined;
+      const extraFooterText =
+        storeSetting?.receipt_extra_footer_text || undefined;
       if (refundDetail) {
         try {
-          await printSaleInvoiceReceipt(refundDetail, false, belowText);
+          await printSaleInvoiceReceipt(
+            refundDetail,
+            false,
+            belowText,
+            extraFooterText,
+          );
         } catch (e) {
           console.error("printSaleInvoiceReceipt (refund) failed:", e);
         }
@@ -426,7 +433,12 @@ export default function PaymentModalForRepay({
       await new Promise((r) => setTimeout(r, 1000));
       if (newSaleDetail) {
         try {
-          await printSaleInvoiceReceipt(newSaleDetail, false, belowText);
+          await printSaleInvoiceReceipt(
+            newSaleDetail,
+            false,
+            belowText,
+            extraFooterText,
+          );
         } catch (e) {
           console.error("printSaleInvoiceReceipt (newSale) failed:", e);
         }
@@ -477,6 +489,7 @@ export default function PaymentModalForRepay({
           detail,
           true,
           storeSetting?.receipt_below_text || undefined,
+          storeSetting?.receipt_extra_footer_text || undefined,
         );
     } catch (e) {
       console.error("reprint failed:", e);

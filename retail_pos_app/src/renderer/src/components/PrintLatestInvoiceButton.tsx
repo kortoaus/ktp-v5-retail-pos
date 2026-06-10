@@ -31,6 +31,7 @@ export default function PrintLatestInvoiceButton({
       await printSaleInvoiceReprint(
         res.result,
         storeSetting?.receipt_below_text || undefined,
+        storeSetting?.receipt_extra_footer_text || undefined,
       );
     } catch (e) {
       console.error("print latest failed:", e);
