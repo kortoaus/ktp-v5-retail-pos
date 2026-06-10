@@ -4,6 +4,10 @@ import type {
 } from "../../service/sale.service";
 import { MONEY_DP, MONEY_SCALE, QTY_DP, QTY_SCALE } from "../constants";
 import dayjsAU from "../dayjsAU";
+import {
+  splitReceiptExtraFooterLines,
+  truncateReceiptExtraFooterLine,
+} from "../receipt-extra-footer";
 import { cutCommand, initPrinterCommand } from "./escpos";
 
 export type ReceiptTextEncoding = "ascii-replace" | "cp949" | "euc-kr";
@@ -14,6 +18,7 @@ export type ReceiptTextEncoding = "ascii-replace" | "cp949" | "euc-kr";
 export interface BuildSaleInvoiceEscposOptions {
   isCopy?: boolean;
   belowText?: string;
+  extraFooterText?: string;
   encoding: ReceiptTextEncoding;
   cut?: boolean;
 }
@@ -466,6 +471,7 @@ async function appendFooter(
   invoice: SaleInvoiceDetail,
   isCopy: boolean,
   belowText: string,
+  extraFooterText?: string,
 ): Promise<void> {
   const isRefund = invoice.type === "REFUND";
   const isSpend = invoice.type === "SPEND";
@@ -478,6 +484,16 @@ async function appendFooter(
   await writer.line();
   writer.align("center");
   await writer.line(centerLine(footerLabel));
+
+  const extraFooterLines =
+    isRefund || isSpend ? [] : splitReceiptExtraFooterLines(extraFooterText);
+  if (extraFooterLines.length > 0) {
+    await writer.line();
+    for (const line of extraFooterLines) {
+      await writer.line(centerLine(truncateReceiptExtraFooterLine(line)));
+    }
+  }
+
   await writer.line();
 
   const qrPayload = `receipt%%%${invoice.serial ?? `INV-${invoice.id}`}`;
@@ -502,6 +518,7 @@ async function appendSaleInvoiceBody(
   invoice: SaleInvoiceDetail,
   isCopy: boolean,
   belowText: string,
+  extraFooterText?: string,
 ): Promise<void> {
   const isRefund = invoice.type === "REFUND";
   const isSpend = invoice.type === "SPEND";
@@ -527,7 +544,7 @@ async function appendSaleInvoiceBody(
     await writer.line("! = Saved");
   }
 
-  await appendFooter(writer, invoice, isCopy, belowText);
+  await appendFooter(writer, invoice, isCopy, belowText, extraFooterText);
 }
 
 export async function buildSaleInvoiceEscposReceipt(
@@ -541,6 +558,7 @@ export async function buildSaleInvoiceEscposReceipt(
     invoice,
     options.isCopy ?? false,
     options.belowText ?? "Thank you!",
+    options.extraFooterText,
   );
   writer.feed(3);
   if (options.cut !== false) writer.raw(cutCommand(3));
@@ -568,6 +586,7 @@ export async function buildSaleInvoiceEscposReceiptChain(
       invoice,
       options.isCopy ?? false,
       options.belowText ?? "Thank you!",
+      options.extraFooterText,
     );
   }
 

@@ -13,6 +13,10 @@ import type { ReceiptTextEncoding } from "./sale-invoice-escpos";
 import { printESCPOS } from "./print.service";
 import dayjsAU from "../dayjsAU";
 import { MONEY_DP, MONEY_SCALE, QTY_DP, QTY_SCALE } from "../constants";
+import {
+  splitReceiptExtraFooterLines,
+  truncateReceiptExtraFooterLine,
+} from "../receipt-extra-footer";
 
 // 80mm thermal (576px). Shift settlement receipt 와 동일한 layout 규칙.
 const W = 576;
@@ -92,8 +96,14 @@ function summarisePayments(payments: SaleInvoicePaymentItem[]) {
 }
 
 // 높이 추정 — SPEND 은 totals / payments 섹션 생략.
-function estimateHeight(invoice: SaleInvoiceDetail, isCopy: boolean): number {
+function estimateHeight(
+  invoice: SaleInvoiceDetail,
+  isCopy: boolean,
+  extraFooterText?: string,
+): number {
   const isSpend = invoice.type === "SPEND";
+  const extraFooterLines =
+    invoice.type === "SALE" ? splitReceiptExtraFooterLines(extraFooterText) : [];
 
   const headerLines = 6 + (invoice.abn ? 0 : 0);
   const metaLines =
@@ -129,7 +139,7 @@ function estimateHeight(invoice: SaleInvoiceDetail, isCopy: boolean): number {
   let voucherListLines = 0;
   if (voucherPayments.length > 0) voucherListLines = 1 + voucherPayments.length;
 
-  const tail = 8;
+  const tail = 8 + extraFooterLines.length;
 
   const total = isSpend
     ? headerLines + metaLines + itemLines + tail
@@ -155,10 +165,11 @@ export async function renderSaleInvoiceReceipt(
   invoice: SaleInvoiceDetail,
   isCopy: boolean = false,
   belowText: string = "Thank you!",
+  extraFooterText?: string,
 ): Promise<HTMLCanvasElement> {
   const canvas = document.createElement("canvas");
   canvas.width = W;
-  canvas.height = estimateHeight(invoice, isCopy);
+  canvas.height = estimateHeight(invoice, isCopy, extraFooterText);
 
   const ctx = canvas.getContext("2d")!;
   ctx.fillStyle = "#fff";
@@ -431,7 +442,19 @@ export async function renderSaleInvoiceReceipt(
       ? "Refund processed"
       : belowText;
   ctx.fillText(footerLabel, W / 2, y);
-  y += LH + 10;
+  y += LH;
+
+  const extraFooterLines =
+    isRefund || isSpend ? [] : splitReceiptExtraFooterLines(extraFooterText);
+  if (extraFooterLines.length > 0) {
+    y += 4;
+    for (const line of extraFooterLines) {
+      ctx.fillText(truncateReceiptExtraFooterLine(line), W / 2, y);
+      y += LH - 6;
+    }
+  }
+
+  y += 10;
 
   // QR — 현재 serial placeholder (INV-<id>). serial 활성화 후에도 동일 슬롯.
   const qrPayload = `receipt%%%${invoice.serial ?? `INV-${invoice.id}`}`;
@@ -466,6 +489,7 @@ export async function printSaleInvoiceReceipt(
   invoice: SaleInvoiceDetail,
   isCopy: boolean = false,
   belowText: string = "Thank you!",
+  extraFooterText?: string,
 ): Promise<void> {
   const receiptConfig = await getReceiptPrintConfig();
 
@@ -473,6 +497,7 @@ export async function printSaleInvoiceReceipt(
     const buffer = await buildSaleInvoiceEscposReceipt(invoice, {
       isCopy,
       belowText,
+      extraFooterText,
       encoding: receiptConfig.encoding,
       cut: true,
     });
@@ -480,7 +505,12 @@ export async function printSaleInvoiceReceipt(
     return;
   }
 
-  const canvas = await renderSaleInvoiceReceipt(invoice, isCopy, belowText);
+  const canvas = await renderSaleInvoiceReceipt(
+    invoice,
+    isCopy,
+    belowText,
+    extraFooterText,
+  );
   const buffer = buildPrintBuffer(canvas);
   await printESCPOS(buffer);
 }
@@ -500,6 +530,7 @@ export async function printSaleInvoiceReceipt(
 export async function printSaleInvoiceReprint(
   invoice: SaleInvoiceDetail,
   belowText: string = "Thank you!",
+  extraFooterText?: string,
 ): Promise<void> {
   // Children 조회 — REFUND 뿐 아니라 SALE (repay) 자식도 모두.
   const childRes = await getSaleInvoiceChildren(invoice.id);
@@ -508,7 +539,7 @@ export async function printSaleInvoiceReprint(
   const receiptConfig = await getReceiptPrintConfig();
 
   if (children.length === 0) {
-    return printSaleInvoiceReceipt(invoice, true, belowText);
+    return printSaleInvoiceReceipt(invoice, true, belowText, extraFooterText);
   }
 
   if (receiptConfig.mode === "escpos") {
@@ -517,6 +548,7 @@ export async function printSaleInvoiceReprint(
       {
         isCopy: true,
         belowText,
+        extraFooterText,
         encoding: receiptConfig.encoding,
       },
     );
@@ -525,9 +557,13 @@ export async function printSaleInvoiceReprint(
   }
 
   const canvases: HTMLCanvasElement[] = [];
-  canvases.push(await renderSaleInvoiceReceipt(invoice, true, belowText));
+  canvases.push(
+    await renderSaleInvoiceReceipt(invoice, true, belowText, extraFooterText),
+  );
   for (const child of children) {
-    canvases.push(await renderSaleInvoiceReceipt(child, true, belowText));
+    canvases.push(
+      await renderSaleInvoiceReceipt(child, true, belowText, extraFooterText),
+    );
   }
 
   const buffer = buildMultiReceiptBuffer(canvases);
