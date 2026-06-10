@@ -100,6 +100,9 @@ function formToPayload(form: FormState) {
   const rate = parseFloat(form.credit_surcharge_rate);
   const cash_point_rate = parseFloat(form.cash_point_rate);
   const other_point_rate = parseFloat(form.other_point_rate);
+  const receiptExtraFooterText = normalizeReceiptExtraFooterPayload(
+    form.receipt_extra_footer_text,
+  );
   return {
     name: form.name,
     phone: form.phone || undefined,
@@ -122,9 +125,7 @@ function formToPayload(form: FormState) {
       ? undefined
       : Math.round((other_point_rate * PCT_SCALE) / 100),
     receipt_below_text: form.receipt_below_text || undefined,
-    receipt_extra_footer_text: normalizeReceiptExtraFooterPayload(
-      form.receipt_extra_footer_text,
-    ),
+    receipt_extra_footer_text: receiptExtraFooterText ?? null,
     user_daily_voucher_default:
       form.user_daily_voucher_default != null
         ? Math.round(parseFloat(form.user_daily_voucher_default) * MONEY_SCALE)
