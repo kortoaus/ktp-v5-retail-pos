@@ -109,4 +109,3 @@ The server is a LAN-local cache/proxy of a cloud system. Data flows:
 - Korean + English are first-class: model fields use `name_en` / `name_ko` pairs. The on-screen keyboard supports dubeolsik Hangul via `es-hangul`.
 - POS math and cart mutations are centralized in `SalesStore` (cart/line) + `PaymentModal/usePaymentCal` (payment/invariants) + `libs/sale/build-payload` (payload). Do not duplicate totals/tax/rounding logic in components.
 - Sale domain decisions live in `docs/sale-domain.md` (D-1 … D-38). Read before changing any invoice / payment / voucher / refund / repay / sync logic.
-- When users write in Korean, reply in English (per global instruction).
