@@ -3,6 +3,37 @@
 Short re-entry map for `ktpv5-pos-retail`. This file intentionally avoids
 duplicating the full product contract.
 
+## KTPv5 Role And Boundaries
+
+`ktpv5-pos-retail` owns the retail desktop POS product: an Electron till app and
+its LAN-local server for a single store. Read this repo when work involves the
+retail sale screen, cart/payment/refund/repay flows, shifts, cash in/out,
+receipt or label printing, serial scale/scanner/customer-display hardware,
+local POS cloud sync, or store-local item/hotkey/member data used by the till.
+
+Upstream systems are the cloud API server, item server, CRM/member data, and
+data/reporting server reached through cloud sync APIs. Downstream consumers are
+the cashier-facing Electron renderer, the customer display window, local
+PostgreSQL, receipt/label printers, scales, scanners, cash drawers, and the
+cloud reporting pipeline after invoices and shifts sync up.
+
+Keep these boundaries sharp:
+
+- Electron main/preload owns native hardware and window access; renderer code
+  stays a normal web app and uses `window.electronAPI` only.
+- The local server is the offline-capable cache/proxy and sync point; reporting
+  calculations belong upstream after sync, not in the till UI.
+- Sale math, rounding, refund, repay, and voucher rules are centralized in the
+  sale domain files and `docs/sale-domain.md`; do not duplicate them in screens.
+- Local POS deployment is single-store/single-company. Do not widen tenant or
+  cloud auth assumptions without checking the API/data-server contracts.
+- Money, quantity, and percent values are integer-scaled at module boundaries.
+
+Validation is package-specific: use `cd retail_pos_app && npm run build` for
+Electron/UI changes, `cd retail_pos_server && npm run build` for local server
+changes, and `cd retail_pos_server && npx prisma generate` after schema edits.
+There is no configured test runner; server `npm test` is a stub.
+
 ## Canonical Docs
 
 - `README.md` — product, architecture, app routes, API route map, features,

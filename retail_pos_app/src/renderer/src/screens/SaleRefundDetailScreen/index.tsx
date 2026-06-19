@@ -4,8 +4,8 @@
 //
 // 입력 방식 (row.type 별):
 //  - WEIGHT             : Numpad (소수점, maxDp=3)
-//  - NORMAL             : Numpad (정수만 — useDot=false)
-//  - PREPACKED / WEIGHT_PREPACKED : all-or-nothing 토글 (qty ↔ cap)
+//  - NORMAL / PREPACKED : Numpad (정수만 — useDot=false)
+//  - WEIGHT_PREPACKED  : all-or-nothing 토글 (qty ↔ cap)
 //  - Tender amount      : MoneyNumpad
 // 각각 해당 row/tender 의 display 버튼을 누르면 모달 open (또는 토글).
 
@@ -186,12 +186,12 @@ export default function SaleRefundDetailScreen({
     setNumpadValue(cur > 0 ? String(cur) : "");
   }
 
-  // Prepacked 은 numpad 안 열고 바로 토글 (0 ↔ cap). WEIGHT / NORMAL 만
+  // WEIGHT_PREPACKED 은 numpad 안 열고 바로 토글 (0 ↔ cap). 나머지는
   // 모달 open — NumpadModal 내부에서 useDot 을 row.type 으로 결정.
   function handleRowQtyTap(row: SaleInvoiceRowItem) {
     const cap = rowRefundable(row);
     if (cap === 0) return;
-    if (row.type === "PREPACKED" || row.type === "WEIGHT_PREPACKED") {
+    if (row.type === "WEIGHT_PREPACKED") {
       const cur = selections[row.id] ?? 0;
       setRowQty(row, cur === cap ? 0 : cap);
       return;
@@ -498,8 +498,7 @@ function RowCard({
   const refundThisRow = rowRefundAmount(row, qty, refunds);
   const priceChanged = row.unit_price_effective !== row.unit_price_original;
   const exhausted = cap === 0;
-  const isPrepacked =
-    row.type === "PREPACKED" || row.type === "WEIGHT_PREPACKED";
+  const isToggleOnly = row.type === "WEIGHT_PREPACKED";
 
   return (
     <div
@@ -538,8 +537,8 @@ function RowCard({
         {/* Right: qty button row + refund amount */}
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           <div className="flex items-center gap-1.5">
-            {/* prepacked 은 버튼 자체가 토글이라 All 링크 중복 — 숨김 */}
-            {!isPrepacked && (
+            {/* 토글 전용 row 는 버튼 자체가 All 이라 링크 중복 — 숨김 */}
+            {!isToggleOnly && (
               <button
                 type="button"
                 disabled={exhausted}
@@ -695,7 +694,7 @@ function NumpadModal({
     if (row) {
       label = row.name_en;
       capHint = `Max ${fmtQty(rowRefundable(row))} ${row.uom}`;
-      // NORMAL 은 정수만, WEIGHT 는 소수 허용. PREPACKED 은 이 경로 안 옴 (토글).
+      // NORMAL/PREPACKED 은 정수만, WEIGHT 는 소수 허용.
       useDot = row.type === "WEIGHT";
     }
   }
