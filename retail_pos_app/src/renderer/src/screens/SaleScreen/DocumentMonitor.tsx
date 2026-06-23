@@ -2,6 +2,7 @@ import { type CSSProperties, useMemo } from "react";
 import { useSalesStore } from "../../store/SalesStore";
 import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../../libs/constants";
 import { cn } from "../../libs/cn";
+import { getMemberLevelOneEstimate } from "../../libs/sale/member-level-estimate";
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 
@@ -15,6 +16,9 @@ type DocumentMonitorClassSet = {
   dueRoot: string;
   dueLabel: string;
   dueValue: string;
+  estimateRoot: string;
+  estimatePrimary: string;
+  estimateSecondary: string;
 };
 
 const DOCUMENT_MONITOR_CLASSES: Record<
@@ -29,15 +33,22 @@ const DOCUMENT_MONITOR_CLASSES: Record<
     dueRoot: "col-span-5 row-span-2 flex items-center justify-between gap-4",
     dueLabel: "text-base text-white font-medium",
     dueValue: "text-green-400 text-2xl font-bold",
+    estimateRoot: "hidden",
+    estimatePrimary: "",
+    estimateSecondary: "",
   },
   customer: {
-    root: "grid grid-cols-12 bg-zinc-900 h-full px-6 py-4 gap-x-5",
+    root: "relative grid grid-cols-12 bg-zinc-900 h-full px-6 py-2 gap-x-5",
     itemLabel: "text-gray-400 font-semibold text-sm",
     itemLabelStyle: undefined,
-    itemValue: "text-white font-bold text-2xl leading-tight",
+    itemValue: "text-white font-bold text-xl leading-tight",
     dueRoot: "col-span-5 flex items-center justify-between gap-5",
-    dueLabel: "text-2xl text-white font-semibold",
-    dueValue: "text-green-400 text-5xl font-bold leading-none",
+    dueLabel: "text-xl text-white font-semibold",
+    dueValue: "text-green-400 text-4xl font-bold leading-none",
+    estimateRoot:
+      "absolute -top-16 right-6 z-20 min-w-[300px] animate-bounce rounded-lg border-2 border-yellow-200 bg-yellow-400 px-4 py-2 text-right leading-tight text-zinc-950 shadow-xl after:absolute after:-bottom-3 after:right-9 after:h-0 after:w-0 after:border-x-[10px] after:border-t-[10px] after:border-x-transparent after:border-t-yellow-400",
+    estimatePrimary: "text-base font-extrabold",
+    estimateSecondary: "text-xl font-black",
   },
 };
 
@@ -52,7 +63,9 @@ export default function DocumentMonitor({
   displayMode?: DocumentMonitorDisplayMode;
 }) {
   const classes = DOCUMENT_MONITOR_CLASSES[displayMode];
-  const lines = useSalesStore((s) => s.carts[s.activeCartIndex]?.lines ?? []);
+  const activeCart = useSalesStore((s) => s.carts[s.activeCartIndex]);
+  const lines = activeCart?.lines ?? [];
+  const member = activeCart?.member ?? null;
 
   const { itemCount, lineCount, qtyCount, total, tax_amount, net } =
     useMemo(() => {
@@ -70,6 +83,14 @@ export default function DocumentMonitor({
     }, [lines]);
 
   const due = total;
+  const memberLevelEstimate = useMemo(
+    () =>
+      displayMode === "customer"
+        ? getMemberLevelOneEstimate({ lines, member })
+        : null,
+    [displayMode, lines, member],
+  );
+  const showCustomerEstimate = memberLevelEstimate != null;
 
   return (
     <div className={classes.root}>
@@ -103,7 +124,19 @@ export default function DocumentMonitor({
 
       <div className={classes.dueRoot}>
         <div className={classes.dueLabel}>DUE</div>
-        <div className={classes.dueValue}>${fmtMoney(due)}</div>
+        <div className="flex flex-col items-end">
+          <div className={classes.dueValue}>${fmtMoney(due)}</div>
+          {showCustomerEstimate && memberLevelEstimate && (
+            <div className={classes.estimateRoot}>
+              <div className={classes.estimatePrimary}>
+                Member total approx: ${fmtMoney(memberLevelEstimate.memberTotal)}
+              </div>
+              <div className={classes.estimateSecondary}>
+                Become a member and save ${fmtMoney(memberLevelEstimate.savings)}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -29,6 +29,7 @@ import {
   buildSalePayload,
   buildSpendPayload,
 } from "../../../libs/sale/build-payload";
+import { getMemberLevelOneEstimate } from "../../../libs/sale/member-level-estimate";
 import LoadingOverlay from "../../../components/LoadingOverlay";
 import { kickDrawer } from "../../../libs/printer/kick-drawer";
 import { printSaleInvoiceReceipt } from "../../../libs/printer/sale-invoice-receipt";
@@ -170,6 +171,10 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
   const cash_point_rate = storeSetting?.cash_point_rate ?? 10;
   const other_point_rate = storeSetting?.other_point_rate ?? 10;
   const activeMember = carts[activeCartIndex]?.member ?? null;
+  const memberLevelEstimate = useMemo(
+    () => getMemberLevelOneEstimate({ lines, member: activeMember }),
+    [lines, activeMember],
+  );
   const activeMemberId = activeMember?.id ?? null;
   const hasAvailableCustomerVoucher =
     activeMember != null && activeMember.points >= 1000;
@@ -920,44 +925,60 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
             </section>
 
             {/* Complete Sale / Record Spend — spendMode 에 따라 교체 (별도 DOM) */}
-            {spendMode ? (
-              <TapTarget
-                onClick={handleSpend}
-                disabled={processing || lines.length === 0}
-                className={cn(
-                  "mt-auto h-16 rounded-lg font-bold text-lg tracking-wide text-white flex items-center justify-center",
-                  processing || lines.length === 0
-                    ? "bg-orange-300 opacity-40 cursor-not-allowed"
-                    : "bg-orange-500 active:bg-orange-600",
-                )}
-              >
-                RECORD SPEND
-              </TapTarget>
-            ) : (
-              <TapTarget
-                onClick={handleCompleteSale}
-                disabled={completeDisabled}
-                className={cn(
-                  "mt-auto h-16 rounded-lg font-bold text-sm tracking-wide transition",
-                  completeDisabled
-                    ? "bg-gray-200 text-gray-400 cursor-not-allowed flex items-center justify-center"
-                    : cn(
-                        "flex items-center justify-center",
-                        completePaymentCategory
-                          ? PAYMENT_CATEGORY_CLASSES[completePaymentCategory]
-                              .button
-                          : PAYMENT_CATEGORY_CLASSES.cash.button,
-                      ),
-                )}
-              >
-                COMPLETE
-                {!completeDisabled && (
-                  <span className="ml-2 text-2xl font-mono">
-                    ${fmtMoney(cal.total)}
-                  </span>
-                )}
-              </TapTarget>
-            )}
+            <div className="mt-auto flex flex-col gap-2">
+              {!spendMode && memberLevelEstimate && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-right">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                    Member total approx
+                  </div>
+                  <div className="font-mono text-sm font-bold text-emerald-800">
+                    ${fmtMoney(memberLevelEstimate.memberTotal)}
+                    <span className="ml-1 text-xs font-semibold">
+                      (SAVE ${fmtMoney(memberLevelEstimate.savings)})
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {spendMode ? (
+                <TapTarget
+                  onClick={handleSpend}
+                  disabled={processing || lines.length === 0}
+                  className={cn(
+                    "h-16 rounded-lg font-bold text-lg tracking-wide text-white flex items-center justify-center",
+                    processing || lines.length === 0
+                      ? "bg-orange-300 opacity-40 cursor-not-allowed"
+                      : "bg-orange-500 active:bg-orange-600",
+                  )}
+                >
+                  RECORD SPEND
+                </TapTarget>
+              ) : (
+                <TapTarget
+                  onClick={handleCompleteSale}
+                  disabled={completeDisabled}
+                  className={cn(
+                    "h-16 rounded-lg font-bold text-sm tracking-wide transition",
+                    completeDisabled
+                      ? "bg-gray-200 text-gray-400 cursor-not-allowed flex items-center justify-center"
+                      : cn(
+                          "flex items-center justify-center",
+                          completePaymentCategory
+                            ? PAYMENT_CATEGORY_CLASSES[completePaymentCategory]
+                                .button
+                            : PAYMENT_CATEGORY_CLASSES.cash.button,
+                        ),
+                  )}
+                >
+                  COMPLETE
+                  {!completeDisabled && (
+                    <span className="ml-2 text-2xl font-mono">
+                      ${fmtMoney(cal.total)}
+                    </span>
+                  )}
+                </TapTarget>
+              )}
+            </div>
           </div>
         </div>
       </div>
