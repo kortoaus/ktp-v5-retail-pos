@@ -1,6 +1,6 @@
 {
   "name": "retail-pos",
-  "version": "1.4.6",
+  "version": "1.4.7",
   "description": "KTPV5 Retail Terminal Desktop Application",
   "author": "KORTOAUS PTY LTD",
   "main": "./out/main/index.js",
