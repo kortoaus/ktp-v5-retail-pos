@@ -11,6 +11,7 @@ import { mergeLabelOutputs } from "../../libs/label-builder";
 import { LabelPrinter, useZplPrinters } from "../../hooks/useZplPrinters";
 import { MONEY_DP, MONEY_SCALE } from "../../libs/constants";
 import { useStoreSetting } from "../../hooks/useStoreSetting";
+import { getPriceTagQueueBadge } from "./price-tag-queue-badge";
 
 const QUEUE_PAGE_SIZE = 10;
 type PriceTag7090PrintMode = "current" | "normal";
@@ -190,13 +191,16 @@ export default function PrintItemPriceTag() {
 
 function QueueItem({ item, onRemove }: { item: Item; onRemove: () => void }) {
   const hasPromo = item.promoPrice != null;
+  const badge = getPriceTagQueueBadge(item);
   const price = getItemDisplayPrice(item);
   const { name_en, name_ko } = itemNameParser(item);
   return (
     <div className="flex items-center px-3 h-full hover:bg-gray-50 transition-colors overflow-hidden">
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate">
-          {hasPromo && <span className="font-bold text-red-500">{`[P]`}</span>}
+          {badge && (
+            <span className="font-bold text-red-500">{`[${badge}]`}</span>
+          )}
           {name_en}
         </div>
         <div className="text-xs text-gray-500 truncate">{name_ko}</div>
