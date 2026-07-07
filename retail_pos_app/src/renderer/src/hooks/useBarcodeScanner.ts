@@ -58,8 +58,9 @@ export function useBarcodeScanner(onScan: (barcode: string) => void): void {
 
   useEffect(() => {
     const emitScan = (barcode: string) => {
-      useDeviceMonitorStore.getState().setLastScannedBarcode(barcode)
-      onScanRef.current(barcode)
+      const normalizedBarcode = barcode.replaceAll(' ', '')
+      useDeviceMonitorStore.getState().setLastScannedBarcode(normalizedBarcode)
+      onScanRef.current(normalizedBarcode)
     }
 
     const removeSerialListener = window.electronAPI.onBarcodeScan((barcode) => {
