@@ -11,6 +11,12 @@ import type {
   PickupOrderListParams,
 } from "../components/pickupOrders/pickup-order-types";
 
+export type PickupOrderMemberPhone = {
+  memberId: string;
+  phone: string;
+  phoneLast4: string | null;
+};
+
 export async function searchPickupOrders(
   params: PickupOrderListParams,
 ): Promise<ApiResponse<PickupOrderListItem[]>> {
@@ -47,4 +53,12 @@ export async function getPickupOrderByCrmId(
     ...res,
     result: res.result ? normalizePickupOrderDetail(res.result) : null,
   };
+}
+
+export async function getPickupOrderMemberPhone(
+  crmOrderId: number,
+): Promise<ApiResponse<PickupOrderMemberPhone>> {
+  return apiService.get<PickupOrderMemberPhone>(
+    `/api/pickup-order/${crmOrderId}/member-phone`,
+  );
 }

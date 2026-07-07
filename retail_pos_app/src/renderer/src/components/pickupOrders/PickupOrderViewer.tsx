@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "../../libs/cn";
-import { getPickupOrderByCrmId } from "../../service/pickup-order.service";
+import {
+  getPickupOrderByCrmId,
+  getPickupOrderMemberPhone,
+} from "../../service/pickup-order.service";
 import {
   countSelectedOptions,
   formatPickupMoney,
@@ -28,29 +31,87 @@ export default function PickupOrderViewer({ crmOrderId, onClose }: Props) {
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [revealedPhone, setRevealedPhone] = useState("");
+  const [phoneLoading, setPhoneLoading] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
+  const phoneRevealRequestGenRef = useRef(0);
+
+  const resetPhoneReveal = () => {
+    phoneRevealRequestGenRef.current += 1;
+    setRevealedPhone("");
+    setPhoneLoading(false);
+    setPhoneError("");
+  };
 
   useEffect(() => {
-    if (crmOrderId == null) return;
+    if (crmOrderId == null) {
+      setOrder(null);
+      setSelectedCrmLineId(null);
+      setError("");
+      resetPhoneReveal();
+      setLoading(false);
+      return;
+    }
     let active = true;
     setOrder(null);
     setSelectedCrmLineId(null);
     setError("");
+    resetPhoneReveal();
     setLoading(true);
-    getPickupOrderByCrmId(crmOrderId).then((res) => {
-      if (!active) return;
-      if (res.ok && res.result) {
-        setOrder(res.result);
-        setSelectedCrmLineId(res.result.lines[0]?.crmLineId ?? null);
-      } else {
-        setError(res.msg || "Failed to load pickup order");
+    void (async () => {
+      try {
+        const res = await getPickupOrderByCrmId(crmOrderId);
+        if (!active) return;
+        if (res.ok && res.result) {
+          resetPhoneReveal();
+          setOrder(res.result);
+          setSelectedCrmLineId(res.result.lines[0]?.crmLineId ?? null);
+        } else {
+          setError(res.msg || "Failed to load pickup order");
+        }
+      } catch {
+        if (!active) return;
+        setError("Failed to load pickup order");
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
-      setLoading(false);
-    });
+    })();
 
     return () => {
       active = false;
     };
   }, [crmOrderId]);
+
+  const revealPhone = async () => {
+    if (crmOrderId == null || phoneLoading) return;
+    const requestGen = phoneRevealRequestGenRef.current + 1;
+    phoneRevealRequestGenRef.current = requestGen;
+    setPhoneLoading(true);
+    setPhoneError("");
+    try {
+      const res = await getPickupOrderMemberPhone(crmOrderId);
+      if (phoneRevealRequestGenRef.current !== requestGen) return;
+      if (res.ok && res.result) {
+        setRevealedPhone(res.result.phone);
+      } else {
+        setPhoneError(res.msg || "Could not load phone");
+      }
+    } catch {
+      if (phoneRevealRequestGenRef.current !== requestGen) return;
+      setPhoneError("Could not load phone");
+    } finally {
+      if (phoneRevealRequestGenRef.current === requestGen) {
+        setPhoneLoading(false);
+      }
+    }
+  };
+
+  const hidePhone = () => {
+    setRevealedPhone("");
+    setPhoneError("");
+  };
 
   const selectedLine =
     order?.lines.find((line) => line.crmLineId === selectedCrmLineId) ??
@@ -95,7 +156,14 @@ export default function PickupOrderViewer({ crmOrderId, onClose }: Props) {
         {order && !loading && !error && (
           <div className="grid min-h-0 flex-1 grid-cols-[minmax(320px,390px)_minmax(0,1fr)] overflow-hidden">
             <section className="min-h-0 overflow-auto border-r border-gray-200">
-              <OrderSummary order={order} />
+              <OrderSummary
+                order={order}
+                revealedPhone={revealedPhone}
+                phoneLoading={phoneLoading}
+                phoneError={phoneError}
+                onRevealPhone={revealPhone}
+                onHidePhone={hidePhone}
+              />
               <LineSelector
                 lines={order.lines}
                 selectedCrmLineId={selectedLine?.crmLineId ?? null}
@@ -127,7 +195,21 @@ export default function PickupOrderViewer({ crmOrderId, onClose }: Props) {
   );
 }
 
-function OrderSummary({ order }: { order: PickupOrderDetail }) {
+function OrderSummary({
+  order,
+  revealedPhone,
+  phoneLoading,
+  phoneError,
+  onRevealPhone,
+  onHidePhone,
+}: {
+  order: PickupOrderDetail;
+  revealedPhone: string;
+  phoneLoading: boolean;
+  phoneError: string;
+  onRevealPhone: () => void;
+  onHidePhone: () => void;
+}) {
   return (
     <div className="border-b border-gray-200 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -150,13 +232,83 @@ function OrderSummary({ order }: { order: PickupOrderDetail }) {
           label="Phone"
           value={order.memberPhoneLast4 ? `*${order.memberPhoneLast4}` : "-"}
         />
-        <SummaryField label="Member ID" value={order.memberId || "-"} />
-        <SummaryField label="Level" value={String(order.memberLevel)} />
+        <PhoneRevealControl
+          revealedPhone={revealedPhone}
+          phoneLoading={phoneLoading}
+          phoneError={phoneError}
+          onRevealPhone={onRevealPhone}
+          onHidePhone={onHidePhone}
+        />
         <SummaryField
           label="Subtotal"
           value={formatPickupMoney(order.linesTotal)}
         />
         <SummaryField label="Total" value={formatPickupMoney(order.total)} />
+      </div>
+    </div>
+  );
+}
+
+function PhoneRevealControl({
+  revealedPhone,
+  phoneLoading,
+  phoneError,
+  onRevealPhone,
+  onHidePhone,
+}: {
+  revealedPhone: string;
+  phoneLoading: boolean;
+  phoneError: string;
+  onRevealPhone: () => void;
+  onHidePhone: () => void;
+}) {
+  const value = phoneLoading
+    ? "Loading phone..."
+    : revealedPhone || phoneError || "Hidden";
+  const actionLabel = phoneLoading
+    ? "Show Full Phone"
+    : revealedPhone
+      ? "Hide"
+      : phoneError
+        ? "Try Again"
+        : "Show Full Phone";
+  const action = revealedPhone ? onHidePhone : onRevealPhone;
+
+  return (
+    <div className="col-span-2 min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+      <div className="font-bold uppercase tracking-wide text-gray-400">
+        Full phone
+      </div>
+      <div className="mt-1 flex min-h-11 items-center justify-between gap-3">
+        <div
+          className={cn(
+            "min-w-0 flex-1 truncate text-sm font-medium",
+            revealedPhone
+              ? "font-mono text-gray-800"
+              : phoneError
+                ? "text-red-500"
+                : "text-gray-500",
+          )}
+        >
+          {value}
+        </div>
+        <button
+          type="button"
+          onPointerDown={action}
+          disabled={phoneLoading}
+          className={cn(
+            "shrink-0 rounded-md border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide",
+            phoneLoading
+              ? "cursor-not-allowed border-gray-200 text-gray-300"
+              : revealedPhone
+                ? "border-gray-300 text-gray-700 active:bg-gray-100"
+                : phoneError
+                  ? "border-red-200 text-red-600 active:bg-red-50"
+                  : "border-blue-200 text-blue-600 active:bg-blue-50",
+          )}
+        >
+          {actionLabel}
+        </button>
       </div>
     </div>
   );

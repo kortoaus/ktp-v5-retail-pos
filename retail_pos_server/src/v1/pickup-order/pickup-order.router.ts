@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getPickupOrderByIdController,
+  getPickupOrderMemberPhoneController,
   listPickupOrdersController,
   syncPickupOrdersController,
 } from "./pickup-order.controller";
@@ -20,6 +21,13 @@ pickupOrderRouter.post(
   userMiddleware,
   scopeMiddleware("sale"),
   syncPickupOrdersController,
+);
+
+pickupOrderRouter.get(
+  "/:id/member-phone",
+  userMiddleware,
+  scopeMiddleware("sale"),
+  getPickupOrderMemberPhoneController,
 );
 
 pickupOrderRouter.get(
