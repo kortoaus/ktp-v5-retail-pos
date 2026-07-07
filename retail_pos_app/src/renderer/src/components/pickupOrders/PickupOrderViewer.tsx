@@ -227,8 +227,13 @@ export default function PickupOrderViewer({
         className="flex max-h-[92vh] w-full max-w-[1180px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl"
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-gray-200 px-4">
-          <h2 className="text-sm font-bold">Pickup Order</h2>
+        <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-gray-200 px-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="truncate text-sm font-bold">
+              {order ? order.documentId : "Pickup Order"}
+            </h2>
+            {order && <StatusBadge status={order.status} />}
+          </div>
           <button
             type="button"
             onPointerDown={close}
@@ -251,43 +256,43 @@ export default function PickupOrderViewer({
         )}
 
         {order && !loading && !error && (
-          <div className="grid min-h-0 flex-1 grid-cols-[minmax(320px,390px)_minmax(0,1fr)] overflow-hidden">
-            <section className="min-h-0 overflow-auto border-r border-gray-200">
-              <OrderSummary
+          <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_78px] overflow-hidden">
+            <section className="grid min-h-0 grid-cols-[360px_480px_minmax(300px,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-gray-50">
+              <OrderInfoStrip
                 order={order}
                 revealedPhone={revealedPhone}
                 phoneLoading={phoneLoading}
                 phoneError={phoneError}
                 onRevealPhone={revealPhone}
                 onHidePhone={hidePhone}
-                statusActionLoading={statusActionLoading}
-                statusActionError={statusActionError}
-                onChangeStatus={changeStatus}
               />
-              <LineSelector
+
+              <LinesPanel
                 lines={order.lines}
                 selectedCrmLineId={selectedLine?.crmLineId ?? null}
                 onSelect={setSelectedCrmLineId}
               />
+
+              <section className="col-start-2 row-start-2 flex min-h-0 flex-col items-center justify-center gap-3 overflow-hidden border-r border-gray-200 bg-gray-50 p-4">
+                {selectedLine ? (
+                  <PickupOrderWorkLabelPreview order={order} line={selectedLine} />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm font-medium text-gray-400">
+                    No pickup order lines
+                  </div>
+                )}
+              </section>
+
+              <LineInstructions line={selectedLine} />
             </section>
 
-            <section className="min-h-0 overflow-auto bg-gray-50 p-4">
-              {selectedLine ? (
-                <div className="grid gap-4 xl:grid-cols-[auto_minmax(0,1fr)]">
-                  <div className="flex justify-center">
-                    <PickupOrderWorkLabelPreview
-                      order={order}
-                      line={selectedLine}
-                    />
-                  </div>
-                  <LineDetail line={selectedLine} />
-                </div>
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-gray-400">
-                  No pickup order lines
-                </div>
-              )}
-            </section>
+            <StatusActionBar
+              documentId={order.documentId}
+              currentStatus={order.status}
+              loading={statusActionLoading}
+              error={statusActionError}
+              onChangeStatus={changeStatus}
+            />
           </div>
         )}
       </div>
@@ -295,16 +300,13 @@ export default function PickupOrderViewer({
   );
 }
 
-function OrderSummary({
+function OrderInfoStrip({
   order,
   revealedPhone,
   phoneLoading,
   phoneError,
   onRevealPhone,
   onHidePhone,
-  statusActionLoading,
-  statusActionError,
-  onChangeStatus,
 }: {
   order: PickupOrderDetail;
   revealedPhone: string;
@@ -312,109 +314,48 @@ function OrderSummary({
   phoneError: string;
   onRevealPhone: () => void;
   onHidePhone: () => void;
-  statusActionLoading: boolean;
-  statusActionError: string;
-  onChangeStatus: (status: PosPickupOrderStatus) => void;
 }) {
   return (
-    <div className="border-b border-gray-200 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="truncate font-mono text-sm font-bold">
-            {order.documentId}
-          </div>
-          <div className="mt-1 text-xs text-gray-500">
-            CRM Order {order.crmOrderId}
-          </div>
-        </div>
-        <StatusBadge status={order.status} />
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-        <SummaryField label="Pickup" value={formatPickupTime(order.pickupStartsAt)} />
-        <SummaryField label="Created" value={formatPickupTime(order.crmCreatedAt)} />
-        <SummaryField label="Member" value={order.memberName || "-"} />
-        <SummaryField
-          label="Phone"
-          value={order.memberPhoneLast4 ? `*${order.memberPhoneLast4}` : "-"}
-        />
-        <PhoneRevealControl
-          revealedPhone={revealedPhone}
-          phoneLoading={phoneLoading}
-          phoneError={phoneError}
-          onRevealPhone={onRevealPhone}
-          onHidePhone={onHidePhone}
-        />
-        <SummaryField
-          label="Subtotal"
-          value={formatPickupMoney(order.linesTotal)}
-        />
-        <SummaryField label="Total" value={formatPickupMoney(order.total)} />
-      </div>
-
-      <StatusActions
-        currentStatus={order.status}
-        loading={statusActionLoading}
-        error={statusActionError}
-        onChangeStatus={onChangeStatus}
+    <section className="col-span-2 row-start-1 grid auto-rows-[72px] grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2 border-b border-r border-gray-200 bg-white p-3">
+      <OrderStripField label="Pickup" value={formatPickupTime(order.pickupStartsAt)} />
+      <OrderStripField label="Created" value={formatPickupTime(order.crmCreatedAt)} />
+      <OrderStripField label="Member" value={order.memberName || "-"} />
+      <PhoneToggleField
+        last4={order.memberPhoneLast4}
+        revealedPhone={revealedPhone}
+        phoneLoading={phoneLoading}
+        phoneError={phoneError}
+        onRevealPhone={onRevealPhone}
+        onHidePhone={onHidePhone}
       />
-    </div>
+      <OrderStripField label="Subtotal" value={formatPickupMoney(order.linesTotal)} />
+      <OrderStripField label="Total" value={formatPickupMoney(order.total)} />
+    </section>
   );
 }
 
-function StatusActions({
-  currentStatus,
-  loading,
-  error,
-  onChangeStatus,
-}: {
-  currentStatus: PickupOrderStatus;
-  loading: boolean;
-  error: string;
-  onChangeStatus: (status: PosPickupOrderStatus) => void;
-}) {
+function OrderStripField({ label, value }: { label: string; value: string }) {
   return (
-    <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-      <div className="font-bold uppercase tracking-wide text-gray-400">
-        Set status
+    <div className="min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2">
+      <div className="truncate text-[11px] font-black uppercase tracking-wide text-gray-400">
+        {label}
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        {POS_PICKUP_ORDER_STATUS_TARGETS.map((status) => {
-          const isCurrent = status === currentStatus;
-          return (
-            <button
-              key={status}
-              type="button"
-              onPointerDown={() => onChangeStatus(status)}
-              disabled={loading || isCurrent}
-              className={cn(
-                "h-8 min-w-0 rounded-md border px-2 text-[11px] font-bold uppercase leading-tight",
-                "whitespace-normal break-words active:bg-blue-50 disabled:cursor-not-allowed",
-                isCurrent
-                  ? "border-gray-300 bg-white text-gray-400"
-                  : "border-blue-200 bg-white text-blue-700",
-                loading && !isCurrent && "opacity-50",
-              )}
-            >
-              {statusLabel(status)}
-            </button>
-          );
-        })}
+      <div className="mt-1 truncate text-base font-black text-gray-900">
+        {value}
       </div>
-      {error && (
-        <div className="mt-2 text-xs font-medium text-red-600">{error}</div>
-      )}
     </div>
   );
 }
 
-function PhoneRevealControl({
+function PhoneToggleField({
+  last4,
   revealedPhone,
   phoneLoading,
   phoneError,
   onRevealPhone,
   onHidePhone,
 }: {
+  last4: string | null;
   revealedPhone: string;
   phoneLoading: boolean;
   phoneError: string;
@@ -422,69 +363,94 @@ function PhoneRevealControl({
   onHidePhone: () => void;
 }) {
   const value = phoneLoading
-    ? "Loading phone..."
-    : revealedPhone || phoneError || "Hidden";
-  const actionLabel = phoneLoading
-    ? "Show Full Phone"
-    : revealedPhone
-      ? "Hide"
-      : phoneError
-        ? "Try Again"
-        : "Show Full Phone";
+    ? "Loading..."
+    : revealedPhone || phoneError || (last4 ? `**** ${last4}` : "-");
   const action = revealedPhone ? onHidePhone : onRevealPhone;
+  const actionLabel = revealedPhone ? "Hide phone" : "Show phone";
 
   return (
-    <div className="col-span-2 min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-      <div className="font-bold uppercase tracking-wide text-gray-400">
-        Full phone
+    <button
+      type="button"
+      onPointerDown={action}
+      disabled={phoneLoading}
+      aria-label={actionLabel}
+      title={actionLabel}
+      className={cn(
+        "min-w-0 rounded-lg border-2 bg-white px-3 py-2 text-left",
+        "disabled:cursor-not-allowed disabled:opacity-70",
+        phoneError
+          ? "border-red-200 text-red-600 active:bg-red-50"
+          : "border-blue-200 text-blue-700 active:bg-blue-50",
+      )}
+    >
+      <div className="truncate text-[11px] font-black uppercase tracking-wide text-gray-400">
+        Phone
       </div>
-      <div className="mt-1 flex min-h-11 items-center justify-between gap-3">
-        <div
-          className={cn(
-            "min-w-0 flex-1 truncate text-sm font-medium",
-            revealedPhone
-              ? "font-mono text-gray-800"
-              : phoneError
-                ? "text-red-500"
-                : "text-gray-500",
-          )}
-        >
-          {value}
+      <div className="mt-1 truncate font-mono text-base font-black">
+        {value}
+      </div>
+    </button>
+  );
+}
+
+function StatusActionBar({
+  documentId,
+  currentStatus,
+  loading,
+  error,
+  onChangeStatus,
+}: {
+  documentId: string;
+  currentStatus: PickupOrderStatus;
+  loading: boolean;
+  error: string;
+  onChangeStatus: (status: PosPickupOrderStatus) => void;
+}) {
+  return (
+    <footer className="grid grid-cols-[minmax(0,1fr)_repeat(5,minmax(118px,150px))] items-center gap-2 border-t border-gray-200 bg-white px-4 py-2">
+      <div className="min-w-0">
+        <div className="truncate text-[11px] font-black uppercase tracking-wide text-gray-400">
+          Set status for {documentId}
         </div>
-        <button
-          type="button"
-          onPointerDown={action}
-          disabled={phoneLoading}
-          className={cn(
-            "shrink-0 rounded-md border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide",
-            phoneLoading
-              ? "cursor-not-allowed border-gray-200 text-gray-300"
-              : revealedPhone
-                ? "border-gray-300 text-gray-700 active:bg-gray-100"
-                : phoneError
-                  ? "border-red-200 text-red-600 active:bg-red-50"
-                  : "border-blue-200 text-blue-600 active:bg-blue-50",
-          )}
-        >
-          {actionLabel}
-        </button>
+        <div className="mt-1 truncate text-sm font-black text-gray-900">
+          Current: {statusLabel(currentStatus)}
+        </div>
+        {error && (
+          <div className="mt-1 truncate text-xs font-bold text-red-600">
+            {error}
+          </div>
+        )}
       </div>
-    </div>
+
+      {POS_PICKUP_ORDER_STATUS_TARGETS.map((status) => {
+        const isCurrent = status === currentStatus;
+        const isCancel = status === "CANCELLED_BY_STORE";
+        return (
+          <button
+            key={status}
+            type="button"
+            onPointerDown={() => onChangeStatus(status)}
+            disabled={loading || isCurrent}
+            className={cn(
+              "h-14 min-w-0 rounded-lg border-2 px-2 text-[12px] font-black uppercase leading-tight",
+              "active:bg-blue-50 disabled:cursor-not-allowed",
+              isCurrent
+                ? "border-gray-300 bg-gray-50 text-gray-400"
+                : isCancel
+                  ? "border-red-200 bg-white text-red-600 active:bg-red-50"
+                  : "border-blue-200 bg-white text-blue-700",
+              loading && !isCurrent && "opacity-50",
+            )}
+          >
+            {statusLabel(status)}
+          </button>
+        );
+      })}
+    </footer>
   );
 }
 
-function SummaryField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <div className="font-bold uppercase tracking-wide text-gray-400">
-        {label}
-      </div>
-      <div className="mt-0.5 truncate font-medium text-gray-800">{value}</div>
-    </div>
-  );
-}
-
-function LineSelector({
+function LinesPanel({
   lines,
   selectedCrmLineId,
   onSelect,
@@ -494,40 +460,36 @@ function LineSelector({
   onSelect: (crmLineId: number) => void;
 }) {
   return (
-    <div className="p-3">
-      <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-gray-400">
+    <aside className="col-start-1 row-start-2 grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-r border-gray-200 bg-white">
+      <div className="border-b border-gray-100 px-4 py-3 text-xs font-black uppercase tracking-wide text-gray-400">
         Lines
       </div>
-      {lines.length === 1 ? (
-        <LineSummaryRow line={lines[0]} />
-      ) : (
-        <div className="space-y-2">
-          {lines.map((line) => (
-            <button
-              key={line.crmLineId}
-              type="button"
-              onPointerDown={() => onSelect(line.crmLineId)}
-              className={cn(
-                "block w-full rounded-lg border p-3 text-left active:bg-blue-50",
-                selectedCrmLineId === line.crmLineId
-                  ? "border-blue-500 bg-blue-50"
-                  : "border-gray-200 bg-white",
-              )}
-            >
-              <LineRowContent line={line} />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function LineSummaryRow({ line }: { line: PickupOrderLine }) {
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3">
-      <LineRowContent line={line} />
-    </div>
+      <div className="min-h-0 overflow-y-auto p-3 pb-16">
+        {lines.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm font-medium text-gray-400">
+            No pickup order lines
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {lines.map((line) => (
+              <button
+                key={line.crmLineId}
+                type="button"
+                onPointerDown={() => onSelect(line.crmLineId)}
+                className={cn(
+                  "block min-h-24 w-full rounded-lg border-2 p-3 text-left active:bg-blue-50",
+                  selectedCrmLineId === line.crmLineId
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 bg-white",
+                )}
+              >
+                <LineRowContent line={line} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </aside>
   );
 }
 
@@ -555,7 +517,7 @@ function LineRowContent({ line }: { line: PickupOrderLine }) {
         {line.note && <Cue label="NOTE" className="bg-amber-100 text-amber-700" />}
         {optionCount > 0 && (
           <Cue
-            label={`OPTIONS ${optionCount}`}
+            label={`${optionCount} OPTIONS`}
             className="bg-indigo-100 text-indigo-700"
           />
         )}
@@ -572,127 +534,87 @@ function Cue({ label, className }: { label: string; className: string }) {
   );
 }
 
-function LineDetail({ line }: { line: PickupOrderLine }) {
+function LineInstructions({ line }: { line: PickupOrderLine | null }) {
   return (
-    <div className="min-w-0 rounded-lg border border-gray-200 bg-white p-4">
-      <div className="flex items-start justify-between gap-3 border-b border-gray-200 pb-3">
-        <div className="min-w-0">
-          <div className="truncate text-lg font-black">
-            {line.name_ko || line.name_en || line.barcode}
-          </div>
-          <div className="mt-1 truncate text-sm text-gray-500">
-            {line.name_en || line.code || line.barcode}
-          </div>
+    <aside className="col-start-3 row-span-2 row-start-1 grid min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-white">
+      <div className="border-b border-gray-200 px-4 py-4">
+        <div className="text-xl font-black text-gray-900">
+          Line instructions
         </div>
-        <div className="shrink-0 text-right">
-          <div className="font-mono text-sm font-bold">
-            {formatPickupQty(line.qty, line.uom)}
-          </div>
-          <div className="mt-1 font-mono text-xs text-gray-500">
-            Line {line.index}
-          </div>
+        <div className="mt-1 text-sm font-semibold text-gray-500">
+          Options and customer note
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-        <DetailField label="Barcode" value={line.barcode || "-"} mono />
-        <DetailField label="Code" value={line.code || "-"} mono />
-        <DetailField label="Member level" value={String(line.memberLevel)} />
-        <DetailField label="Line total" value={formatPickupMoney(line.total)} mono />
-        <DetailField
-          label="Option total"
-          value={formatPickupMoney(line.optionTotal)}
-          mono
-        />
-      </div>
-
-      <OptionGroups groups={line.selectedOptionsSnapshot} />
-
-      <div className="mt-4">
-        <div className="text-xs font-bold uppercase tracking-wide text-gray-400">
-          Customer note
-        </div>
-        <div className="mt-1 min-h-16 whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800">
-          {line.note || "No customer note"}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DetailField({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="text-xs font-bold uppercase tracking-wide text-gray-400">
-        {label}
-      </div>
-      <div
-        className={cn(
-          "mt-0.5 break-words font-medium text-gray-800",
-          mono && "font-mono",
+      <div className="min-h-0 overflow-y-auto p-4">
+        {line ? (
+          <>
+            <InstructionOptionGroups groups={line.selectedOptionsSnapshot} />
+            <InstructionCustomerNote note={line.note} />
+          </>
+        ) : (
+          <div className="flex h-full items-center justify-center text-sm font-medium text-gray-400">
+            No pickup order lines
+          </div>
         )}
-      >
-        {value}
       </div>
-    </div>
+    </aside>
   );
 }
 
-function OptionGroups({
+function InstructionOptionGroups({
   groups,
 }: {
   groups: PickupOrderSelectedOptionGroup[];
 }) {
   return (
-    <div className="mt-4">
-      <div className="text-xs font-bold uppercase tracking-wide text-gray-400">
+    <section className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="text-xs font-black uppercase tracking-wide text-gray-400">
         Selected options
       </div>
       {groups.length === 0 ? (
-        <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-500">
+        <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm font-medium text-gray-500">
           No selected options
         </div>
       ) : (
-        <div className="mt-2 space-y-3">
+        <div className="mt-3 space-y-3">
           {groups.map((group) => (
-            <OptionGroup key={group.optionGroupId} group={group} />
+            <InstructionOptionGroup key={group.optionGroupId} group={group} />
           ))}
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
-function OptionGroup({ group }: { group: PickupOrderSelectedOptionGroup }) {
-  const groupLabel = group.name_ko || group.name_en || group.key;
+function InstructionOptionGroup({
+  group,
+}: {
+  group: PickupOrderSelectedOptionGroup;
+}) {
+  const groupLabel = group.name_en || group.key;
 
   return (
     <div className="rounded-lg border border-gray-200 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0 break-words text-sm font-bold">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 break-words text-base font-black text-gray-900">
           {groupLabel}
         </div>
-        <span className="shrink-0 rounded bg-gray-100 px-2 py-1 text-[10px] font-bold text-gray-500">
+        <span className="shrink-0 rounded bg-gray-100 px-2 py-1 text-[10px] font-black uppercase text-gray-500">
           {group.type}
         </span>
       </div>
-      <div className="mt-2 space-y-1">
-        {group.selectedOptions.map((option) => {
-          const optionLabel = option.name_ko || option.name_en || option.key;
+      <div className="mt-2 divide-y divide-gray-100">
+        {group.selectedOptions.map((option, index) => {
+          const optionLabel = option.name_en || option.key;
           return (
             <div
-              key={option.key}
-              className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2 text-sm"
+              key={`${option.key}-${index}`}
+              className="grid min-h-12 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 py-2 text-base font-bold"
             >
-              <span className="min-w-0 break-words">{optionLabel}</span>
+              <span className="min-w-0 break-words text-gray-900">
+                {optionLabel}
+              </span>
               <span className="font-mono text-gray-500">
                 {formatPickupQty(option.qty, "")}
               </span>
@@ -704,6 +626,19 @@ function OptionGroup({ group }: { group: PickupOrderSelectedOptionGroup }) {
         })}
       </div>
     </div>
+  );
+}
+
+function InstructionCustomerNote({ note }: { note: string | null }) {
+  return (
+    <section className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+      <div className="text-xs font-black uppercase tracking-wide text-gray-400">
+        Customer note
+      </div>
+      <div className="mt-3 min-h-24 whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-3 text-base font-semibold text-gray-800">
+        {note || "No customer note"}
+      </div>
+    </section>
   );
 }
 
