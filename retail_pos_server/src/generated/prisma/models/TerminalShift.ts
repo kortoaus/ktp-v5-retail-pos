@@ -1409,10 +1409,6 @@ export type TerminalShiftUncheckedUpdateManyWithoutTerminalNestedInput = {
   deleteMany?: Prisma.TerminalShiftScalarWhereInput | Prisma.TerminalShiftScalarWhereInput[]
 }
 
-export type NullableDateTimeFieldUpdateOperationsInput = {
-  set?: Date | string | null
-}
-
 export type TerminalShiftCreateNestedOneWithoutCashIosInput = {
   create?: Prisma.XOR<Prisma.TerminalShiftCreateWithoutCashIosInput, Prisma.TerminalShiftUncheckedCreateWithoutCashIosInput>
   connectOrCreate?: Prisma.TerminalShiftCreateOrConnectWithoutCashIosInput

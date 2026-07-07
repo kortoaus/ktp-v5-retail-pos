@@ -13,6 +13,7 @@ import brandRouter from "./v1/brand/brand.router";
 import voucherRouter from "./v1/voucher/voucher.router";
 import customerVoucherRouter from "./v1/customer-voucher/customer-voucher.router";
 import saleRouter from "./v1/sale/sale.router";
+import pickupOrderRouter from "./v1/pickup-order/pickup-order.router";
 
 const router = Router();
 
@@ -30,4 +31,5 @@ router.use("/store", storeRouter);
 router.use("/voucher", voucherRouter);
 router.use("/customer-voucher", customerVoucherRouter);
 router.use("/sale", saleRouter);
+router.use("/pickup-order", pickupOrderRouter);
 export default router;

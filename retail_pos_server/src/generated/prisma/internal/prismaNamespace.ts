@@ -399,6 +399,9 @@ export const ModelName = {
   HotkeyItem: 'HotkeyItem',
   StoreSetting: 'StoreSetting',
   PrintedItemSheet: 'PrintedItemSheet',
+  PickupOrderCache: 'PickupOrderCache',
+  PickupOrderLineCache: 'PickupOrderLineCache',
+  PickupOrderSyncState: 'PickupOrderSyncState',
   User: 'User',
   TerminalShift: 'TerminalShift',
   CashInOut: 'CashInOut',
@@ -423,7 +426,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "company" | "category" | "brand" | "item" | "itemScaleData" | "itemCategory" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter"
+    modelProps: "company" | "category" | "brand" | "item" | "itemScaleData" | "itemCategory" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "pickupOrderCache" | "pickupOrderLineCache" | "pickupOrderSyncState" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1537,6 +1540,228 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    PickupOrderCache: {
+      payload: Prisma.$PickupOrderCachePayload<ExtArgs>
+      fields: Prisma.PickupOrderCacheFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PickupOrderCacheFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderCachePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PickupOrderCacheFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderCachePayload>
+        }
+        findFirst: {
+          args: Prisma.PickupOrderCacheFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderCachePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PickupOrderCacheFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderCachePayload>
+        }
+        findMany: {
+          args: Prisma.PickupOrderCacheFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderCachePayload>[]
+        }
+        create: {
+          args: Prisma.PickupOrderCacheCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderCachePayload>
+        }
+        createMany: {
+          args: Prisma.PickupOrderCacheCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PickupOrderCacheCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderCachePayload>[]
+        }
+        delete: {
+          args: Prisma.PickupOrderCacheDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderCachePayload>
+        }
+        update: {
+          args: Prisma.PickupOrderCacheUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderCachePayload>
+        }
+        deleteMany: {
+          args: Prisma.PickupOrderCacheDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PickupOrderCacheUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PickupOrderCacheUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderCachePayload>[]
+        }
+        upsert: {
+          args: Prisma.PickupOrderCacheUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderCachePayload>
+        }
+        aggregate: {
+          args: Prisma.PickupOrderCacheAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePickupOrderCache>
+        }
+        groupBy: {
+          args: Prisma.PickupOrderCacheGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PickupOrderCacheGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PickupOrderCacheCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PickupOrderCacheCountAggregateOutputType> | number
+        }
+      }
+    }
+    PickupOrderLineCache: {
+      payload: Prisma.$PickupOrderLineCachePayload<ExtArgs>
+      fields: Prisma.PickupOrderLineCacheFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PickupOrderLineCacheFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderLineCachePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PickupOrderLineCacheFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderLineCachePayload>
+        }
+        findFirst: {
+          args: Prisma.PickupOrderLineCacheFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderLineCachePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PickupOrderLineCacheFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderLineCachePayload>
+        }
+        findMany: {
+          args: Prisma.PickupOrderLineCacheFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderLineCachePayload>[]
+        }
+        create: {
+          args: Prisma.PickupOrderLineCacheCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderLineCachePayload>
+        }
+        createMany: {
+          args: Prisma.PickupOrderLineCacheCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PickupOrderLineCacheCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderLineCachePayload>[]
+        }
+        delete: {
+          args: Prisma.PickupOrderLineCacheDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderLineCachePayload>
+        }
+        update: {
+          args: Prisma.PickupOrderLineCacheUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderLineCachePayload>
+        }
+        deleteMany: {
+          args: Prisma.PickupOrderLineCacheDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PickupOrderLineCacheUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PickupOrderLineCacheUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderLineCachePayload>[]
+        }
+        upsert: {
+          args: Prisma.PickupOrderLineCacheUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderLineCachePayload>
+        }
+        aggregate: {
+          args: Prisma.PickupOrderLineCacheAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePickupOrderLineCache>
+        }
+        groupBy: {
+          args: Prisma.PickupOrderLineCacheGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PickupOrderLineCacheGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PickupOrderLineCacheCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PickupOrderLineCacheCountAggregateOutputType> | number
+        }
+      }
+    }
+    PickupOrderSyncState: {
+      payload: Prisma.$PickupOrderSyncStatePayload<ExtArgs>
+      fields: Prisma.PickupOrderSyncStateFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PickupOrderSyncStateFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderSyncStatePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PickupOrderSyncStateFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderSyncStatePayload>
+        }
+        findFirst: {
+          args: Prisma.PickupOrderSyncStateFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderSyncStatePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PickupOrderSyncStateFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderSyncStatePayload>
+        }
+        findMany: {
+          args: Prisma.PickupOrderSyncStateFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderSyncStatePayload>[]
+        }
+        create: {
+          args: Prisma.PickupOrderSyncStateCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderSyncStatePayload>
+        }
+        createMany: {
+          args: Prisma.PickupOrderSyncStateCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PickupOrderSyncStateCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderSyncStatePayload>[]
+        }
+        delete: {
+          args: Prisma.PickupOrderSyncStateDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderSyncStatePayload>
+        }
+        update: {
+          args: Prisma.PickupOrderSyncStateUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderSyncStatePayload>
+        }
+        deleteMany: {
+          args: Prisma.PickupOrderSyncStateDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PickupOrderSyncStateUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PickupOrderSyncStateUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderSyncStatePayload>[]
+        }
+        upsert: {
+          args: Prisma.PickupOrderSyncStateUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PickupOrderSyncStatePayload>
+        }
+        aggregate: {
+          args: Prisma.PickupOrderSyncStateAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePickupOrderSyncState>
+        }
+        groupBy: {
+          args: Prisma.PickupOrderSyncStateGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PickupOrderSyncStateGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PickupOrderSyncStateCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PickupOrderSyncStateCountAggregateOutputType> | number
+        }
+      }
+    }
     User: {
       payload: Prisma.$UserPayload<ExtArgs>
       fields: Prisma.UserFieldRefs
@@ -2482,6 +2707,74 @@ export const PrintedItemSheetScalarFieldEnum = {
 export type PrintedItemSheetScalarFieldEnum = (typeof PrintedItemSheetScalarFieldEnum)[keyof typeof PrintedItemSheetScalarFieldEnum]
 
 
+export const PickupOrderCacheScalarFieldEnum = {
+  id: 'id',
+  crmOrderId: 'crmOrderId',
+  companyId: 'companyId',
+  documentId: 'documentId',
+  status: 'status',
+  memberId: 'memberId',
+  memberName: 'memberName',
+  memberLevel: 'memberLevel',
+  memberPhoneLast4: 'memberPhoneLast4',
+  pickupStartsAt: 'pickupStartsAt',
+  linesTotal: 'linesTotal',
+  total: 'total',
+  crmCreatedAt: 'crmCreatedAt',
+  crmUpdatedAt: 'crmUpdatedAt',
+  syncedAt: 'syncedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PickupOrderCacheScalarFieldEnum = (typeof PickupOrderCacheScalarFieldEnum)[keyof typeof PickupOrderCacheScalarFieldEnum]
+
+
+export const PickupOrderLineCacheScalarFieldEnum = {
+  id: 'id',
+  crmLineId: 'crmLineId',
+  crmOrderId: 'crmOrderId',
+  index: 'index',
+  itemId: 'itemId',
+  name_en: 'name_en',
+  name_ko: 'name_ko',
+  barcode: 'barcode',
+  code: 'code',
+  uom: 'uom',
+  prices: 'prices',
+  promoPrices: 'promoPrices',
+  memberLevel: 'memberLevel',
+  optionTotal: 'optionTotal',
+  qty: 'qty',
+  total: 'total',
+  note: 'note',
+  selectedOptionsSnapshot: 'selectedOptionsSnapshot',
+  crmCreatedAt: 'crmCreatedAt',
+  crmUpdatedAt: 'crmUpdatedAt',
+  syncedAt: 'syncedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PickupOrderLineCacheScalarFieldEnum = (typeof PickupOrderLineCacheScalarFieldEnum)[keyof typeof PickupOrderLineCacheScalarFieldEnum]
+
+
+export const PickupOrderSyncStateScalarFieldEnum = {
+  id: 'id',
+  key: 'key',
+  cursorUpdatedAt: 'cursorUpdatedAt',
+  cursorOrderId: 'cursorOrderId',
+  lastSyncedAt: 'lastSyncedAt',
+  lastSuccessAt: 'lastSuccessAt',
+  lastErrorAt: 'lastErrorAt',
+  lastErrorMsg: 'lastErrorMsg',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PickupOrderSyncStateScalarFieldEnum = (typeof PickupOrderSyncStateScalarFieldEnum)[keyof typeof PickupOrderSyncStateScalarFieldEnum]
+
+
 export const UserScalarFieldEnum = {
   id: 'id',
   name: 'name',
@@ -2708,6 +3001,13 @@ export const NullableJsonNullValueInput = {
 export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
 
 
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+
+
 export const QueryMode = {
   default: 'default',
   insensitive: 'insensitive'
@@ -2817,6 +3117,20 @@ export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaMode
 
 
 /**
+ * Reference to a field of type 'Json'
+ */
+export type JsonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Json'>
+    
+
+
+/**
+ * Reference to a field of type 'QueryMode'
+ */
+export type EnumQueryModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'QueryMode'>
+    
+
+
+/**
  * Reference to a field of type 'InvoiceType'
  */
 export type EnumInvoiceTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'InvoiceType'>
@@ -2883,20 +3197,6 @@ export type EnumVoucherStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$Pr
  * Reference to a field of type 'VoucherStatus[]'
  */
 export type ListEnumVoucherStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'VoucherStatus[]'>
-    
-
-
-/**
- * Reference to a field of type 'Json'
- */
-export type JsonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Json'>
-    
-
-
-/**
- * Reference to a field of type 'QueryMode'
- */
-export type EnumQueryModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'QueryMode'>
     
 
 
@@ -3023,6 +3323,9 @@ export type GlobalOmitConfig = {
   hotkeyItem?: Prisma.HotkeyItemOmit
   storeSetting?: Prisma.StoreSettingOmit
   printedItemSheet?: Prisma.PrintedItemSheetOmit
+  pickupOrderCache?: Prisma.PickupOrderCacheOmit
+  pickupOrderLineCache?: Prisma.PickupOrderLineCacheOmit
+  pickupOrderSyncState?: Prisma.PickupOrderSyncStateOmit
   user?: Prisma.UserOmit
   terminalShift?: Prisma.TerminalShiftOmit
   cashInOut?: Prisma.CashInOutOmit

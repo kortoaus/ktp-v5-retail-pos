@@ -272,6 +272,84 @@ model PrintedItemSheet {
   updatedAt DateTime @updatedAt
 }
 
+model PickupOrderCache {
+  id               Int      @id @default(autoincrement())
+  crmOrderId       Int      @unique
+  companyId        Int
+  documentId       String   @unique
+  status           String
+
+  memberId         String
+  memberName       String
+  memberLevel      Int
+  memberPhoneLast4 String?
+
+  pickupStartsAt   DateTime
+  linesTotal       Int
+  total            Int
+
+  crmCreatedAt     DateTime
+  crmUpdatedAt     DateTime
+  syncedAt         DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  lines            PickupOrderLineCache[]
+
+  @@index([companyId, status, pickupStartsAt])
+  @@index([companyId, pickupStartsAt])
+  @@index([companyId, crmUpdatedAt])
+  @@index([companyId, syncedAt])
+}
+
+model PickupOrderLineCache {
+  id                      Int              @id @default(autoincrement())
+  crmLineId               Int              @unique
+  crmOrderId              Int
+  order                   PickupOrderCache @relation(fields: [crmOrderId], references: [crmOrderId], onDelete: Cascade)
+
+  index                   Int
+  itemId                  Int
+  name_en                 String
+  name_ko                 String
+  barcode                 String
+  code                    String?
+  uom                     String
+
+  prices                  Int[]
+  promoPrices             Json?
+  memberLevel             Int
+  optionTotal             Int
+  qty                     Int
+  total                   Int
+  note                    String?
+  selectedOptionsSnapshot Json
+
+  crmCreatedAt            DateTime
+  crmUpdatedAt            DateTime
+  syncedAt                DateTime         @default(now())
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+
+  @@index([crmOrderId, index])
+  @@index([itemId])
+  @@index([barcode])
+  @@index([code])
+}
+
+model PickupOrderSyncState {
+  id              Int       @id @default(autoincrement())
+  key             String    @unique
+  cursorUpdatedAt DateTime?
+  cursorOrderId   Int?
+  lastSyncedAt    DateTime?
+  lastSuccessAt   DateTime?
+  lastErrorAt     DateTime?
+  lastErrorMsg    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
 model User {
   id        Int           @id @default(autoincrement())
   name      String

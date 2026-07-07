@@ -6,6 +6,7 @@ import {
   triggerSyncAllSaleInvoices,
   triggerSyncAllShifts,
 } from "./v1/cloud/cloud.sync.service";
+import { startPickupOrderSyncWorker } from "./v1/pickup-order/pickup-order.worker";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -34,4 +35,5 @@ httpServer.listen(port, () => {
   // while server was down, network hiccup, etc).
   triggerSyncAllSaleInvoices();
   triggerSyncAllShifts();
+  startPickupOrderSyncWorker();
 });
