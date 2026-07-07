@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildPickupOrderListWhere,
+  buildPickupOrderListOrderBy,
   buildPickupOrderPaging,
   buildPickupOrderKeywordWhere,
   parsePickupOrderListQuery,
@@ -79,4 +80,11 @@ test("buildPickupOrderPaging returns renderer paging shape", () => {
       totalPages: 3,
     },
   );
+});
+
+test("buildPickupOrderListOrderBy returns newest pickup orders first", () => {
+  assert.deepEqual(buildPickupOrderListOrderBy(), [
+    { pickupStartsAt: "desc" },
+    { crmOrderId: "desc" },
+  ]);
 });

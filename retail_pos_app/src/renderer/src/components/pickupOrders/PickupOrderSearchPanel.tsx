@@ -8,6 +8,7 @@ import MemberSearchModal, {
 import LoadingOverlay from "../LoadingOverlay";
 import type { PagingType } from "../../libs/api";
 import { cn } from "../../libs/cn";
+import dayjsAU from "../../libs/dayjsAU";
 import { searchPickupOrders } from "../../service/pickup-order.service";
 import {
   countSelectedOptions,
@@ -40,6 +41,7 @@ export default function PickupOrderSearchPanel({ onSelect }: Props) {
     useState<PickupOrderStatusFilter>("ALL");
   const [member, setMember] = useState<MemberSearchSelection | null>(null);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
+  const [todaySearchToken, setTodaySearchToken] = useState(0);
 
   const [items, setItems] = useState<PickupOrderListItem[]>([]);
   const [paging, setPaging] = useState<PagingType | null>(null);
@@ -96,6 +98,13 @@ export default function PickupOrderSearchPanel({ onSelect }: Props) {
     void fetchPage(1);
   }
 
+  function searchToday() {
+    const now = dayjsAU();
+    setFrom(now.startOf("day"));
+    setTo(now.endOf("day"));
+    setTodaySearchToken((token) => token + 1);
+  }
+
   function reset() {
     setKeyword("");
     setFrom(null);
@@ -109,6 +118,11 @@ export default function PickupOrderSearchPanel({ onSelect }: Props) {
     void fetchPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (todaySearchToken === 0) return;
+    void fetchPage(1);
+  }, [todaySearchToken, fetchPage]);
 
   return (
     <div className="flex flex-col h-full relative">
@@ -130,6 +144,14 @@ export default function PickupOrderSearchPanel({ onSelect }: Props) {
             setTo(t);
           }}
         />
+        <button
+          type="button"
+          onPointerDown={searchToday}
+          disabled={loading}
+          className="h-9 px-3 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-sm font-bold active:bg-blue-100 disabled:opacity-40"
+        >
+          Today
+        </button>
 
         <div
           onPointerDown={() => {

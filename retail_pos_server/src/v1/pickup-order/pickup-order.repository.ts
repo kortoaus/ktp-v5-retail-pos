@@ -145,6 +145,10 @@ export function buildPickupOrderPaging(input: {
   };
 }
 
+export function buildPickupOrderListOrderBy(): Prisma.PickupOrderCacheOrderByWithRelationInput[] {
+  return [{ pickupStartsAt: "desc" }, { crmOrderId: "desc" }];
+}
+
 function toPrismaJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
 }
@@ -313,7 +317,7 @@ export async function listCachedPickupOrders(query: PickupOrderListQuery) {
   const [rows, totalCount] = await db.$transaction([
     db.pickupOrderCache.findMany({
       where,
-      orderBy: [{ pickupStartsAt: "asc" }, { crmOrderId: "asc" }],
+      orderBy: buildPickupOrderListOrderBy(),
       skip: (query.page - 1) * query.limit,
       take: query.limit,
       include: {
