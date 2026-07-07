@@ -136,6 +136,23 @@ export function formatPickupTime(value: string): string {
   return dayjsAU(value).format("ddd, DD MMM YYYY hh:mm A");
 }
 
+export function formatPickupDateTimeParts(value: string): {
+  date: string;
+  day: string;
+  time: string;
+} {
+  const date = dayjsAU(value);
+  return {
+    date: date.format("Do MMM YY"),
+    day: date.format("ddd"),
+    time: date.format("hh:mm A"),
+  };
+}
+
+export function formatPickupCreatedAt(value: string): string {
+  return dayjsAU(value).format("Do MMM YY hh:mm A");
+}
+
 export function countSelectedOptions(
   groups: PickupOrderSelectedOptionGroup[],
 ): number {

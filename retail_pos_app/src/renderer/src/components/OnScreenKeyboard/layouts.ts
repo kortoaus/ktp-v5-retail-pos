@@ -50,6 +50,7 @@ export const NUMPAD: Layout = [
   [key("1"), key("2"), key("3")],
   [key("4"), key("5"), key("6")],
   [key("7"), key("8"), key("9")],
-  [key("."), key("0"), action("⌫", "BACKSPACE")],
+  [key("0", "0", 3)],
+  [key("-"), key("."), action("⌫", "BACKSPACE")],
   [action("ABC", "LANG_PREV", 2), action("Enter", "ENTER", 1)],
 ];

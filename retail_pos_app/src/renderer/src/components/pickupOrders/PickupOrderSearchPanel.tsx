@@ -18,9 +18,9 @@ import { cn } from "../../libs/cn";
 import dayjsAU from "../../libs/dayjsAU";
 import { searchPickupOrders } from "../../service/pickup-order.service";
 import {
-  countSelectedOptions,
+  formatPickupCreatedAt,
+  formatPickupDateTimeParts,
   formatPickupMoney,
-  formatPickupTime,
   statusLabel,
 } from "./pickup-order-format";
 import {
@@ -243,77 +243,89 @@ const PickupOrderSearchPanel = forwardRef<PickupOrderSearchPanelHandle, Props>(
             No pickup orders
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full table-fixed text-sm">
+            <colgroup>
+              <col className="w-[170px]" />
+              <col className="w-[122px]" />
+              <col className="w-[138px]" />
+              <col className="w-[82px]" />
+              <col className="w-[138px]" />
+              <col className="w-[150px]" />
+              <col />
+              <col className="w-[148px]" />
+              <col className="w-[112px]" />
+            </colgroup>
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr className="border-b border-gray-200">
-                <th className="text-left p-2">Document</th>
-                <th className="text-left p-2">Pickup</th>
-                <th className="text-left p-2">Status</th>
-                <th className="text-left p-2">Member</th>
-                <th className="text-left p-2">First item</th>
-                <th className="text-right p-2">Shown</th>
-                <th className="text-right p-2">Total</th>
+                <th className="text-left p-2">
+                  Document
+                </th>
+                <th className="text-left p-2">
+                  Status
+                </th>
+                <th colSpan={3} className="text-left p-2">
+                  Pick up start at
+                </th>
+                <th className="text-left p-2">
+                  Member
+                </th>
+                <th className="text-left p-2">
+                  First item
+                </th>
+                <th className="text-left p-2">
+                  Created at
+                </th>
+                <th className="text-right p-2">
+                  Total
+                </th>
               </tr>
             </thead>
             <tbody>
               {items.map((order) => {
                 const firstLine = order.lines[0];
-                const optionCount = firstLine
-                  ? countSelectedOptions(firstLine.selectedOptionsSnapshot)
-                  : 0;
+                const pickup = formatPickupDateTimeParts(order.pickupStartsAt);
                 return (
                   <tr
                     key={order.crmOrderId}
                     onPointerDown={() => onSelect(order)}
                     className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 active:bg-blue-50"
                   >
-                    <td className="p-2 font-mono text-xs">
+                    <td className="px-2 py-1.5 font-mono text-xs">
                       {order.documentId}
                     </td>
-                    <td className="p-2 text-xs text-gray-500">
-                      {formatPickupTime(order.pickupStartsAt)}
-                    </td>
-                    <td className="p-2">
+                    <td className="px-2 py-1.5">
                       <StatusBadge status={order.status} />
                     </td>
-                    <td className="p-2">
-                      <div>{order.memberName}</div>
-                      {order.memberPhoneLast4 && (
-                        <div className="text-[11px] text-gray-400">
-                          *{order.memberPhoneLast4}
-                        </div>
-                      )}
+                    <td className="px-2 py-1.5 whitespace-nowrap text-[18px] font-semibold leading-none text-gray-900">
+                      {pickup.date}
                     </td>
-                    <td className="p-2">
+                    <td className="px-2 py-1.5 whitespace-nowrap text-[18px] font-semibold leading-none text-gray-900">
+                      {pickup.day}
+                    </td>
+                    <td className="px-2 py-1.5 whitespace-nowrap text-[18px] font-semibold leading-none text-gray-900">
+                      {pickup.time}
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <div className="truncate">{order.memberName}</div>
+                    </td>
+                    <td className="px-2 py-1.5 min-w-0">
                       {firstLine ? (
                         <div className="min-w-0">
-                          <div className="font-medium truncate">
+                          <div className="font-medium leading-tight truncate">
                             {firstLine.name_ko}
                           </div>
-                          <div className="text-xs text-gray-500 truncate">
+                          <div className="text-xs leading-tight text-gray-500 truncate">
                             {firstLine.name_en}
-                          </div>
-                          <div className="flex items-center gap-1 mt-1">
-                            {firstLine.note && (
-                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-bold">
-                                NOTE
-                              </span>
-                            )}
-                            {optionCount > 0 && (
-                              <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 text-[10px] font-bold">
-                                OPTIONS {optionCount}
-                              </span>
-                            )}
                           </div>
                         </div>
                       ) : (
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
-                    <td className="p-2 text-right font-mono">
-                      {order.lines.length}
+                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-xs font-semibold text-gray-600">
+                      {formatPickupCreatedAt(order.crmCreatedAt)}
                     </td>
-                    <td className="p-2 text-right font-mono font-semibold">
+                    <td className="px-2 py-1.5 text-right font-mono font-semibold">
                       {formatPickupMoney(order.total)}
                     </td>
                   </tr>
@@ -369,11 +381,11 @@ function StatusBadge({ status }: { status: PickupOrderStatus }) {
   return (
     <span
       className={cn(
-        "text-[10px] font-bold px-2 py-1 rounded tracking-wider whitespace-nowrap",
+        "text-[10px] font-bold px-1.5 py-1 rounded tracking-wide whitespace-nowrap",
         statusClass(status),
       )}
     >
-      {statusLabel(status)}
+      {statusLabel(status).split(" ")[0]}
     </span>
   );
 }
