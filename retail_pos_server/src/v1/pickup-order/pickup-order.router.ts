@@ -4,11 +4,29 @@ import {
   listPickupOrdersController,
   syncPickupOrdersController,
 } from "./pickup-order.controller";
+import { scopeMiddleware, userMiddleware } from "../user/user.middleware";
 
 const pickupOrderRouter = Router();
 
-pickupOrderRouter.get("/", listPickupOrdersController);
-pickupOrderRouter.post("/sync", syncPickupOrdersController);
-pickupOrderRouter.get("/:id", getPickupOrderByIdController);
+pickupOrderRouter.get(
+  "/",
+  userMiddleware,
+  scopeMiddleware("sale"),
+  listPickupOrdersController,
+);
+
+pickupOrderRouter.post(
+  "/sync",
+  userMiddleware,
+  scopeMiddleware("sale"),
+  syncPickupOrdersController,
+);
+
+pickupOrderRouter.get(
+  "/:id",
+  userMiddleware,
+  scopeMiddleware("sale"),
+  getPickupOrderByIdController,
+);
 
 export default pickupOrderRouter;

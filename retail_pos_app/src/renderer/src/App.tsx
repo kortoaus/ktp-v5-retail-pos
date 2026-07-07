@@ -25,6 +25,7 @@ import SaleScreen from "./screens/SaleScreen";
 import SaleInvoiceSearchScreen from "./screens/SaleInvoiceSearchScreen";
 import SaleRefundDetailScreen from "./screens/SaleRefundDetailScreen";
 import SaleRefundPickerScreen from "./screens/SaleRefundPickerScreen";
+import PickupOrderSearchScreen from "./screens/PickupOrderSearchScreen";
 
 function App(): React.JSX.Element {
   return (
@@ -59,6 +60,10 @@ function MainApp() {
               <Route path="hotkey" element={<HotkeyManagerScreen />} />
               <Route path="user" element={<UserManageScreen />} />
               <Route path="invoices" element={<SaleInvoiceSearchScreen />} />
+              <Route
+                path="pickup-orders"
+                element={<PickupOrderSearchScreen />}
+              />
               <Route path="refund" element={<SaleRefundPickerScreen />} />
               <Route
                 path="refund/:invoiceId"
