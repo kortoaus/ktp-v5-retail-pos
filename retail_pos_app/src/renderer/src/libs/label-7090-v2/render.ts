@@ -376,7 +376,7 @@ export async function renderPriceTag7090Canvas(
   ctx.fillStyle = "#111";
   ctx.textBaseline = "alphabetic";
 
-  drawText(ctx, model.code ?? "", 24, 48, 22, 700, 240);
+  drawText(ctx, model.barcodeText.trim() || "-", 24, 48, 22, 700, 240);
 
   const isPromo = model.caseName.startsWith("promo");
   drawCenteredFittedText(

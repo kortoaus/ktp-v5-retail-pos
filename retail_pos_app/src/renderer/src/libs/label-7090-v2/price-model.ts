@@ -63,6 +63,8 @@ export function getPriceTag7090Model(
     caseName = "normal-guest";
   }
 
+  const barcodeText = item.barcodeGTIN || item.barcodePLU || item.barcode;
+
   return {
     caseName,
     headline:
@@ -71,7 +73,8 @@ export function getPriceTag7090Model(
         : hasPromo
           ? item.promoPrice?.name_en || "Special"
           : storeName,
-    barcode: item.barcodeGTIN || item.barcodePLU || item.barcode,
+    barcode: barcodeText,
+    barcodeText,
     code: item.code,
     nameKo: name_ko,
     nameEn: name_en,

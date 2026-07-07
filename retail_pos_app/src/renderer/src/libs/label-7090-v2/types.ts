@@ -27,6 +27,7 @@ export interface PriceTag7090Model {
   caseName: PriceTag7090Case;
   headline: string;
   barcode: string;
+  barcodeText: string;
   code: string | null;
   nameKo: string;
   nameEn: string;

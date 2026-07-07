@@ -134,8 +134,6 @@ export function buildPriceTag7030(
   const [dollar, cent] = currentPriceStr.replace("$", "").split(".");
   const dollarWidth = 35;
   const dollarOffset = 40 * dollar.length;
-  const charLengthKo = 18;
-  const charLengthEn = 30;
   const lineHeight = 30;
 
   const builder = new LabelBuilder().setSize(550, 240);
@@ -158,13 +156,19 @@ export function buildPriceTag7030(
     y += lineHeight;
   }
 
-  for (const line of splitLines(name_ko, charLengthKo)) {
-    builder.text(10, y, line, 21, true);
-    y += lineHeight;
-  }
-
-  for (const line of splitLines(name_en, charLengthEn)) {
-    builder.text(10, y, line, 21, false);
+  const productRows = [
+    ...splitLines(name_ko, 18).slice(0, 1).map((text) => ({
+      kind: "ko" as const,
+      text,
+    })),
+    ...splitLines(name_en, 30).slice(0, 2).map((text) => ({
+      kind: "en" as const,
+      text,
+    })),
+    { kind: "barcode" as const, text: item.barcode.trim() || "-" },
+  ];
+  for (const row of productRows) {
+    builder.text(10, y, row.text, 21, row.kind === "ko");
     y += lineHeight;
   }
 
