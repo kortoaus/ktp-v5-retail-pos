@@ -70,6 +70,7 @@ export type PickupOrderListQuery = {
   from?: Date;
   to?: Date;
   keyword?: string;
+  memberId?: string;
   page: number;
   limit: number;
 };

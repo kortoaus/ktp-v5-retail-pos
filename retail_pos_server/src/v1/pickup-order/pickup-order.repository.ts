@@ -50,6 +50,7 @@ export function parsePickupOrderListQuery(
 ): PickupOrderListQuery {
   const rawStatus = first(query.status);
   const rawKeyword = first(query.keyword);
+  const rawMemberId = first(query.memberId);
   const page = parsePositiveInt(first(query.page) ?? "1", "page");
   const limit = parsePositiveInt(first(query.limit) ?? "20", "limit");
 
@@ -69,13 +70,18 @@ export function parsePickupOrderListQuery(
   if (rawKeyword !== undefined && typeof rawKeyword !== "string") {
     throw new BadRequestException("keyword must be a string");
   }
+  if (rawMemberId !== undefined && typeof rawMemberId !== "string") {
+    throw new BadRequestException("memberId must be a string");
+  }
 
   const keyword = typeof rawKeyword === "string" ? rawKeyword.trim() : "";
+  const memberId = typeof rawMemberId === "string" ? rawMemberId.trim() : "";
   return {
     ...(rawStatus ? { status: rawStatus as PickupOrderStatus } : {}),
     from: parseOptionalDate(query.from, "from"),
     to: parseOptionalDate(query.to, "to"),
     ...(keyword ? { keyword } : {}),
+    ...(memberId ? { memberId } : {}),
     page,
     limit,
   };
@@ -110,22 +116,32 @@ function buildDateWhere(
 ): Prisma.PickupOrderCacheWhereInput {
   const pickupStartsAt: Prisma.DateTimeFilter = {};
   if (query.from) pickupStartsAt.gte = query.from;
-  if (query.to) pickupStartsAt.lt = query.to;
+  if (query.to) pickupStartsAt.lte = query.to;
   return Object.keys(pickupStartsAt).length > 0 ? { pickupStartsAt } : {};
 }
 
-function buildPaging(input: {
+export function buildPickupOrderListWhere(
+  query: PickupOrderListQuery,
+): Prisma.PickupOrderCacheWhereInput {
+  return {
+    ...(query.status ? { status: query.status } : {}),
+    ...(query.memberId ? { memberId: query.memberId } : {}),
+    ...buildDateWhere(query),
+    ...buildPickupOrderKeywordWhere(query.keyword),
+  };
+}
+
+export function buildPickupOrderPaging(input: {
   page: number;
   limit: number;
   totalCount: number;
 }) {
-  const totalPages = Math.ceil(input.totalCount / input.limit);
+  const totalPages = Math.max(1, Math.ceil(input.totalCount / input.limit));
   return {
-    page: input.page,
-    limit: input.limit,
-    totalCount: input.totalCount,
-    totalPages,
+    hasPrev: input.page > 1,
     hasNext: input.page < totalPages,
+    currentPage: input.page,
+    totalPages,
   };
 }
 
@@ -292,11 +308,7 @@ export async function upsertPickupOrderPage(items: CrmPickupOrderWire[]) {
 }
 
 export async function listCachedPickupOrders(query: PickupOrderListQuery) {
-  const where: Prisma.PickupOrderCacheWhereInput = {
-    ...(query.status ? { status: query.status } : {}),
-    ...buildDateWhere(query),
-    ...buildPickupOrderKeywordWhere(query.keyword),
-  };
+  const where = buildPickupOrderListWhere(query);
 
   const [rows, totalCount] = await db.$transaction([
     db.pickupOrderCache.findMany({
@@ -317,8 +329,8 @@ export async function listCachedPickupOrders(query: PickupOrderListQuery) {
   return {
     ok: true,
     msg: "Pickup orders loaded",
-    result: { items: rows },
-    paging: buildPaging({
+    result: rows,
+    paging: buildPickupOrderPaging({
       page: query.page,
       limit: query.limit,
       totalCount,

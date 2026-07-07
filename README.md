@@ -81,6 +81,7 @@ Historical planning files live under `docs/outdated/`. They are kept for context
 | `/manager/hotkey`   | HotkeyManagerScreen     | —     | hotkey    | Quick-select grid CRUD      |
 | `/manager/user`     | UserManageScreen        | —     | user      | User account management     |
 | `/manager/invoices` | SaleInvoiceSearchScreen | —     | —         | Invoice search, reprint     |
+| `/manager/pickup-orders` | PickupOrderSearchScreen | — | sale | Cached pickup order search and read-only work-order viewer |
 | `/manager/refund`   | SaleRefundPickerScreen  | Yes   | refund    | Pick sale invoice to refund |
 | `/manager/refund/:invoiceId` | SaleRefundDetailScreen | Yes | refund | Build refund or repay       |
 | `/manager/cashio`   | CashIOManageScreen      | Yes   | cashio    | Cash in/out management      |
@@ -102,6 +103,7 @@ All routes prefixed with `/api`. Terminal middleware identifies terminal + compa
 | `/user`     | User     | user + user   | User CRUD, auth by code                      |
 | `/sale`     | Sale     | user + sale   | Create, spend, refund, repay, query, latest  |
 | `/voucher`  | Voucher  | user + sale   | Staff daily voucher list / issue             |
+| `/pickup-order` | Pickup Order | user + sale | Cached pickup order list/detail/manual sync |
 | `/printer`  | Printer  | —             | Server-side print (raw data)                 |
 | `/cloud`    | Cloud    | —             | Cloud down-sync, posts, item sheets, push    |
 | `/cashio`   | CashIO   | user + cashio | Cash in/out CRUD with search                 |

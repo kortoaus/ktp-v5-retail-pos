@@ -16,6 +16,7 @@ import {
   IoPrintOutline,
   IoReceiptOutline,
   IoBarcodeOutline,
+  IoBagCheckOutline,
 } from "react-icons/io5";
 
 const btn =
@@ -80,6 +81,13 @@ export default function HomeScreen() {
           className="bg-blue-50 text-blue-700 hover:bg-blue-100"
         >
           Invoice Search
+        </NavBtn>
+        <NavBtn
+          to="/manager/pickup-orders"
+          icon={<IoBagCheckOutline size={24} />}
+          className="bg-blue-50 text-blue-700 hover:bg-blue-100"
+        >
+          Pickup Orders
         </NavBtn>
         <NavBtn
           to="/manager/refund"
