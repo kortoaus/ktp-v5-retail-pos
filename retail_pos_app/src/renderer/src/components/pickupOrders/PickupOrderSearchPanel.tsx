@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import type { Dayjs } from "dayjs";
 import KeyboardInputText from "../KeyboardInputText";
 import DateRangeSelector from "../DateRangeSelector";
@@ -17,7 +24,7 @@ import {
   statusLabel,
 } from "./pickup-order-format";
 import {
-  PICKUP_ORDER_STATUSES,
+  POS_PICKUP_ORDER_STATUS_TARGETS,
   type PickupOrderListItem,
   type PickupOrderStatus,
   type PickupOrderStatusFilter,
@@ -26,14 +33,22 @@ import {
 const PAGE_SIZE = 20;
 const STATUS_FILTERS: PickupOrderStatusFilter[] = [
   "ALL",
-  ...PICKUP_ORDER_STATUSES,
+  ...POS_PICKUP_ORDER_STATUS_TARGETS,
 ];
 
 interface Props {
   onSelect: (order: PickupOrderListItem) => void;
 }
 
-export default function PickupOrderSearchPanel({ onSelect }: Props) {
+export type PickupOrderSearchPanelHandle = {
+  refreshCurrentPage: () => void;
+};
+
+const PickupOrderSearchPanel = forwardRef<PickupOrderSearchPanelHandle, Props>(
+  function PickupOrderSearchPanel(
+    { onSelect },
+    ref,
+  ) {
   const [keyword, setKeyword] = useState("");
   const [from, setFrom] = useState<Dayjs | null>(null);
   const [to, setTo] = useState<Dayjs | null>(null);
@@ -92,6 +107,16 @@ export default function PickupOrderSearchPanel({ onSelect }: Props) {
       }
     },
     [keyword, from, to, statusFilter, member],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      refreshCurrentPage: () => {
+        void fetchPage(paging?.currentPage ?? 1);
+      },
+    }),
+    [fetchPage, paging?.currentPage],
   );
 
   function search() {
@@ -331,7 +356,10 @@ export default function PickupOrderSearchPanel({ onSelect }: Props) {
       />
     </div>
   );
-}
+  },
+);
+
+export default PickupOrderSearchPanel;
 
 function statusLabelForFilter(status: PickupOrderStatusFilter): string {
   return status === "ALL" ? "ALL" : statusLabel(status);

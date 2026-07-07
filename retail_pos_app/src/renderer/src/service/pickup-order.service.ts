@@ -4,6 +4,7 @@ import {
   normalizePickupOrderListItem,
 } from "../components/pickupOrders/pickup-order-format";
 import type {
+  PosPickupOrderStatus,
   PickupOrderDetail,
   PickupOrderDetailWire,
   PickupOrderListItem,
@@ -61,4 +62,23 @@ export async function getPickupOrderMemberPhone(
   return apiService.get<PickupOrderMemberPhone>(
     `/api/pickup-order/${crmOrderId}/member-phone`,
   );
+}
+
+export async function updatePickupOrderStatus(
+  crmOrderId: number,
+  status: PosPickupOrderStatus,
+): Promise<ApiResponse<PickupOrderDetail>> {
+  const res = await apiService.post<PickupOrderDetailWire>(
+    `/api/pickup-order/${crmOrderId}/status`,
+    { status },
+  );
+
+  return {
+    ...res,
+    result: res.result ? normalizePickupOrderDetail(res.result) : null,
+  };
+}
+
+export async function syncPickupOrders(): Promise<ApiResponse<unknown>> {
+  return apiService.post<unknown>("/api/pickup-order/sync");
 }

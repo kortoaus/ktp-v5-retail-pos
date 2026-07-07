@@ -10,6 +10,17 @@ export const PICKUP_ORDER_STATUSES = [
 export type PickupOrderStatus = (typeof PICKUP_ORDER_STATUSES)[number];
 export type PickupOrderStatusFilter = "ALL" | PickupOrderStatus;
 
+export const POS_PICKUP_ORDER_STATUS_TARGETS = [
+  "PENDING",
+  "ORDER_CONFIRMED",
+  "READY",
+  "COMPLETED",
+  "CANCELLED_BY_STORE",
+] as const satisfies readonly PickupOrderStatus[];
+
+export type PosPickupOrderStatus =
+  (typeof POS_PICKUP_ORDER_STATUS_TARGETS)[number];
+
 export type PickupOrderSelectedOption = {
   key: string;
   name_en: string;

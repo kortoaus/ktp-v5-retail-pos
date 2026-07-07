@@ -219,6 +219,11 @@ export async function findExistingPickupOrderIds(crmOrderIds: number[]) {
 export async function upsertPickupOrderPage(items: CrmPickupOrderWire[]) {
   return db.$transaction(async (tx) => {
     for (const item of items) {
+      const pickupStartsAt = new Date(item.pickupStartsAt);
+      const crmCreatedAt = new Date(item.createdAt);
+      const crmUpdatedAt = new Date(item.updatedAt);
+      const syncedAt = new Date();
+
       await tx.pickupOrderCache.upsert({
         where: { crmOrderId: item.id },
         create: {
@@ -230,27 +235,37 @@ export async function upsertPickupOrderPage(items: CrmPickupOrderWire[]) {
           memberName: item.memberName,
           memberLevel: item.memberLevel,
           memberPhoneLast4: item.memberPhoneLast4,
-          pickupStartsAt: new Date(item.pickupStartsAt),
+          pickupStartsAt,
           linesTotal: item.linesTotal,
           total: item.total,
-          crmCreatedAt: new Date(item.createdAt),
-          crmUpdatedAt: new Date(item.updatedAt),
-          syncedAt: new Date(),
+          crmCreatedAt,
+          crmUpdatedAt,
+          syncedAt,
         },
-        update: {
+        update: {},
+      });
+
+      const updatedOrder = await tx.pickupOrderCache.updateMany({
+        where: {
+          crmOrderId: item.id,
+          crmUpdatedAt: { lte: crmUpdatedAt },
+        },
+        data: {
           documentId: item.documentId,
           status: item.status,
           memberId: item.memberId,
           memberName: item.memberName,
           memberLevel: item.memberLevel,
           memberPhoneLast4: item.memberPhoneLast4,
-          pickupStartsAt: new Date(item.pickupStartsAt),
+          pickupStartsAt,
           linesTotal: item.linesTotal,
           total: item.total,
-          crmUpdatedAt: new Date(item.updatedAt),
-          syncedAt: new Date(),
+          crmUpdatedAt,
+          syncedAt,
         },
       });
+
+      if (updatedOrder.count === 0) continue;
 
       for (const line of item.lines) {
         const promoPrices =

@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import BlockScreen from "../components/BlockScreen";
-import PickupOrderSearchPanel from "../components/pickupOrders/PickupOrderSearchPanel";
+import PickupOrderSearchPanel, {
+  type PickupOrderSearchPanelHandle,
+} from "../components/pickupOrders/PickupOrderSearchPanel";
 import PickupOrderViewer from "../components/pickupOrders/PickupOrderViewer";
 import { useUser } from "../contexts/UserContext";
 import hasScope from "../libs/scope-utils";
@@ -10,6 +12,7 @@ export default function PickupOrderSearchScreen() {
   const navigate = useNavigate();
   const { user } = useUser();
   const [viewerCrmOrderId, setViewerCrmOrderId] = useState<number | null>(null);
+  const searchPanelRef = useRef<PickupOrderSearchPanelHandle | null>(null);
 
   if (!user || !hasScope(user.scope, ["sale"])) {
     return <BlockScreen />;
@@ -30,6 +33,7 @@ export default function PickupOrderSearchScreen() {
 
       <div className="flex-1 min-h-0">
         <PickupOrderSearchPanel
+          ref={searchPanelRef}
           onSelect={(order) => setViewerCrmOrderId(order.crmOrderId)}
         />
       </div>
@@ -37,6 +41,7 @@ export default function PickupOrderSearchScreen() {
       <PickupOrderViewer
         crmOrderId={viewerCrmOrderId}
         onClose={() => setViewerCrmOrderId(null)}
+        onRefreshList={() => searchPanelRef.current?.refreshCurrentPage()}
       />
     </div>
   );

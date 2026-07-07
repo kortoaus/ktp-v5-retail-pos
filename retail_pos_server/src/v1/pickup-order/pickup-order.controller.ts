@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { HttpException } from "../../libs/exceptions";
 import { parseIntId } from "../../libs/query";
+import type { UserModel } from "../../generated/prisma/models";
 import {
   getCachedPickupOrderByCrmId,
   listCachedPickupOrders,
@@ -9,6 +10,7 @@ import {
 import {
   getPickupOrderMemberPhoneByCrmOrderId,
 } from "./pickup-order.member-phone";
+import { updatePickupOrderStatusFromPos } from "./pickup-order.status";
 import { pickupOrderSyncService } from "./pickup-order.sync.service";
 
 export async function listPickupOrdersController(req: Request, res: Response) {
@@ -50,6 +52,26 @@ export async function getPickupOrderMemberPhoneController(
       paging: null,
     });
   }
+}
+
+export async function updatePickupOrderStatusController(
+  req: Request,
+  res: Response,
+) {
+  const crmOrderId = parseIntId(req, "id");
+  const user = res.locals.user as UserModel;
+  const result = await updatePickupOrderStatusFromPos({
+    orderId: crmOrderId,
+    body: req.body,
+    user: { id: user.id, name: user.name },
+  });
+
+  res.status(200).json({
+    ok: true,
+    msg: "Pickup order status updated",
+    result,
+    paging: null,
+  });
 }
 
 export async function syncPickupOrdersController(_req: Request, res: Response) {
