@@ -5,7 +5,12 @@ import {
   InternalServerException,
   UnauthorizedException,
 } from "../../libs/exceptions";
-import type { PickupOrderSyncPage } from "./pickup-order.types";
+import type { ApiResponse } from "../../libs/cloud.api";
+import type {
+  CrmPickupOrderWire,
+  PickupOrderStatus,
+  PickupOrderSyncPage,
+} from "./pickup-order.types";
 
 function requireOk<T>(res: {
   ok: boolean;
@@ -42,6 +47,48 @@ export async function fetchCrmPickupOrderSyncPage(input: {
       ...(input.afterId ? { afterId: input.afterId } : {}),
       limit: input.limit,
     },
+  );
+
+  return requireOk(res);
+}
+
+export type CrmPickupOrderStatusPayload = {
+  status: Exclude<PickupOrderStatus, "CANCELLED_BY_CUSTOMER">;
+  actorId?: string;
+  actorName?: string;
+  note?: string;
+};
+
+type CrmPickupOrderStatusClient = {
+  post: (
+    endpoint: string,
+    payload: CrmPickupOrderStatusPayload,
+  ) => Promise<ApiResponse<CrmPickupOrderWire>>;
+};
+
+export function createUpdateCrmPickupOrderStatus(
+  client: CrmPickupOrderStatusClient,
+) {
+  return async (
+    orderId: number,
+    payload: CrmPickupOrderStatusPayload,
+  ): Promise<CrmPickupOrderWire> => {
+    const res = await client.post(
+      `/device/pickup-order/${orderId}/status`,
+      payload,
+    );
+
+    return requireOk(res);
+  };
+}
+
+export async function updateCrmPickupOrderStatus(
+  orderId: number,
+  payload: CrmPickupOrderStatusPayload,
+): Promise<CrmPickupOrderWire> {
+  const res = await crmApiService.post<CrmPickupOrderWire>(
+    `/device/pickup-order/${orderId}/status`,
+    payload,
   );
 
   return requireOk(res);

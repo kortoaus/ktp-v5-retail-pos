@@ -4,6 +4,7 @@ import {
   getPickupOrderMemberPhoneController,
   listPickupOrdersController,
   syncPickupOrdersController,
+  updatePickupOrderStatusController,
 } from "./pickup-order.controller";
 import { scopeMiddleware, userMiddleware } from "../user/user.middleware";
 
@@ -21,6 +22,13 @@ pickupOrderRouter.post(
   userMiddleware,
   scopeMiddleware("sale"),
   syncPickupOrdersController,
+);
+
+pickupOrderRouter.post(
+  "/:id/status",
+  userMiddleware,
+  scopeMiddleware("sale"),
+  updatePickupOrderStatusController,
 );
 
 pickupOrderRouter.get(

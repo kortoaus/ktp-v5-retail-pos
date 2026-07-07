@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "../../libs/cn";
 import {
   getPickupOrderByCrmId,
   getPickupOrderMemberPhone,
+  syncPickupOrders,
+  updatePickupOrderStatus,
 } from "../../service/pickup-order.service";
 import {
   countSelectedOptions,
@@ -12,19 +14,26 @@ import {
   statusLabel,
 } from "./pickup-order-format";
 import PickupOrderWorkLabelPreview from "./PickupOrderWorkLabelPreview";
-import type {
-  PickupOrderDetail,
-  PickupOrderLine,
-  PickupOrderSelectedOptionGroup,
-  PickupOrderStatus,
+import {
+  POS_PICKUP_ORDER_STATUS_TARGETS,
+  type PosPickupOrderStatus,
+  type PickupOrderDetail,
+  type PickupOrderLine,
+  type PickupOrderSelectedOptionGroup,
+  type PickupOrderStatus,
 } from "./pickup-order-types";
 
 type Props = {
   crmOrderId: number | null;
   onClose: () => void;
+  onRefreshList: () => void;
 };
 
-export default function PickupOrderViewer({ crmOrderId, onClose }: Props) {
+export default function PickupOrderViewer({
+  crmOrderId,
+  onClose,
+  onRefreshList,
+}: Props) {
   const [order, setOrder] = useState<PickupOrderDetail | null>(null);
   const [selectedCrmLineId, setSelectedCrmLineId] = useState<number | null>(
     null,
@@ -34,20 +43,50 @@ export default function PickupOrderViewer({ crmOrderId, onClose }: Props) {
   const [revealedPhone, setRevealedPhone] = useState("");
   const [phoneLoading, setPhoneLoading] = useState(false);
   const [phoneError, setPhoneError] = useState("");
+  const [statusActionLoading, setStatusActionLoading] = useState(false);
+  const [statusActionError, setStatusActionError] = useState("");
   const phoneRevealRequestGenRef = useRef(0);
+  const statusActionRequestGenRef = useRef(0);
+  const activeCrmOrderIdRef = useRef<number | null>(crmOrderId);
+  activeCrmOrderIdRef.current = crmOrderId;
 
-  const resetPhoneReveal = () => {
+  const resetPhoneReveal = useCallback(() => {
     phoneRevealRequestGenRef.current += 1;
     setRevealedPhone("");
     setPhoneLoading(false);
     setPhoneError("");
-  };
+  }, []);
+
+  const applyOrderDetail = useCallback(
+    (detail: PickupOrderDetail) => {
+      resetPhoneReveal();
+      setOrder(detail);
+      setSelectedCrmLineId(detail.lines[0]?.crmLineId ?? null);
+    },
+    [resetPhoneReveal],
+  );
+
+  const loadOrder = useCallback(
+    async (id: number, shouldApply: () => boolean = () => true) => {
+      const res = await getPickupOrderByCrmId(id);
+      if (!shouldApply()) return;
+      if (res.ok && res.result) {
+        applyOrderDetail(res.result);
+        return;
+      }
+      throw new Error(res.msg || "Failed to load pickup order");
+    },
+    [applyOrderDetail],
+  );
 
   useEffect(() => {
+    statusActionRequestGenRef.current += 1;
     if (crmOrderId == null) {
       setOrder(null);
       setSelectedCrmLineId(null);
       setError("");
+      setStatusActionError("");
+      setStatusActionLoading(false);
       resetPhoneReveal();
       setLoading(false);
       return;
@@ -56,22 +95,17 @@ export default function PickupOrderViewer({ crmOrderId, onClose }: Props) {
     setOrder(null);
     setSelectedCrmLineId(null);
     setError("");
+    setStatusActionError("");
     resetPhoneReveal();
     setLoading(true);
     void (async () => {
       try {
-        const res = await getPickupOrderByCrmId(crmOrderId);
+        await loadOrder(crmOrderId, () => active);
+      } catch (err) {
         if (!active) return;
-        if (res.ok && res.result) {
-          resetPhoneReveal();
-          setOrder(res.result);
-          setSelectedCrmLineId(res.result.lines[0]?.crmLineId ?? null);
-        } else {
-          setError(res.msg || "Failed to load pickup order");
-        }
-      } catch {
-        if (!active) return;
-        setError("Failed to load pickup order");
+        setError(
+          err instanceof Error ? err.message : "Failed to load pickup order",
+        );
       } finally {
         if (active) {
           setLoading(false);
@@ -82,7 +116,70 @@ export default function PickupOrderViewer({ crmOrderId, onClose }: Props) {
     return () => {
       active = false;
     };
-  }, [crmOrderId]);
+  }, [crmOrderId, loadOrder, resetPhoneReveal]);
+
+  const changeStatus = async (status: PosPickupOrderStatus) => {
+    if (crmOrderId == null || !order || statusActionLoading) return;
+    const actionCrmOrderId = crmOrderId;
+    const label = statusLabel(status);
+    const firstConfirmed = window.confirm(
+      `Change pickup order status to ${label}?`,
+    );
+    if (!firstConfirmed) return;
+    const secondConfirmed = window.confirm(
+      `Customer may receive a push notification for ${label}. Continue?`,
+    );
+    if (!secondConfirmed) return;
+
+    const actionGen = statusActionRequestGenRef.current + 1;
+    statusActionRequestGenRef.current = actionGen;
+    const isCurrentAction = () =>
+      statusActionRequestGenRef.current === actionGen &&
+      activeCrmOrderIdRef.current === actionCrmOrderId;
+
+    setStatusActionLoading(true);
+    setStatusActionError("");
+    try {
+      const statusRes = await updatePickupOrderStatus(actionCrmOrderId, status);
+      if (!isCurrentAction()) return;
+      if (!statusRes.ok) {
+        throw new Error(
+          statusRes.msg || "Failed to update pickup order status",
+        );
+      }
+      if (!statusRes.result) {
+        throw new Error("Failed to update pickup order status");
+      }
+
+      applyOrderDetail(statusRes.result);
+
+      const syncRes = await syncPickupOrders();
+      if (!isCurrentAction()) return;
+      if (!syncRes.ok) {
+        throw new Error("Pickup order updated, but sync failed");
+      }
+
+      await loadOrder(actionCrmOrderId, isCurrentAction);
+      if (!isCurrentAction()) return;
+      onRefreshList();
+    } catch (err) {
+      if (!isCurrentAction()) return;
+      setStatusActionError(
+        err instanceof Error
+          ? err.message
+          : "Failed to update pickup order status",
+      );
+    } finally {
+      if (isCurrentAction()) {
+        setStatusActionLoading(false);
+      }
+    }
+  };
+
+  const close = () => {
+    statusActionRequestGenRef.current += 1;
+    onClose();
+  };
 
   const revealPhone = async () => {
     if (crmOrderId == null || phoneLoading) return;
@@ -124,7 +221,7 @@ export default function PickupOrderViewer({ crmOrderId, onClose }: Props) {
     <div
       className="fixed inset-0 flex items-center justify-center bg-black/50 p-4"
       style={{ zIndex: 1500 }}
-      onPointerDown={onClose}
+      onPointerDown={close}
     >
       <div
         className="flex max-h-[92vh] w-full max-w-[1180px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl"
@@ -134,7 +231,7 @@ export default function PickupOrderViewer({ crmOrderId, onClose }: Props) {
           <h2 className="text-sm font-bold">Pickup Order</h2>
           <button
             type="button"
-            onPointerDown={onClose}
+            onPointerDown={close}
             className="flex size-10 items-center justify-center rounded-lg text-xl text-gray-500 active:bg-gray-200"
           >
             X
@@ -163,6 +260,9 @@ export default function PickupOrderViewer({ crmOrderId, onClose }: Props) {
                 phoneError={phoneError}
                 onRevealPhone={revealPhone}
                 onHidePhone={hidePhone}
+                statusActionLoading={statusActionLoading}
+                statusActionError={statusActionError}
+                onChangeStatus={changeStatus}
               />
               <LineSelector
                 lines={order.lines}
@@ -202,6 +302,9 @@ function OrderSummary({
   phoneError,
   onRevealPhone,
   onHidePhone,
+  statusActionLoading,
+  statusActionError,
+  onChangeStatus,
 }: {
   order: PickupOrderDetail;
   revealedPhone: string;
@@ -209,6 +312,9 @@ function OrderSummary({
   phoneError: string;
   onRevealPhone: () => void;
   onHidePhone: () => void;
+  statusActionLoading: boolean;
+  statusActionError: string;
+  onChangeStatus: (status: PosPickupOrderStatus) => void;
 }) {
   return (
     <div className="border-b border-gray-200 p-4">
@@ -245,6 +351,59 @@ function OrderSummary({
         />
         <SummaryField label="Total" value={formatPickupMoney(order.total)} />
       </div>
+
+      <StatusActions
+        currentStatus={order.status}
+        loading={statusActionLoading}
+        error={statusActionError}
+        onChangeStatus={onChangeStatus}
+      />
+    </div>
+  );
+}
+
+function StatusActions({
+  currentStatus,
+  loading,
+  error,
+  onChangeStatus,
+}: {
+  currentStatus: PickupOrderStatus;
+  loading: boolean;
+  error: string;
+  onChangeStatus: (status: PosPickupOrderStatus) => void;
+}) {
+  return (
+    <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+      <div className="font-bold uppercase tracking-wide text-gray-400">
+        Set status
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {POS_PICKUP_ORDER_STATUS_TARGETS.map((status) => {
+          const isCurrent = status === currentStatus;
+          return (
+            <button
+              key={status}
+              type="button"
+              onPointerDown={() => onChangeStatus(status)}
+              disabled={loading || isCurrent}
+              className={cn(
+                "h-8 min-w-0 rounded-md border px-2 text-[11px] font-bold uppercase leading-tight",
+                "whitespace-normal break-words active:bg-blue-50 disabled:cursor-not-allowed",
+                isCurrent
+                  ? "border-gray-300 bg-white text-gray-400"
+                  : "border-blue-200 bg-white text-blue-700",
+                loading && !isCurrent && "opacity-50",
+              )}
+            >
+              {statusLabel(status)}
+            </button>
+          );
+        })}
+      </div>
+      {error && (
+        <div className="mt-2 text-xs font-medium text-red-600">{error}</div>
+      )}
     </div>
   );
 }
