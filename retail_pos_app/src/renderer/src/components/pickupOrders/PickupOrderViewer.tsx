@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useUser } from "../../contexts/UserContext";
 import { useZplPrinters } from "../../hooks/useZplPrinters";
 import { cn } from "../../libs/cn";
 import { buildPickupWorkLabelModel } from "../../libs/pickup-work-label/model";
@@ -13,6 +14,10 @@ import {
   syncPickupOrders,
   updatePickupOrderStatus,
 } from "../../service/pickup-order.service";
+import {
+  markPrintedHistory,
+  PRINTED_HISTORY_ENTITY_PICKUP_ORDER,
+} from "../../service/printed-history.service";
 import {
   countSelectedOptions,
   formatPickupMoney,
@@ -29,6 +34,11 @@ import {
   type PickupOrderSelectedOptionGroup,
   type PickupOrderStatus,
 } from "./pickup-order-types";
+import {
+  canUserUsePickupOrderStatusAction,
+  isPickupOrderLabelPrintable,
+  requiresManagerForPickupOrderStatusTransition,
+} from "./pickup-order-status-policy";
 
 type Props = {
   crmOrderId: number | null;
@@ -52,6 +62,7 @@ export default function PickupOrderViewer({
   const [phoneError, setPhoneError] = useState("");
   const [statusActionLoading, setStatusActionLoading] = useState(false);
   const [statusActionError, setStatusActionError] = useState("");
+  const { user } = useUser();
   const { printers, printLabel } = useZplPrinters();
   const pickupLabelPrinters = getPickupWorkLabelPrinters(printers);
   const pickupLabelPrinter = pickupLabelPrinters[0] ?? null;
@@ -95,12 +106,12 @@ export default function PickupOrderViewer({
 
   useEffect(() => {
     statusActionRequestGenRef.current += 1;
+    setStatusActionLoading(false);
     if (crmOrderId == null) {
       setOrder(null);
       setSelectedCrmLineId(null);
       setError("");
       setStatusActionError("");
-      setStatusActionLoading(false);
       resetPhoneReveal();
       setLoading(false);
       return;
@@ -137,8 +148,36 @@ export default function PickupOrderViewer({
     setLabelPrintMessage("");
   }, [order?.crmOrderId, selectedCrmLineId]);
 
+  const persistStatusChange = useCallback(
+    async (
+      actionCrmOrderId: number,
+      status: PosPickupOrderStatus,
+      isCurrentAction: () => boolean,
+    ) => {
+      const statusRes = await updatePickupOrderStatus(actionCrmOrderId, status);
+      if (!isCurrentAction()) return null;
+      if (!statusRes.ok) {
+        throw new Error(statusRes.msg || "Failed to update pickup order status");
+      }
+      if (!statusRes.result) {
+        throw new Error("Failed to update pickup order status");
+      }
+      applyOrderDetail(statusRes.result);
+      return statusRes.result;
+    },
+    [applyOrderDetail],
+  );
+
   const changeStatus = async (status: PosPickupOrderStatus) => {
-    if (crmOrderId == null || !order || statusActionLoading) return;
+    if (
+      crmOrderId == null ||
+      !order ||
+      statusActionLoading ||
+      labelPrintLoading ||
+      labelPrintInFlightRef.current
+    ) {
+      return;
+    }
     const actionCrmOrderId = crmOrderId;
     const label = statusLabel(status);
     const firstConfirmed = window.confirm(
@@ -159,18 +198,12 @@ export default function PickupOrderViewer({
     setStatusActionLoading(true);
     setStatusActionError("");
     try {
-      const statusRes = await updatePickupOrderStatus(actionCrmOrderId, status);
-      if (!isCurrentAction()) return;
-      if (!statusRes.ok) {
-        throw new Error(
-          statusRes.msg || "Failed to update pickup order status",
-        );
-      }
-      if (!statusRes.result) {
-        throw new Error("Failed to update pickup order status");
-      }
-
-      applyOrderDetail(statusRes.result);
+      const updatedOrder = await persistStatusChange(
+        actionCrmOrderId,
+        status,
+        isCurrentAction,
+      );
+      if (!updatedOrder) return;
 
       const syncRes = await syncPickupOrders();
       if (!isCurrentAction()) return;
@@ -234,15 +267,39 @@ export default function PickupOrderViewer({
     order?.lines.find((line) => line.crmLineId === selectedCrmLineId) ??
     order?.lines[0] ??
     null;
+  const canPrintSelectedLabel =
+    order !== null &&
+    pickupLabelPrinter !== null &&
+    !statusActionLoading &&
+    isPickupOrderLabelPrintable(order.status);
 
   const printSelectedLabel = useCallback(async () => {
     if (
       !order ||
       !selectedLine ||
       labelPrintLoading ||
+      statusActionLoading ||
       labelPrintInFlightRef.current
     ) {
       return;
+    }
+
+    if (!isPickupOrderLabelPrintable(order.status)) {
+      setLabelPrintMessage(
+        "Labels cannot be printed for completed or cancelled pickup orders.",
+      );
+      return;
+    }
+
+    const shouldConfirmPending = order.status === "PENDING";
+    if (shouldConfirmPending) {
+      const statusConfirmed = window.confirm(
+        "This order is still pending. Printing labels will confirm the order and notify the customer. Continue?",
+      );
+      if (!statusConfirmed) {
+        setLabelPrintMessage("Print cancelled.");
+        return;
+      }
     }
 
     if (!pickupLabelPrinter) {
@@ -260,9 +317,11 @@ export default function PickupOrderViewer({
     }
 
     const labelPrintGen = labelPrintRequestGenRef.current + 1;
+    const labelPrintCrmOrderId = order.crmOrderId;
     labelPrintRequestGenRef.current = labelPrintGen;
     const isCurrentLabelPrint = () =>
-      labelPrintRequestGenRef.current === labelPrintGen;
+      labelPrintRequestGenRef.current === labelPrintGen &&
+      activeCrmOrderIdRef.current === labelPrintCrmOrderId;
 
     labelPrintInFlightRef.current = true;
     setLabelPrintLoading(true);
@@ -286,9 +345,64 @@ export default function PickupOrderViewer({
       }
 
       if (!isCurrentLabelPrint()) return;
+      const historyRes = await markPrintedHistory(
+        PRINTED_HISTORY_ENTITY_PICKUP_ORDER,
+        labelPrintCrmOrderId,
+      );
+      if (!isCurrentLabelPrint()) return;
+      if (!historyRes.ok) {
+        setLabelPrintMessage(
+          historyRes.msg || "Labels printed, but print history was not saved.",
+        );
+        return;
+      }
+
+      if (order.status === "PENDING") {
+        const actionCrmOrderId = order.crmOrderId;
+        const actionGen = statusActionRequestGenRef.current + 1;
+        statusActionRequestGenRef.current = actionGen;
+        const isCurrentStatusAction = () =>
+          statusActionRequestGenRef.current === actionGen &&
+          activeCrmOrderIdRef.current === actionCrmOrderId;
+
+        setStatusActionLoading(true);
+        setStatusActionError("");
+        try {
+          const updatedOrder = await persistStatusChange(
+            actionCrmOrderId,
+            "ORDER_CONFIRMED",
+            isCurrentStatusAction,
+          );
+          if (!updatedOrder) return;
+          const syncRes = await syncPickupOrders();
+          if (!isCurrentStatusAction()) return;
+          if (!syncRes.ok) {
+            throw new Error("Pickup order confirmed, but sync failed");
+          }
+          await loadOrder(actionCrmOrderId, isCurrentStatusAction);
+          if (!isCurrentStatusAction()) return;
+        } catch {
+          if (isCurrentStatusAction()) {
+            setStatusActionError(
+              "Labels printed, but order was not confirmed. Confirm manually.",
+            );
+            setLabelPrintMessage(
+              "Labels printed, but order was not confirmed. Confirm manually.",
+            );
+          }
+          return;
+        } finally {
+          if (isCurrentStatusAction()) {
+            setStatusActionLoading(false);
+          }
+        }
+      }
+
+      if (!isCurrentLabelPrint()) return;
       setLabelPrintMessage(
         `Printed ${printCount} label${printCount === 1 ? "" : "s"} to ${pickupLabelPrinter.name}.`,
       );
+      onRefreshList();
     } catch (err) {
       if (isCurrentLabelPrint()) {
         setLabelPrintMessage(
@@ -301,17 +415,23 @@ export default function PickupOrderViewer({
     }
   }, [
     labelPrintLoading,
+    loadOrder,
+    onRefreshList,
     order,
     pickupLabelPrinter,
+    persistStatusChange,
     printLabel,
     selectedLine,
+    statusActionLoading,
   ]);
 
   const labelPrintStatusMessage =
     labelPrintMessage ||
-    (selectedLine && !pickupLabelPrinter
-      ? "No 100x100 label printer configured."
-      : "");
+    (selectedLine && order && !isPickupOrderLabelPrintable(order.status)
+      ? "Labels cannot be printed for completed or cancelled pickup orders."
+      : selectedLine && !pickupLabelPrinter
+        ? "No 100x100 label printer configured."
+        : "");
 
   if (crmOrderId == null) return null;
 
@@ -377,7 +497,7 @@ export default function PickupOrderViewer({
                     <PickupOrderWorkLabelPreview
                       order={order}
                       line={selectedLine}
-                      canPrint={pickupLabelPrinter !== null}
+                      canPrint={canPrintSelectedLabel}
                       printing={labelPrintLoading}
                       onPrint={printSelectedLabel}
                     />
@@ -400,8 +520,13 @@ export default function PickupOrderViewer({
             <StatusActionBar
               documentId={order.documentId}
               currentStatus={order.status}
-              loading={statusActionLoading}
+              loading={
+                statusActionLoading ||
+                labelPrintLoading ||
+                labelPrintInFlightRef.current
+              }
               error={statusActionError}
+              userScopes={user?.scope ?? []}
               onChangeStatus={changeStatus}
             />
           </div>
@@ -544,12 +669,14 @@ function StatusActionBar({
   currentStatus,
   loading,
   error,
+  userScopes,
   onChangeStatus,
 }: {
   documentId: string;
   currentStatus: PickupOrderStatus;
   loading: boolean;
   error: string;
+  userScopes: string[];
   onChangeStatus: (status: PosPickupOrderStatus) => void;
 }) {
   return (
@@ -571,12 +698,22 @@ function StatusActionBar({
       {POS_PICKUP_ORDER_STATUS_TARGETS.map((status) => {
         const isCurrent = status === currentStatus;
         const isCancel = status === "CANCELLED_BY_STORE";
+        const allowed = canUserUsePickupOrderStatusAction(
+          currentStatus,
+          status,
+          userScopes,
+        );
+        const managerOnly = requiresManagerForPickupOrderStatusTransition(
+          currentStatus,
+          status,
+        );
         return (
           <button
             key={status}
             type="button"
             onPointerDown={() => onChangeStatus(status)}
-            disabled={loading || isCurrent}
+            disabled={loading || isCurrent || !allowed}
+            title={managerOnly && !allowed ? "Manager required" : undefined}
             className={cn(
               "h-14 min-w-0 rounded-lg border-2 px-2 text-[12px] font-black uppercase leading-tight",
               "active:bg-blue-50 disabled:cursor-not-allowed",
@@ -589,6 +726,9 @@ function StatusActionBar({
             )}
           >
             {statusLabel(status)}
+            {managerOnly && !allowed && (
+              <span className="mt-0.5 block text-[9px]">Manager required</span>
+            )}
           </button>
         );
       })}
