@@ -15,7 +15,7 @@ export interface ScaleConfig {
 }
 
 export type LabelLanguage = "zpl" | "slcs";
-export type MediaSize = "7030" | "7090";
+export type MediaSize = "7030" | "7090" | "100100";
 export type EscposSerialParity = "none" | "even" | "odd" | "mark" | "space";
 export type EscposSerialHandshaking = "none" | "dtr-dsr" | "rts-cts" | "xon-xoff";
 export type ReceiptPrintMode = "raster" | "escpos";

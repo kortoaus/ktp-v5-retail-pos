@@ -16,14 +16,24 @@ import type {
 type Props = {
   order: PickupOrderDetail;
   line: PickupOrderLine;
+  canPrint?: boolean;
+  printing?: boolean;
+  onPrint?: () => void;
 };
 
-export default function PickupOrderWorkLabelPreview({ order, line }: Props) {
+export default function PickupOrderWorkLabelPreview({
+  order,
+  line,
+  canPrint = false,
+  printing = false,
+  onPrint,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const model = useMemo<PickupWorkLabelModel>(
     () => buildPickupWorkLabelModel(order, line),
     [order, line],
   );
+  const isPrintable = canPrint && Boolean(onPrint);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,9 +92,9 @@ export default function PickupOrderWorkLabelPreview({ order, line }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [model]);
+  }, [isPrintable, model]);
 
-  return (
+  const canvas = (
     <canvas
       ref={canvasRef}
       width={PICKUP_WORK_LABEL_CANVAS_SIZE}
@@ -93,5 +103,24 @@ export default function PickupOrderWorkLabelPreview({ order, line }: Props) {
       className="block max-w-full bg-white shadow-sm"
       style={{ width: "100mm", height: "100mm" }}
     />
+  );
+
+  if (!isPrintable) {
+    return canvas;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onPrint}
+      disabled={printing}
+      aria-label={`Print pickup work label for ${model.documentId}`}
+      className="group relative block max-w-full disabled:cursor-wait"
+    >
+      {canvas}
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/70 px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 group-disabled:opacity-100">
+        {printing ? "Printing..." : "Tap to print"}
+      </span>
+    </button>
   );
 }

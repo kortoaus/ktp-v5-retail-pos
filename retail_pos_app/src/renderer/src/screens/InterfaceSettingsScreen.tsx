@@ -27,7 +27,7 @@ interface ScaleForm {
 }
 
 type LabelLanguage = "zpl" | "slcs";
-type MediaSize = "7030" | "7090";
+type MediaSize = "7030" | "7090" | "100100";
 
 interface ZplSerialEntry {
   name: string;
@@ -1088,6 +1088,7 @@ export default function InterfaceSettingsScreen() {
                       <option value="">None</option>
                       <option value="7030">70×30</option>
                       <option value="7090">70×90</option>
+                      <option value="100100">100x100</option>
                     </select>
                   </div>
                   <div className="flex-1">
@@ -1180,6 +1181,7 @@ export default function InterfaceSettingsScreen() {
                       <option value="">None</option>
                       <option value="7030">70×30</option>
                       <option value="7090">70×90</option>
+                      <option value="100100">100x100</option>
                     </select>
                   </div>
                   <div className="flex-1">

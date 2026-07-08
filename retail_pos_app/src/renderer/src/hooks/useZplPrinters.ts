@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { LabelOutput } from '../libs/label-builder'
 
 type LabelLanguage = 'zpl' | 'slcs'
-type MediaSize = '7030' | '7090'
+type MediaSize = '7030' | '7090' | '100100'
 
 interface LabelPrinterSerial {
   type: 'serial'

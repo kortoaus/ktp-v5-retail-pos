@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useZplPrinters } from "../../hooks/useZplPrinters";
 import { cn } from "../../libs/cn";
+import { buildPickupWorkLabelModel } from "../../libs/pickup-work-label/model";
+import { buildPickupWorkLabelOutput } from "../../libs/pickup-work-label/output";
+import {
+  getPickupWorkLabelPrintCount,
+  getPickupWorkLabelPrinters,
+} from "../../libs/pickup-work-label/print";
 import {
   getPickupOrderByCrmId,
   getPickupOrderMemberPhone,
@@ -45,8 +52,15 @@ export default function PickupOrderViewer({
   const [phoneError, setPhoneError] = useState("");
   const [statusActionLoading, setStatusActionLoading] = useState(false);
   const [statusActionError, setStatusActionError] = useState("");
+  const { printers, printLabel } = useZplPrinters();
+  const pickupLabelPrinters = getPickupWorkLabelPrinters(printers);
+  const pickupLabelPrinter = pickupLabelPrinters[0] ?? null;
+  const [labelPrintLoading, setLabelPrintLoading] = useState(false);
+  const [labelPrintMessage, setLabelPrintMessage] = useState("");
   const phoneRevealRequestGenRef = useRef(0);
   const statusActionRequestGenRef = useRef(0);
+  const labelPrintRequestGenRef = useRef(0);
+  const labelPrintInFlightRef = useRef(false);
   const activeCrmOrderIdRef = useRef<number | null>(crmOrderId);
   activeCrmOrderIdRef.current = crmOrderId;
 
@@ -118,6 +132,11 @@ export default function PickupOrderViewer({
     };
   }, [crmOrderId, loadOrder, resetPhoneReveal]);
 
+  useEffect(() => {
+    labelPrintRequestGenRef.current += 1;
+    setLabelPrintMessage("");
+  }, [order?.crmOrderId, selectedCrmLineId]);
+
   const changeStatus = async (status: PosPickupOrderStatus) => {
     if (crmOrderId == null || !order || statusActionLoading) return;
     const actionCrmOrderId = crmOrderId;
@@ -178,6 +197,7 @@ export default function PickupOrderViewer({
 
   const close = () => {
     statusActionRequestGenRef.current += 1;
+    labelPrintRequestGenRef.current += 1;
     onClose();
   };
 
@@ -214,6 +234,84 @@ export default function PickupOrderViewer({
     order?.lines.find((line) => line.crmLineId === selectedCrmLineId) ??
     order?.lines[0] ??
     null;
+
+  const printSelectedLabel = useCallback(async () => {
+    if (
+      !order ||
+      !selectedLine ||
+      labelPrintLoading ||
+      labelPrintInFlightRef.current
+    ) {
+      return;
+    }
+
+    if (!pickupLabelPrinter) {
+      setLabelPrintMessage("No 100x100 label printer configured.");
+      return;
+    }
+
+    const printCount = getPickupWorkLabelPrintCount(selectedLine.qty);
+    const confirmed = window.confirm(
+      `Print ${printCount} pickup label${printCount === 1 ? "" : "s"} to ${pickupLabelPrinter.name}?`,
+    );
+    if (!confirmed) {
+      setLabelPrintMessage("Print cancelled.");
+      return;
+    }
+
+    const labelPrintGen = labelPrintRequestGenRef.current + 1;
+    labelPrintRequestGenRef.current = labelPrintGen;
+    const isCurrentLabelPrint = () =>
+      labelPrintRequestGenRef.current === labelPrintGen;
+
+    labelPrintInFlightRef.current = true;
+    setLabelPrintLoading(true);
+    setLabelPrintMessage("");
+
+    try {
+      const model = buildPickupWorkLabelModel(order, selectedLine);
+      const label = await buildPickupWorkLabelOutput(
+        pickupLabelPrinter.language,
+        model,
+      );
+
+      for (let copy = 0; copy < printCount; copy += 1) {
+        const result = await printLabel(pickupLabelPrinter, label);
+        if (!result.ok) {
+          if (isCurrentLabelPrint()) {
+            setLabelPrintMessage(result.message || "Failed to print label.");
+          }
+          return;
+        }
+      }
+
+      if (!isCurrentLabelPrint()) return;
+      setLabelPrintMessage(
+        `Printed ${printCount} label${printCount === 1 ? "" : "s"} to ${pickupLabelPrinter.name}.`,
+      );
+    } catch (err) {
+      if (isCurrentLabelPrint()) {
+        setLabelPrintMessage(
+          err instanceof Error ? err.message : "Failed to print label.",
+        );
+      }
+    } finally {
+      labelPrintInFlightRef.current = false;
+      setLabelPrintLoading(false);
+    }
+  }, [
+    labelPrintLoading,
+    order,
+    pickupLabelPrinter,
+    printLabel,
+    selectedLine,
+  ]);
+
+  const labelPrintStatusMessage =
+    labelPrintMessage ||
+    (selectedLine && !pickupLabelPrinter
+      ? "No 100x100 label printer configured."
+      : "");
 
   if (crmOrderId == null) return null;
 
@@ -275,7 +373,20 @@ export default function PickupOrderViewer({
 
               <section className="col-start-2 row-start-2 flex min-h-0 flex-col items-center justify-center gap-3 overflow-hidden border-r border-gray-200 bg-gray-50 p-4">
                 {selectedLine ? (
-                  <PickupOrderWorkLabelPreview order={order} line={selectedLine} />
+                  <>
+                    <PickupOrderWorkLabelPreview
+                      order={order}
+                      line={selectedLine}
+                      canPrint={pickupLabelPrinter !== null}
+                      printing={labelPrintLoading}
+                      onPrint={printSelectedLabel}
+                    />
+                    {labelPrintStatusMessage && (
+                      <p className="max-w-[420px] text-center text-xs font-semibold text-gray-600">
+                        {labelPrintStatusMessage}
+                      </p>
+                    )}
+                  </>
                 ) : (
                   <div className="flex h-full items-center justify-center text-sm font-medium text-gray-400">
                     No pickup order lines
