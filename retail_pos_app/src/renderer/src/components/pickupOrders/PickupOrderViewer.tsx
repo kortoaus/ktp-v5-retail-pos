@@ -27,7 +27,6 @@ import {
 } from "./pickup-order-format";
 import PickupOrderWorkLabelPreview from "./PickupOrderWorkLabelPreview";
 import {
-  POS_PICKUP_ORDER_STATUS_TARGETS,
   type PosPickupOrderStatus,
   type PickupOrderDetail,
   type PickupOrderLine,
@@ -35,20 +34,22 @@ import {
   type PickupOrderStatus,
 } from "./pickup-order-types";
 import {
-  canUserUsePickupOrderStatusAction,
+  getVisiblePickupOrderStatusActions,
   isPickupOrderLabelPrintable,
-  requiresManagerForPickupOrderStatusTransition,
+  isPickupOrderPhoneRevealAllowed,
 } from "./pickup-order-status-policy";
 
 type Props = {
   crmOrderId: number | null;
   onClose: () => void;
+  onPrinted: (crmOrderId: number) => void;
   onRefreshList: () => void;
 };
 
 export default function PickupOrderViewer({
   crmOrderId,
   onClose,
+  onPrinted,
   onRefreshList,
 }: Props) {
   const [order, setOrder] = useState<PickupOrderDetail | null>(null);
@@ -235,7 +236,14 @@ export default function PickupOrderViewer({
   };
 
   const revealPhone = async () => {
-    if (crmOrderId == null || phoneLoading) return;
+    if (
+      crmOrderId == null ||
+      phoneLoading ||
+      !order ||
+      !isPickupOrderPhoneRevealAllowed(order.status)
+    ) {
+      return;
+    }
     const requestGen = phoneRevealRequestGenRef.current + 1;
     phoneRevealRequestGenRef.current = requestGen;
     setPhoneLoading(true);
@@ -356,6 +364,7 @@ export default function PickupOrderViewer({
         );
         return;
       }
+      onPrinted(labelPrintCrmOrderId);
 
       if (order.status === "PENDING") {
         const actionCrmOrderId = order.crmOrderId;
@@ -416,6 +425,7 @@ export default function PickupOrderViewer({
   }, [
     labelPrintLoading,
     loadOrder,
+    onPrinted,
     onRefreshList,
     order,
     pickupLabelPrinter,
@@ -481,6 +491,7 @@ export default function PickupOrderViewer({
                 revealedPhone={revealedPhone}
                 phoneLoading={phoneLoading}
                 phoneError={phoneError}
+                canRevealPhone={isPickupOrderPhoneRevealAllowed(order.status)}
                 onRevealPhone={revealPhone}
                 onHidePhone={hidePhone}
               />
@@ -541,6 +552,7 @@ function OrderInfoStrip({
   revealedPhone,
   phoneLoading,
   phoneError,
+  canRevealPhone,
   onRevealPhone,
   onHidePhone,
 }: {
@@ -548,6 +560,7 @@ function OrderInfoStrip({
   revealedPhone: string;
   phoneLoading: boolean;
   phoneError: string;
+  canRevealPhone: boolean;
   onRevealPhone: () => void;
   onHidePhone: () => void;
 }) {
@@ -567,6 +580,7 @@ function OrderInfoStrip({
         revealedPhone={revealedPhone}
         phoneLoading={phoneLoading}
         phoneError={phoneError}
+        canRevealPhone={canRevealPhone}
         onRevealPhone={onRevealPhone}
         onHidePhone={onHidePhone}
       />
@@ -623,6 +637,7 @@ function PhoneToggleField({
   revealedPhone,
   phoneLoading,
   phoneError,
+  canRevealPhone,
   onRevealPhone,
   onHidePhone,
 }: {
@@ -630,6 +645,7 @@ function PhoneToggleField({
   revealedPhone: string;
   phoneLoading: boolean;
   phoneError: string;
+  canRevealPhone: boolean;
   onRevealPhone: () => void;
   onHidePhone: () => void;
 }) {
@@ -637,19 +653,26 @@ function PhoneToggleField({
     ? "Loading..."
     : revealedPhone || phoneError || (last4 ? `**** ${last4}` : "-");
   const action = revealedPhone ? onHidePhone : onRevealPhone;
-  const actionLabel = revealedPhone ? "Hide phone" : "Show phone";
+  const canTogglePhone = revealedPhone || canRevealPhone;
+  const actionLabel = canTogglePhone
+    ? revealedPhone
+      ? "Hide phone"
+      : "Show phone"
+    : "Phone reveal unavailable";
 
   return (
     <button
       type="button"
       onPointerDown={action}
-      disabled={phoneLoading}
+      disabled={phoneLoading || !canTogglePhone}
       aria-label={actionLabel}
       title={actionLabel}
       className={cn(
         "min-w-0 rounded-lg border-2 bg-white px-3 py-2 text-left",
         "disabled:cursor-not-allowed disabled:opacity-70",
-        phoneError
+        !canTogglePhone
+          ? "border-gray-200 text-gray-400"
+          : phoneError
           ? "border-red-200 text-red-600 active:bg-red-50"
           : "border-blue-200 text-blue-700 active:bg-blue-50",
       )}
@@ -679,8 +702,13 @@ function StatusActionBar({
   userScopes: string[];
   onChangeStatus: (status: PosPickupOrderStatus) => void;
 }) {
+  const visibleActions = getVisiblePickupOrderStatusActions(
+    currentStatus,
+    userScopes,
+  );
+
   return (
-    <footer className="grid grid-cols-[minmax(0,1fr)_repeat(5,minmax(118px,150px))] items-center gap-2 border-t border-gray-200 bg-white px-4 py-2">
+    <footer className="flex items-center gap-2 border-t border-gray-200 bg-white px-4 py-2">
       <div className="min-w-0">
         <div className="truncate text-[11px] font-black uppercase tracking-wide text-gray-400">
           Set status for {documentId}
@@ -695,43 +723,29 @@ function StatusActionBar({
         )}
       </div>
 
-      {POS_PICKUP_ORDER_STATUS_TARGETS.map((status) => {
-        const isCurrent = status === currentStatus;
-        const isCancel = status === "CANCELLED_BY_STORE";
-        const allowed = canUserUsePickupOrderStatusAction(
-          currentStatus,
-          status,
-          userScopes,
-        );
-        const managerOnly = requiresManagerForPickupOrderStatusTransition(
-          currentStatus,
-          status,
-        );
-        return (
-          <button
-            key={status}
-            type="button"
-            onPointerDown={() => onChangeStatus(status)}
-            disabled={loading || isCurrent || !allowed}
-            title={managerOnly && !allowed ? "Manager required" : undefined}
-            className={cn(
-              "h-14 min-w-0 rounded-lg border-2 px-2 text-[12px] font-black uppercase leading-tight",
-              "active:bg-blue-50 disabled:cursor-not-allowed",
-              isCurrent
-                ? "border-gray-300 bg-gray-50 text-gray-400"
-                : isCancel
+      <div className="flex flex-1 justify-end gap-2">
+        {visibleActions.map((status) => {
+          const isCancel = status === "CANCELLED_BY_STORE";
+          return (
+            <button
+              key={status}
+              type="button"
+              onPointerDown={() => onChangeStatus(status)}
+              disabled={loading}
+              className={cn(
+                "h-14 w-[150px] min-w-0 rounded-lg border-2 px-2 text-[12px] font-black uppercase leading-tight",
+                "active:bg-blue-50 disabled:cursor-not-allowed",
+                isCancel
                   ? "border-red-200 bg-white text-red-600 active:bg-red-50"
                   : "border-blue-200 bg-white text-blue-700",
-              loading && !isCurrent && "opacity-50",
-            )}
-          >
-            {statusLabel(status)}
-            {managerOnly && !allowed && (
-              <span className="mt-0.5 block text-[9px]">Manager required</span>
-            )}
-          </button>
-        );
-      })}
+                loading && "opacity-50",
+              )}
+            >
+              {statusLabel(status)}
+            </button>
+          );
+        })}
+      </div>
     </footer>
   );
 }

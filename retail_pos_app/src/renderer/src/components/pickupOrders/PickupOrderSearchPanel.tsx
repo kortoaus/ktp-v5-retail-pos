@@ -46,6 +46,7 @@ interface Props {
 }
 
 export type PickupOrderSearchPanelHandle = {
+  markPrinted: (crmOrderId: number) => void;
   refreshCurrentPage: () => void;
 };
 
@@ -141,14 +142,30 @@ const PickupOrderSearchPanel = forwardRef<PickupOrderSearchPanelHandle, Props>(
     [keyword, from, to, statusFilter, member],
   );
 
+  const markPrinted = useCallback((crmOrderId: number) => {
+    setPrintedSummariesByOrderId((current) => {
+      const next = new Map(current);
+      const existing = next.get(crmOrderId);
+      next.set(crmOrderId, {
+        entityId: crmOrderId,
+        printCount: (existing?.printCount ?? 0) + 1,
+        lastPrintedAt: new Date().toISOString(),
+        lastPrintedByUserId: existing?.lastPrintedByUserId ?? null,
+        lastPrintedByUserName: existing?.lastPrintedByUserName ?? null,
+      });
+      return next;
+    });
+  }, []);
+
   useImperativeHandle(
     ref,
     () => ({
+      markPrinted,
       refreshCurrentPage: () => {
         void fetchPage(paging?.currentPage ?? 1);
       },
     }),
-    [fetchPage, paging?.currentPage],
+    [fetchPage, markPrinted, paging?.currentPage],
   );
 
   function search() {
@@ -326,16 +343,16 @@ const PickupOrderSearchPanel = forwardRef<PickupOrderSearchPanelHandle, Props>(
                     className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 active:bg-blue-50"
                   >
                     <td className="px-2 py-1.5 font-mono text-xs">
+                      {printedSummary && (
+                        <span className="mr-1 font-black text-red-600">
+                          [P]
+                        </span>
+                      )}
                       {order.documentId}
                     </td>
                     <td className="px-2 py-1.5">
                       <div className="flex flex-wrap items-center gap-1">
                         <StatusBadge status={order.status} />
-                        {printedSummary && (
-                          <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-700">
-                            Printed
-                          </span>
-                        )}
                       </div>
                     </td>
                     <td className="px-2 py-1.5 whitespace-nowrap text-[18px] font-semibold leading-none text-gray-900">

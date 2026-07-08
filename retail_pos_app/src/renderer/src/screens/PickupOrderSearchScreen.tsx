@@ -41,6 +41,9 @@ export default function PickupOrderSearchScreen() {
       <PickupOrderViewer
         crmOrderId={viewerCrmOrderId}
         onClose={() => setViewerCrmOrderId(null)}
+        onPrinted={(crmOrderId) =>
+          searchPanelRef.current?.markPrinted(crmOrderId)
+        }
         onRefreshList={() => searchPanelRef.current?.refreshCurrentPage()}
       />
     </div>

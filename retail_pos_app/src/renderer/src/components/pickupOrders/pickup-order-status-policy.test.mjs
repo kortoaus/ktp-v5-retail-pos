@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   canTransitionPickupOrderStatus,
+  getVisiblePickupOrderStatusActions,
+  isPickupOrderPhoneRevealAllowed,
   isPickupOrderLabelPrintable,
   requiresManagerForPickupOrderStatusTransition,
 } from "./pickup-order-status-policy.ts";
@@ -14,6 +16,15 @@ test("isPickupOrderLabelPrintable blocks completed and cancelled orders", () => 
   assert.equal(isPickupOrderLabelPrintable("COMPLETED"), false);
   assert.equal(isPickupOrderLabelPrintable("CANCELLED_BY_STORE"), false);
   assert.equal(isPickupOrderLabelPrintable("CANCELLED_BY_CUSTOMER"), false);
+});
+
+test("isPickupOrderPhoneRevealAllowed blocks completed and cancelled orders", () => {
+  assert.equal(isPickupOrderPhoneRevealAllowed("PENDING"), true);
+  assert.equal(isPickupOrderPhoneRevealAllowed("ORDER_CONFIRMED"), true);
+  assert.equal(isPickupOrderPhoneRevealAllowed("READY"), true);
+  assert.equal(isPickupOrderPhoneRevealAllowed("COMPLETED"), false);
+  assert.equal(isPickupOrderPhoneRevealAllowed("CANCELLED_BY_STORE"), false);
+  assert.equal(isPickupOrderPhoneRevealAllowed("CANCELLED_BY_CUSTOMER"), false);
 });
 
 test("renderer pickup status policy exposes forward actions and manager-only ready cancellation", () => {
@@ -32,5 +43,28 @@ test("renderer pickup status policy exposes forward actions and manager-only rea
       "CANCELLED_BY_STORE",
     ),
     false,
+  );
+});
+
+test("getVisiblePickupOrderStatusActions returns only actions available for each phase", () => {
+  assert.deepEqual(getVisiblePickupOrderStatusActions("PENDING", []), [
+    "ORDER_CONFIRMED",
+    "CANCELLED_BY_STORE",
+  ]);
+  assert.deepEqual(getVisiblePickupOrderStatusActions("ORDER_CONFIRMED", []), [
+    "READY",
+    "CANCELLED_BY_STORE",
+  ]);
+  assert.deepEqual(getVisiblePickupOrderStatusActions("READY", []), [
+    "COMPLETED",
+  ]);
+  assert.deepEqual(getVisiblePickupOrderStatusActions("READY", ["admin"]), [
+    "COMPLETED",
+    "CANCELLED_BY_STORE",
+  ]);
+  assert.deepEqual(getVisiblePickupOrderStatusActions("COMPLETED", ["admin"]), []);
+  assert.deepEqual(
+    getVisiblePickupOrderStatusActions("CANCELLED_BY_STORE", ["admin"]),
+    [],
   );
 });

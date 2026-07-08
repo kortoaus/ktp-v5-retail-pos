@@ -25,6 +25,16 @@ export function isPickupOrderLabelPrintable(
   );
 }
 
+export function isPickupOrderPhoneRevealAllowed(
+  status: PickupOrderStatus,
+): boolean {
+  return (
+    status === "PENDING" ||
+    status === "ORDER_CONFIRMED" ||
+    status === "READY"
+  );
+}
+
 export function canTransitionPickupOrderStatus(
   fromStatus: PickupOrderStatus,
   toStatus: PosPickupOrderStatus,
@@ -49,4 +59,13 @@ export function canUserUsePickupOrderStatusAction(
     return true;
   }
   return userScopes.includes("admin");
+}
+
+export function getVisiblePickupOrderStatusActions(
+  fromStatus: PickupOrderStatus,
+  userScopes: readonly string[],
+): PosPickupOrderStatus[] {
+  return allowedTransitions[fromStatus].filter((toStatus) =>
+    canUserUsePickupOrderStatusAction(fromStatus, toStatus, userScopes),
+  );
 }
