@@ -32,6 +32,7 @@ type Deps = {
   updateCrmStatus?: typeof updateCrmPickupOrderStatus;
   upsertLocalPickupOrder?: (items: CrmPickupOrderWire[]) => Promise<unknown>;
   getLocalPickupOrderStatus?: (orderId: number) => Promise<PickupOrderStatus>;
+  getLocalPickupOrder?: (orderId: number) => Promise<CrmPickupOrderWire>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -64,6 +65,55 @@ async function getCachedPickupOrderStatus(
   return row.status as PickupOrderStatus;
 }
 
+async function getCachedPickupOrderWire(
+  orderId: number,
+): Promise<CrmPickupOrderWire> {
+  const row = await db.pickupOrderCache.findUnique({
+    where: { crmOrderId: orderId },
+    include: { lines: { orderBy: { index: "asc" } } },
+  });
+  if (!row) {
+    throw new NotFoundException("Pickup order not found");
+  }
+
+  return {
+    id: row.crmOrderId,
+    companyId: row.companyId,
+    documentId: row.documentId,
+    status: row.status as PickupOrderStatus,
+    memberId: row.memberId,
+    memberName: row.memberName,
+    memberLevel: row.memberLevel,
+    memberPhoneLast4: row.memberPhoneLast4,
+    pickupStartsAt: row.pickupStartsAt.toISOString(),
+    linesTotal: row.linesTotal,
+    total: row.total,
+    createdAt: row.crmCreatedAt.toISOString(),
+    updatedAt: row.crmUpdatedAt.toISOString(),
+    lines: row.lines.map((line) => ({
+      id: line.crmLineId,
+      orderId: line.crmOrderId,
+      index: line.index,
+      itemId: line.itemId,
+      name_en: line.name_en,
+      name_ko: line.name_ko,
+      barcode: line.barcode,
+      code: line.code,
+      uom: line.uom,
+      prices: line.prices,
+      promoPrices: line.promoPrices,
+      memberLevel: line.memberLevel,
+      optionTotal: line.optionTotal,
+      qty: line.qty,
+      total: line.total,
+      note: line.note,
+      selectedOptionsSnapshot: line.selectedOptionsSnapshot,
+      createdAt: line.crmCreatedAt.toISOString(),
+      updatedAt: line.crmUpdatedAt.toISOString(),
+    })),
+  };
+}
+
 export async function updatePickupOrderStatusFromPos(
   input: {
     orderId: number;
@@ -85,6 +135,11 @@ export async function updatePickupOrderStatusFromPos(
     parsed.status,
     input.user.scope,
   );
+  if (currentStatus === parsed.status) {
+    const getLocalPickupOrder =
+      deps.getLocalPickupOrder ?? getCachedPickupOrderWire;
+    return getLocalPickupOrder(input.orderId);
+  }
 
   const result = await updateCrmStatus(input.orderId, {
     status: parsed.status,

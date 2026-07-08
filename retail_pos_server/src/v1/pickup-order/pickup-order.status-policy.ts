@@ -6,7 +6,7 @@ const allowedTransitions: Record<PickupOrderStatus, readonly PosPickupOrderStatu
   PENDING: ["ORDER_CONFIRMED", "CANCELLED_BY_STORE"],
   ORDER_CONFIRMED: ["READY", "CANCELLED_BY_STORE"],
   READY: ["COMPLETED", "CANCELLED_BY_STORE"],
-  COMPLETED: [],
+  COMPLETED: ["COMPLETED"],
   CANCELLED_BY_STORE: [],
   CANCELLED_BY_CUSTOMER: [],
 };

@@ -10,6 +10,7 @@ import {
 import {
   getPickupOrderMemberPhoneByCrmOrderId,
 } from "./pickup-order.member-phone";
+import { emitPickupPendingCount } from "./pickup-order.pending-count";
 import { updatePickupOrderStatusFromPos } from "./pickup-order.status";
 import { pickupOrderSyncService } from "./pickup-order.sync.service";
 
@@ -65,6 +66,7 @@ export async function updatePickupOrderStatusController(
     body: req.body,
     user: { id: user.id, name: user.name, scope: user.scope },
   });
+  void emitPickupPendingCount();
 
   res.status(200).json({
     ok: true,

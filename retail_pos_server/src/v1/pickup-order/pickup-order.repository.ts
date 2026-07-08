@@ -4,6 +4,7 @@ import { BadRequestException, NotFoundException } from "../../libs/exceptions";
 import type {
   CrmPickupOrderWire,
   PickupOrderListQuery,
+  PickupOrderListSort,
   PickupOrderStatus,
 } from "./pickup-order.types";
 
@@ -14,6 +15,11 @@ const validStatuses = new Set<PickupOrderStatus>([
   "COMPLETED",
   "CANCELLED_BY_STORE",
   "CANCELLED_BY_CUSTOMER",
+]);
+
+const validListSorts = new Set<PickupOrderListSort>([
+  "pickupStartsAtDesc",
+  "pickupStartsAtAsc",
 ]);
 
 const positiveIntegerPattern = /^[1-9]\d*$/;
@@ -45,12 +51,51 @@ function parseOptionalDate(value: unknown, fieldName: string): Date | undefined 
   return parsed;
 }
 
+function parseOptionalSort(value: unknown): PickupOrderListSort {
+  const raw = first(value);
+  if (raw === undefined || raw === "") return "pickupStartsAtDesc";
+  if (
+    typeof raw !== "string" ||
+    !validListSorts.has(raw as PickupOrderListSort)
+  ) {
+    throw new BadRequestException("sort must be a valid pickup order sort");
+  }
+  return raw as PickupOrderListSort;
+}
+
+function parseOptionalStatuses(value: unknown): PickupOrderStatus[] | undefined {
+  const raw = first(value);
+  if (raw === undefined || raw === "") return undefined;
+  if (typeof raw !== "string") {
+    throw new BadRequestException(
+      "statuses must contain valid pickup order statuses",
+    );
+  }
+
+  const statuses = raw
+    .split(",")
+    .map((status) => status.trim())
+    .filter((status) => status.length > 0);
+
+  if (
+    statuses.length === 0 ||
+    statuses.some((status) => !validStatuses.has(status as PickupOrderStatus))
+  ) {
+    throw new BadRequestException(
+      "statuses must contain valid pickup order statuses",
+    );
+  }
+
+  return Array.from(new Set(statuses)) as PickupOrderStatus[];
+}
+
 export function parsePickupOrderListQuery(
   query: Record<string, unknown>,
 ): PickupOrderListQuery {
   const rawStatus = first(query.status);
   const rawKeyword = first(query.keyword);
   const rawMemberId = first(query.memberId);
+  const statuses = parseOptionalStatuses(query.statuses);
   const page = parsePositiveInt(first(query.page) ?? "1", "page");
   const limit = parsePositiveInt(first(query.limit) ?? "20", "limit");
 
@@ -78,10 +123,12 @@ export function parsePickupOrderListQuery(
   const memberId = typeof rawMemberId === "string" ? rawMemberId.trim() : "";
   return {
     ...(rawStatus ? { status: rawStatus as PickupOrderStatus } : {}),
+    ...(!rawStatus && statuses ? { statuses } : {}),
     from: parseOptionalDate(query.from, "from"),
     to: parseOptionalDate(query.to, "to"),
     ...(keyword ? { keyword } : {}),
     ...(memberId ? { memberId } : {}),
+    sort: parseOptionalSort(query.sort),
     page,
     limit,
   };
@@ -124,10 +171,23 @@ export function buildPickupOrderListWhere(
   query: PickupOrderListQuery,
 ): Prisma.PickupOrderCacheWhereInput {
   return {
-    ...(query.status ? { status: query.status } : {}),
+    ...(query.status
+      ? { status: query.status }
+      : query.statuses
+        ? { status: { in: query.statuses } }
+        : {}),
     ...(query.memberId ? { memberId: query.memberId } : {}),
     ...buildDateWhere(query),
     ...buildPickupOrderKeywordWhere(query.keyword),
+  };
+}
+
+export function buildPendingPickupOrderCountWhere(
+  from: Date,
+): Prisma.PickupOrderCacheWhereInput {
+  return {
+    status: "PENDING",
+    pickupStartsAt: { gte: from },
   };
 }
 
@@ -145,8 +205,21 @@ export function buildPickupOrderPaging(input: {
   };
 }
 
-export function buildPickupOrderListOrderBy(): Prisma.PickupOrderCacheOrderByWithRelationInput[] {
+export function buildPickupOrderListOrderBy(input: {
+  sort: PickupOrderListSort;
+}): Prisma.PickupOrderCacheOrderByWithRelationInput[] {
+  if (input.sort === "pickupStartsAtAsc") {
+    return [{ pickupStartsAt: "asc" }, { crmOrderId: "asc" }];
+  }
   return [{ pickupStartsAt: "desc" }, { crmOrderId: "desc" }];
+}
+
+export async function countPendingPickupOrdersFrom(
+  from: Date,
+): Promise<number> {
+  return db.pickupOrderCache.count({
+    where: buildPendingPickupOrderCountWhere(from),
+  });
 }
 
 function toPrismaJson(value: unknown): Prisma.InputJsonValue {
@@ -332,7 +405,7 @@ export async function listCachedPickupOrders(query: PickupOrderListQuery) {
   const [rows, totalCount] = await db.$transaction([
     db.pickupOrderCache.findMany({
       where,
-      orderBy: buildPickupOrderListOrderBy(),
+      orderBy: buildPickupOrderListOrderBy({ sort: query.sort }),
       skip: (query.page - 1) * query.limit,
       take: query.limit,
       include: {

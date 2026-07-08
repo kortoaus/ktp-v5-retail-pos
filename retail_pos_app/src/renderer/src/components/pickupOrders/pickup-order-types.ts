@@ -9,6 +9,9 @@ export const PICKUP_ORDER_STATUSES = [
 
 export type PickupOrderStatus = (typeof PICKUP_ORDER_STATUSES)[number];
 export type PickupOrderStatusFilter = "ALL" | PickupOrderStatus;
+export type PickupOrderListSort =
+  | "pickupStartsAtDesc"
+  | "pickupStartsAtAsc";
 
 export const POS_PICKUP_ORDER_STATUS_TARGETS = [
   "PENDING",
@@ -96,4 +99,5 @@ export type PickupOrderListParams = {
   to?: string;
   status?: PickupOrderStatus;
   memberId?: string;
+  sort?: PickupOrderListSort;
 };

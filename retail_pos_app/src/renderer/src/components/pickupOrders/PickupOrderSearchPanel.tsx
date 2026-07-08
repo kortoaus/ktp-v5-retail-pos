@@ -31,6 +31,7 @@ import {
 import {
   POS_PICKUP_ORDER_STATUS_TARGETS,
   type PickupOrderListItem,
+  type PickupOrderListSort,
   type PickupOrderStatus,
   type PickupOrderStatusFilter,
 } from "./pickup-order-types";
@@ -43,23 +44,32 @@ const STATUS_FILTERS: PickupOrderStatusFilter[] = [
 
 interface Props {
   onSelect: (order: PickupOrderListItem) => void;
+  initialStatusFilter?: PickupOrderStatusFilter;
+  initialFrom?: Dayjs | null;
+  initialSort?: PickupOrderListSort;
 }
 
 export type PickupOrderSearchPanelHandle = {
   markPrinted: (crmOrderId: number) => void;
+  markStatusChanged: (crmOrderId: number, status: PickupOrderStatus) => void;
   refreshCurrentPage: () => void;
 };
 
 const PickupOrderSearchPanel = forwardRef<PickupOrderSearchPanelHandle, Props>(
   function PickupOrderSearchPanel(
-    { onSelect },
+    {
+      onSelect,
+      initialStatusFilter = "ALL",
+      initialFrom = null,
+      initialSort = "pickupStartsAtDesc",
+    },
     ref,
   ) {
   const [keyword, setKeyword] = useState("");
-  const [from, setFrom] = useState<Dayjs | null>(null);
+  const [from, setFrom] = useState<Dayjs | null>(initialFrom);
   const [to, setTo] = useState<Dayjs | null>(null);
   const [statusFilter, setStatusFilter] =
-    useState<PickupOrderStatusFilter>("ALL");
+    useState<PickupOrderStatusFilter>(initialStatusFilter);
   const [member, setMember] = useState<MemberSearchSelection | null>(null);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [todaySearchToken, setTodaySearchToken] = useState(0);
@@ -94,6 +104,7 @@ const PickupOrderSearchPanel = forwardRef<PickupOrderSearchPanelHandle, Props>(
           to: to?.toISOString(),
           status: statusFilter === "ALL" ? undefined : statusFilter,
           memberId: member?.id,
+          sort: initialSort,
         });
         if (
           requestId !== latestRequestIdRef.current ||
@@ -139,7 +150,7 @@ const PickupOrderSearchPanel = forwardRef<PickupOrderSearchPanelHandle, Props>(
         }
       }
     },
-    [keyword, from, to, statusFilter, member],
+    [keyword, from, to, statusFilter, member, initialSort],
   );
 
   const markPrinted = useCallback((crmOrderId: number) => {
@@ -157,15 +168,31 @@ const PickupOrderSearchPanel = forwardRef<PickupOrderSearchPanelHandle, Props>(
     });
   }, []);
 
+  const markStatusChanged = useCallback(
+    (crmOrderId: number, status: PickupOrderStatus) => {
+      setItems((current) => {
+        if (statusFilter !== "ALL" && statusFilter !== status) {
+          return current.filter((item) => item.crmOrderId !== crmOrderId);
+        }
+
+        return current.map((item) =>
+          item.crmOrderId === crmOrderId ? { ...item, status } : item,
+        );
+      });
+    },
+    [statusFilter],
+  );
+
   useImperativeHandle(
     ref,
     () => ({
       markPrinted,
+      markStatusChanged,
       refreshCurrentPage: () => {
         void fetchPage(paging?.currentPage ?? 1);
       },
     }),
-    [fetchPage, markPrinted, paging?.currentPage],
+    [fetchPage, markPrinted, markStatusChanged, paging?.currentPage],
   );
 
   function search() {

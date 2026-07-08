@@ -127,6 +127,7 @@ test("buildPickupWorkLabelQrPayload builds a v2 PP barcode without quantity", ()
     prices: [1299, 1199],
     promoPrices: { prices: [1099, "bad", 999] },
     optionTotal: 350,
+    pickupOrderId: 9001,
   });
 
   assert.equal(payload.startsWith("00:"), true);
@@ -136,8 +137,24 @@ test("buildPickupWorkLabelQrPayload builds a v2 PP barcode without quantity", ()
     "01": "9330001112223",
     "02": [1649, 1549],
     "03": [1449, 1349],
+    "09": 9001,
   });
   assert.equal(Object.hasOwn(parsed, "04"), false);
+});
+
+test('buildPickupWorkLabelQrPayload omits "09" for invalid pickup order ids', () => {
+  for (const pickupOrderId of [0, -1, 12.5, Number.NaN]) {
+    const payload = buildPickupWorkLabelQrPayload({
+      barcode: "9330001112223",
+      prices: [1299, 1199],
+      promoPrices: { prices: [1099, 999] },
+      optionTotal: 350,
+      pickupOrderId,
+    });
+
+    const parsed = JSON.parse(payload.slice("00:".length));
+    assert.equal(Object.hasOwn(parsed, "09"), false);
+  }
 });
 
 test("buildPickupWorkLabelModel uses English labels and keeps quantity out of QR", () => {
@@ -176,6 +193,7 @@ test("buildPickupWorkLabelModel uses English labels and keeps quantity out of QR
     "01": "9330001112223",
     "02": [1649, 1549],
     "03": [1449, 1349],
+    "09": 9001,
   });
   assert.equal(Object.hasOwn(parsedQrPayload, "04"), false);
 });
@@ -221,4 +239,11 @@ test("buildPickupWorkLabelModel falls back when English labels and note are blan
   assert.equal(model.itemNameEn, "FALLBACK-CODE");
   assert.deepEqual(model.optionLines, ["sauce: soy x1.25"]);
   assert.equal(model.note, null);
+  assert.deepEqual(JSON.parse(model.qrPayload.slice("00:".length)), {
+    "00": 2,
+    "01": "",
+    "02": [1649, 1549],
+    "03": [1449, 1349],
+    "09": 9001,
+  });
 });

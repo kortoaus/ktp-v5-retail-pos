@@ -1,5 +1,6 @@
 import { getIO } from "../../libs/socket";
 import { fetchCrmPickupOrderSyncPage } from "./pickup-order.crm";
+import { emitPickupPendingCount } from "./pickup-order.pending-count";
 import {
   findExistingPickupOrderIds,
   getPickupOrderSyncState,
@@ -131,7 +132,7 @@ export function createPickupOrderSyncService(
         await deps.markSuccess({ cursorUpdatedAt, cursorOrderId });
       }
 
-      return {
+      const outcome = {
         pulled,
         inserted,
         updated: pulled - inserted,
@@ -139,6 +140,8 @@ export function createPickupOrderSyncService(
         cursorUpdatedAt,
         cursorOrderId,
       };
+      void emitPickupPendingCount();
+      return outcome;
     } catch (error) {
       await deps.markFailure(error);
       throw error;

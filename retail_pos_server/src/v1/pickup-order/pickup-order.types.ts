@@ -6,6 +6,10 @@ export type PickupOrderStatus =
   | "CANCELLED_BY_STORE"
   | "CANCELLED_BY_CUSTOMER";
 
+export type PickupOrderListSort =
+  | "pickupStartsAtDesc"
+  | "pickupStartsAtAsc";
+
 export type CrmPickupOrderLineWire = {
   id: number;
   orderId: number;
@@ -67,10 +71,12 @@ export type PickupOrderSyncOutcome = {
 
 export type PickupOrderListQuery = {
   status?: PickupOrderStatus;
+  statuses?: PickupOrderStatus[];
   from?: Date;
   to?: Date;
   keyword?: string;
   memberId?: string;
+  sort: PickupOrderListSort;
   page: number;
   limit: number;
 };

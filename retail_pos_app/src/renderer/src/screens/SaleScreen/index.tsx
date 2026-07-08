@@ -20,6 +20,7 @@ import { useSalesStore, LINE_PAGE_SIZE } from "../../store/SalesStore";
 import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../../libs/constants";
 import { useWeight } from "../../hooks/useWeight";
 import { cn } from "../../libs/cn";
+import dayjsAU from "../../libs/dayjsAU";
 import SearchItemModal from "../../components/SearchItemModal";
 import LineViewer from "./LineViewer";
 import CartSwitcher from "./CartSwitcher";
@@ -35,6 +36,7 @@ import useCloudHotkeys from "../../hooks/useCloudHotkeys";
 import LinePaging from "./LinePaging";
 import PrintLatestInvoiceButton from "../../components/PrintLatestInvoiceButton";
 import { kickDrawer } from "../../libs/printer/kick-drawer";
+import PickupPendingCountButton from "../../components/pickupOrders/PickupPendingCountButton";
 import SyncButton from "../../components/SyncButton";
 import SyncPostButton from "../../components/SyncPostButton";
 import PaymentModal from "./PaymentModal";
@@ -271,6 +273,10 @@ export default function SaleScreen() {
 
     const options: AddLineOptions = {};
 
+    if (pp.pickupOrderId != null) {
+      options.pickupOrderId = pp.pickupOrderId;
+    }
+
     if (pp.discountType && pp.discountAmount > 0) {
       const tag =
         pp.discountType === "pct"
@@ -310,6 +316,16 @@ export default function SaleScreen() {
     setSelectedLineKey(null);
     setModalTarget(null);
   }
+
+  function openPendingPickupOrders() {
+    const params = new URLSearchParams({
+      status: "PENDING",
+      from: dayjsAU().startOf("day").toISOString(),
+      sort: "pickupStartsAtAsc",
+    });
+    navigate(`/manager/pickup-orders?${params.toString()}`);
+  }
+
   return (
     <div className="h-full w-full bg-gray-50 flex flex-col">
       {/* ── Top Bar ──────────────────────────────────────── */}
@@ -336,6 +352,7 @@ export default function SaleScreen() {
           <TopBarButton label="Kick Drawer" onClick={() => kickDrawer()} />
         </div>
         <div className="flex items-center gap-4">
+          <PickupPendingCountButton onRefresh={openPendingPickupOrders} />
           <SyncButton />
           <SyncPostButton />
           <CartSwitcher />

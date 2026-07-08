@@ -88,6 +88,7 @@ export function buildPickupWorkLabelModel(
       prices: line.prices,
       promoPrices: line.promoPrices,
       optionTotal: line.optionTotal,
+      pickupOrderId: order.crmOrderId,
     }),
   };
 }

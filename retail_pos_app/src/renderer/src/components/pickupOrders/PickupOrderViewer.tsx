@@ -43,6 +43,7 @@ type Props = {
   crmOrderId: number | null;
   onClose: () => void;
   onPrinted: (crmOrderId: number) => void;
+  onStatusChanged: (crmOrderId: number, status: PickupOrderStatus) => void;
   onRefreshList: () => void;
 };
 
@@ -50,6 +51,7 @@ export default function PickupOrderViewer({
   crmOrderId,
   onClose,
   onPrinted,
+  onStatusChanged,
   onRefreshList,
 }: Props) {
   const [order, setOrder] = useState<PickupOrderDetail | null>(null);
@@ -205,6 +207,7 @@ export default function PickupOrderViewer({
         isCurrentAction,
       );
       if (!updatedOrder) return;
+      onStatusChanged(actionCrmOrderId, updatedOrder.status);
 
       const syncRes = await syncPickupOrders();
       if (!isCurrentAction()) return;
@@ -383,6 +386,7 @@ export default function PickupOrderViewer({
             isCurrentStatusAction,
           );
           if (!updatedOrder) return;
+          onStatusChanged(actionCrmOrderId, updatedOrder.status);
           const syncRes = await syncPickupOrders();
           if (!isCurrentStatusAction()) return;
           if (!syncRes.ok) {
@@ -427,6 +431,7 @@ export default function PickupOrderViewer({
     loadOrder,
     onPrinted,
     onRefreshList,
+    onStatusChanged,
     order,
     pickupLabelPrinter,
     persistStatusChange,

@@ -29,6 +29,7 @@ export async function searchPickupOrders(
   if (params.to) qs.set("to", params.to);
   if (params.status) qs.set("status", params.status);
   if (params.memberId) qs.set("memberId", params.memberId);
+  if (params.sort) qs.set("sort", params.sort);
 
   const q = qs.toString();
   const res = await apiService.get<PickupOrderListItemWire[]>(

@@ -51,7 +51,7 @@ export const useSalesStore = create<SalesStoreState>()((set, get) => ({
     let lines = [...cart.lines];
 
     if (item.type === "normal") {
-      const mergeIdx = findMergeTarget(lines, item, memberLevel);
+      const mergeIdx = findMergeTarget(lines, item, memberLevel, options);
       if (mergeIdx !== -1) {
         const merged = recalculateLine({
           ...lines[mergeIdx],

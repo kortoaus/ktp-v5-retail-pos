@@ -29,6 +29,10 @@ import {
   buildSalePayload,
   buildSpendPayload,
 } from "../../../libs/sale/build-payload";
+import {
+  completePickupOrdersAfterSale,
+  getDistinctPickupOrderIds,
+} from "../../../libs/pickup-order/auto-complete";
 import { getMemberLevelOneEstimate } from "../../../libs/sale/member-level-estimate";
 import LoadingOverlay from "../../../components/LoadingOverlay";
 import { kickDrawer } from "../../../libs/printer/kick-drawer";
@@ -328,6 +332,10 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     if (completeDisabled || processing) return;
     const cart = carts[activeCartIndex];
     if (!cart) return;
+    const saleCartSnapshot = {
+      ...cart,
+      lines: cart.lines.map((line) => ({ ...line })),
+    };
 
     // Non-cash staged (CREDIT / GIFTCARD / VOUCHER) 가 ready 면 committed 처럼
     // payload 에 포함 → ADD 누르는 단계 생략 (1-step Complete flow).
@@ -339,7 +347,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
       (stagedPayment.tender !== "VOUCHER" || stagedPayment.entityId > 0);
 
     const payload = buildSalePayload({
-      cart,
+      cart: saleCartSnapshot,
       cal,
       payments,
       stagedPayment: stagedReady ? stagedPayment : undefined,
@@ -362,7 +370,18 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
         change: cal.change,
         receiptPrinted: false,
       });
+      const pickupOrderIds = getDistinctPickupOrderIds(saleCartSnapshot.lines);
       clearActiveCart();
+      if (pickupOrderIds.length > 0) {
+        void completePickupOrdersAfterSale(pickupOrderIds).then((failures) => {
+          if (failures.length === 0) return;
+          window.alert(
+            `Sale completed, but pickup completion failed for: ${failures
+              .map((failure) => failure.id)
+              .join(", ")}`,
+          );
+        });
+      }
 
       // Drawer 먼저 — 프린트는 수초 걸리므로 서랍을 앞세워 cashier 가 거스름돈
       // 꺼내는 동안 영수증이 뽑히게. cashIntent 기준 (cashApplied 아님) —

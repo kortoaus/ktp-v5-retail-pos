@@ -6,6 +6,7 @@ export type PickupWorkLabelQrPayloadInput = {
   prices: number[];
   promoPrices: unknown;
   optionTotal: number;
+  pickupOrderId: number;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -17,6 +18,10 @@ function keepFiniteNumbers(values: unknown[]): number[] {
     (value): value is number =>
       typeof value === "number" && Number.isFinite(value),
   );
+}
+
+function isPositiveInteger(value: number): boolean {
+  return Number.isInteger(value) && value > 0 && Number.isFinite(value);
 }
 
 export function normalizePromoPrices(value: unknown): number[] {
@@ -36,6 +41,7 @@ export function buildPickupWorkLabelQrPayload({
   prices,
   promoPrices,
   optionTotal,
+  pickupOrderId,
 }: PickupWorkLabelQrPayloadInput): string {
   const payload: Record<string, unknown> = {
     "00": PP_PAYLOAD_VERSION,
@@ -43,6 +49,10 @@ export function buildPickupWorkLabelQrPayload({
     "02": addOptionTotal(prices, optionTotal),
     "03": addOptionTotal(normalizePromoPrices(promoPrices), optionTotal),
   };
+
+  if (isPositiveInteger(pickupOrderId)) {
+    payload["09"] = pickupOrderId;
+  }
 
   return `${PP_PREFIX}${JSON.stringify(payload)}`;
 }

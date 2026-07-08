@@ -22,6 +22,16 @@ export interface AddLineOptions {
   measured_weight?: number;
   adjustedPrice?: number;
   ppMarkdown?: PPMarkdown | null;
+  pickupOrderId?: number | null;
+}
+
+function normalizePickupOrderId(value: number | null | undefined): number | null {
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    Number.isInteger(value) &&
+    value > 0
+    ? value
+    : null;
 }
 
 export function createEmptyCart(): Cart {
@@ -98,6 +108,7 @@ export function buildNewLine(
     unit_price_effective: 0,
     qty,
     measured_weight: options?.measured_weight ?? null,
+    pickupOrderId: normalizePickupOrderId(options?.pickupOrderId),
     total: 0,
     tax_amount: 0,
     net: 0,
@@ -112,9 +123,11 @@ export function findMergeTarget(
   lines: SaleLineType[],
   item: SaleLineItem,
   memberLevel: number,
+  options?: AddLineOptions,
 ): number {
   const unit_price_original = resolveOriginalPrice(item);
   const unit_price_discounted = resolveDiscountedPrice(item, memberLevel);
+  const pickupOrderId = normalizePickupOrderId(options?.pickupOrderId);
 
   return lines.findIndex(
     (l) =>
@@ -122,7 +135,8 @@ export function findMergeTarget(
       l.itemId === item.itemId &&
       l.unit_price_adjusted === null &&
       l.unit_price_discounted === unit_price_discounted &&
-      l.unit_price_original === unit_price_original,
+      l.unit_price_original === unit_price_original &&
+      l.pickupOrderId === pickupOrderId,
   );
 }
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildPendingPickupOrderCountWhere,
   buildPickupOrderListWhere,
   buildPickupOrderListOrderBy,
   buildPickupOrderPaging,
@@ -30,6 +31,32 @@ test("parsePickupOrderListQuery accepts status and keyword", () => {
 test("parsePickupOrderListQuery accepts memberId", () => {
   const query = parsePickupOrderListQuery({ memberId: "crm-member-7" });
   assert.equal(query.memberId, "crm-member-7");
+});
+
+test("parsePickupOrderListQuery accepts earliest-first sort", () => {
+  const query = parsePickupOrderListQuery({ sort: "pickupStartsAtAsc" });
+  assert.equal(query.sort, "pickupStartsAtAsc");
+});
+
+test("parsePickupOrderListQuery rejects unknown sort", () => {
+  assert.throws(
+    () => parsePickupOrderListQuery({ sort: "crmCreatedAtAsc" }),
+    /sort must be a valid pickup order sort/,
+  );
+});
+
+test("parsePickupOrderListQuery accepts multiple statuses", () => {
+  const query = parsePickupOrderListQuery({
+    statuses: "PENDING,ORDER_CONFIRMED,READY",
+  });
+  assert.deepEqual(query.statuses, ["PENDING", "ORDER_CONFIRMED", "READY"]);
+});
+
+test("parsePickupOrderListQuery rejects unknown statuses entry", () => {
+  assert.throws(
+    () => parsePickupOrderListQuery({ statuses: "PENDING,PRINTED" }),
+    /statuses must contain valid pickup order statuses/,
+  );
 });
 
 test("parsePickupOrderListQuery trims blank memberId away", () => {
@@ -70,6 +97,16 @@ test("buildPickupOrderListWhere combines status dates member and keyword", () =>
   assert.ok(where.OR);
 });
 
+test("buildPickupOrderListWhere applies multiple status filter", () => {
+  const query = parsePickupOrderListQuery({
+    statuses: "PENDING,ORDER_CONFIRMED,READY",
+  });
+
+  const where = buildPickupOrderListWhere(query);
+
+  assert.deepEqual(where.status, { in: ["PENDING", "ORDER_CONFIRMED", "READY"] });
+});
+
 test("buildPickupOrderPaging returns renderer paging shape", () => {
   assert.deepEqual(
     buildPickupOrderPaging({ page: 2, limit: 20, totalCount: 55 }),
@@ -83,8 +120,24 @@ test("buildPickupOrderPaging returns renderer paging shape", () => {
 });
 
 test("buildPickupOrderListOrderBy returns newest pickup orders first", () => {
-  assert.deepEqual(buildPickupOrderListOrderBy(), [
+  assert.deepEqual(buildPickupOrderListOrderBy({ sort: "pickupStartsAtDesc" }), [
     { pickupStartsAt: "desc" },
     { crmOrderId: "desc" },
   ]);
+});
+
+test("buildPickupOrderListOrderBy returns earliest pickup orders first", () => {
+  assert.deepEqual(buildPickupOrderListOrderBy({ sort: "pickupStartsAtAsc" }), [
+    { pickupStartsAt: "asc" },
+    { crmOrderId: "asc" },
+  ]);
+});
+
+test("buildPendingPickupOrderCountWhere counts pending orders from the provided day boundary", () => {
+  const from = new Date("2026-07-07T14:00:00.000Z");
+
+  assert.deepEqual(buildPendingPickupOrderCountWhere(from), {
+    status: "PENDING",
+    pickupStartsAt: { gte: from },
+  });
 });
