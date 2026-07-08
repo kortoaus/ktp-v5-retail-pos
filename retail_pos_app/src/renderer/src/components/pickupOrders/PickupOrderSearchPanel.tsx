@@ -16,6 +16,11 @@ import LoadingOverlay from "../LoadingOverlay";
 import type { PagingType } from "../../libs/api";
 import { cn } from "../../libs/cn";
 import dayjsAU from "../../libs/dayjsAU";
+import {
+  getPrintedHistorySummaries,
+  PRINTED_HISTORY_ENTITY_PICKUP_ORDER,
+  type PrintedHistorySummary,
+} from "../../service/printed-history.service";
 import { searchPickupOrders } from "../../service/pickup-order.service";
 import {
   formatPickupCreatedAt,
@@ -59,6 +64,9 @@ const PickupOrderSearchPanel = forwardRef<PickupOrderSearchPanelHandle, Props>(
   const [todaySearchToken, setTodaySearchToken] = useState(0);
 
   const [items, setItems] = useState<PickupOrderListItem[]>([]);
+  const [printedSummariesByOrderId, setPrintedSummariesByOrderId] = useState<
+    Map<number, PrintedHistorySummary>
+  >(new Map());
   const [paging, setPaging] = useState<PagingType | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -95,8 +103,32 @@ const PickupOrderSearchPanel = forwardRef<PickupOrderSearchPanelHandle, Props>(
         if (res.ok && res.result) {
           setItems(res.result);
           setPaging(res.paging);
+          const orderIds = res.result.map((order) => order.crmOrderId);
+          const printedRes = await getPrintedHistorySummaries(
+            PRINTED_HISTORY_ENTITY_PICKUP_ORDER,
+            orderIds,
+          );
+          if (
+            requestId !== latestRequestIdRef.current ||
+            filterVersion !== filterVersionRef.current
+          ) {
+            return;
+          }
+          if (printedRes.ok && Array.isArray(printedRes.result)) {
+            setPrintedSummariesByOrderId(
+              new Map(
+                printedRes.result.map((summary) => [
+                  summary.entityId,
+                  summary,
+                ]),
+              ),
+            );
+          } else {
+            setPrintedSummariesByOrderId(new Map());
+          }
         } else {
           setItems([]);
+          setPrintedSummariesByOrderId(new Map());
           setPaging(res.paging);
           setError(res.msg || "Failed to load pickup orders");
         }
@@ -284,6 +316,9 @@ const PickupOrderSearchPanel = forwardRef<PickupOrderSearchPanelHandle, Props>(
               {items.map((order) => {
                 const firstLine = order.lines[0];
                 const pickup = formatPickupDateTimeParts(order.pickupStartsAt);
+                const printedSummary = printedSummariesByOrderId.get(
+                  order.crmOrderId,
+                );
                 return (
                   <tr
                     key={order.crmOrderId}
@@ -294,7 +329,14 @@ const PickupOrderSearchPanel = forwardRef<PickupOrderSearchPanelHandle, Props>(
                       {order.documentId}
                     </td>
                     <td className="px-2 py-1.5">
-                      <StatusBadge status={order.status} />
+                      <div className="flex flex-wrap items-center gap-1">
+                        <StatusBadge status={order.status} />
+                        {printedSummary && (
+                          <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-700">
+                            Printed
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-2 py-1.5 whitespace-nowrap text-[18px] font-semibold leading-none text-gray-900">
                       {pickup.date}
