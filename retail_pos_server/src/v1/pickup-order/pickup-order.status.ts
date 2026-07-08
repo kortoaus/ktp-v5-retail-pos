@@ -1,6 +1,11 @@
-import { BadRequestException } from "../../libs/exceptions";
+import db from "../../libs/db";
+import { BadRequestException, NotFoundException } from "../../libs/exceptions";
 import { updateCrmPickupOrderStatus } from "./pickup-order.crm";
 import { upsertPickupOrderPage } from "./pickup-order.repository";
+import {
+  assertPickupOrderStatusManagerAllowed,
+  assertPickupOrderStatusTransitionAllowed,
+} from "./pickup-order.status-policy";
 import type { CrmPickupOrderWire, PickupOrderStatus } from "./pickup-order.types";
 
 export const POS_PICKUP_ORDER_STATUSES = [
@@ -20,11 +25,13 @@ export type PickupOrderStatusBody = {
 type PosUserSnapshot = {
   id: number;
   name: string;
+  scope: string[];
 };
 
 type Deps = {
   updateCrmStatus?: typeof updateCrmPickupOrderStatus;
   upsertLocalPickupOrder?: (items: CrmPickupOrderWire[]) => Promise<unknown>;
+  getLocalPickupOrderStatus?: (orderId: number) => Promise<PickupOrderStatus>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -44,6 +51,19 @@ export function parsePickupOrderStatusBody(body: unknown): PickupOrderStatusBody
   return { status: body.status as PosPickupOrderStatus };
 }
 
+async function getCachedPickupOrderStatus(
+  orderId: number,
+): Promise<PickupOrderStatus> {
+  const row = await db.pickupOrderCache.findUnique({
+    where: { crmOrderId: orderId },
+    select: { status: true },
+  });
+  if (!row) {
+    throw new NotFoundException("Pickup order not found");
+  }
+  return row.status as PickupOrderStatus;
+}
+
 export async function updatePickupOrderStatusFromPos(
   input: {
     orderId: number;
@@ -56,6 +76,15 @@ export async function updatePickupOrderStatusFromPos(
   const updateCrmStatus = deps.updateCrmStatus ?? updateCrmPickupOrderStatus;
   const upsertLocalPickupOrder =
     deps.upsertLocalPickupOrder ?? upsertPickupOrderPage;
+  const getLocalPickupOrderStatus =
+    deps.getLocalPickupOrderStatus ?? getCachedPickupOrderStatus;
+  const currentStatus = await getLocalPickupOrderStatus(input.orderId);
+  assertPickupOrderStatusTransitionAllowed(currentStatus, parsed.status);
+  assertPickupOrderStatusManagerAllowed(
+    currentStatus,
+    parsed.status,
+    input.user.scope,
+  );
 
   const result = await updateCrmStatus(input.orderId, {
     status: parsed.status,

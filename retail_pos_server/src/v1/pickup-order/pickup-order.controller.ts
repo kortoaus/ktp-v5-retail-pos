@@ -63,7 +63,7 @@ export async function updatePickupOrderStatusController(
   const result = await updatePickupOrderStatusFromPos({
     orderId: crmOrderId,
     body: req.body,
-    user: { id: user.id, name: user.name },
+    user: { id: user.id, name: user.name, scope: user.scope },
   });
 
   res.status(200).json({

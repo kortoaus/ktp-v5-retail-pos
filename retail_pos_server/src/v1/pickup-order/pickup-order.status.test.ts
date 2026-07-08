@@ -14,6 +14,10 @@ import {
   parsePickupOrderStatusBody,
   updatePickupOrderStatusFromPos,
 } from "./pickup-order.status";
+import {
+  canTransitionPickupOrderStatus,
+  requiresManagerForPickupOrderStatusTransition,
+} from "./pickup-order.status-policy";
 import type { CrmPickupOrderWire } from "./pickup-order.types";
 
 const pickupOrderWire: CrmPickupOrderWire = {
@@ -58,9 +62,10 @@ test("updatePickupOrderStatusFromPos sends CRM status and actor snapshot", async
     {
       orderId: 42,
       body: { status: "READY" },
-      user: { id: 12, name: "Alice" },
+      user: { id: 12, name: "Alice", scope: ["sale"] },
     },
     {
+      getLocalPickupOrderStatus: async () => "ORDER_CONFIRMED",
       updateCrmStatus: async (orderId, payload) => {
         calls.push({ orderId, payload });
         return pickupOrderWire;
@@ -82,6 +87,69 @@ test("updatePickupOrderStatusFromPos sends CRM status and actor snapshot", async
     },
   ]);
   assert.deepEqual(upserts, [[pickupOrderWire]]);
+});
+
+test("pickup POS status policy marks ready cancellation as manager-only", () => {
+  assert.equal(canTransitionPickupOrderStatus("READY", "CANCELLED_BY_STORE"), true);
+  assert.equal(
+    requiresManagerForPickupOrderStatusTransition("READY", "CANCELLED_BY_STORE"),
+    true,
+  );
+  assert.equal(
+    requiresManagerForPickupOrderStatusTransition("ORDER_CONFIRMED", "CANCELLED_BY_STORE"),
+    false,
+  );
+});
+
+test("updatePickupOrderStatusFromPos blocks ready cancellation for non-admin users", async () => {
+  await assert.rejects(
+    () =>
+      updatePickupOrderStatusFromPos(
+        {
+          orderId: 42,
+          body: { status: "CANCELLED_BY_STORE" },
+          user: { id: 12, name: "Alice", scope: ["sale"] },
+        },
+        {
+          getLocalPickupOrderStatus: async () => "READY",
+          updateCrmStatus: async () => pickupOrderWire,
+          upsertLocalPickupOrder: async () => undefined,
+        },
+      ),
+    (error) =>
+      error instanceof UnauthorizedException &&
+      error.message === "Manager permission required",
+  );
+});
+
+test("updatePickupOrderStatusFromPos allows ready cancellation for admin users", async () => {
+  const calls: unknown[] = [];
+  await updatePickupOrderStatusFromPos(
+    {
+      orderId: 42,
+      body: { status: "CANCELLED_BY_STORE" },
+      user: { id: 1, name: "Manager", scope: ["admin"] },
+    },
+    {
+      getLocalPickupOrderStatus: async () => "READY",
+      updateCrmStatus: async (orderId, payload) => {
+        calls.push({ orderId, payload });
+        return { ...pickupOrderWire, status: "CANCELLED_BY_STORE" };
+      },
+      upsertLocalPickupOrder: async () => undefined,
+    },
+  );
+
+  assert.deepEqual(calls, [
+    {
+      orderId: 42,
+      payload: {
+        status: "CANCELLED_BY_STORE",
+        actorId: "1",
+        actorName: "Manager",
+      },
+    },
+  ]);
 });
 
 test("pickupOrderRouter registers POST /:id/status before GET /:id", () => {
