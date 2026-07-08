@@ -272,6 +272,20 @@ model PrintedItemSheet {
   updatedAt DateTime @updatedAt
 }
 
+model PrintedHistory {
+  id         Int      @id @default(autoincrement())
+  entityType String
+  entityId   Int
+  printedAt  DateTime @default(now())
+  userId     Int?
+  userName   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([entityType, entityId])
+  @@index([entityType, printedAt])
+}
+
 model PickupOrderCache {
   id               Int      @id @default(autoincrement())
   crmOrderId       Int      @unique

@@ -399,6 +399,7 @@ export const ModelName = {
   HotkeyItem: 'HotkeyItem',
   StoreSetting: 'StoreSetting',
   PrintedItemSheet: 'PrintedItemSheet',
+  PrintedHistory: 'PrintedHistory',
   PickupOrderCache: 'PickupOrderCache',
   PickupOrderLineCache: 'PickupOrderLineCache',
   PickupOrderSyncState: 'PickupOrderSyncState',
@@ -426,7 +427,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "company" | "category" | "brand" | "item" | "itemScaleData" | "itemCategory" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "pickupOrderCache" | "pickupOrderLineCache" | "pickupOrderSyncState" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter"
+    modelProps: "company" | "category" | "brand" | "item" | "itemScaleData" | "itemCategory" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "printedHistory" | "pickupOrderCache" | "pickupOrderLineCache" | "pickupOrderSyncState" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1537,6 +1538,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.PrintedItemSheetCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.PrintedItemSheetCountAggregateOutputType> | number
+        }
+      }
+    }
+    PrintedHistory: {
+      payload: Prisma.$PrintedHistoryPayload<ExtArgs>
+      fields: Prisma.PrintedHistoryFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PrintedHistoryFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedHistoryPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PrintedHistoryFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedHistoryPayload>
+        }
+        findFirst: {
+          args: Prisma.PrintedHistoryFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedHistoryPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PrintedHistoryFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedHistoryPayload>
+        }
+        findMany: {
+          args: Prisma.PrintedHistoryFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedHistoryPayload>[]
+        }
+        create: {
+          args: Prisma.PrintedHistoryCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedHistoryPayload>
+        }
+        createMany: {
+          args: Prisma.PrintedHistoryCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PrintedHistoryCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedHistoryPayload>[]
+        }
+        delete: {
+          args: Prisma.PrintedHistoryDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedHistoryPayload>
+        }
+        update: {
+          args: Prisma.PrintedHistoryUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedHistoryPayload>
+        }
+        deleteMany: {
+          args: Prisma.PrintedHistoryDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PrintedHistoryUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PrintedHistoryUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedHistoryPayload>[]
+        }
+        upsert: {
+          args: Prisma.PrintedHistoryUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PrintedHistoryPayload>
+        }
+        aggregate: {
+          args: Prisma.PrintedHistoryAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePrintedHistory>
+        }
+        groupBy: {
+          args: Prisma.PrintedHistoryGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PrintedHistoryGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PrintedHistoryCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PrintedHistoryCountAggregateOutputType> | number
         }
       }
     }
@@ -2707,6 +2782,20 @@ export const PrintedItemSheetScalarFieldEnum = {
 export type PrintedItemSheetScalarFieldEnum = (typeof PrintedItemSheetScalarFieldEnum)[keyof typeof PrintedItemSheetScalarFieldEnum]
 
 
+export const PrintedHistoryScalarFieldEnum = {
+  id: 'id',
+  entityType: 'entityType',
+  entityId: 'entityId',
+  printedAt: 'printedAt',
+  userId: 'userId',
+  userName: 'userName',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PrintedHistoryScalarFieldEnum = (typeof PrintedHistoryScalarFieldEnum)[keyof typeof PrintedHistoryScalarFieldEnum]
+
+
 export const PickupOrderCacheScalarFieldEnum = {
   id: 'id',
   crmOrderId: 'crmOrderId',
@@ -3323,6 +3412,7 @@ export type GlobalOmitConfig = {
   hotkeyItem?: Prisma.HotkeyItemOmit
   storeSetting?: Prisma.StoreSettingOmit
   printedItemSheet?: Prisma.PrintedItemSheetOmit
+  printedHistory?: Prisma.PrintedHistoryOmit
   pickupOrderCache?: Prisma.PickupOrderCacheOmit
   pickupOrderLineCache?: Prisma.PickupOrderLineCacheOmit
   pickupOrderSyncState?: Prisma.PickupOrderSyncStateOmit

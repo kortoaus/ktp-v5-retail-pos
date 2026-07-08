@@ -66,6 +66,7 @@ export const ModelName = {
   HotkeyItem: 'HotkeyItem',
   StoreSetting: 'StoreSetting',
   PrintedItemSheet: 'PrintedItemSheet',
+  PrintedHistory: 'PrintedHistory',
   PickupOrderCache: 'PickupOrderCache',
   PickupOrderLineCache: 'PickupOrderLineCache',
   PickupOrderSyncState: 'PickupOrderSyncState',
@@ -334,6 +335,20 @@ export const PrintedItemSheetScalarFieldEnum = {
 } as const
 
 export type PrintedItemSheetScalarFieldEnum = (typeof PrintedItemSheetScalarFieldEnum)[keyof typeof PrintedItemSheetScalarFieldEnum]
+
+
+export const PrintedHistoryScalarFieldEnum = {
+  id: 'id',
+  entityType: 'entityType',
+  entityId: 'entityId',
+  printedAt: 'printedAt',
+  userId: 'userId',
+  userName: 'userName',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PrintedHistoryScalarFieldEnum = (typeof PrintedHistoryScalarFieldEnum)[keyof typeof PrintedHistoryScalarFieldEnum]
 
 
 export const PickupOrderCacheScalarFieldEnum = {

@@ -93,6 +93,11 @@ export type StoreSetting = Prisma.StoreSettingModel
  */
 export type PrintedItemSheet = Prisma.PrintedItemSheetModel
 /**
+ * Model PrintedHistory
+ * 
+ */
+export type PrintedHistory = Prisma.PrintedHistoryModel
+/**
  * Model PickupOrderCache
  * 
  */
