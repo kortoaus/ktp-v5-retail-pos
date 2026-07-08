@@ -25,6 +25,92 @@ type StoreSettingDTO = {
   other_point_rate?: number; // percent (1 = 10%)
 };
 
+type StoreLabelSettingRow = {
+  name: string;
+  address1: string;
+  address2: string | null;
+  suburb: string;
+  state: string;
+  postcode: string;
+};
+
+type StoreLabelSettingClient = {
+  storeSetting: {
+    findUnique(args: {
+      where: { id: number };
+      select: {
+        name: true;
+        address1: true;
+        address2: true;
+        suburb: true;
+        state: true;
+        postcode: true;
+      };
+    }): Promise<StoreLabelSettingRow | null>;
+  };
+};
+
+function compactAddressPart(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+export function formatStoreLabelAddress(
+  storeSetting: Pick<
+    StoreLabelSettingRow,
+    "address1" | "address2" | "suburb" | "state" | "postcode"
+  >,
+): string {
+  return [
+    compactAddressPart(storeSetting.address1),
+    compactAddressPart(storeSetting.address2),
+    compactAddressPart(storeSetting.suburb),
+    compactAddressPart(storeSetting.state),
+    compactAddressPart(storeSetting.postcode),
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" ");
+}
+
+export function createGetStoreLabelSettingService(
+  client: StoreLabelSettingClient = db,
+) {
+  return async () => {
+    try {
+      const storeSetting = await client.storeSetting.findUnique({
+        where: { id: 1 },
+        select: {
+          name: true,
+          address1: true,
+          address2: true,
+          suburb: true,
+          state: true,
+          postcode: true,
+        },
+      });
+      if (!storeSetting) {
+        throw new NotFoundException("Store setting not found");
+      }
+
+      return {
+        ok: true,
+        result: {
+          name: storeSetting.name,
+          address: formatStoreLabelAddress(storeSetting),
+        },
+        msg: "Store label setting retrieved successfully",
+      };
+    } catch (e) {
+      if (e instanceof HttpException) throw e;
+      console.error("getStoreLabelSettingService error:", e);
+      throw new InternalServerException();
+    }
+  };
+}
+
+export const getStoreLabelSettingService =
+  createGetStoreLabelSettingService();
+
 export const updateStoreSettingService = async (dto: StoreSettingDTO) => {
   try {
     const {

@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   updateStoreSettingController,
   getStoreSettingController,
+  getStoreLabelSettingController,
 } from "./store.controller";
 import { scopeMiddleware, userMiddleware } from "../user/user.middleware";
 
@@ -13,6 +14,7 @@ router.post(
   scopeMiddleware("store"),
   updateStoreSettingController,
 );
+router.get("/label", getStoreLabelSettingController);
 router.get("/", getStoreSettingController);
 
 export default router;
