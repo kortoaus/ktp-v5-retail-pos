@@ -1,0 +1,19 @@
+# store-upsync-backlog.sh 매장 목록 템플릿.
+#
+# 사용법: 이 파일을 같은 디렉터리에 store-hosts.txt 로 복사한 뒤 실제 매장 SSH
+# 대상으로 채운다 (store-hosts.txt 는 실제 호스트/자격 정보를 담으므로 커밋하지
+# 않는다 — retail_pos_server/.env.example 과 같은 관례).
+#
+# 형식: 한 줄에 매장 하나, 공백/탭으로 구분된 두 필드.
+#   <store-name> <ssh-target>
+#
+# <ssh-target> 은 ssh(1) 이 목적지로 받아들이는 어떤 형태든 된다 —
+# user@host, 순수 IP, 또는 ~/.ssh/config 의 Host alias.
+#
+# 예:
+# chatswood     store-chatswood
+# eastwood      ktpv5@203.0.113.10
+# parramatta    store-parramatta.internal
+#
+# STORE_HOSTS 환경변수로 이 파일 전체를 대체할 수도 있다 (같은 형식, 줄바꿈
+# 구분) — 스크립트 헤더 코멘트 참고.
