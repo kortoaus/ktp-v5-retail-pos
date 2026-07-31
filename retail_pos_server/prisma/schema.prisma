@@ -33,24 +33,6 @@ model Company {
   email    String?
 }
 
-model Category {
-  id        Int            @id
-  name_en   String
-  name_ko   String
-  parentId  Int?
-  index     Int            @default(999)
-  level     Int            @default(1)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  archived  Boolean        @default(false)
-  companyId Int
-  parent    Category?      @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: Cascade)
-  children  Category[]     @relation("CategoryToCategory")
-  items     ItemCategory[]
-
-  @@index([companyId, parentId])
-}
-
 model Brand {
   id        Int      @id
   name_en   String
@@ -99,9 +81,7 @@ model Item {
   brand   Brand? @relation(fields: [brandId], references: [id])
 
   // Categories
-  categoryIds   Int[]          @default([])
-  categoryMarks String[]       @default([])
-  categories    ItemCategory[]
+  categoryMarks String[] @default([])
 
   // Prices
   taxable          Boolean @default(false)
@@ -129,15 +109,6 @@ model ItemScaleData {
   isFixedWeight     Boolean @default(false)
   ingredients       String?
   item              Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
-}
-
-model ItemCategory {
-  itemId     Int
-  categoryId Int
-  category   Category @relation(fields: [categoryId], references: [id])
-  item       Item     @relation(fields: [itemId], references: [id])
-
-  @@id([itemId, categoryId])
 }
 
 enum ItemRFD {
