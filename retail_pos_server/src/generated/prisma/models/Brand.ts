@@ -439,14 +439,6 @@ export type BrandNullableScalarRelationFilter = {
   isNot?: Prisma.BrandWhereInput | null
 }
 
-export type BoolFieldUpdateOperationsInput = {
-  set?: boolean
-}
-
-export type DateTimeFieldUpdateOperationsInput = {
-  set?: Date | string
-}
-
 export type BrandCreateNestedOneWithoutItemsInput = {
   create?: Prisma.XOR<Prisma.BrandCreateWithoutItemsInput, Prisma.BrandUncheckedCreateWithoutItemsInput>
   connectOrCreate?: Prisma.BrandCreateOrConnectWithoutItemsInput

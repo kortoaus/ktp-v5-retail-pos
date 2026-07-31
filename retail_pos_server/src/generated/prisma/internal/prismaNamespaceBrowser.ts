@@ -52,9 +52,11 @@ export const AnyNull = runtime.AnyNull
 
 export const ModelName = {
   Company: 'Company',
+  Category: 'Category',
   Brand: 'Brand',
   Item: 'Item',
   ItemScaleData: 'ItemScaleData',
+  ItemCategory: 'ItemCategory',
   Price: 'Price',
   PromoPrice: 'PromoPrice',
   CloudHotkey: 'CloudHotkey',
@@ -114,6 +116,22 @@ export const CompanyScalarFieldEnum = {
 export type CompanyScalarFieldEnum = (typeof CompanyScalarFieldEnum)[keyof typeof CompanyScalarFieldEnum]
 
 
+export const CategoryScalarFieldEnum = {
+  id: 'id',
+  name_en: 'name_en',
+  name_ko: 'name_ko',
+  parentId: 'parentId',
+  index: 'index',
+  level: 'level',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  archived: 'archived',
+  companyId: 'companyId'
+} as const
+
+export type CategoryScalarFieldEnum = (typeof CategoryScalarFieldEnum)[keyof typeof CategoryScalarFieldEnum]
+
+
 export const BrandScalarFieldEnum = {
   id: 'id',
   name_en: 'name_en',
@@ -149,6 +167,7 @@ export const ItemScalarFieldEnum = {
   bundleQty: 'bundleQty',
   parentId: 'parentId',
   brandId: 'brandId',
+  categoryIds: 'categoryIds',
   categoryMarks: 'categoryMarks',
   taxable: 'taxable',
   wholesaleTaxable: 'wholesaleTaxable',
@@ -170,6 +189,14 @@ export const ItemScaleDataScalarFieldEnum = {
 } as const
 
 export type ItemScaleDataScalarFieldEnum = (typeof ItemScaleDataScalarFieldEnum)[keyof typeof ItemScaleDataScalarFieldEnum]
+
+
+export const ItemCategoryScalarFieldEnum = {
+  itemId: 'itemId',
+  categoryId: 'categoryId'
+} as const
+
+export type ItemCategoryScalarFieldEnum = (typeof ItemCategoryScalarFieldEnum)[keyof typeof ItemCategoryScalarFieldEnum]
 
 
 export const PriceScalarFieldEnum = {
