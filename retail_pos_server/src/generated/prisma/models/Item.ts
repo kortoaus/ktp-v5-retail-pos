@@ -32,7 +32,6 @@ export type ItemAvgAggregateOutputType = {
   bundleQty: number | null
   parentId: number | null
   brandId: number | null
-  categoryIds: number | null
 }
 
 export type ItemSumAggregateOutputType = {
@@ -41,7 +40,6 @@ export type ItemSumAggregateOutputType = {
   bundleQty: number | null
   parentId: number | null
   brandId: number | null
-  categoryIds: number[]
 }
 
 export type ItemMinAggregateOutputType = {
@@ -123,7 +121,6 @@ export type ItemCountAggregateOutputType = {
   bundleQty: number
   parentId: number
   brandId: number
-  categoryIds: number
   categoryMarks: number
   taxable: number
   wholesaleTaxable: number
@@ -141,7 +138,6 @@ export type ItemAvgAggregateInputType = {
   bundleQty?: true
   parentId?: true
   brandId?: true
-  categoryIds?: true
 }
 
 export type ItemSumAggregateInputType = {
@@ -150,7 +146,6 @@ export type ItemSumAggregateInputType = {
   bundleQty?: true
   parentId?: true
   brandId?: true
-  categoryIds?: true
 }
 
 export type ItemMinAggregateInputType = {
@@ -232,7 +227,6 @@ export type ItemCountAggregateInputType = {
   bundleQty?: true
   parentId?: true
   brandId?: true
-  categoryIds?: true
   categoryMarks?: true
   taxable?: true
   wholesaleTaxable?: true
@@ -350,7 +344,6 @@ export type ItemGroupByOutputType = {
   bundleQty: number
   parentId: number | null
   brandId: number | null
-  categoryIds: number[]
   categoryMarks: string[]
   taxable: boolean
   wholesaleTaxable: boolean
@@ -404,7 +397,6 @@ export type ItemWhereInput = {
   bundleQty?: Prisma.IntFilter<"Item"> | number
   parentId?: Prisma.IntNullableFilter<"Item"> | number | null
   brandId?: Prisma.IntNullableFilter<"Item"> | number | null
-  categoryIds?: Prisma.IntNullableListFilter<"Item">
   categoryMarks?: Prisma.StringNullableListFilter<"Item">
   taxable?: Prisma.BoolFilter<"Item"> | boolean
   wholesaleTaxable?: Prisma.BoolFilter<"Item"> | boolean
@@ -415,7 +407,6 @@ export type ItemWhereInput = {
   parent?: Prisma.XOR<Prisma.ItemNullableScalarRelationFilter, Prisma.ItemWhereInput> | null
   children?: Prisma.ItemListRelationFilter
   brand?: Prisma.XOR<Prisma.BrandNullableScalarRelationFilter, Prisma.BrandWhereInput> | null
-  categories?: Prisma.ItemCategoryListRelationFilter
   scaleData?: Prisma.XOR<Prisma.ItemScaleDataNullableScalarRelationFilter, Prisma.ItemScaleDataWhereInput> | null
 }
 
@@ -440,7 +431,6 @@ export type ItemOrderByWithRelationInput = {
   bundleQty?: Prisma.SortOrder
   parentId?: Prisma.SortOrderInput | Prisma.SortOrder
   brandId?: Prisma.SortOrderInput | Prisma.SortOrder
-  categoryIds?: Prisma.SortOrder
   categoryMarks?: Prisma.SortOrder
   taxable?: Prisma.SortOrder
   wholesaleTaxable?: Prisma.SortOrder
@@ -451,7 +441,6 @@ export type ItemOrderByWithRelationInput = {
   parent?: Prisma.ItemOrderByWithRelationInput
   children?: Prisma.ItemOrderByRelationAggregateInput
   brand?: Prisma.BrandOrderByWithRelationInput
-  categories?: Prisma.ItemCategoryOrderByRelationAggregateInput
   scaleData?: Prisma.ItemScaleDataOrderByWithRelationInput
 }
 
@@ -479,7 +468,6 @@ export type ItemWhereUniqueInput = Prisma.AtLeast<{
   bundleQty?: Prisma.IntFilter<"Item"> | number
   parentId?: Prisma.IntNullableFilter<"Item"> | number | null
   brandId?: Prisma.IntNullableFilter<"Item"> | number | null
-  categoryIds?: Prisma.IntNullableListFilter<"Item">
   categoryMarks?: Prisma.StringNullableListFilter<"Item">
   taxable?: Prisma.BoolFilter<"Item"> | boolean
   wholesaleTaxable?: Prisma.BoolFilter<"Item"> | boolean
@@ -490,7 +478,6 @@ export type ItemWhereUniqueInput = Prisma.AtLeast<{
   parent?: Prisma.XOR<Prisma.ItemNullableScalarRelationFilter, Prisma.ItemWhereInput> | null
   children?: Prisma.ItemListRelationFilter
   brand?: Prisma.XOR<Prisma.BrandNullableScalarRelationFilter, Prisma.BrandWhereInput> | null
-  categories?: Prisma.ItemCategoryListRelationFilter
   scaleData?: Prisma.XOR<Prisma.ItemScaleDataNullableScalarRelationFilter, Prisma.ItemScaleDataWhereInput> | null
 }, "id">
 
@@ -515,7 +502,6 @@ export type ItemOrderByWithAggregationInput = {
   bundleQty?: Prisma.SortOrder
   parentId?: Prisma.SortOrderInput | Prisma.SortOrder
   brandId?: Prisma.SortOrderInput | Prisma.SortOrder
-  categoryIds?: Prisma.SortOrder
   categoryMarks?: Prisma.SortOrder
   taxable?: Prisma.SortOrder
   wholesaleTaxable?: Prisma.SortOrder
@@ -554,7 +540,6 @@ export type ItemScalarWhereWithAggregatesInput = {
   bundleQty?: Prisma.IntWithAggregatesFilter<"Item"> | number
   parentId?: Prisma.IntNullableWithAggregatesFilter<"Item"> | number | null
   brandId?: Prisma.IntNullableWithAggregatesFilter<"Item"> | number | null
-  categoryIds?: Prisma.IntNullableListFilter<"Item">
   categoryMarks?: Prisma.StringNullableListFilter<"Item">
   taxable?: Prisma.BoolWithAggregatesFilter<"Item"> | boolean
   wholesaleTaxable?: Prisma.BoolWithAggregatesFilter<"Item"> | boolean
@@ -583,7 +568,6 @@ export type ItemCreateInput = {
   useBatch?: boolean
   archived?: boolean
   bundleQty?: number
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -594,7 +578,6 @@ export type ItemCreateInput = {
   parent?: Prisma.ItemCreateNestedOneWithoutChildrenInput
   children?: Prisma.ItemCreateNestedManyWithoutParentInput
   brand?: Prisma.BrandCreateNestedOneWithoutItemsInput
-  categories?: Prisma.ItemCategoryCreateNestedManyWithoutItemInput
   scaleData?: Prisma.ItemScaleDataCreateNestedOneWithoutItemInput
 }
 
@@ -619,7 +602,6 @@ export type ItemUncheckedCreateInput = {
   bundleQty?: number
   parentId?: number | null
   brandId?: number | null
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -628,7 +610,6 @@ export type ItemUncheckedCreateInput = {
   isTemporary?: boolean
   isPointExcluded?: boolean
   children?: Prisma.ItemUncheckedCreateNestedManyWithoutParentInput
-  categories?: Prisma.ItemCategoryUncheckedCreateNestedManyWithoutItemInput
   scaleData?: Prisma.ItemScaleDataUncheckedCreateNestedOneWithoutItemInput
 }
 
@@ -651,7 +632,6 @@ export type ItemUpdateInput = {
   useBatch?: Prisma.BoolFieldUpdateOperationsInput | boolean
   archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
   bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
   taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
   wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -662,7 +642,6 @@ export type ItemUpdateInput = {
   parent?: Prisma.ItemUpdateOneWithoutChildrenNestedInput
   children?: Prisma.ItemUpdateManyWithoutParentNestedInput
   brand?: Prisma.BrandUpdateOneWithoutItemsNestedInput
-  categories?: Prisma.ItemCategoryUpdateManyWithoutItemNestedInput
   scaleData?: Prisma.ItemScaleDataUpdateOneWithoutItemNestedInput
 }
 
@@ -687,7 +666,6 @@ export type ItemUncheckedUpdateInput = {
   bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
   parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   brandId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
   taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
   wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -696,7 +674,6 @@ export type ItemUncheckedUpdateInput = {
   isTemporary?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isPointExcluded?: Prisma.BoolFieldUpdateOperationsInput | boolean
   children?: Prisma.ItemUncheckedUpdateManyWithoutParentNestedInput
-  categories?: Prisma.ItemCategoryUncheckedUpdateManyWithoutItemNestedInput
   scaleData?: Prisma.ItemScaleDataUncheckedUpdateOneWithoutItemNestedInput
 }
 
@@ -721,7 +698,6 @@ export type ItemCreateManyInput = {
   bundleQty?: number
   parentId?: number | null
   brandId?: number | null
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -750,7 +726,6 @@ export type ItemUpdateManyMutationInput = {
   useBatch?: Prisma.BoolFieldUpdateOperationsInput | boolean
   archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
   bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
   taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
   wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -781,7 +756,6 @@ export type ItemUncheckedUpdateManyInput = {
   bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
   parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   brandId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
   taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
   wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -799,14 +773,6 @@ export type ItemListRelationFilter = {
 
 export type ItemOrderByRelationAggregateInput = {
   _count?: Prisma.SortOrder
-}
-
-export type IntNullableListFilter<$PrismaModel = never> = {
-  equals?: number[] | Prisma.ListIntFieldRefInput<$PrismaModel> | null
-  has?: number | Prisma.IntFieldRefInput<$PrismaModel> | null
-  hasEvery?: number[] | Prisma.ListIntFieldRefInput<$PrismaModel>
-  hasSome?: number[] | Prisma.ListIntFieldRefInput<$PrismaModel>
-  isEmpty?: boolean
 }
 
 export type StringNullableListFilter<$PrismaModel = never> = {
@@ -843,7 +809,6 @@ export type ItemCountOrderByAggregateInput = {
   bundleQty?: Prisma.SortOrder
   parentId?: Prisma.SortOrder
   brandId?: Prisma.SortOrder
-  categoryIds?: Prisma.SortOrder
   categoryMarks?: Prisma.SortOrder
   taxable?: Prisma.SortOrder
   wholesaleTaxable?: Prisma.SortOrder
@@ -859,7 +824,6 @@ export type ItemAvgOrderByAggregateInput = {
   bundleQty?: Prisma.SortOrder
   parentId?: Prisma.SortOrder
   brandId?: Prisma.SortOrder
-  categoryIds?: Prisma.SortOrder
 }
 
 export type ItemMaxOrderByAggregateInput = {
@@ -926,7 +890,6 @@ export type ItemSumOrderByAggregateInput = {
   bundleQty?: Prisma.SortOrder
   parentId?: Prisma.SortOrder
   brandId?: Prisma.SortOrder
-  categoryIds?: Prisma.SortOrder
 }
 
 export type ItemScalarRelationFilter = {
@@ -976,10 +939,6 @@ export type ItemUncheckedUpdateManyWithoutBrandNestedInput = {
   deleteMany?: Prisma.ItemScalarWhereInput | Prisma.ItemScalarWhereInput[]
 }
 
-export type ItemCreatecategoryIdsInput = {
-  set: number[]
-}
-
 export type ItemCreatecategoryMarksInput = {
   set: string[]
 }
@@ -1006,11 +965,6 @@ export type ItemUncheckedCreateNestedManyWithoutParentInput = {
 
 export type EnumItemRFDFieldUpdateOperationsInput = {
   set?: $Enums.ItemRFD
-}
-
-export type ItemUpdatecategoryIdsInput = {
-  set?: number[]
-  push?: number | number[]
 }
 
 export type ItemUpdatecategoryMarksInput = {
@@ -1042,6 +996,14 @@ export type ItemUpdateManyWithoutParentNestedInput = {
   deleteMany?: Prisma.ItemScalarWhereInput | Prisma.ItemScalarWhereInput[]
 }
 
+export type NullableIntFieldUpdateOperationsInput = {
+  set?: number | null
+  increment?: number
+  decrement?: number
+  multiply?: number
+  divide?: number
+}
+
 export type ItemUncheckedUpdateManyWithoutParentNestedInput = {
   create?: Prisma.XOR<Prisma.ItemCreateWithoutParentInput, Prisma.ItemUncheckedCreateWithoutParentInput> | Prisma.ItemCreateWithoutParentInput[] | Prisma.ItemUncheckedCreateWithoutParentInput[]
   connectOrCreate?: Prisma.ItemCreateOrConnectWithoutParentInput | Prisma.ItemCreateOrConnectWithoutParentInput[]
@@ -1070,20 +1032,6 @@ export type ItemUpdateOneRequiredWithoutScaleDataNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.ItemUpdateToOneWithWhereWithoutScaleDataInput, Prisma.ItemUpdateWithoutScaleDataInput>, Prisma.ItemUncheckedUpdateWithoutScaleDataInput>
 }
 
-export type ItemCreateNestedOneWithoutCategoriesInput = {
-  create?: Prisma.XOR<Prisma.ItemCreateWithoutCategoriesInput, Prisma.ItemUncheckedCreateWithoutCategoriesInput>
-  connectOrCreate?: Prisma.ItemCreateOrConnectWithoutCategoriesInput
-  connect?: Prisma.ItemWhereUniqueInput
-}
-
-export type ItemUpdateOneRequiredWithoutCategoriesNestedInput = {
-  create?: Prisma.XOR<Prisma.ItemCreateWithoutCategoriesInput, Prisma.ItemUncheckedCreateWithoutCategoriesInput>
-  connectOrCreate?: Prisma.ItemCreateOrConnectWithoutCategoriesInput
-  upsert?: Prisma.ItemUpsertWithoutCategoriesInput
-  connect?: Prisma.ItemWhereUniqueInput
-  update?: Prisma.XOR<Prisma.XOR<Prisma.ItemUpdateToOneWithWhereWithoutCategoriesInput, Prisma.ItemUpdateWithoutCategoriesInput>, Prisma.ItemUncheckedUpdateWithoutCategoriesInput>
-}
-
 export type ItemCreateWithoutBrandInput = {
   id: number
   companyId: number
@@ -1103,7 +1051,6 @@ export type ItemCreateWithoutBrandInput = {
   useBatch?: boolean
   archived?: boolean
   bundleQty?: number
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -1113,7 +1060,6 @@ export type ItemCreateWithoutBrandInput = {
   isPointExcluded?: boolean
   parent?: Prisma.ItemCreateNestedOneWithoutChildrenInput
   children?: Prisma.ItemCreateNestedManyWithoutParentInput
-  categories?: Prisma.ItemCategoryCreateNestedManyWithoutItemInput
   scaleData?: Prisma.ItemScaleDataCreateNestedOneWithoutItemInput
 }
 
@@ -1137,7 +1083,6 @@ export type ItemUncheckedCreateWithoutBrandInput = {
   archived?: boolean
   bundleQty?: number
   parentId?: number | null
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -1146,7 +1091,6 @@ export type ItemUncheckedCreateWithoutBrandInput = {
   isTemporary?: boolean
   isPointExcluded?: boolean
   children?: Prisma.ItemUncheckedCreateNestedManyWithoutParentInput
-  categories?: Prisma.ItemCategoryUncheckedCreateNestedManyWithoutItemInput
   scaleData?: Prisma.ItemScaleDataUncheckedCreateNestedOneWithoutItemInput
 }
 
@@ -1200,7 +1144,6 @@ export type ItemScalarWhereInput = {
   bundleQty?: Prisma.IntFilter<"Item"> | number
   parentId?: Prisma.IntNullableFilter<"Item"> | number | null
   brandId?: Prisma.IntNullableFilter<"Item"> | number | null
-  categoryIds?: Prisma.IntNullableListFilter<"Item">
   categoryMarks?: Prisma.StringNullableListFilter<"Item">
   taxable?: Prisma.BoolFilter<"Item"> | boolean
   wholesaleTaxable?: Prisma.BoolFilter<"Item"> | boolean
@@ -1229,7 +1172,6 @@ export type ItemCreateWithoutChildrenInput = {
   useBatch?: boolean
   archived?: boolean
   bundleQty?: number
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -1239,7 +1181,6 @@ export type ItemCreateWithoutChildrenInput = {
   isPointExcluded?: boolean
   parent?: Prisma.ItemCreateNestedOneWithoutChildrenInput
   brand?: Prisma.BrandCreateNestedOneWithoutItemsInput
-  categories?: Prisma.ItemCategoryCreateNestedManyWithoutItemInput
   scaleData?: Prisma.ItemScaleDataCreateNestedOneWithoutItemInput
 }
 
@@ -1264,7 +1205,6 @@ export type ItemUncheckedCreateWithoutChildrenInput = {
   bundleQty?: number
   parentId?: number | null
   brandId?: number | null
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -1272,7 +1212,6 @@ export type ItemUncheckedCreateWithoutChildrenInput = {
   updatedAt?: Date | string
   isTemporary?: boolean
   isPointExcluded?: boolean
-  categories?: Prisma.ItemCategoryUncheckedCreateNestedManyWithoutItemInput
   scaleData?: Prisma.ItemScaleDataUncheckedCreateNestedOneWithoutItemInput
 }
 
@@ -1300,7 +1239,6 @@ export type ItemCreateWithoutParentInput = {
   useBatch?: boolean
   archived?: boolean
   bundleQty?: number
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -1310,7 +1248,6 @@ export type ItemCreateWithoutParentInput = {
   isPointExcluded?: boolean
   children?: Prisma.ItemCreateNestedManyWithoutParentInput
   brand?: Prisma.BrandCreateNestedOneWithoutItemsInput
-  categories?: Prisma.ItemCategoryCreateNestedManyWithoutItemInput
   scaleData?: Prisma.ItemScaleDataCreateNestedOneWithoutItemInput
 }
 
@@ -1334,7 +1271,6 @@ export type ItemUncheckedCreateWithoutParentInput = {
   archived?: boolean
   bundleQty?: number
   brandId?: number | null
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -1343,7 +1279,6 @@ export type ItemUncheckedCreateWithoutParentInput = {
   isTemporary?: boolean
   isPointExcluded?: boolean
   children?: Prisma.ItemUncheckedCreateNestedManyWithoutParentInput
-  categories?: Prisma.ItemCategoryUncheckedCreateNestedManyWithoutItemInput
   scaleData?: Prisma.ItemScaleDataUncheckedCreateNestedOneWithoutItemInput
 }
 
@@ -1387,7 +1322,6 @@ export type ItemUpdateWithoutChildrenInput = {
   useBatch?: Prisma.BoolFieldUpdateOperationsInput | boolean
   archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
   bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
   taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
   wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1397,7 +1331,6 @@ export type ItemUpdateWithoutChildrenInput = {
   isPointExcluded?: Prisma.BoolFieldUpdateOperationsInput | boolean
   parent?: Prisma.ItemUpdateOneWithoutChildrenNestedInput
   brand?: Prisma.BrandUpdateOneWithoutItemsNestedInput
-  categories?: Prisma.ItemCategoryUpdateManyWithoutItemNestedInput
   scaleData?: Prisma.ItemScaleDataUpdateOneWithoutItemNestedInput
 }
 
@@ -1422,7 +1355,6 @@ export type ItemUncheckedUpdateWithoutChildrenInput = {
   bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
   parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   brandId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
   taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
   wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1430,7 +1362,6 @@ export type ItemUncheckedUpdateWithoutChildrenInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   isTemporary?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isPointExcluded?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  categories?: Prisma.ItemCategoryUncheckedUpdateManyWithoutItemNestedInput
   scaleData?: Prisma.ItemScaleDataUncheckedUpdateOneWithoutItemNestedInput
 }
 
@@ -1469,7 +1400,6 @@ export type ItemCreateWithoutScaleDataInput = {
   useBatch?: boolean
   archived?: boolean
   bundleQty?: number
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -1480,7 +1410,6 @@ export type ItemCreateWithoutScaleDataInput = {
   parent?: Prisma.ItemCreateNestedOneWithoutChildrenInput
   children?: Prisma.ItemCreateNestedManyWithoutParentInput
   brand?: Prisma.BrandCreateNestedOneWithoutItemsInput
-  categories?: Prisma.ItemCategoryCreateNestedManyWithoutItemInput
 }
 
 export type ItemUncheckedCreateWithoutScaleDataInput = {
@@ -1504,7 +1433,6 @@ export type ItemUncheckedCreateWithoutScaleDataInput = {
   bundleQty?: number
   parentId?: number | null
   brandId?: number | null
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -1513,7 +1441,6 @@ export type ItemUncheckedCreateWithoutScaleDataInput = {
   isTemporary?: boolean
   isPointExcluded?: boolean
   children?: Prisma.ItemUncheckedCreateNestedManyWithoutParentInput
-  categories?: Prisma.ItemCategoryUncheckedCreateNestedManyWithoutItemInput
 }
 
 export type ItemCreateOrConnectWithoutScaleDataInput = {
@@ -1551,7 +1478,6 @@ export type ItemUpdateWithoutScaleDataInput = {
   useBatch?: Prisma.BoolFieldUpdateOperationsInput | boolean
   archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
   bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
   taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
   wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1562,7 +1488,6 @@ export type ItemUpdateWithoutScaleDataInput = {
   parent?: Prisma.ItemUpdateOneWithoutChildrenNestedInput
   children?: Prisma.ItemUpdateManyWithoutParentNestedInput
   brand?: Prisma.BrandUpdateOneWithoutItemsNestedInput
-  categories?: Prisma.ItemCategoryUpdateManyWithoutItemNestedInput
 }
 
 export type ItemUncheckedUpdateWithoutScaleDataInput = {
@@ -1586,7 +1511,6 @@ export type ItemUncheckedUpdateWithoutScaleDataInput = {
   bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
   parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   brandId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
   taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
   wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1595,155 +1519,6 @@ export type ItemUncheckedUpdateWithoutScaleDataInput = {
   isTemporary?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isPointExcluded?: Prisma.BoolFieldUpdateOperationsInput | boolean
   children?: Prisma.ItemUncheckedUpdateManyWithoutParentNestedInput
-  categories?: Prisma.ItemCategoryUncheckedUpdateManyWithoutItemNestedInput
-}
-
-export type ItemCreateWithoutCategoriesInput = {
-  id: number
-  companyId: number
-  name_en: string
-  name_ko: string
-  name_invoice?: string | null
-  barcode: string
-  code?: string | null
-  thumb?: string | null
-  barcodeGTIN?: string | null
-  barcodePLU?: string | null
-  barcodeType?: string
-  uom?: string
-  defaultRFD?: $Enums.ItemRFD
-  isScale?: boolean
-  isBundle?: boolean
-  useBatch?: boolean
-  archived?: boolean
-  bundleQty?: number
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
-  categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
-  taxable?: boolean
-  wholesaleTaxable?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  isTemporary?: boolean
-  isPointExcluded?: boolean
-  parent?: Prisma.ItemCreateNestedOneWithoutChildrenInput
-  children?: Prisma.ItemCreateNestedManyWithoutParentInput
-  brand?: Prisma.BrandCreateNestedOneWithoutItemsInput
-  scaleData?: Prisma.ItemScaleDataCreateNestedOneWithoutItemInput
-}
-
-export type ItemUncheckedCreateWithoutCategoriesInput = {
-  id: number
-  companyId: number
-  name_en: string
-  name_ko: string
-  name_invoice?: string | null
-  barcode: string
-  code?: string | null
-  thumb?: string | null
-  barcodeGTIN?: string | null
-  barcodePLU?: string | null
-  barcodeType?: string
-  uom?: string
-  defaultRFD?: $Enums.ItemRFD
-  isScale?: boolean
-  isBundle?: boolean
-  useBatch?: boolean
-  archived?: boolean
-  bundleQty?: number
-  parentId?: number | null
-  brandId?: number | null
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
-  categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
-  taxable?: boolean
-  wholesaleTaxable?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  isTemporary?: boolean
-  isPointExcluded?: boolean
-  children?: Prisma.ItemUncheckedCreateNestedManyWithoutParentInput
-  scaleData?: Prisma.ItemScaleDataUncheckedCreateNestedOneWithoutItemInput
-}
-
-export type ItemCreateOrConnectWithoutCategoriesInput = {
-  where: Prisma.ItemWhereUniqueInput
-  create: Prisma.XOR<Prisma.ItemCreateWithoutCategoriesInput, Prisma.ItemUncheckedCreateWithoutCategoriesInput>
-}
-
-export type ItemUpsertWithoutCategoriesInput = {
-  update: Prisma.XOR<Prisma.ItemUpdateWithoutCategoriesInput, Prisma.ItemUncheckedUpdateWithoutCategoriesInput>
-  create: Prisma.XOR<Prisma.ItemCreateWithoutCategoriesInput, Prisma.ItemUncheckedCreateWithoutCategoriesInput>
-  where?: Prisma.ItemWhereInput
-}
-
-export type ItemUpdateToOneWithWhereWithoutCategoriesInput = {
-  where?: Prisma.ItemWhereInput
-  data: Prisma.XOR<Prisma.ItemUpdateWithoutCategoriesInput, Prisma.ItemUncheckedUpdateWithoutCategoriesInput>
-}
-
-export type ItemUpdateWithoutCategoriesInput = {
-  id?: Prisma.IntFieldUpdateOperationsInput | number
-  companyId?: Prisma.IntFieldUpdateOperationsInput | number
-  name_en?: Prisma.StringFieldUpdateOperationsInput | string
-  name_ko?: Prisma.StringFieldUpdateOperationsInput | string
-  name_invoice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  barcode?: Prisma.StringFieldUpdateOperationsInput | string
-  code?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  thumb?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  barcodeGTIN?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  barcodePLU?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  barcodeType?: Prisma.StringFieldUpdateOperationsInput | string
-  uom?: Prisma.StringFieldUpdateOperationsInput | string
-  defaultRFD?: Prisma.EnumItemRFDFieldUpdateOperationsInput | $Enums.ItemRFD
-  isScale?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isBundle?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  useBatch?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
-  categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
-  taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  isTemporary?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isPointExcluded?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  parent?: Prisma.ItemUpdateOneWithoutChildrenNestedInput
-  children?: Prisma.ItemUpdateManyWithoutParentNestedInput
-  brand?: Prisma.BrandUpdateOneWithoutItemsNestedInput
-  scaleData?: Prisma.ItemScaleDataUpdateOneWithoutItemNestedInput
-}
-
-export type ItemUncheckedUpdateWithoutCategoriesInput = {
-  id?: Prisma.IntFieldUpdateOperationsInput | number
-  companyId?: Prisma.IntFieldUpdateOperationsInput | number
-  name_en?: Prisma.StringFieldUpdateOperationsInput | string
-  name_ko?: Prisma.StringFieldUpdateOperationsInput | string
-  name_invoice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  barcode?: Prisma.StringFieldUpdateOperationsInput | string
-  code?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  thumb?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  barcodeGTIN?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  barcodePLU?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  barcodeType?: Prisma.StringFieldUpdateOperationsInput | string
-  uom?: Prisma.StringFieldUpdateOperationsInput | string
-  defaultRFD?: Prisma.EnumItemRFDFieldUpdateOperationsInput | $Enums.ItemRFD
-  isScale?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isBundle?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  useBatch?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
-  parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  brandId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
-  categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
-  taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  isTemporary?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isPointExcluded?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  children?: Prisma.ItemUncheckedUpdateManyWithoutParentNestedInput
-  scaleData?: Prisma.ItemScaleDataUncheckedUpdateOneWithoutItemNestedInput
 }
 
 export type ItemCreateManyBrandInput = {
@@ -1766,7 +1541,6 @@ export type ItemCreateManyBrandInput = {
   archived?: boolean
   bundleQty?: number
   parentId?: number | null
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -1795,7 +1569,6 @@ export type ItemUpdateWithoutBrandInput = {
   useBatch?: Prisma.BoolFieldUpdateOperationsInput | boolean
   archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
   bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
   taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
   wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1805,7 +1578,6 @@ export type ItemUpdateWithoutBrandInput = {
   isPointExcluded?: Prisma.BoolFieldUpdateOperationsInput | boolean
   parent?: Prisma.ItemUpdateOneWithoutChildrenNestedInput
   children?: Prisma.ItemUpdateManyWithoutParentNestedInput
-  categories?: Prisma.ItemCategoryUpdateManyWithoutItemNestedInput
   scaleData?: Prisma.ItemScaleDataUpdateOneWithoutItemNestedInput
 }
 
@@ -1829,7 +1601,6 @@ export type ItemUncheckedUpdateWithoutBrandInput = {
   archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
   bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
   parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
   taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
   wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1838,7 +1609,6 @@ export type ItemUncheckedUpdateWithoutBrandInput = {
   isTemporary?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isPointExcluded?: Prisma.BoolFieldUpdateOperationsInput | boolean
   children?: Prisma.ItemUncheckedUpdateManyWithoutParentNestedInput
-  categories?: Prisma.ItemCategoryUncheckedUpdateManyWithoutItemNestedInput
   scaleData?: Prisma.ItemScaleDataUncheckedUpdateOneWithoutItemNestedInput
 }
 
@@ -1862,7 +1632,6 @@ export type ItemUncheckedUpdateManyWithoutBrandInput = {
   archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
   bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
   parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
   taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
   wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1892,7 +1661,6 @@ export type ItemCreateManyParentInput = {
   archived?: boolean
   bundleQty?: number
   brandId?: number | null
-  categoryIds?: Prisma.ItemCreatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemCreatecategoryMarksInput | string[]
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -1921,7 +1689,6 @@ export type ItemUpdateWithoutParentInput = {
   useBatch?: Prisma.BoolFieldUpdateOperationsInput | boolean
   archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
   bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
   taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
   wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1931,7 +1698,6 @@ export type ItemUpdateWithoutParentInput = {
   isPointExcluded?: Prisma.BoolFieldUpdateOperationsInput | boolean
   children?: Prisma.ItemUpdateManyWithoutParentNestedInput
   brand?: Prisma.BrandUpdateOneWithoutItemsNestedInput
-  categories?: Prisma.ItemCategoryUpdateManyWithoutItemNestedInput
   scaleData?: Prisma.ItemScaleDataUpdateOneWithoutItemNestedInput
 }
 
@@ -1955,7 +1721,6 @@ export type ItemUncheckedUpdateWithoutParentInput = {
   archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
   bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
   brandId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
   taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
   wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1964,7 +1729,6 @@ export type ItemUncheckedUpdateWithoutParentInput = {
   isTemporary?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isPointExcluded?: Prisma.BoolFieldUpdateOperationsInput | boolean
   children?: Prisma.ItemUncheckedUpdateManyWithoutParentNestedInput
-  categories?: Prisma.ItemCategoryUncheckedUpdateManyWithoutItemNestedInput
   scaleData?: Prisma.ItemScaleDataUncheckedUpdateOneWithoutItemNestedInput
 }
 
@@ -1988,7 +1752,6 @@ export type ItemUncheckedUpdateManyWithoutParentInput = {
   archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
   bundleQty?: Prisma.IntFieldUpdateOperationsInput | number
   brandId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  categoryIds?: Prisma.ItemUpdatecategoryIdsInput | number[]
   categoryMarks?: Prisma.ItemUpdatecategoryMarksInput | string[]
   taxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
   wholesaleTaxable?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2005,12 +1768,10 @@ export type ItemUncheckedUpdateManyWithoutParentInput = {
 
 export type ItemCountOutputType = {
   children: number
-  categories: number
 }
 
 export type ItemCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   children?: boolean | ItemCountOutputTypeCountChildrenArgs
-  categories?: boolean | ItemCountOutputTypeCountCategoriesArgs
 }
 
 /**
@@ -2028,13 +1789,6 @@ export type ItemCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Extensi
  */
 export type ItemCountOutputTypeCountChildrenArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.ItemWhereInput
-}
-
-/**
- * ItemCountOutputType without action
- */
-export type ItemCountOutputTypeCountCategoriesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.ItemCategoryWhereInput
 }
 
 
@@ -2059,7 +1813,6 @@ export type ItemSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   bundleQty?: boolean
   parentId?: boolean
   brandId?: boolean
-  categoryIds?: boolean
   categoryMarks?: boolean
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -2070,7 +1823,6 @@ export type ItemSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   parent?: boolean | Prisma.Item$parentArgs<ExtArgs>
   children?: boolean | Prisma.Item$childrenArgs<ExtArgs>
   brand?: boolean | Prisma.Item$brandArgs<ExtArgs>
-  categories?: boolean | Prisma.Item$categoriesArgs<ExtArgs>
   scaleData?: boolean | Prisma.Item$scaleDataArgs<ExtArgs>
   _count?: boolean | Prisma.ItemCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["item"]>
@@ -2096,7 +1848,6 @@ export type ItemSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   bundleQty?: boolean
   parentId?: boolean
   brandId?: boolean
-  categoryIds?: boolean
   categoryMarks?: boolean
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -2129,7 +1880,6 @@ export type ItemSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   bundleQty?: boolean
   parentId?: boolean
   brandId?: boolean
-  categoryIds?: boolean
   categoryMarks?: boolean
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -2162,7 +1912,6 @@ export type ItemSelectScalar = {
   bundleQty?: boolean
   parentId?: boolean
   brandId?: boolean
-  categoryIds?: boolean
   categoryMarks?: boolean
   taxable?: boolean
   wholesaleTaxable?: boolean
@@ -2172,12 +1921,11 @@ export type ItemSelectScalar = {
   isPointExcluded?: boolean
 }
 
-export type ItemOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "companyId" | "name_en" | "name_ko" | "name_invoice" | "barcode" | "code" | "thumb" | "barcodeGTIN" | "barcodePLU" | "barcodeType" | "uom" | "defaultRFD" | "isScale" | "isBundle" | "useBatch" | "archived" | "bundleQty" | "parentId" | "brandId" | "categoryIds" | "categoryMarks" | "taxable" | "wholesaleTaxable" | "createdAt" | "updatedAt" | "isTemporary" | "isPointExcluded", ExtArgs["result"]["item"]>
+export type ItemOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "companyId" | "name_en" | "name_ko" | "name_invoice" | "barcode" | "code" | "thumb" | "barcodeGTIN" | "barcodePLU" | "barcodeType" | "uom" | "defaultRFD" | "isScale" | "isBundle" | "useBatch" | "archived" | "bundleQty" | "parentId" | "brandId" | "categoryMarks" | "taxable" | "wholesaleTaxable" | "createdAt" | "updatedAt" | "isTemporary" | "isPointExcluded", ExtArgs["result"]["item"]>
 export type ItemInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   parent?: boolean | Prisma.Item$parentArgs<ExtArgs>
   children?: boolean | Prisma.Item$childrenArgs<ExtArgs>
   brand?: boolean | Prisma.Item$brandArgs<ExtArgs>
-  categories?: boolean | Prisma.Item$categoriesArgs<ExtArgs>
   scaleData?: boolean | Prisma.Item$scaleDataArgs<ExtArgs>
   _count?: boolean | Prisma.ItemCountOutputTypeDefaultArgs<ExtArgs>
 }
@@ -2196,7 +1944,6 @@ export type $ItemPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     parent: Prisma.$ItemPayload<ExtArgs> | null
     children: Prisma.$ItemPayload<ExtArgs>[]
     brand: Prisma.$BrandPayload<ExtArgs> | null
-    categories: Prisma.$ItemCategoryPayload<ExtArgs>[]
     scaleData: Prisma.$ItemScaleDataPayload<ExtArgs> | null
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
@@ -2220,7 +1967,6 @@ export type $ItemPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     bundleQty: number
     parentId: number | null
     brandId: number | null
-    categoryIds: number[]
     categoryMarks: string[]
     taxable: boolean
     wholesaleTaxable: boolean
@@ -2625,7 +2371,6 @@ export interface Prisma__ItemClient<T, Null = never, ExtArgs extends runtime.Typ
   parent<T extends Prisma.Item$parentArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Item$parentArgs<ExtArgs>>): Prisma.Prisma__ItemClient<runtime.Types.Result.GetResult<Prisma.$ItemPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   children<T extends Prisma.Item$childrenArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Item$childrenArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ItemPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   brand<T extends Prisma.Item$brandArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Item$brandArgs<ExtArgs>>): Prisma.Prisma__BrandClient<runtime.Types.Result.GetResult<Prisma.$BrandPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
-  categories<T extends Prisma.Item$categoriesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Item$categoriesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ItemCategoryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   scaleData<T extends Prisma.Item$scaleDataArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Item$scaleDataArgs<ExtArgs>>): Prisma.Prisma__ItemScaleDataClient<runtime.Types.Result.GetResult<Prisma.$ItemScaleDataPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -2676,7 +2421,6 @@ export interface ItemFieldRefs {
   readonly bundleQty: Prisma.FieldRef<"Item", 'Int'>
   readonly parentId: Prisma.FieldRef<"Item", 'Int'>
   readonly brandId: Prisma.FieldRef<"Item", 'Int'>
-  readonly categoryIds: Prisma.FieldRef<"Item", 'Int[]'>
   readonly categoryMarks: Prisma.FieldRef<"Item", 'String[]'>
   readonly taxable: Prisma.FieldRef<"Item", 'Boolean'>
   readonly wholesaleTaxable: Prisma.FieldRef<"Item", 'Boolean'>
@@ -3139,30 +2883,6 @@ export type Item$brandArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs
    */
   include?: Prisma.BrandInclude<ExtArgs> | null
   where?: Prisma.BrandWhereInput
-}
-
-/**
- * Item.categories
- */
-export type Item$categoriesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the ItemCategory
-   */
-  select?: Prisma.ItemCategorySelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the ItemCategory
-   */
-  omit?: Prisma.ItemCategoryOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.ItemCategoryInclude<ExtArgs> | null
-  where?: Prisma.ItemCategoryWhereInput
-  orderBy?: Prisma.ItemCategoryOrderByWithRelationInput | Prisma.ItemCategoryOrderByWithRelationInput[]
-  cursor?: Prisma.ItemCategoryWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.ItemCategoryScalarFieldEnum | Prisma.ItemCategoryScalarFieldEnum[]
 }
 
 /**

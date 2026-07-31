@@ -9,11 +9,9 @@
  * 🟢 You can import this file directly.
  */
 export type * from './models/Company'
-export type * from './models/Category'
 export type * from './models/Brand'
 export type * from './models/Item'
 export type * from './models/ItemScaleData'
-export type * from './models/ItemCategory'
 export type * from './models/Price'
 export type * from './models/PromoPrice'
 export type * from './models/CloudHotkey'

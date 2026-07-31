@@ -405,6 +405,14 @@ export type PriceUncheckedUpdateManyInput = {
   markup?: Prisma.FloatFieldUpdateOperationsInput | number
 }
 
+export type IntNullableListFilter<$PrismaModel = never> = {
+  equals?: number[] | Prisma.ListIntFieldRefInput<$PrismaModel> | null
+  has?: number | Prisma.IntFieldRefInput<$PrismaModel> | null
+  hasEvery?: number[] | Prisma.ListIntFieldRefInput<$PrismaModel>
+  hasSome?: number[] | Prisma.ListIntFieldRefInput<$PrismaModel>
+  isEmpty?: boolean
+}
+
 export type PriceCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   companyId?: Prisma.SortOrder

@@ -1,10 +1,9 @@
-import { Brand, Category, Price } from "../../generated/prisma/browser";
+import { Brand, Price } from "../../generated/prisma/browser";
 import {
   CloudHotkey,
   CloudHotkeyItem,
   Company,
   Item,
-  ItemCategory,
   ItemScaleData,
   PromoPrice,
 } from "../../generated/prisma/client";
@@ -17,12 +16,14 @@ const tag = "[cloud-migrate]";
 
 type ItemWithRelations = Item & {
   scaleData: ItemScaleData | null;
-  categories: ItemCategory[];
 };
 
 function toLocalItemData(
   item: ItemWithRelations,
-): Omit<Item, "parent" | "children" | "brand" | "scaleData" | "categories"> {
+): Omit<
+  Item,
+  "parent" | "children" | "brand" | "scaleData" | "categoryIds"
+> {
   return {
     id: item.id,
     companyId: item.companyId,
@@ -44,7 +45,6 @@ function toLocalItemData(
     bundleQty: item.bundleQty,
     parentId: item.parentId,
     brandId: item.brandId,
-    categoryIds: item.categoryIds,
     categoryMarks: item.categoryMarks,
     taxable: item.taxable,
     wholesaleTaxable: item.wholesaleTaxable,
@@ -79,7 +79,7 @@ export async function cloudItemMigrateService() {
     console.log(`${tag} items: ${result.length} received`);
 
     for (const item of result) {
-      const { scaleData, categories } = item;
+      const { scaleData } = item;
       const itemData = toLocalItemData(item);
       const { type, gtin14, plu } = getNormalizedBarcode(item.barcode);
 
@@ -107,16 +107,6 @@ export async function cloudItemMigrateService() {
           data: { ...scaleData, itemId: item.id },
         });
       }
-
-      if (categories && categories.length > 0) {
-        await db.itemCategory.deleteMany({ where: { itemId: item.id } });
-        await db.itemCategory.createMany({
-          data: categories.map((c) => ({
-            itemId: item.id,
-            categoryId: c.categoryId,
-          })),
-        });
-      }
     }
 
     for (const item of result) {
@@ -131,57 +121,6 @@ export async function cloudItemMigrateService() {
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error(`${tag} items: error`, e);
-    return false;
-  }
-}
-
-export async function cloudCategoryMigrateService() {
-  try {
-    const lastUpdatedAt = await db.category
-      .findFirst({
-        select: { updatedAt: true },
-        orderBy: { updatedAt: "desc" },
-        take: 1,
-      })
-      .then((r) => r?.updatedAt?.getTime() || 0);
-
-    const { ok, msg, result } = await apiService.post<Category[]>(
-      "/device/migrate/category",
-      { lastUpdatedAt },
-    );
-
-    console.log(result);
-
-    if (!ok || !result) {
-      throw new BadRequestException(
-        msg || "Failed to migrate categories from cloud",
-      );
-    }
-
-    const parents = result.filter((c) => !c.parentId);
-    const children = result.filter((c) => c.parentId);
-
-    for (const category of parents) {
-      await db.category.upsert({
-        where: { id: category.id },
-        update: { ...category, parentId: null },
-        create: { ...category, parentId: null },
-      });
-    }
-
-    for (const category of children) {
-      await db.category.upsert({
-        where: { id: category.id },
-        update: { ...category },
-        create: { ...category },
-      });
-    }
-
-    console.log(`${tag} categories: ${result.length} synced`);
-    return true;
-  } catch (e) {
-    if (e instanceof HttpException) throw e;
-    console.error(`${tag} categories: error`, e);
     return false;
   }
 }

@@ -385,11 +385,9 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 
 export const ModelName = {
   Company: 'Company',
-  Category: 'Category',
   Brand: 'Brand',
   Item: 'Item',
   ItemScaleData: 'ItemScaleData',
-  ItemCategory: 'ItemCategory',
   Price: 'Price',
   PromoPrice: 'PromoPrice',
   CloudHotkey: 'CloudHotkey',
@@ -427,7 +425,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "company" | "category" | "brand" | "item" | "itemScaleData" | "itemCategory" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "printedHistory" | "pickupOrderCache" | "pickupOrderLineCache" | "pickupOrderSyncState" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter"
+    modelProps: "company" | "brand" | "item" | "itemScaleData" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "printedHistory" | "pickupOrderCache" | "pickupOrderLineCache" | "pickupOrderSyncState" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -502,80 +500,6 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.CompanyCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.CompanyCountAggregateOutputType> | number
-        }
-      }
-    }
-    Category: {
-      payload: Prisma.$CategoryPayload<ExtArgs>
-      fields: Prisma.CategoryFieldRefs
-      operations: {
-        findUnique: {
-          args: Prisma.CategoryFindUniqueArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$CategoryPayload> | null
-        }
-        findUniqueOrThrow: {
-          args: Prisma.CategoryFindUniqueOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$CategoryPayload>
-        }
-        findFirst: {
-          args: Prisma.CategoryFindFirstArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$CategoryPayload> | null
-        }
-        findFirstOrThrow: {
-          args: Prisma.CategoryFindFirstOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$CategoryPayload>
-        }
-        findMany: {
-          args: Prisma.CategoryFindManyArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$CategoryPayload>[]
-        }
-        create: {
-          args: Prisma.CategoryCreateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$CategoryPayload>
-        }
-        createMany: {
-          args: Prisma.CategoryCreateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        createManyAndReturn: {
-          args: Prisma.CategoryCreateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$CategoryPayload>[]
-        }
-        delete: {
-          args: Prisma.CategoryDeleteArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$CategoryPayload>
-        }
-        update: {
-          args: Prisma.CategoryUpdateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$CategoryPayload>
-        }
-        deleteMany: {
-          args: Prisma.CategoryDeleteManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateMany: {
-          args: Prisma.CategoryUpdateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateManyAndReturn: {
-          args: Prisma.CategoryUpdateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$CategoryPayload>[]
-        }
-        upsert: {
-          args: Prisma.CategoryUpsertArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$CategoryPayload>
-        }
-        aggregate: {
-          args: Prisma.CategoryAggregateArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.AggregateCategory>
-        }
-        groupBy: {
-          args: Prisma.CategoryGroupByArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.CategoryGroupByOutputType>[]
-        }
-        count: {
-          args: Prisma.CategoryCountArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.CategoryCountAggregateOutputType> | number
         }
       }
     }
@@ -798,80 +722,6 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.ItemScaleDataCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.ItemScaleDataCountAggregateOutputType> | number
-        }
-      }
-    }
-    ItemCategory: {
-      payload: Prisma.$ItemCategoryPayload<ExtArgs>
-      fields: Prisma.ItemCategoryFieldRefs
-      operations: {
-        findUnique: {
-          args: Prisma.ItemCategoryFindUniqueArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemCategoryPayload> | null
-        }
-        findUniqueOrThrow: {
-          args: Prisma.ItemCategoryFindUniqueOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemCategoryPayload>
-        }
-        findFirst: {
-          args: Prisma.ItemCategoryFindFirstArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemCategoryPayload> | null
-        }
-        findFirstOrThrow: {
-          args: Prisma.ItemCategoryFindFirstOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemCategoryPayload>
-        }
-        findMany: {
-          args: Prisma.ItemCategoryFindManyArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemCategoryPayload>[]
-        }
-        create: {
-          args: Prisma.ItemCategoryCreateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemCategoryPayload>
-        }
-        createMany: {
-          args: Prisma.ItemCategoryCreateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        createManyAndReturn: {
-          args: Prisma.ItemCategoryCreateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemCategoryPayload>[]
-        }
-        delete: {
-          args: Prisma.ItemCategoryDeleteArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemCategoryPayload>
-        }
-        update: {
-          args: Prisma.ItemCategoryUpdateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemCategoryPayload>
-        }
-        deleteMany: {
-          args: Prisma.ItemCategoryDeleteManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateMany: {
-          args: Prisma.ItemCategoryUpdateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateManyAndReturn: {
-          args: Prisma.ItemCategoryUpdateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemCategoryPayload>[]
-        }
-        upsert: {
-          args: Prisma.ItemCategoryUpsertArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemCategoryPayload>
-        }
-        aggregate: {
-          args: Prisma.ItemCategoryAggregateArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.AggregateItemCategory>
-        }
-        groupBy: {
-          args: Prisma.ItemCategoryGroupByArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.ItemCategoryGroupByOutputType>[]
-        }
-        count: {
-          args: Prisma.ItemCategoryCountArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.ItemCategoryCountAggregateOutputType> | number
         }
       }
     }
@@ -2561,22 +2411,6 @@ export const CompanyScalarFieldEnum = {
 export type CompanyScalarFieldEnum = (typeof CompanyScalarFieldEnum)[keyof typeof CompanyScalarFieldEnum]
 
 
-export const CategoryScalarFieldEnum = {
-  id: 'id',
-  name_en: 'name_en',
-  name_ko: 'name_ko',
-  parentId: 'parentId',
-  index: 'index',
-  level: 'level',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt',
-  archived: 'archived',
-  companyId: 'companyId'
-} as const
-
-export type CategoryScalarFieldEnum = (typeof CategoryScalarFieldEnum)[keyof typeof CategoryScalarFieldEnum]
-
-
 export const BrandScalarFieldEnum = {
   id: 'id',
   name_en: 'name_en',
@@ -2612,7 +2446,6 @@ export const ItemScalarFieldEnum = {
   bundleQty: 'bundleQty',
   parentId: 'parentId',
   brandId: 'brandId',
-  categoryIds: 'categoryIds',
   categoryMarks: 'categoryMarks',
   taxable: 'taxable',
   wholesaleTaxable: 'wholesaleTaxable',
@@ -2634,14 +2467,6 @@ export const ItemScaleDataScalarFieldEnum = {
 } as const
 
 export type ItemScaleDataScalarFieldEnum = (typeof ItemScaleDataScalarFieldEnum)[keyof typeof ItemScaleDataScalarFieldEnum]
-
-
-export const ItemCategoryScalarFieldEnum = {
-  itemId: 'itemId',
-  categoryId: 'categoryId'
-} as const
-
-export type ItemCategoryScalarFieldEnum = (typeof ItemCategoryScalarFieldEnum)[keyof typeof ItemCategoryScalarFieldEnum]
 
 
 export const PriceScalarFieldEnum = {
@@ -3157,6 +2982,13 @@ export type ListStringFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaMod
 
 
 /**
+ * Reference to a field of type 'Boolean'
+ */
+export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
+    
+
+
+/**
  * Reference to a field of type 'DateTime'
  */
 export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
@@ -3167,13 +2999,6 @@ export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel
  * Reference to a field of type 'DateTime[]'
  */
 export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime[]'>
-    
-
-
-/**
- * Reference to a field of type 'Boolean'
- */
-export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
     
 
 
@@ -3398,11 +3223,9 @@ export type PrismaClientOptions = ({
 }
 export type GlobalOmitConfig = {
   company?: Prisma.CompanyOmit
-  category?: Prisma.CategoryOmit
   brand?: Prisma.BrandOmit
   item?: Prisma.ItemOmit
   itemScaleData?: Prisma.ItemScaleDataOmit
-  itemCategory?: Prisma.ItemCategoryOmit
   price?: Prisma.PriceOmit
   promoPrice?: Prisma.PromoPriceOmit
   cloudHotkey?: Prisma.CloudHotkeyOmit
