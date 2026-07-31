@@ -4,7 +4,6 @@ import {
   CloudHotkeyItem,
   Company,
   Item,
-  ItemCategory,
   ItemScaleData,
   PromoPrice,
 } from "../../generated/prisma/client";
@@ -17,12 +16,14 @@ const tag = "[cloud-migrate]";
 
 type ItemWithRelations = Item & {
   scaleData: ItemScaleData | null;
-  categories: ItemCategory[];
 };
 
 function toLocalItemData(
   item: ItemWithRelations,
-): Omit<Item, "parent" | "children" | "brand" | "scaleData" | "categories"> {
+): Omit<
+  Item,
+  "parent" | "children" | "brand" | "scaleData" | "categoryIds"
+> {
   return {
     id: item.id,
     companyId: item.companyId,
@@ -44,7 +45,6 @@ function toLocalItemData(
     bundleQty: item.bundleQty,
     parentId: item.parentId,
     brandId: item.brandId,
-    categoryIds: item.categoryIds,
     categoryMarks: item.categoryMarks,
     taxable: item.taxable,
     wholesaleTaxable: item.wholesaleTaxable,
@@ -79,7 +79,7 @@ export async function cloudItemMigrateService() {
     console.log(`${tag} items: ${result.length} received`);
 
     for (const item of result) {
-      const { scaleData, categories } = item;
+      const { scaleData } = item;
       const itemData = toLocalItemData(item);
       const { type, gtin14, plu } = getNormalizedBarcode(item.barcode);
 
@@ -105,16 +105,6 @@ export async function cloudItemMigrateService() {
         await db.itemScaleData.deleteMany({ where: { itemId: item.id } });
         await db.itemScaleData.create({
           data: { ...scaleData, itemId: item.id },
-        });
-      }
-
-      if (categories && categories.length > 0) {
-        await db.itemCategory.deleteMany({ where: { itemId: item.id } });
-        await db.itemCategory.createMany({
-          data: categories.map((c) => ({
-            itemId: item.id,
-            categoryId: c.categoryId,
-          })),
         });
       }
     }
