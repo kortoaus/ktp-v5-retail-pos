@@ -1,7 +1,6 @@
 import { Response, Request } from "express";
 import {
   cloudBrandMigrateService,
-  cloudCategoryMigrateService,
   cloudCompanyMigrateService,
   cloudHotkeyMigrateService,
   cloudItemMigrateService,
@@ -17,16 +16,6 @@ import {
 } from "./cloud.sync.service";
 
 export async function cloudItemMigrateController(req: Request, res: Response) {
-  const categoryResult = await cloudCategoryMigrateService();
-
-  if (!categoryResult) {
-    res.status(500).json({
-      ok: false,
-      msg: "Failed to migrate categories",
-    });
-    return;
-  }
-
   const companyResult = await cloudCompanyMigrateService();
   if (!companyResult) {
     res.status(500).json({
