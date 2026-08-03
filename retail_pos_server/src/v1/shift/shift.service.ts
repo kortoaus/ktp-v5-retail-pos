@@ -48,7 +48,8 @@ export async function openTerminalShiftService(
 
     const newShift = await db.terminalShift.create({
       data: {
-        companyId: company.id,
+        // sale/spend/refund 와 동일하게 클라우드 회사 id 를 기록 (로컬 Company.id=1 금지)
+        companyId: company.cloudId,
         terminalId: terminal.id,
 
         dayStr: now.format("ddd"),

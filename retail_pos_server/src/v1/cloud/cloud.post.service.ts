@@ -11,7 +11,11 @@ async function client(company: Company) {
   const client = await axios.get(`${CRM_URL}/api/post`, {
     headers: {
       contentType: "application/json",
-      "ktpv5-company": JSON.stringify({ id: company.id, name: company.name }),
+      "ktpv5-company": JSON.stringify({
+        // CRM 은 클라우드 회사 id 를 기대한다 — 로컬 Company.id(=1) 가 아니라 cloudId.
+        id: company.cloudId,
+        name: company.name,
+      }),
     },
   });
 

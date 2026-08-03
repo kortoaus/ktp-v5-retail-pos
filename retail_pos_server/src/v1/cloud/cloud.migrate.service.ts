@@ -304,6 +304,8 @@ export async function cloudCompanyMigrateService() {
         email: result.email,
       },
       update: {
+        // create 뿐 아니라 재싱크 때도 stale companyId 를 교정한다
+        companyId: result.cloudId,
         companyName: result.name,
       },
     });
