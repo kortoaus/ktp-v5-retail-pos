@@ -21,6 +21,9 @@ export interface BuildSaleInvoiceEscposOptions {
   extraFooterText?: string;
   encoding: ReceiptTextEncoding;
   cut?: boolean;
+  // 판매 직후 최초 출력에만 전달 — CRM 잔액 스냅샷 + pointsEarned 합산.
+  // 저장되지 않는 값이므로 reprint 경로에서는 알 수 없어 생략된다.
+  memberTotalPoints?: number;
 }
 
 const ESC = 0x1b;
@@ -426,6 +429,7 @@ async function appendTaxAndSavings(
   writer: EscposWriter,
   invoice: SaleInvoiceDetail,
   isRefund: boolean,
+  memberTotalPoints?: number,
 ): Promise<void> {
   await writer.divider();
 
@@ -445,6 +449,11 @@ async function appendTaxAndSavings(
   if (!isRefund && invoice.type === "SALE" && invoice.pointsEarned > 0) {
     await writer.line(
       leftRight("Points Earned", invoice.pointsEarned.toLocaleString()),
+    );
+  }
+  if (!isRefund && invoice.type === "SALE" && memberTotalPoints != null) {
+    await writer.line(
+      leftRight("Total Points", memberTotalPoints.toLocaleString()),
     );
   }
 }
@@ -519,6 +528,7 @@ async function appendSaleInvoiceBody(
   isCopy: boolean,
   belowText: string,
   extraFooterText?: string,
+  memberTotalPoints?: number,
 ): Promise<void> {
   const isRefund = invoice.type === "REFUND";
   const isSpend = invoice.type === "SPEND";
@@ -537,7 +547,7 @@ async function appendSaleInvoiceBody(
   if (!isSpend) {
     await appendTotals(writer, invoice, isRefund);
     const voucherPayments = await appendPayments(writer, invoice, isRefund);
-    await appendTaxAndSavings(writer, invoice, isRefund);
+    await appendTaxAndSavings(writer, invoice, isRefund, memberTotalPoints);
     await appendVoucherDetails(writer, voucherPayments, isRefund);
     await writer.divider();
     await writer.line("^ = price changed  # = GST applicable");
@@ -559,6 +569,7 @@ export async function buildSaleInvoiceEscposReceipt(
     options.isCopy ?? false,
     options.belowText ?? "Thank you!",
     options.extraFooterText,
+    options.memberTotalPoints,
   );
   writer.feed(3);
   if (options.cut !== false) writer.raw(cutCommand(3));

@@ -326,6 +326,9 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     cashReceived: number;
     change: number;
     receiptPrinted: boolean;
+    // clearActiveCart() 가 member 를 지우기 전의 CRM 잔액 스냅샷. 영수증의
+    // Total Points(잔액+적립) 계산용 — 어디에도 저장되지 않는다.
+    memberPointsBefore: number | null;
   } | null>(null);
 
   async function handleCompleteSale() {
@@ -369,6 +372,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
         cashReceived: cal.cashIntent,
         change: cal.change,
         receiptPrinted: false,
+        memberPointsBefore: activeMember?.points ?? null,
       });
       const pickupOrderIds = getDistinctPickupOrderIds(saleCartSnapshot.lines);
       clearActiveCart();
@@ -435,11 +439,17 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
         window.alert("Failed to load receipt detail");
         return;
       }
+      // 멤버 판매면 합산 포인트(잔액 스냅샷 + 서버 확정 적립) 한 줄 추가.
+      const memberTotalPoints =
+        completedInfo.memberPointsBefore != null && detail.type === "SALE"
+          ? completedInfo.memberPointsBefore + detail.pointsEarned
+          : undefined;
       await printSaleInvoiceReceipt(
         detail,
         completedInfo.receiptPrinted,
         storeSetting?.receipt_below_text || undefined,
         storeSetting?.receipt_extra_footer_text || undefined,
+        memberTotalPoints,
       );
       setCompletedInfo((prev) =>
         prev ? { ...prev, detail, receiptPrinted: true } : prev,
@@ -679,6 +689,15 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
                 )}
               >
                 {hasAvailableCustomerVoucher ? "Voucher available" : "Member"}
+              </span>
+            )}
+            {activeMember && !spendMode && (
+              // 잔액 → 합산(예상 적립 포함). cashier 가 영수증 전에 안내할 수
+              // 있게 헤더에 상시 노출. 적립 예상은 결제 수단 조합에 따라 변동.
+              <span className="text-sm font-semibold text-gray-600">
+                P {activeMember.points.toLocaleString()}
+                {cal.pointsEarned > 0 &&
+                  ` → ${(activeMember.points + cal.pointsEarned).toLocaleString()}`}
               </span>
             )}
           </div>

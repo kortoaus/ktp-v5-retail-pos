@@ -100,6 +100,7 @@ function estimateHeight(
   invoice: SaleInvoiceDetail,
   isCopy: boolean,
   extraFooterText?: string,
+  memberTotalPoints?: number,
 ): number {
   const isSpend = invoice.type === "SPEND";
   const extraFooterLines =
@@ -128,6 +129,7 @@ function estimateHeight(
   if (invoice.creditSurchargeAmount > 0) totalLines += 1;
   if (invoice.rounding !== 0) totalLines += 1;
   if (invoice.type === "SALE" && invoice.pointsEarned > 0) totalLines += 1;
+  if (invoice.type === "SALE" && memberTotalPoints != null) totalLines += 1;
 
   let payLines = 0;
   if (cashPaid > 0) payLines += invoice.type === "REFUND" ? 1 : 2;
@@ -166,10 +168,11 @@ export async function renderSaleInvoiceReceipt(
   isCopy: boolean = false,
   belowText: string = "Thank you!",
   extraFooterText?: string,
+  memberTotalPoints?: number,
 ): Promise<HTMLCanvasElement> {
   const canvas = document.createElement("canvas");
   canvas.width = W;
-  canvas.height = estimateHeight(invoice, isCopy, extraFooterText);
+  canvas.height = estimateHeight(invoice, isCopy, extraFooterText, memberTotalPoints);
 
   const ctx = canvas.getContext("2d")!;
   ctx.fillStyle = "#fff";
@@ -401,6 +404,10 @@ export async function renderSaleInvoiceReceipt(
       row(ctx, "Points Earned", invoice.pointsEarned.toLocaleString(), y);
       y += LH;
     }
+    if (!isRefund && invoice.type === "SALE" && memberTotalPoints != null) {
+      row(ctx, "Total Points", memberTotalPoints.toLocaleString(), y);
+      y += LH;
+    }
 
     /* ── Vouchers Used (entityLabel 상세) ── */
     if (voucherPayments.length > 0) {
@@ -490,6 +497,9 @@ export async function printSaleInvoiceReceipt(
   isCopy: boolean = false,
   belowText: string = "Thank you!",
   extraFooterText?: string,
+  // 판매 직후 최초 출력에만 전달되는 합산 포인트 (CRM 잔액 스냅샷 + pointsEarned).
+  // 어디에도 저장되지 않으므로 reprint 경로에서는 전달 불가 → 줄 자체가 생략된다.
+  memberTotalPoints?: number,
 ): Promise<void> {
   const receiptConfig = await getReceiptPrintConfig();
 
@@ -500,6 +510,7 @@ export async function printSaleInvoiceReceipt(
       extraFooterText,
       encoding: receiptConfig.encoding,
       cut: true,
+      memberTotalPoints,
     });
     await printESCPOS(buffer, { stripSerialInit: true });
     return;
@@ -510,6 +521,7 @@ export async function printSaleInvoiceReceipt(
     isCopy,
     belowText,
     extraFooterText,
+    memberTotalPoints,
   );
   const buffer = buildPrintBuffer(canvas);
   await printESCPOS(buffer);
