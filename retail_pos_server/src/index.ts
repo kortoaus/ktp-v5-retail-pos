@@ -6,11 +6,6 @@ import {
   triggerSyncAllSaleInvoices,
   triggerSyncAllShifts,
 } from "./v1/cloud/cloud.sync.service";
-import {
-  emitPickupPendingCountToSocket,
-  startPickupPendingCountBroadcaster,
-} from "./v1/pickup-order/pickup-order.pending-count";
-import { startPickupOrderSyncWorker } from "./v1/pickup-order/pickup-order.worker";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -27,7 +22,6 @@ setIO(io);
 
 io.on("connection", (socket) => {
   console.log(`Socket connected: ${socket.id}`);
-  void emitPickupPendingCountToSocket(socket);
   socket.on("disconnect", () => {
     console.log(`Socket disconnected: ${socket.id}`);
   });
@@ -40,6 +34,4 @@ httpServer.listen(port, () => {
   // while server was down, network hiccup, etc).
   triggerSyncAllSaleInvoices();
   triggerSyncAllShifts();
-  startPickupOrderSyncWorker();
-  startPickupPendingCountBroadcaster();
 });

@@ -13,8 +13,6 @@ import brandRouter from "./v1/brand/brand.router";
 import voucherRouter from "./v1/voucher/voucher.router";
 import customerVoucherRouter from "./v1/customer-voucher/customer-voucher.router";
 import saleRouter from "./v1/sale/sale.router";
-import pickupOrderRouter from "./v1/pickup-order/pickup-order.router";
-import printedHistoryRouter from "./v1/printed-history/printed-history.router";
 
 const router = Router();
 
@@ -32,6 +30,4 @@ router.use("/store", storeRouter);
 router.use("/voucher", voucherRouter);
 router.use("/customer-voucher", customerVoucherRouter);
 router.use("/sale", saleRouter);
-router.use("/pickup-order", pickupOrderRouter);
-router.use("/printed-history", printedHistoryRouter);
 export default router;
