@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { KeyboardKey } from "./KeyboardKey";
 import { useHangulComposer } from "./useHangulComposer";
+import { usePhysicalKeyboard } from "./usePhysicalKeyboard";
 import {
   KOREAN,
   KOREAN_SHIFT,
@@ -108,8 +109,12 @@ export default function OnScreenKeyboard({
     [lang, showNumpad, shifted, value, onChange, onEnter, composer],
   );
 
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  usePhysicalKeyboard({ rootRef, lang, showNumpad, onKey: handleKey });
+
   return (
     <div
+      ref={rootRef}
       className={`w-full bg-gray-100 p-2 rounded-xl select-none ${className}`}
     >
       {layout.map((row, rowIdx) => (
