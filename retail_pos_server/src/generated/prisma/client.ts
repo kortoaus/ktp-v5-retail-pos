@@ -103,26 +103,6 @@ export type StoreSetting = Prisma.StoreSettingModel
  */
 export type PrintedItemSheet = Prisma.PrintedItemSheetModel
 /**
- * Model PrintedHistory
- * 
- */
-export type PrintedHistory = Prisma.PrintedHistoryModel
-/**
- * Model PickupOrderCache
- * 
- */
-export type PickupOrderCache = Prisma.PickupOrderCacheModel
-/**
- * Model PickupOrderLineCache
- * 
- */
-export type PickupOrderLineCache = Prisma.PickupOrderLineCacheModel
-/**
- * Model PickupOrderSyncState
- * 
- */
-export type PickupOrderSyncState = Prisma.PickupOrderSyncStateModel
-/**
  * Model User
  * 
  */

@@ -64,10 +64,6 @@ export const ModelName = {
   HotkeyItem: 'HotkeyItem',
   StoreSetting: 'StoreSetting',
   PrintedItemSheet: 'PrintedItemSheet',
-  PrintedHistory: 'PrintedHistory',
-  PickupOrderCache: 'PickupOrderCache',
-  PickupOrderLineCache: 'PickupOrderLineCache',
-  PickupOrderSyncState: 'PickupOrderSyncState',
   User: 'User',
   TerminalShift: 'TerminalShift',
   CashInOut: 'CashInOut',
@@ -310,88 +306,6 @@ export const PrintedItemSheetScalarFieldEnum = {
 export type PrintedItemSheetScalarFieldEnum = (typeof PrintedItemSheetScalarFieldEnum)[keyof typeof PrintedItemSheetScalarFieldEnum]
 
 
-export const PrintedHistoryScalarFieldEnum = {
-  id: 'id',
-  entityType: 'entityType',
-  entityId: 'entityId',
-  printedAt: 'printedAt',
-  userId: 'userId',
-  userName: 'userName',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-} as const
-
-export type PrintedHistoryScalarFieldEnum = (typeof PrintedHistoryScalarFieldEnum)[keyof typeof PrintedHistoryScalarFieldEnum]
-
-
-export const PickupOrderCacheScalarFieldEnum = {
-  id: 'id',
-  crmOrderId: 'crmOrderId',
-  companyId: 'companyId',
-  documentId: 'documentId',
-  status: 'status',
-  memberId: 'memberId',
-  memberName: 'memberName',
-  memberLevel: 'memberLevel',
-  memberPhoneLast4: 'memberPhoneLast4',
-  pickupStartsAt: 'pickupStartsAt',
-  linesTotal: 'linesTotal',
-  total: 'total',
-  crmCreatedAt: 'crmCreatedAt',
-  crmUpdatedAt: 'crmUpdatedAt',
-  syncedAt: 'syncedAt',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-} as const
-
-export type PickupOrderCacheScalarFieldEnum = (typeof PickupOrderCacheScalarFieldEnum)[keyof typeof PickupOrderCacheScalarFieldEnum]
-
-
-export const PickupOrderLineCacheScalarFieldEnum = {
-  id: 'id',
-  crmLineId: 'crmLineId',
-  crmOrderId: 'crmOrderId',
-  index: 'index',
-  itemId: 'itemId',
-  name_en: 'name_en',
-  name_ko: 'name_ko',
-  barcode: 'barcode',
-  code: 'code',
-  uom: 'uom',
-  prices: 'prices',
-  promoPrices: 'promoPrices',
-  memberLevel: 'memberLevel',
-  optionTotal: 'optionTotal',
-  qty: 'qty',
-  total: 'total',
-  note: 'note',
-  selectedOptionsSnapshot: 'selectedOptionsSnapshot',
-  crmCreatedAt: 'crmCreatedAt',
-  crmUpdatedAt: 'crmUpdatedAt',
-  syncedAt: 'syncedAt',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-} as const
-
-export type PickupOrderLineCacheScalarFieldEnum = (typeof PickupOrderLineCacheScalarFieldEnum)[keyof typeof PickupOrderLineCacheScalarFieldEnum]
-
-
-export const PickupOrderSyncStateScalarFieldEnum = {
-  id: 'id',
-  key: 'key',
-  cursorUpdatedAt: 'cursorUpdatedAt',
-  cursorOrderId: 'cursorOrderId',
-  lastSyncedAt: 'lastSyncedAt',
-  lastSuccessAt: 'lastSuccessAt',
-  lastErrorAt: 'lastErrorAt',
-  lastErrorMsg: 'lastErrorMsg',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-} as const
-
-export type PickupOrderSyncStateScalarFieldEnum = (typeof PickupOrderSyncStateScalarFieldEnum)[keyof typeof PickupOrderSyncStateScalarFieldEnum]
-
-
 export const UserScalarFieldEnum = {
   id: 'id',
   name: 'name',
@@ -616,13 +530,6 @@ export const NullableJsonNullValueInput = {
 } as const
 
 export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
-
-
-export const JsonNullValueInput = {
-  JsonNull: JsonNull
-} as const
-
-export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
 
 
 export const QueryMode = {
