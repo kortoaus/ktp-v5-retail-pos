@@ -25,9 +25,9 @@ src/main/       index.ts (windows + lifecycle) · store.ts (config) · updater.t
 src/preload/    index.ts (contextBridge) · index.d.ts (window.electronAPI types)
 src/renderer/src/
   App.tsx main.tsx      HashRouter + providers    contexts/  Terminal → Shift → User
-  service/*.service.ts  ALL HTTP (15 files)       libs/api.ts  the axios singleton
+  service/*.service.ts  ALL HTTP (12 files)       libs/api.ts  the axios singleton
   store/SalesStore.ts   zustand cart state        libs/{printer,label-*,sale,refund}/
-scripts/tests/  9 node:test files (not wired to npm test)
+scripts/tests/  3 node:test files (not wired to npm test)
 ```
 
 ## Windows (`src/main/index.ts`)
@@ -93,7 +93,7 @@ works before `TerminalProvider` mounts. Every method resolves to
 **The renderer never calls api-server or crm-server directly.** The only non-local host anywhere is
 the Cloudflare Images CDN in `libs/cf-image-utils.ts` (`<img src>` only). Everything cloud-facing is
 proxied by the local server: `/api/crm/*`, `/api/cloud/*`, `/api/hotkey/cloud`,
-`/api/customer-voucher/*`, `/api/pickup-order/sync`. One deliberate bypass:
+`/api/customer-voucher/*`. One deliberate bypass:
 `libs/printer/print.service.ts` uses bare `fetch` for `POST /api/printer/print` (binary body).
 
 ## Routing & Gating
@@ -114,7 +114,7 @@ and unreferenced — dead code.
 `store/SalesStore.ts` — zustand, **no persist middleware**; carts are lost on reload/restart. Fixed
 `CART_COUNT = 4` carts, each `{ lines, member }` (member is per-cart). `LINE_PAGE_SIZE = 10`;
 `ALLOWED_CHANGE_QTY_TYPES = ["normal","prepacked"]`. `addLine` merges same-item lines only when
-`unit_price_adjusted === null` and price + `pickupOrderId` match — and the merge **moves the line to
+`unit_price_adjusted === null` and price match — and the merge **moves the line to
 the bottom**. `store/SalesStore.helper.ts` `recalculateLine` is the **sole writer** of derived fields:
 
 ```
@@ -178,22 +178,20 @@ Main ↔ customer display is **`BroadcastChannel`, not IPC** — the two windows
 bundle: `pos-cart` (main → customer, `{carts, activeCartIndex, lineOffset}`, from
 `hooks/useCartBroadcast.ts`), `pos-refresh` (customer/button → main, signal only), and
 `pos-customer-data` (main → customer, `{storeSetting, posts}`).
-No shared socket.io client — two components each open their own `io(apiService.getBaseURL())`:
-`components/SyncButton.tsx` (`cloud-sync-completed` → prompts a reload) and
-`components/pickupOrders/PickupPendingCountButton.tsx` (`pickup-order:pending-count`). The server
-also emits `pickup-order:new` — **no renderer listener exists for it**. `hooks/useServerHealth.ts`
-polls `GET /ok` every 5 s (not a socket).
+No shared socket.io client — `components/SyncButton.tsx` opens its own
+`io(apiService.getBaseURL())` for `cloud-sync-completed` (prompts a reload).
+`hooks/useServerHealth.ts` polls `GET /ok` every 5 s (not a socket).
 
 ## Auto-Update & Testing
 
 `src/main/updater.ts` (30 lines) no-ops unless `app.isPackaged`, checks **once at boot and never
 again**, `autoDownload: true`, and on `update-downloaded` immediately `quitAndInstall(false, true)` —
 **silent forced restart mid-shift, no prompt**. Feed comes from `package.json` `build.publish`.
-No `test` script. `scripts/tests/*.test.ts` (9 files, some with an inline `node:module` resolver hook
-to stub service imports) plus three colocated `*.test.mjs` run ad hoc:
+No `test` script. `scripts/tests/*.test.ts` (3 files, some with an inline `node:module` resolver hook
+to stub service imports) plus two colocated `*.test.mjs` run ad hoc:
 
 ```bash
-node --experimental-strip-types scripts/tests/pickup-order-format.test.ts
+node --experimental-strip-types scripts/tests/invoice-search-scan.test.ts
 node --experimental-strip-types src/renderer/src/libs/label-7090-v2/layout.test.mjs
 ```
 

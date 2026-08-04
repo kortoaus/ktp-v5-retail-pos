@@ -6,14 +6,14 @@ server (`retail_pos_server`) that backs it, deployed one pair per store.
 ## Project Role
 
 This repo owns everything at a retail register: cart, payment, refund, repay, shift open/close,
-cash in/out, receipts, price/weight/pickup labels, the customer display, and serial hardware.
+cash in/out, receipts, price/weight labels, the customer display, and serial hardware.
 It is **offline-first** — a sale completes and prints with the internet down. Reporting and
 analytics live upstream, never here. Two upstream cloud services, both reached **only** by
 `retail_pos_server` (the renderer never talks to either directly):
 
 - **ktpv5-api-server** (`API_URL`) — catalogue down-sync (`/device/migrate/*`), invoice/shift
   up-sync (`/device/sync/retail/*`), label-update sheets. Invoices forwarded on to data-server.
-- **ktpv5-crm-server** (`CRM_URL`) — members, customer vouchers, pickup orders, post feed.
+- **ktpv5-crm-server** (`CRM_URL`) — members, customer vouchers, post feed.
 
 ## Repo Layout
 
@@ -45,7 +45,8 @@ pm2 start ecosystem.config.js       # prod: "retail-pos-server", cwd ./retail_po
 App: no `.env`. Runtime config lives in `app-config.json` under Electron `userData`, written by
 `ServerSetupScreen` / `InterfaceSettingsScreen`; `ELECTRON_RENDERER_URL` (electron-vite dev) is
 the only env var main reads. Server (`retail_pos_server/.env`): `PORT`, `DATABASE_URL`, `API_URL`,
-`CRM_URL`, `API_KEY`, `CRON_INSTANCE`; `ITEM_URL` is declared and imported but never used — dead.
+`CRM_URL`, `API_KEY`; `ITEM_URL` is declared and imported but never used — dead; `CRON_INSTANCE`
+is no longer read anywhere — dead.
 
 ## Architecture
 
@@ -57,17 +58,16 @@ the only env var main reads. Server (`retail_pos_server/.env`): `PORT`, `DATABAS
    SalesStore (4 carts) · usePaymentCal ◀─ pos-refresh ─────  │ 2nd monitor, no preload  │
         │                               ── pos-customer-data▶ └──────────────────────────┘
         │ HTTP http://{host}:2200/api/* + header ip-address: <LAN IP>
-        │ Socket.IO (same origin): cloud-sync-completed, pickup-order:pending-count
+        │ Socket.IO (same origin): cloud-sync-completed
         ▼
  retail_pos_server — Express 5 : 2200
    terminalMiddleware (ip-address → Terminal/Company/StoreSetting/Shift)
-   /api/{sale,shift,item,crm,customer-voucher,pickup-order,cloud,printer,...}
+   /api/{sale,shift,item,crm,customer-voucher,cloud,printer,...}
    Prisma 7 (PrismaPg) ──▶ local PostgreSQL      ← SOURCE OF TRUTH
         │ libs/cloud.api.ts — Bearer dk_<API_KEY> + device-api-key (one key, both services)
         ├─▶ ktpv5-api-server  /device/migrate/* (catalogue down) · /device/item-sheet/… ·
         │                     /device/sync/retail/* (invoices+shifts up) ──▶ data-server
-        └─▶ ktpv5-crm-server  /device/member/* · /device/customer-voucher/* · GET /api/post ·
-                              /device/pickup-order/*
+        └─▶ ktpv5-crm-server  /device/member/* · /device/customer-voucher/* · GET /api/post
 ```
 
 Down-sync is **pull, explicit**: `POST /api/cloud/migrate/item` runs company → category → brand →
@@ -114,11 +114,11 @@ on the critical path of a sale.
 
 **Works offline:** sale / spend / refund / repay create, shift open+close, cash in/out, item and
 barcode search, hotkeys, staff user vouchers, receipt and label printing, invoice search and
-reprint, pickup-order browsing from cache.
+reprint.
 **Hard-fails when the cloud is down** (deliberate — no queue, no cash fallback): customer voucher
 lookup/issue/redeem, refused at the tender step (D-21); **refund of any invoice containing a
-customer-voucher payment**, refused entirely; CRM member search and signup/OTP; pickup-order status
-writes; catalogue down-sync; post feed. `useServerHealth` polls `GET /ok` every 5 s for the
+customer-voucher payment**, refused entirely; CRM member search and signup/OTP; catalogue
+down-sync; post feed. `useServerHealth` polls `GET /ok` every 5 s for the
 `DeviceMonitor` badge — that covers the local server only, not the cloud.
 
 **Up-sync mechanics** (`retail_pos_server/src/v1/cloud/cloud.sync.service.ts`):
@@ -128,11 +128,10 @@ writes; catalogue down-sync; post feed. `useServerHealth` polls `GET /ok` every 
   `originalInvoiceId` is resolved to the parent's cloud id before push; data-server upserts on
   `(deviceId, localId)`, so retries are idempotent.
 - Triggers: sale/refund/repay create, shift close, cloud migrate, server boot. Module-level
-  booleans prevent overlapping sweeps. **No scheduler for invoices/shifts.**
+  booleans prevent overlapping sweeps. **No scheduler.**
 - Failures are silent — rows stay `cloudId = null` until the next trigger, with no alert, retry
   counter or backlog UI. `SELECT count(*) FROM "SaleInvoice" WHERE "cloudId" IS NULL` is the
-  health check. Timers that *do* exist: pickup-order CRM sync every 60 s (only when
-  `CRON_INSTANCE=true`) and the `pickup-order:pending-count` broadcast every 10 s (ungated).
+  health check.
 
 ## Hardware
 
@@ -186,13 +185,13 @@ does may update mid-shift.
 ## Testing
 
 No test runner is wired into either `package.json` (server `npm test` is a literal stub). Tests are
-~22 `node:test` files, all pure functions with injected deps — none touch Postgres or hardware.
-Coverage: sale points, doc counter, refund points, pickup-order, printed-history, store label
-format, label layout. Colocated `*.test.mjs` files run like the app example below.
+~9 `node:test` files, all pure functions with injected deps — none touch Postgres or hardware.
+Coverage: sale points, doc counter, refund points, store label format, label layout. Colocated
+`*.test.mjs` files run like the app example below.
 
 ```bash
 cd retail_pos_server && npm run build && node --test dist/v1/sale/sale.points.test.js
-cd retail_pos_app    && node --experimental-strip-types scripts/tests/pickup-order-format.test.ts
+cd retail_pos_app    && node --experimental-strip-types scripts/tests/invoice-search-scan.test.ts
 ```
 
 Everything else rides on `TEST_CHECKLIST.md`, the manual regression script — run it before any
@@ -231,18 +230,14 @@ build` in each project, plus `npx prisma generate` after any schema edit.
   publishes Postgres on 5555 while `.env.example` says 5438. **`retail_pos_app/build/`** (the
   electron-builder icons) is deleted in the working tree though present in git HEAD — CI is
   unaffected, a local `package:win` is not.
-- **The pending-count broadcaster is not gated by `CRON_INSTANCE`** — every server runs a DB count
-  every 10 s regardless of clients. `GET /clear` is a harmless 200 stub; keep it that way.
 - **Unused surface — do not assume it is live**: `GET /api/brand/*` and `GET /api/store/label` have
-  no consumer here; the server emits `pickup-order:new` with no renderer listener;
-  `WeightLabelScreen.tsx` is unrouted; `decimal.js` is imported nowhere; `ITEM_URL` and
-  `refreshToken` are written and never read.
+  no consumer here; `WeightLabelScreen.tsx` is unrouted; `decimal.js` is imported nowhere;
+  `ITEM_URL` and `refreshToken` are written and never read.
 
 ## Further Reading
 
 - `docs/sale-domain.md` — **read before touching invoice/payment/voucher/refund/repay/sync.**
-  D-1 … D-41 with rationale. Largely accurate; D-38's "no cron" now applies only to invoice/shift
-  sync, not to pickup orders.
+  D-1 … D-41 with rationale. Largely accurate.
 - `docs/customer-voucher-system.md` — CRM voucher contract and failure scenarios. Accurate on
   ownership and idempotency, but its "HTTP Boundary" section overstates the local surface: only
   `GET /api/customer-voucher/valid` and `POST /api/customer-voucher/issue` exist as routes; `redeem`,
@@ -252,10 +247,10 @@ build` in each project, plus `npx prisma generate` after any schema edit.
   (manual regression, Korean) · `docs/superpowers/{plans,specs}/` (design history) · `docs/outdated/`
   (dead plans, never a contract).
 - `README.md` — product/feature/permission reference. Mostly accurate; its server route table
-  omits `/api/customer-voucher` and `/api/printed-history`, its app route table omits `/barcode-print`.
+  omits `/api/customer-voucher`, its app route table omits `/barcode-print`.
 - `AGENTS.md` + `retail_pos_app/AGENTS.md` — the Codex-era rules these files supersede; still
-  substantially correct. Known drift: both claim "no test runner is configured" (~22 `node:test`
-  files exist); the root router list omits `customer-voucher`, `pickup-order`, `printed-history`;
+  substantially correct. Known drift: both claim "no test runner is configured" (~9 `node:test`
+  files exist); the root router list omits `customer-voucher`;
   the app IPC table omits `ipc/escpos.ts` and `ipc/text-encoding.ts`; `store.ts` is hand-rolled
   JSON, not `electron-store`. Do not edit these, `README.md`, `TEST_CHECKLIST.md` or `docs/*` as a
   side effect of code work — update them deliberately, or record the drift here.

@@ -8,12 +8,11 @@ only thing in the building that talks to the cloud.
 - `src/index.ts` — creates the HTTP server, attaches Socket.IO (same port, `cors.origin: "*"`),
   listens on `process.env.PORT || 3000`. **PM2 sets `PORT=2200`** (`../ecosystem.config.js`);
   `.env.example` also says 2200. The `|| 3000` fallback is a trap — always set `PORT`.
-- On boot it fires: `triggerSyncAllSaleInvoices()`, `triggerSyncAllShifts()`,
-  `startPickupOrderSyncWorker()`, `startPickupPendingCountBroadcaster()`.
+- On boot it fires: `triggerSyncAllSaleInvoices()`, `triggerSyncAllShifts()`.
 - `src/app.ts` — Express wiring. **Order is load-bearing**: `express.json({limit:"1mb"})` →
   cors → request logger → `/health` `/clear` `/ok` (unauthenticated stubs) →
   `terminalMiddleware` → `/api` router → error handler.
-- `src/router.ts` — mounts 16 modules under `/api`. Each module is
+- `src/router.ts` — mounts 14 modules under `/api`. Each module is
   `x.router.ts` + `x.controller.ts` + `x.service.ts`.
 
 ## Commands
@@ -38,8 +37,8 @@ docker compose up -d         # local dev Postgres only (host port 5555)
 | `API_URL` | ktpv5-api-server base |
 | `CRM_URL` | ktpv5-crm-server base |
 | `API_KEY` | Device key **hex only, without the `dk_` prefix** (see Device Auth) |
-| `CRON_INSTANCE` | `"true"` enables the 60 s pickup-order sync worker. Anything else disables it |
 | `ITEM_URL` | Declared in `src/libs/constants.ts`, imported by `cloud.api.ts`, **never used**. Dead |
+| `CRON_INSTANCE` | No longer read anywhere in `src`. Dead |
 
 ## Request Pipeline
 
@@ -71,8 +70,6 @@ docker compose up -d         # local dev Postgres only (host port 5555)
 | `/sale` | user + `sale`/`refund` | `POST /`, `/spend`, `/refund` (`refund`), `/repay` (`refund`), `GET /`, `/latest`, `/:id/children`, `/:id` — **`/latest` and `/:id/children` MUST stay declared before `/:id`** |
 | `/voucher` | user + `sale` | `GET /daily`, `POST /daily/issue` (staff vouchers) |
 | `/customer-voucher` | user + `sale` | `GET /valid`, `POST /issue` **only** |
-| `/pickup-order` | user + `sale` | `GET /`, `POST /sync`, `POST /:id/status`, `GET /:id/member-phone`, `GET /:id` |
-| `/printed-history` | user + `sale` | `GET /`, `POST /` |
 | `/printer` | none | `POST /print` — `express.raw(application/octet-stream, 20mb)`, TCP-bridges bytes to a network printer |
 | `/cashio` | user + `cashio` | `GET|POST /` |
 | `/store` | GET open, POST + `store` | `GET /`, `GET /label` (no consumer in this repo), `POST /` |
@@ -91,8 +88,7 @@ docker compose up -d         # local dev Postgres only (host port 5555)
   ItemCategory Price PromoPrice CloudHotkey CloudHotkeyItem`.
 - POS-owned (up-sync or local-only): `Terminal Hotkey StoreSetting User TerminalShift
   CashInOut SaleInvoice SaleInvoiceRow SaleInvoicePayment Voucher VoucherEvent DocCounter
-  PrintedItemSheet PrintedHistory`.
-- CRM cache (read-only mirror): `PickupOrderCache PickupOrderLineCache PickupOrderSyncState`.
+  PrintedItemSheet`.
 - `companyId = 1` and `storeSetting.id = 1` are hard-coded everywhere. Single-store deployment.
 
 ## Cloud Sync — api-server (`API_URL`)
@@ -125,7 +121,6 @@ Up (`src/v1/cloud/cloud.sync.service.ts`): `POST /device/sync/retail/sale-invoic
 These go to **ktpv5-crm-server**, not the central api-server:
 `/device/member/{create,phone,search/id,search/keyword,search/phone,signup/stage,signup/request-otp,signup/verify}`,
 `/device/customer-voucher/{valid,issue,redeem,redeem/void,refund-issue}`,
-`/device/pickup-order/sync`, `/device/pickup-order/:id/status`,
 and `GET {CRM_URL}/api/post` (raw axios, `ktpv5-company` JSON header, in `cloud.post.service.ts`).
 
 `redeem`, `redeem/void` and `refund-issue` have **no local HTTP route** — they are invoked
@@ -157,8 +152,6 @@ failure voids the already-redeemed vouchers before rethrowing.
 | Event | Emitted by |
 |---|---|
 | `cloud-sync-completed` | `cloud.migrate.controller.ts` after a full down-sync |
-| `pickup-order:new` | `pickup-order.sync.service.ts` when the CRM sync pulls new orders |
-| `pickup-order:pending-count` | `pickup-order.pending-count.ts`, every 10 s to all clients **and** once on each socket connect |
 
 ## Testing
 
@@ -168,20 +161,13 @@ failure voids the already-redeemed vouchers before rethrowing.
 npm run build && node --test dist/v1/sale/sale.doc-counter.test.js
 ```
 
-Files: `sale.{points,refund.points,doc-counter}.test.ts`,
-`pickup-order.{query,sync.service,member-phone,status,pending-count}.test.ts`,
-`printed-history.test.ts`, `store.service.test.ts`. All are pure-function tests with
-injected deps — none touch Postgres. Keep it that way.
+Files: `sale.{points,refund.points,doc-counter}.test.ts`, `store.service.test.ts`. All are
+pure-function tests with injected deps — none touch Postgres. Keep it that way.
 
 ## Gotchas
 
 - `terminalMiddleware` trusts the `ip-address` **header**. Any LAN client can impersonate a
   terminal; combined with the `userId%%%` token, `Authorization: Bearer 1%%%0` is admin.
-- `startPickupPendingCountBroadcaster()` is **not** gated by `CRON_INSTANCE` — every server
-  runs a DB `count` every 10 s whether or not a client is listening. Only the 60 s
-  pickup-order **sync** worker is gated.
-- `docs/sale-domain.md` D-38 says "no cron". That is still true for invoice/shift sync, but
-  pickup-order sync and the pending-count broadcast are timer-driven.
 - `docker-compose.yml` publishes Postgres on host **5555**; `.env.example` points at **5438**.
   Reconcile before assuming either.
 - `libs/exceptions.HttpException` subclasses are thrown from `async` handlers. Express 5
