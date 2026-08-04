@@ -147,12 +147,15 @@ order `member%%%<id>` → `00:<json>` PP barcode (`libs/pp-barcode.ts`) → plai
 cents (inverse of `libs/barcode-utils.ts fiveDigitFloat`).
 
 `components/OnScreenKeyboard/usePhysicalKeyboard.ts` is the second key-event boundary: while an
-`OnScreenKeyboard` instance is visible (`offsetParent` check — hidden instances on multi-keyboard
-screens bail), it consumes mapped keydowns in the **capture phase** with `stopPropagation`, so the
-scanner hook sees nothing while a keyboard is on screen. Mapping lives in the pure
-`physical-key-map.ts` (dubeolsik by `e.code` position, numpad-mode restriction, `Lang1`/`AltRight`/
-`HangulMode` = 한/영). A barcode scanned while a keyboard is visible types into the field —
-accepted trade-off, see `docs/superpowers/specs/2026-08-04-physical-keyboard-input-design.md`.
+`OnScreenKeyboard` instance is visible, it consumes mapped keydowns in the **capture phase** with
+`stopPropagation`, so the scanner hook sees nothing while a keyboard is on screen. A module-level
+mount-order registry arbitrates multiple instances — only the **last-mounted visible** one handles
+(covers both CSS-`hidden` siblings and a `KeyboardInputText` overlay opened above an embedded
+keyboard). Mapping lives in the pure `physical-key-map.ts` (dubeolsik by `e.code` position,
+numpad-mode restriction, `Lang1`/`AltRight`/`HangulMode` = 한/영; CapsLock honored for Latin
+letters, NumLock deliberately ignored). A barcode scanned while a keyboard is visible types into
+the field — accepted trade-off, see
+`docs/superpowers/specs/2026-08-04-physical-keyboard-input-design.md`.
 
 ## Printing
 

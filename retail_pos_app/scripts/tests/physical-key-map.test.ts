@@ -91,3 +91,13 @@ test("isLangToggle detects Lang1, AltRight, HangulMode", () => {
   assert.equal(isLangToggle("KeyA", "a"), false);
   assert.equal(isLangToggle("AltLeft", "Alt"), false);
 });
+
+test("review pass: extra edges", () => {
+  assert.equal(resolvePhysicalKey("NumpadEnter", false, "english"), "ENTER");
+  assert.equal(resolvePhysicalKey("Digit0", false, "english"), "0");
+  assert.equal(resolvePhysicalKey("Numpad0", false, "numpad"), "0");
+  assert.equal(resolvePhysicalKey("Backslash", false, "english"), "\\");
+  assert.equal(resolvePhysicalKey("Backslash", true, "english"), "|");
+  assert.equal(resolvePhysicalKey("Space", true, "english"), " ");
+  assert.equal(resolvePhysicalKey("Space", true, "korean"), " ");
+});

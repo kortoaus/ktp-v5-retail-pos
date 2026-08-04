@@ -36,6 +36,12 @@ Several screens (CashIOForm, UserForm, StoreSettingScreen) mount multiple keyboa
 simultaneously and hide all but one with CSS `hidden`. Visibility is therefore checked per event
 via `offsetParent !== null` on the instance's root element; hidden instances ignore the event.
 
+Two instances CAN be visible at once (found in code review): on UserManageScreen and
+CashIOManageScreen the search field's `KeyboardInputText` overlay can open above a form whose
+embedded keyboard stays visible behind the dimmed backdrop. A module-level registry in
+`usePhysicalKeyboard` records instances in mount order, and only the **last-mounted visible**
+instance handles an event — the overlay mounts after the form, so the keyboard the user sees wins.
+
 ## Architecture
 
 Two new files in `retail_pos_app/src/renderer/src/components/OnScreenKeyboard/`, one edit:
@@ -84,20 +90,24 @@ usePhysicalKeyboard(opts: {
 ```
 
 - Registers one `window.addEventListener("keydown", handler, { capture: true })` per mounted
-  instance; removed on unmount.
-- Handler sequence: (1) bail if `rootRef.current?.offsetParent == null` (hidden/unmounted);
-  (2) bail on modifier policy; (3) lang-toggle check → `onKey("LANG_EN" | "LANG_KR")`;
-  (4) `resolvePhysicalKey(code, shiftKey, mode)` where `mode = showNumpad ? "numpad" : lang`;
-  (5) on a non-null token: `preventDefault()`, `stopPropagation()`,
-  `stopImmediatePropagation()`, `onKey(token)`. On `null`: do nothing — the event propagates
-  normally (scanner heuristics will discard slow human keystrokes as they do today).
+  instance and pushes its ref onto the module-level mount-order registry; both removed on
+  unmount.
+- Handler sequence: (1) bail unless this instance is the last-mounted visible one
+  (`topmostVisible() !== rootRef`); (2) bail on modifier policy; (3) lang-toggle check →
+  `onKey("LANG_EN" | "LANG_KR")`; (4) `resolvePhysicalKey(code, shiftKey, mode)` where
+  `mode = showNumpad ? "numpad" : lang` and, for Latin letters in english mode, `shiftKey` is
+  XORed with CapsLock state (matching OS typing); (5) on a non-null token: `preventDefault()`,
+  `stopPropagation()`, `stopImmediatePropagation()`, then `onKey(token)` — except a repeated
+  (`e.repeat`) `ENTER`, which is consumed but not delivered so holding Enter cannot spam
+  submits. On `null`: do nothing — the event propagates normally (scanner heuristics will
+  discard slow human keystrokes as they do today).
 - `stopPropagation` in the capture phase on `window` halts propagation before the bubble phase,
   which is where `useBarcodeScanner` listens — so handled keys never reach the scanner.
-  `stopImmediatePropagation` additionally guards the (theoretically impossible) case of two
-  visible instances.
+  `stopImmediatePropagation` additionally guards same-phase listeners of other instances.
 
 Physical Shift is per-keystroke (`e.shiftKey`); it neither reads nor writes the on-screen sticky
-`shifted` state.
+`shifted` state. NumLock is deliberately ignored — `Numpad8` types "8" even with NumLock off
+(desirable on a till, but a divergence from OS behavior).
 
 ### 3. `index.tsx` edit
 
