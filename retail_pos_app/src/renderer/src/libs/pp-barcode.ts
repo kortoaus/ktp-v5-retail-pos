@@ -3,7 +3,6 @@ export interface PPBarcode {
   prices: number[];
   promoPrices: number[];
   weight: number | null;
-  pickupOrderId: number | null;
   discountType: "pct" | "amt" | null;
   discountAmount: number;
 }
@@ -12,18 +11,6 @@ const PP_PREFIX = "00:";
 
 export function isPPBarcode(raw: string): boolean {
   return raw.startsWith(PP_PREFIX);
-}
-
-function readPositiveInteger(value: unknown): number | null {
-  if (
-    typeof value === "number" &&
-    Number.isFinite(value) &&
-    Number.isInteger(value) &&
-    value > 0
-  ) {
-    return value;
-  }
-  return null;
 }
 
 export function parsePPBarcode(raw: string): PPBarcode | null {
@@ -36,7 +23,6 @@ export function parsePPBarcode(raw: string): PPBarcode | null {
       prices: json["02"] ?? [],
       promoPrices: json["03"] ?? [],
       weight: json["04"] ?? null,
-      pickupOrderId: readPositiveInteger(json["09"]),
       discountType: dt === 1 ? "pct" : dt === 2 ? "amt" : null,
       discountAmount: json["06"] ?? 0,
     };

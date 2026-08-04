@@ -54,7 +54,6 @@ export function invoiceRowToLine(row: SaleInvoiceRowItem): SaleLineType {
     unit_price_effective: row.unit_price_effective,
     qty: row.qty,
     measured_weight: row.measured_weight,
-    pickupOrderId: null,
     total: row.total,
     tax_amount: row.tax_amount,
     net: row.net,

@@ -29,10 +29,6 @@ import {
   buildSalePayload,
   buildSpendPayload,
 } from "../../../libs/sale/build-payload";
-import {
-  completePickupOrdersAfterSale,
-  getDistinctPickupOrderIds,
-} from "../../../libs/pickup-order/auto-complete";
 import { getMemberLevelOneEstimate } from "../../../libs/sale/member-level-estimate";
 import LoadingOverlay from "../../../components/LoadingOverlay";
 import { kickDrawer } from "../../../libs/printer/kick-drawer";
@@ -374,18 +370,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
         receiptPrinted: false,
         memberPointsBefore: activeMember?.points ?? null,
       });
-      const pickupOrderIds = getDistinctPickupOrderIds(saleCartSnapshot.lines);
       clearActiveCart();
-      if (pickupOrderIds.length > 0) {
-        void completePickupOrdersAfterSale(pickupOrderIds).then((failures) => {
-          if (failures.length === 0) return;
-          window.alert(
-            `Sale completed, but pickup completion failed for: ${failures
-              .map((failure) => failure.id)
-              .join(", ")}`,
-          );
-        });
-      }
 
       // Drawer 먼저 — 프린트는 수초 걸리므로 서랍을 앞세워 cashier 가 거스름돈
       // 꺼내는 동안 영수증이 뽑히게. cashIntent 기준 (cashApplied 아님) —

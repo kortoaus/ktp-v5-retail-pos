@@ -211,12 +211,6 @@ export interface SaleLineType extends SaleLineItem {
   measured_weight: number | null;
 
   /**
-   * CRM pickup order id carried by pickup work label PP barcode field "09".
-   * Null for normal non-pickup scans and older PP labels.
-   */
-  pickupOrderId: number | null;
-
-  /**
    * Tax-INCLUSIVE line total, in cents.
    * Formula: `round(unit_price_effective × qty / QTY_SCALE)`.
    * This is the number printed on the receipt for the line, summed into
