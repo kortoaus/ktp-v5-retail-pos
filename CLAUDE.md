@@ -238,6 +238,10 @@ build` in each project, plus `npx prisma generate` after any schema edit.
 
 - `docs/sale-domain.md` — **read before touching invoice/payment/voucher/refund/repay/sync.**
   D-1 … D-41 with rationale. Largely accurate.
+- `docs/linkly/` — Linkly EFTPOS TCP/IP integration reference (official-sources-only,
+  built 2026-08-05; protocol, transactions, recovery, integration mapping). **Read before
+  any card-payment integration work.** Nothing implemented yet; open design decisions in
+  `06-integration-notes.md`.
 - `docs/customer-voucher-system.md` — CRM voucher contract and failure scenarios. Accurate on
   ownership and idempotency, but its "HTTP Boundary" section overstates the local surface: only
   `GET /api/customer-voucher/valid` and `POST /api/customer-voucher/issue` exist as routes; `redeem`,
