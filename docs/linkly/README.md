@@ -36,6 +36,40 @@ without re-consulting scattered sources.
 Facts observed only in the SDK (not in the API doc) are marked **[SDK-observed]**.
 Where the API doc contradicts itself, both readings are recorded and flagged.
 
+## Change cadence & maintenance (surveyed 2026-08-05)
+
+The wire format is effectively **frozen**. Evidence:
+
+- **API doc**: 3 revisions total (all 2022, all editorial/deprecation-text); v1.0.3
+  (2022-08-18) is still current 4 years later.
+- **C# SDK** (2017-09 → 2023-04, 32 commits, master untouched since): the `M`
+  Transaction request layout is **byte-identical between the 2017 first commit and
+  the 2023 last commit**. Every wire-affecting change in 5.5 years was *additive*
+  (new command codes `W`/`|`, new ReceiptAutoPrint mode `7`, Void TxnType, cloud
+  pairing) or an SDK-side parse bugfix (TxnRef padding 2018; GLT
+  ClearedFundsBalance and QueryCard length-check relaxation 2023). Zero breaking
+  layout changes on record.
+- **Java SDK**: two substantive commits (2020, 2023); both SDKs last touched the
+  same day (2023-04-17).
+
+Structural reason: this is the PC-EFTPOS ActiveX-era fixed-offset format; 750+
+deployed POS integrations depend on the exact byte layout, so evolution only ever
+happens at the edges (new commands, new PAD tags, new response codes).
+
+**Consequences for our TS parser:**
+
+1. Hard-coding fixed offsets is safe — but treat trailing optional fields (PAD) as
+   possibly absent; Linkly itself had to relax a QueryCard length check in 2023.
+2. PAD codec must skip unknown tags (the `TTTLLL` encoding is self-describing) —
+   new tags are the one form of evolution that actually occurs, and this absorbs
+   them with zero code changes.
+3. Unknown command code → log + ignore. Unknown response code → treat as decline
+   (anything ≠ `00`/`08`).
+4. No periodic sync needed. Re-check the doc + SDK repos only when upgrading the
+   EFT-Client software version, and at accreditation.
+5. ⚠ This survey covers the **public** doc/SDK. At accreditation signup, ask
+   whether a newer spec is distributed via the portal.
+
 ## Cloud API confusion guard
 
 Linkly publishes three distinct APIs. Only the first is ours:
