@@ -14,7 +14,7 @@ export type LineAdjustmentWire = "PRICE_OVERRIDE";
 
 export interface MemberSnapshotPayload {
   id: string;
-  name: string;
+  name: string | null; // null = POS 오프라인 미검증 부착 (specs/2026-08-07 참조)
   level: number;
   phoneLast4: string | null;
 }
