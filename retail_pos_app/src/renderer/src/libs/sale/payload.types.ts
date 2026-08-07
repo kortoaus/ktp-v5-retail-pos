@@ -37,7 +37,7 @@ export type LineAdjustmentWire = "PRICE_OVERRIDE";
 
 export interface MemberSnapshotPayload {
   id: string; // CRM member id (external ref)
-  name: string;
+  name: string | null; // null = 오프라인 미검증 부착
   level: number; // 할인 적용된 레벨 (스냅샷)
   phoneLast4: string | null;
 }

@@ -177,7 +177,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
   );
   const activeMemberId = activeMember?.id ?? null;
   const hasAvailableCustomerVoucher =
-    activeMember != null && activeMember.points >= 1000;
+    activeMember?.points != null && activeMember.points >= 1000;
   const previousMemberIdRef = useRef<string | null>(activeMemberId);
   const voucherSlot: TenderSlot = activeMember
     ? "CUSTOMER_VOUCHER"
@@ -680,9 +680,20 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
               // 잔액 → 합산(예상 적립 포함). cashier 가 영수증 전에 안내할 수
               // 있게 헤더에 상시 노출. 적립 예상은 결제 수단 조합에 따라 변동.
               <span className="text-sm font-semibold text-gray-600">
-                P {activeMember.points.toLocaleString()}
-                {cal.pointsEarned > 0 &&
-                  ` → ${(activeMember.points + cal.pointsEarned).toLocaleString()}`}
+                {activeMember.points != null ? (
+                  <>
+                    P {activeMember.points.toLocaleString()}
+                    {cal.pointsEarned > 0 &&
+                      ` → ${(activeMember.points + cal.pointsEarned).toLocaleString()}`}
+                  </>
+                ) : (
+                  // 오프라인 미검증 멤버 — CRM 잔액을 모른다. 예상 적립만 노출.
+                  <>
+                    Offline
+                    {cal.pointsEarned > 0 &&
+                      ` · +${cal.pointsEarned.toLocaleString()}P pending`}
+                  </>
+                )}
               </span>
             )}
           </div>

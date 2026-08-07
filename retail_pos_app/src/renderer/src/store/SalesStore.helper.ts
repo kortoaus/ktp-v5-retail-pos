@@ -9,10 +9,11 @@ export interface Cart {
 
 export interface SaleMember {
   id: string;
-  name: string;
+  name: string | null; // null ⟺ 오프라인 미검증 부착 (unverified)
   level: number;
   phone_last4: string | null;
-  points: number;
+  points: number | null;
+  unverified?: boolean;
 }
 
 import { PPMarkdown } from "../types/sales";

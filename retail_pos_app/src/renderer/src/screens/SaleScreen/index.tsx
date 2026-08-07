@@ -7,6 +7,7 @@ import { useBarcodeScanner } from "../../hooks/useBarcodeScanner";
 import { generateSaleLineItem } from "../../libs/item-utils";
 import { SaleLineItem } from "../../types/sales";
 import { embededPriceParser } from "../../libs/scan-utils";
+import { parseMemberQr } from "../../libs/member-qr";
 import {
   isPPBarcode,
   parsePPBarcode,
@@ -93,11 +94,13 @@ export default function SaleScreen() {
       if (loading) return;
 
       // Search Member
-      if (rawBarcode.startsWith("member%%%")) {
+      const memberQr = parseMemberQr(rawBarcode);
+      if (memberQr) {
         try {
           setLoading(true);
-          const memberId = rawBarcode.split("%%%")[1];
-          const { ok, msg, result } = await searchMemberById(memberId);
+          const { ok, msg, status, result } = await searchMemberById(
+            memberQr.memberId,
+          );
           if (ok && result) {
             setMember({
               id: result.id,
@@ -105,6 +108,17 @@ export default function SaleScreen() {
               level: result.level,
               phone_last4: result.phone_last4,
               points: result.points,
+            });
+          } else if (status === 0) {
+            // 네트워크 단절 — QR 의 id/level 로 미검증 부착.
+            // 적립은 업싱크 시 CRM 이 member 존재를 검증한 뒤 처리된다.
+            setMember({
+              id: memberQr.memberId,
+              name: null,
+              level: memberQr.level ?? 1,
+              phone_last4: null,
+              points: null,
+              unverified: true,
             });
           } else {
             window.alert(msg);
@@ -322,7 +336,11 @@ export default function SaleScreen() {
             onClick={() => setModalTarget("item-search")}
           />
           <TopBarButton
-            label={member ? member.name : "Member"}
+            label={
+              member
+                ? (member.name ?? `Offline ****${member.id.slice(-4)}`)
+                : "Member"
+            }
             active={member !== null}
             onClick={() => {
               if (member) {
