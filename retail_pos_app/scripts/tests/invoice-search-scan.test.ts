@@ -11,6 +11,12 @@ assert.deepEqual(parseInvoiceSearchScan("member%%%crm-42"), {
   memberId: "crm-42",
 });
 
+// level 세그먼트가 붙은 신형 QR — id 첫 세그먼트만 취한다
+assert.deepEqual(parseInvoiceSearchScan("member%%%crm-42%%%3"), {
+  type: "member",
+  memberId: "crm-42",
+});
+
 assert.deepEqual(parseInvoiceSearchScan("INV-999"), {
   type: "keyword",
   keyword: "INV-999",
