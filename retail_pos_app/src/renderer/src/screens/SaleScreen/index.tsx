@@ -38,6 +38,7 @@ import PrintLatestInvoiceButton from "../../components/PrintLatestInvoiceButton"
 import { kickDrawer } from "../../libs/printer/kick-drawer";
 import SyncButton from "../../components/SyncButton";
 import SyncPostButton from "../../components/SyncPostButton";
+import OrdersPendingButton from "../../components/orders/OrdersPendingButton";
 import PaymentModal from "./PaymentModal";
 import CloudHotkeyViewerV2 from "../../components/CloudHotkeyViewerV2";
 
@@ -355,6 +356,7 @@ export default function SaleScreen() {
           <TopBarButton label="Kick Drawer" onClick={() => kickDrawer()} />
         </div>
         <div className="flex items-center gap-4">
+          <OrdersPendingButton />
           <SyncButton />
           <SyncPostButton />
           <CartSwitcher />

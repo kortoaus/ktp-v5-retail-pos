@@ -13,6 +13,7 @@ export interface Terminal {
   name: string;
   ipAddress: string;
   archived: boolean;
+  orderChimeEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }

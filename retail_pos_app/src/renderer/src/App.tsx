@@ -23,6 +23,7 @@ import PriceTagScreen from "./screens/PriceTagScreen";
 import BarcodePrintScreen from "./screens/BarcodePrintScreen";
 import SaleScreen from "./screens/SaleScreen";
 import SaleInvoiceSearchScreen from "./screens/SaleInvoiceSearchScreen";
+import OrdersScreen from "./screens/OrdersScreen";
 import SaleRefundDetailScreen from "./screens/SaleRefundDetailScreen";
 import SaleRefundPickerScreen from "./screens/SaleRefundPickerScreen";
 
@@ -59,6 +60,7 @@ function MainApp() {
               <Route path="hotkey" element={<HotkeyManagerScreen />} />
               <Route path="user" element={<UserManageScreen />} />
               <Route path="invoices" element={<SaleInvoiceSearchScreen />} />
+              <Route path="orders" element={<OrdersScreen />} />
               <Route path="refund" element={<SaleRefundPickerScreen />} />
               <Route
                 path="refund/:invoiceId"

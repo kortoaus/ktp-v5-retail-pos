@@ -16,6 +16,7 @@ import {
   IoPrintOutline,
   IoReceiptOutline,
   IoBarcodeOutline,
+  IoNotificationsOutline,
 } from "react-icons/io5";
 
 const btn =
@@ -74,6 +75,13 @@ export default function HomeScreen() {
             </NavBtn>
           </>
         )}
+        <NavBtn
+          to="/manager/orders"
+          icon={<IoNotificationsOutline size={24} />}
+          className="bg-blue-50 text-blue-700 hover:bg-blue-100"
+        >
+          Orders
+        </NavBtn>
         <NavBtn
           to="/manager/invoices"
           icon={<IoReceiptOutline size={24} />}

@@ -16,6 +16,11 @@ import { Link } from "react-router-dom";
 import { useUser } from "../../contexts/UserContext";
 import BlockScreen from "../../components/BlockScreen";
 import hasScope from "../../libs/scope-utils";
+import {
+  getTerminals,
+  setTerminalOrderChime,
+  type TerminalChimeSetting,
+} from "../../service/terminal.service";
 
 const FIELDS = [
   { key: "name", label: "Store Name", layout: "korean" as const },
@@ -139,6 +144,8 @@ export default function StoreSettingScreen() {
   const [activeField, setActiveField] = useState<FieldKey>("name");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [terminals, setTerminals] = useState<TerminalChimeSetting[]>([]);
+  const [chimeSavingId, setChimeSavingId] = useState<number | null>(null);
   const extraFooterValidation = form
     ? validateReceiptExtraFooterText(form.receipt_extra_footer_text)
     : { ok: true, errors: [] };
@@ -155,9 +162,40 @@ export default function StoreSettingScreen() {
     }
   }, []);
 
+  const fetchTerminals = useCallback(async () => {
+    const res = await getTerminals();
+    if (res.ok && res.result) {
+      setTerminals(res.result);
+    }
+  }, []);
+
   useEffect(() => {
     fetchSetting();
-  }, [fetchSetting]);
+    fetchTerminals();
+  }, [fetchSetting, fetchTerminals]);
+
+  // 주문 차임 토글 — 저장 즉시 반영. 브로드캐스터가 다음 틱(≤60초)에
+  // chimeTerminalIds 로 전 단말에 전파하므로 단말 재시동은 불필요.
+  const handleChimeToggle = async (terminal: TerminalChimeSetting) => {
+    if (chimeSavingId !== null) return;
+    setChimeSavingId(terminal.id);
+    try {
+      const res = await setTerminalOrderChime(
+        terminal.id,
+        !terminal.orderChimeEnabled,
+      );
+      if (res.ok && res.result) {
+        const updated = res.result;
+        setTerminals((current) =>
+          current.map((t) => (t.id === updated.id ? updated : t)),
+        );
+      } else {
+        window.alert(res.msg || "Failed to update order chime setting");
+      }
+    } finally {
+      setChimeSavingId(null);
+    }
+  };
 
   const handleKeyboardChange = (newValue: string) => {
     if (!form) return;
@@ -320,6 +358,48 @@ export default function StoreSettingScreen() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Order chime terminals — 차임만 게이트, 배지/배너/목록은 전 터미널 */}
+          <div className="col-span-2 flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-500">
+              Order Chime Terminals
+            </label>
+            <p className="text-[11px] text-gray-400">
+              New-order chime sounds only on enabled terminals. Order badges
+              and the order list still work on every terminal.
+            </p>
+            <div className="rounded-lg border border-gray-300 divide-y divide-gray-100">
+              {terminals.map((t) => (
+                <div
+                  key={t.id}
+                  className="flex items-center justify-between px-3 py-2"
+                >
+                  <span className="text-sm">
+                    {t.name}{" "}
+                    <span className="text-xs text-gray-400">#{t.id}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onPointerDown={() => handleChimeToggle(t)}
+                    disabled={chimeSavingId !== null}
+                    className={cn(
+                      "h-7 w-16 rounded-full text-xs font-bold transition-colors disabled:opacity-50",
+                      t.orderChimeEnabled
+                        ? "bg-orange-500 text-white active:bg-orange-600"
+                        : "bg-gray-200 text-gray-500 active:bg-gray-300",
+                    )}
+                  >
+                    {t.orderChimeEnabled ? "ON" : "OFF"}
+                  </button>
+                </div>
+              ))}
+              {terminals.length === 0 && (
+                <div className="px-3 py-2 text-xs text-gray-400">
+                  No terminals found
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
