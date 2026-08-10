@@ -235,6 +235,7 @@ export const TerminalScalarFieldEnum = {
   name: 'name',
   ipAddress: 'ipAddress',
   archived: 'archived',
+  orderChimeEnabled: 'orderChimeEnabled',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
