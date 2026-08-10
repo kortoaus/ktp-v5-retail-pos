@@ -4,7 +4,8 @@
 // - 배너: count > 0 → 상단 주황 슬림 스트립(터치 → /manager/orders).
 //   소켓 끊김 → 회색 "reconnecting", crm 불통(ok:false) → 은은한 안내.
 // - 차임: 자기 터미널 id ∈ chimeTerminalIds 일 때만. `order:new` 즉시 1회 +
-//   count > 0 인 동안 120초 간격 반복. WebAudio 생성 톤(더블 비프, 에셋 불요),
+//   count > 0 인 동안 120초 간격 반복. 벨 톤(WebAudio 딩–동) 직후 보이스
+//   시그니처("New order in~", ElevenLabs, 번들 mp3)가 이어진다.
 //   최초 pointerdown 제스처에서 AudioContext 언락(Chromium 자동재생 정책).
 
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
@@ -21,8 +22,12 @@ import {
   setOrderInboxState,
   subscribeOrderInbox,
 } from "./orderInboxStore";
+import orderChimeVoiceUrl from "../../assets/order-chime-voice.mp3";
 
 const CHIME_REPEAT_MS = 120_000;
+
+// 벨(딩–동, ~1s)이 끝나갈 무렵 보이스가 이어지는 간격.
+const VOICE_DELAY_MS = 900;
 
 export default function OrderNotification() {
   const navigate = useNavigate();
@@ -59,10 +64,15 @@ export default function OrderNotification() {
     };
   }, []);
 
+  // 보이스 시그니처는 재사용 한 개 인스턴스 — 반복 재생 시 currentTime 리셋.
+  const voiceRef = useRef<HTMLAudioElement | null>(null);
+  if (voiceRef.current === null) {
+    voiceRef.current = new Audio(orderChimeVoiceUrl);
+    voiceRef.current.preload = "auto";
+  }
+  const voiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const playChime = useCallback(() => {
-    // 보이스 시그니처(일레븐랩스) 도입 예정 — 파일이 assets 에 추가되면
-    // import chimeUrl from "../../assets/order-chime.mp3" 후 new Audio(chimeUrl)
-    // 재생으로 교체하고 아래 합성 톤은 폴백으로 강등한다.
     const ctx = audioCtxRef.current;
     if (!ctx) return; // 아직 제스처 언락 전
     void ctx.resume();
@@ -84,6 +94,22 @@ export default function OrderNotification() {
     const t0 = ctx.currentTime;
     bell(t0, 659.25); // E5
     bell(t0 + 0.35, 880); // A5 — 딩-동 ~1s
+
+    // 벨에 이어 보이스 "New order in~!" — 실패해도 벨만으로 알림은 성립.
+    if (voiceTimerRef.current) clearTimeout(voiceTimerRef.current);
+    voiceTimerRef.current = setTimeout(() => {
+      const voice = voiceRef.current;
+      if (!voice) return;
+      voice.currentTime = 0;
+      voice.play().catch(() => undefined);
+    }, VOICE_DELAY_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (voiceTimerRef.current) clearTimeout(voiceTimerRef.current);
+      voiceRef.current?.pause();
+    };
   }, []);
 
   // 소켓 핸들러(order:new)가 최신 차임 가능 여부를 보도록 ref 로 추적.
