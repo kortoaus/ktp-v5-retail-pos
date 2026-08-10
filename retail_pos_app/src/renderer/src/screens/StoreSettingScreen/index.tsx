@@ -190,7 +190,9 @@ export default function StoreSettingScreen() {
           current.map((t) => (t.id === updated.id ? updated : t)),
         );
       } else {
-        window.alert(res.msg || "Failed to update order chime setting");
+        window.alert(
+          `Failed to update order chime setting (status ${res.status}): ${res.msg || "unknown error"}`,
+        );
       }
     } finally {
       setChimeSavingId(null);

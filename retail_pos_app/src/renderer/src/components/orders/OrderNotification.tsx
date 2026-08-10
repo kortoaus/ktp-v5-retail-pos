@@ -60,27 +60,30 @@ export default function OrderNotification() {
   }, []);
 
   const playChime = useCallback(() => {
+    // 보이스 시그니처(일레븐랩스) 도입 예정 — 파일이 assets 에 추가되면
+    // import chimeUrl from "../../assets/order-chime.mp3" 후 new Audio(chimeUrl)
+    // 재생으로 교체하고 아래 합성 톤은 폴백으로 강등한다.
     const ctx = audioCtxRef.current;
     if (!ctx) return; // 아직 제스처 언락 전
     void ctx.resume();
 
-    const beep = (startAt: number, freq: number) => {
+    // 부드러운 벨 톤: 사인파 + 짧은 어택 + 긴 지수 감쇠 (마림바 느낌)
+    const bell = (startAt: number, freq: number) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = "square";
+      osc.type = "sine";
       osc.frequency.value = freq;
       gain.gain.setValueAtTime(0, startAt);
-      gain.gain.linearRampToValueAtTime(0.6, startAt + 0.02);
-      gain.gain.setValueAtTime(0.6, startAt + 0.32);
-      gain.gain.linearRampToValueAtTime(0, startAt + 0.4);
+      gain.gain.linearRampToValueAtTime(0.35, startAt + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.7);
       osc.connect(gain).connect(ctx.destination);
       osc.start(startAt);
-      osc.stop(startAt + 0.42);
+      osc.stop(startAt + 0.75);
     };
 
     const t0 = ctx.currentTime;
-    beep(t0, 880); // A5
-    beep(t0 + 0.5, 1174.66); // D6 — 더블 비프 ~1s
+    bell(t0, 659.25); // E5
+    bell(t0 + 0.35, 880); // A5 — 딩-동 ~1s
   }, []);
 
   // 소켓 핸들러(order:new)가 최신 차임 가능 여부를 보도록 ref 로 추적.

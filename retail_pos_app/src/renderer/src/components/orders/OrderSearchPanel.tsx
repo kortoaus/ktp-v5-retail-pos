@@ -17,7 +17,7 @@ import {
   type OrderSummary,
 } from "../../service/order.service";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 const PRESETS: { key: OrderPreset; label: string }[] = [
   { key: "new", label: "New" },
@@ -153,7 +153,7 @@ export default function OrderSearchPanel() {
               type="button"
               onPointerDown={() => setPreset(p.key)}
               className={cn(
-                "px-4 h-10 text-sm font-medium border-r last:border-r-0 border-gray-300",
+                "px-5 h-12 text-base font-semibold border-r last:border-r-0 border-gray-300",
                 preset === p.key
                   ? "bg-blue-600 text-white"
                   : "bg-white text-gray-700 active:bg-gray-100",
@@ -171,7 +171,7 @@ export default function OrderSearchPanel() {
               type="button"
               onPointerDown={() => setFulfillment(f.key)}
               className={cn(
-                "px-4 h-10 text-sm font-medium border-r last:border-r-0 border-gray-300",
+                "px-5 h-12 text-base font-semibold border-r last:border-r-0 border-gray-300",
                 fulfillment === f.key
                   ? "bg-blue-600 text-white"
                   : "bg-white text-gray-700 active:bg-gray-100",
@@ -187,7 +187,7 @@ export default function OrderSearchPanel() {
           type="button"
           onPointerDown={() => fetchPage(paging?.currentPage ?? 1)}
           disabled={loading}
-          className="h-10 px-4 rounded-lg bg-gray-200 text-sm font-medium active:bg-gray-300 disabled:opacity-40"
+          className="h-12 px-5 rounded-lg bg-gray-200 text-base font-semibold active:bg-gray-300 disabled:opacity-40"
         >
           Refresh
         </button>
@@ -236,23 +236,23 @@ function OrderRow({
   return (
     <div
       className={cn(
-        "h-full flex items-center gap-3 px-4 text-sm border-l-4 border-l-transparent",
+        "h-full flex items-center gap-3 px-4 text-base border-l-4 border-l-transparent",
         overdue && "bg-red-50 border-l-red-500",
       )}
     >
-      <span className="w-24 shrink-0 text-xs text-gray-500 tabular-nums">
+      <span className="w-24 shrink-0 text-sm text-gray-500 tabular-nums">
         {fmtPlacedAt(order.placedAt)}
       </span>
-      <span className="w-28 shrink-0 font-mono text-xs">{order.orderNo}</span>
+      <span className="w-32 shrink-0 font-mono text-sm">{order.orderNo}</span>
       <FulfillmentBadge fulfillment={order.fulfillment} />
       <span className="w-44 shrink-0 truncate">
         {order.memberName}{" "}
-        <span className="text-gray-400 text-xs">
+        <span className="text-gray-400 text-sm">
           (…{order.memberPhoneLast3})
         </span>
       </span>
       <span className="flex-1 min-w-0 truncate text-gray-600">
-        <span className="text-xs text-gray-400 mr-1">{order.lineCount}×</span>
+        <span className="text-sm text-gray-400 mr-1">{order.lineCount}×</span>
         {lineSummary}
       </span>
       <span className="w-20 shrink-0 text-right font-mono">
@@ -260,7 +260,7 @@ function OrderRow({
       </span>
       <span
         className={cn(
-          "w-28 shrink-0 text-xs tabular-nums",
+          "w-28 shrink-0 text-sm tabular-nums",
           overdue ? "text-red-600 font-bold" : "text-gray-600",
         )}
       >
