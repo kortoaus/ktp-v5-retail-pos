@@ -48,7 +48,13 @@ export default function OrderNotification() {
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
-    // 최초 사용자 제스처에서 AudioContext 생성/resume (capture, 비간섭).
+    // Electron 은 기본 autoplayPolicy 가 no-user-gesture-required 라 마운트
+    // 시점에 바로 생성한다. 혹시 suspended 로 시작하면(정책 변경 대비)
+    // 최초 pointerdown 에서 resume 하는 폴백을 유지.
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new AudioContext();
+      void audioCtxRef.current.resume();
+    }
     const unlock = () => {
       if (!audioCtxRef.current) {
         audioCtxRef.current = new AudioContext();
@@ -149,9 +155,12 @@ export default function OrderNotification() {
     };
   }, [playChime]);
 
-  // ── 반복 차임: count > 0 이고 이 터미널이 차임 대상인 동안 120초 간격 ──
+  // ── 반복 차임: count > 0 이고 이 터미널이 차임 대상인 동안 ──
+  // 조건이 성립하는 순간 즉시 1회(미접수가 있는 채로 앱을 켠 경우 포함),
+  // 이후 120초 간격 반복.
   useEffect(() => {
     if (!chimeEnabled || !hasPending) return;
+    playChime();
     const handle = setInterval(playChime, CHIME_REPEAT_MS);
     return () => clearInterval(handle);
   }, [chimeEnabled, hasPending, playChime]);
