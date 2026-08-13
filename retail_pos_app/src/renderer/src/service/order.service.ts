@@ -170,3 +170,19 @@ export const rejectOrder = async (
     reason,
   });
 };
+
+// --- 슬라이스 C: 인쇄 기록 ---
+// 인쇄 성공 후 best-effort 기록 — 실패해도 인쇄 흐름을 막지 않는다
+// (호출부 console.error only). 전이가 아니므로 version 없음, 종결 주문에도
+// 허용(재인쇄). 응답은 전이와 동일한 갱신된 상세 DTO.
+
+export type OrderPrintedBody =
+  | { kind: "picklist" }
+  | { kind: "label"; lineId: number };
+
+export const recordOrderPrinted = async (
+  id: number,
+  body: OrderPrintedBody,
+): Promise<ApiResponse<OrderDetail>> => {
+  return await apiService.post<OrderDetail>(`/api/order/${id}/printed`, body);
+};

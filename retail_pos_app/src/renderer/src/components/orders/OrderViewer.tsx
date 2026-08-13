@@ -14,15 +14,29 @@
 import { useEffect, useState } from "react";
 import OnScreenKeyboard from "../OnScreenKeyboard";
 import { useUser } from "../../contexts/UserContext";
+import { useZplPrinters } from "../../hooks/useZplPrinters";
+import { printOrderPickList } from "../../libs/printer/order-pick-list-receipt";
 import {
   acceptOrder,
   getOrder,
   readyOrder,
+  recordOrderPrinted,
   rejectOrder,
   type OrderDetail,
+  type OrderLine,
+  type OrderPrintedBody,
 } from "../../service/order.service";
 import { decrementPendingCount } from "./orderInboxStore";
+import { buildOrderLabelZpl } from "./order-label-zpl";
+import {
+  buildLabelPrintedCounts,
+  countPicklistPrinted,
+} from "./order-print-events";
 import type { OrderStatusAction } from "./order-status-policy";
+import {
+  buildPickListRenderModel,
+  formatOrderDueDisplay,
+} from "./pick-list-render";
 import OrderViewerSummary from "./OrderViewerSummary";
 import OrderViewerMadeToOrderSection from "./OrderViewerMadeToOrderSection";
 import OrderViewerPickingSection from "./OrderViewerPickingSection";
@@ -50,10 +64,14 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
   const [error, setError] = useState("");
   // 공유 in-flight boolean 하나 — 액션 바 전체 disabled (v1 관례).
   const [inFlight, setInFlight] = useState(false);
+  // 인쇄 버튼(픽업리스트 + 라인별 라벨) 공유 in-flight — 더블탭 = 2장 방지,
+  // 1탭 = 정확히 1장 (슬라이스 C). 전이 in-flight 와는 별개.
+  const [printInFlight, setPrintInFlight] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
   const { user } = useUser();
+  const { printers, printLabel } = useZplPrinters();
 
   useEffect(() => {
     if (orderId == null) return;
@@ -126,6 +144,67 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
     void runTransition("REJECTED", reason);
   }
 
+  // --- 슬라이스 C: 실물 인쇄 2종 ---
+  // 인쇄 성공 → printed 기록 POST(best-effort) → 응답 상세로 갱신(카운트
+  // 리프레시). 기록 실패는 console.error only — 인쇄를 막지 않는다(스펙).
+  async function recordPrinted(orderId: number, body: OrderPrintedBody) {
+    try {
+      const res = await recordOrderPrinted(orderId, body);
+      if (res.ok && res.result) setDetail(res.result);
+      else console.error("[order-printed] record failed:", res.msg);
+    } catch (err) {
+      console.error("[order-printed] record failed:", err);
+    }
+  }
+
+  async function handlePrintPickList() {
+    if (!detail || printInFlight) return;
+    setPrintInFlight(true);
+    try {
+      // 기존 ESC/POS raster 파이프라인 — printESCPOS 가 프린터 미설정/실패를
+      // 자체 알럿으로 처리하고 throw 하지 않는다(기존 인쇄 관례).
+      await printOrderPickList(buildPickListRenderModel(detail));
+      await recordPrinted(detail.id, { kind: "picklist" });
+    } catch (err) {
+      console.error("[order-pick-list] print failed:", err);
+    } finally {
+      setPrintInFlight(false);
+    }
+  }
+
+  async function handlePrintLabel(line: OrderLine) {
+    if (!detail || printInFlight) return;
+    // 제작 라벨은 ZPL 100×100 전용 — media 100100 ZPL 프린터가 설정에
+    // 없으면 알럿 후 중단(스펙).
+    const printer = printers.find(
+      (p) => p.mediaSize === "100100" && p.language === "zpl",
+    );
+    if (!printer) {
+      window.alert("No 100x100 ZPL label printer configured.");
+      return;
+    }
+    setPrintInFlight(true);
+    try {
+      const zpl = buildOrderLabelZpl(
+        {
+          orderNo: detail.orderNo,
+          dueDisplay: formatOrderDueDisplay(detail.dueAt),
+        },
+        line,
+      );
+      const result = await printLabel(printer, { language: "zpl", data: zpl });
+      if (!result.ok) {
+        console.error("[order-label] print failed:", result.message);
+        return;
+      }
+      await recordPrinted(detail.id, { kind: "label", lineId: line.id });
+    } catch (err) {
+      console.error("[order-label] print failed:", err);
+    } finally {
+      setPrintInFlight(false);
+    }
+  }
+
   if (orderId == null) return null;
 
   const madeToOrderLines = detail
@@ -134,6 +213,11 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
   const pickingLines = detail
     ? detail.lines.filter((line) => line.options.length === 0)
     : [];
+  // 인쇄 카운트 — 상세 events 에서 파생 (crm 이 정본, 로컬 상태 없음).
+  const picklistCount = detail ? countPicklistPrinted(detail.events) : 0;
+  const labelCounts = detail
+    ? buildLabelPrintedCounts(detail.events)
+    : new Map<number, number>();
 
   return (
     <>
@@ -168,7 +252,24 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
           {detail && (
             <>
               <OrderViewerSummary detail={detail} />
-              <OrderViewerMadeToOrderSection lines={madeToOrderLines} />
+              {/* 픽업리스트 인쇄 — 전이 버튼과 구분되는 secondary 스타일,
+                  요약 섹션 직하 배치(장식 최소). 카운트는 PICKLIST_PRINTED. */}
+              <div className="px-4 py-3 border-b border-gray-300">
+                <button
+                  type="button"
+                  disabled={printInFlight}
+                  onPointerDown={() => void handlePrintPickList()}
+                  className="w-full h-12 rounded-lg bg-gray-200 font-bold active:bg-gray-300 disabled:opacity-40"
+                >
+                  {`Print pick list${picklistCount > 0 ? ` (${picklistCount})` : ""}`}
+                </button>
+              </div>
+              <OrderViewerMadeToOrderSection
+                lines={madeToOrderLines}
+                labelCounts={labelCounts}
+                printInFlight={printInFlight}
+                onPrintLabel={(line) => void handlePrintLabel(line)}
+              />
               <OrderViewerPickingSection lines={pickingLines} />
               <OrderViewerTotals detail={detail} />
               {/* ⑤ 거절 사유 — 있을 때만 */}
