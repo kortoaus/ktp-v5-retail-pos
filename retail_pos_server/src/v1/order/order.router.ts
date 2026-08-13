@@ -5,6 +5,7 @@ import {
   getOrderController,
   getOrdersController,
   printedOrderController,
+  revealOrderMemberPhoneController,
   readyOrderController,
   rejectOrderController,
 } from "./order.controller";
@@ -53,6 +54,7 @@ orderRouter.post(
   userMiddleware,
   scopeMiddleware("sale"),
   printedOrderController,
+  revealOrderMemberPhoneController,
 );
 
 export default orderRouter;

@@ -8,6 +8,7 @@ import {
   printedOrderService,
   readyOrderService,
   rejectOrderService,
+  revealOrderMemberPhoneService,
 } from "./order.service";
 
 // GET /api/order — crm /device/order 실시간 프록시 (로컬 미러 금지, §X-4).
@@ -54,3 +55,12 @@ export async function printedOrderController(req: Request, res: Response) {
   const id = parseOrderId(req.params.id);
   res.status(200).json(await printedOrderService(id, req.body));
 }
+
+export async function revealOrderMemberPhoneController(
+  req: Request,
+  res: Response,
+) {
+  const id = parseOrderId(req.params.id);
+  res.status(200).json(await revealOrderMemberPhoneService(id));
+}
+

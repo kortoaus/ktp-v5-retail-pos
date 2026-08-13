@@ -19,6 +19,7 @@ import { printOrderPickList } from "../../libs/printer/order-pick-list-receipt";
 import {
   acceptOrder,
   getOrder,
+  revealOrderMemberPhone,
   readyOrder,
   recordOrderPrinted,
   rejectOrder,
@@ -60,6 +61,10 @@ interface Props {
 
 export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
   const [detail, setDetail] = useState<OrderDetail | null>(null);
+  // 공개된 전화번호는 이 로컬 state 에만 존재 — 뷰어를 닫거나 다른 주문을
+  // 열면 즉시 소멸(캐시/스토리지 금지, web client MemberDetail 불변식).
+  const [revealedPhone, setRevealedPhone] = useState<string | null>(null);
+  const [revealing, setRevealing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   // 공유 in-flight boolean 하나 — 액션 바 전체 disabled (v1 관례).
@@ -76,6 +81,8 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
   useEffect(() => {
     if (orderId == null) return;
     setDetail(null);
+    setRevealedPhone(null);
+    setRevealing(false);
     setError("");
     setRejectOpen(false);
     setRejectReason("");
@@ -205,6 +212,23 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
     }
   }
 
+  const handleRevealPhone = async () => {
+    if (orderId == null || revealing) return;
+    setRevealing(true);
+    try {
+      const res = await revealOrderMemberPhone(orderId);
+      if (res.ok && res.result) {
+        setRevealedPhone(res.result.phone);
+      } else {
+        window.alert(res.msg || "Failed to reveal phone number");
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRevealing(false);
+    }
+  };
+
   if (orderId == null) return null;
 
   const madeToOrderLines = detail
@@ -251,7 +275,13 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
 
           {detail && (
             <>
-              <OrderViewerSummary detail={detail} />
+              <OrderViewerSummary
+                detail={detail}
+                revealedPhone={revealedPhone}
+                revealing={revealing}
+                onRevealPhone={handleRevealPhone}
+                onHidePhone={() => setRevealedPhone(null)}
+              />
               {/* 픽업리스트 인쇄 — 전이 버튼과 구분되는 secondary 스타일,
                   요약 섹션 직하 배치(장식 최소). 카운트는 PICKLIST_PRINTED. */}
               <div className="px-4 py-3 border-b border-gray-300">

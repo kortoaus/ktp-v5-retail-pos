@@ -107,3 +107,27 @@ export async function printedOrderService(id: number, body: unknown) {
   );
   return { ok: true, result: requireOk(res) };
 }
+
+// --- 전화 리빌 프록시 (주문 스코프) ---
+// 앱이 임의 memberId 를 직접 던지지 못하도록 주문 상세에서 memberId 를
+// 확인한 뒤 crm 의 기존 디바이스 리빌 초크포인트를 호출한다. 모든 공개는
+// crm MemberRevealLog 에 감사 기록된다(actorType DEVICE).
+export type RevealedMemberPhoneWire = {
+  memberId: string;
+  phone: string;
+  phoneLast4: string | null;
+};
+
+export async function revealOrderMemberPhoneService(id: number) {
+  const detailRes = await crmApiService.get<OrderDetailWire>(
+    `/device/order/${id}`,
+  );
+  const detail = requireOk(detailRes);
+
+  const res = await crmApiService.post<RevealedMemberPhoneWire>(
+    "/device/member/phone",
+    { memberId: detail.memberId },
+  );
+  return { ok: true, result: requireOk(res) };
+}
+

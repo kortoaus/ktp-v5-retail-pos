@@ -186,3 +186,20 @@ export const recordOrderPrinted = async (
 ): Promise<ApiResponse<OrderDetail>> => {
   return await apiService.post<OrderDetail>(`/api/order/${id}/printed`, body);
 };
+
+export type RevealedMemberPhone = {
+  memberId: string;
+  phone: string;
+  phoneLast4: string | null;
+};
+
+// 전화 리빌 — 주문 스코프 프록시. 공개된 번호는 호출측 로컬 state 에만
+// 보관할 것(캐시/스토리지 금지 — web client MemberDetail 불변식과 동일).
+export const revealOrderMemberPhone = async (
+  id: number,
+): Promise<ApiResponse<RevealedMemberPhone>> => {
+  return await apiService.post<RevealedMemberPhone>(
+    `/api/order/${id}/member-phone`,
+  );
+};
+
