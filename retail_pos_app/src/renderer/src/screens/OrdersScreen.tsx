@@ -1,8 +1,11 @@
-// OrdersScreen — 주문 수신함 (슬라이스 A: 알림 + 목록, 조회 전용).
-// Screen+Panel 관례 (모델: SaleInvoiceSearchScreen). 뷰어/디테일 없음 — B 에서.
+// OrdersScreen — 주문 수신함. Screen+Panel+Viewer 관례
+// (모델: SaleInvoiceSearchScreen). 행 탭 → OrderViewer(디테일+전이, 슬라이스 B).
+// 전이 성공(onChanged) → refreshKey 증가 → Panel 이 현재 페이지 재조회.
 
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import OrderSearchPanel from "../components/orders/OrderSearchPanel";
+import OrderViewer from "../components/orders/OrderViewer";
 import BlockScreen from "../components/BlockScreen";
 import hasScope from "../libs/scope-utils";
 import { useUser } from "../contexts/UserContext";
@@ -10,6 +13,8 @@ import { useUser } from "../contexts/UserContext";
 export default function OrdersScreen() {
   const navigate = useNavigate();
   const { user, loading: userLoading } = useUser();
+  const [viewingOrderId, setViewingOrderId] = useState<number | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   if (userLoading) {
     return (
@@ -43,8 +48,17 @@ export default function OrdersScreen() {
       </div>
 
       <div className="flex-1 min-h-0">
-        <OrderSearchPanel />
+        <OrderSearchPanel
+          onSelect={setViewingOrderId}
+          refreshKey={refreshKey}
+        />
       </div>
+
+      <OrderViewer
+        orderId={viewingOrderId}
+        onClose={() => setViewingOrderId(null)}
+        onChanged={() => setRefreshKey((k) => k + 1)}
+      />
     </div>
   );
 }

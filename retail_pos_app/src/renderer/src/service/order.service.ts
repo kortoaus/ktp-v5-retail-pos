@@ -50,3 +50,123 @@ export const getOrders = async (
 ): Promise<ApiResponse<OrderSummary[]>> => {
   return await apiService.get<OrderSummary[]>(`/api/order${qs}`);
 };
+
+// --- 슬라이스 B: 상세 + 전이 ---
+// 정본은 crm-server mapRetailOrderAdminDetail + dueAt (로컬 서버는 프록시).
+// 상세는 요약형과 달리 lineCount/firstLineName* 이 없고 lines/events 전체.
+// 전이 충돌은 status 409 / msg "TRANSITION_CONFLICT" — 상세 재조회로
+// 실상태를 학습한다 (스펙 2026-08-13).
+
+export interface OrderLineOption {
+  sourceOptionGroupId: number;
+  sourceOptionItemId: number;
+  groupName_en: string;
+  groupName_ko: string;
+  optionName_en: string;
+  optionName_ko: string;
+  priceDelta: number; // 단위당 cents
+  qty: number;
+}
+
+export interface OrderLine {
+  id: number;
+  sourceItemId: number;
+  name_en: string;
+  name_ko: string;
+  thumb: string;
+  qty: number; // EA 정수 (POS QTY_SCALE 아님)
+  unitBasePrice: number; // cents
+  optionsTotal: number; // 단위당 cents
+  unitPrice: number; // cents
+  lineTotal: number; // cents
+  taxable: boolean;
+  deliverySurchargePerUnit: number; // cents
+  isAgeRestricted: boolean;
+  sort: number;
+  // 판별자(오너 확정): options.length > 0 = Made to Order, 아니면 Picking.
+  options: OrderLineOption[];
+}
+
+export interface OrderEvent {
+  type: string;
+  actorType: string;
+  actorLabel: string;
+  note: string;
+  createdAt: string; // ISO
+}
+
+export interface OrderDetail {
+  id: number;
+  orderNo: string;
+  fulfillment: OrderFulfillment;
+  status: OrderStatus;
+  paymentMethod: "IN_STORE" | "STRIPE";
+  paymentStatus: "UNPAID" | "PAID";
+  memberId: string;
+  memberName: string;
+  memberPhoneLast3: string;
+  pickupDate: string | null; // "YYYY-MM-DD"
+  pickupSlotMinutes: number | null; // minute-of-day
+  deliveryEtaDate: string | null; // "YYYY-MM-DD"
+  shippingLabel: string | null;
+  shippingAddress1: string | null;
+  shippingAddress2: string | null;
+  shippingSuburb: string | null;
+  shippingState: string | null;
+  shippingPostcode: string | null;
+  shippingNote: string | null;
+  subtotal: number; // cents
+  surchargeTotal: number; // cents
+  deliveryFee: number; // cents
+  total: number; // cents
+  requiresAgeCheck: boolean;
+  rejectReason: string | null;
+  posInvoiceSerial: string | null;
+  version: number;
+  placedAt: string; // ISO
+  acceptedAt: string | null;
+  readyAt: string | null;
+  collectedAt: string | null;
+  cancelledAt: string | null;
+  rejectedAt: string | null;
+  expiredAt: string | null;
+  createdAt: string; // ISO
+  dueAt: string | null; // ISO — server-computed
+  lines: OrderLine[];
+  events: OrderEvent[];
+}
+
+export const getOrder = async (
+  id: number,
+): Promise<ApiResponse<OrderDetail>> => {
+  return await apiService.get<OrderDetail>(`/api/order/${id}`);
+};
+
+export const acceptOrder = async (
+  id: number,
+  version: number,
+): Promise<ApiResponse<OrderDetail>> => {
+  return await apiService.post<OrderDetail>(`/api/order/${id}/accept`, {
+    version,
+  });
+};
+
+export const readyOrder = async (
+  id: number,
+  version: number,
+): Promise<ApiResponse<OrderDetail>> => {
+  return await apiService.post<OrderDetail>(`/api/order/${id}/ready`, {
+    version,
+  });
+};
+
+export const rejectOrder = async (
+  id: number,
+  version: number,
+  reason: string,
+): Promise<ApiResponse<OrderDetail>> => {
+  return await apiService.post<OrderDetail>(`/api/order/${id}/reject`, {
+    version,
+    reason,
+  });
+};

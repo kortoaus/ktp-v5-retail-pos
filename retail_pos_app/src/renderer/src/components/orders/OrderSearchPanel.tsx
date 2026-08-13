@@ -1,8 +1,9 @@
-// OrderSearchPanel — 주문 수신함 목록 (슬라이스 A: 조회 전용).
-// 프리셋 탭 + C&C/Delivery 토글 + ServerPagingList 20행.
-// 행 탭 무동작 — 디테일 화면은 슬라이스 B.
+// OrderSearchPanel — 주문 수신함 목록.
+// 프리셋 탭 + C&C/Delivery 토글 + ServerPagingList 10행.
+// 슬라이스 B: 행 탭 → onSelect(orderId) (Screen 이 OrderViewer 를 연다),
+// refreshKey 증가 → 현재 페이지 재조회 (전이 후 onChanged 훅).
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import LoadingOverlay from "../LoadingOverlay";
 import ServerPagingList from "../list/ServerPagingList";
 import { PagingType } from "../../libs/api";
@@ -16,6 +17,7 @@ import {
   type OrderStatus,
   type OrderSummary,
 } from "../../service/order.service";
+import { FulfillmentBadge, StatusBadge } from "./order-badges";
 
 const PAGE_SIZE = 10;
 
@@ -98,7 +100,16 @@ function isOverdue(order: OrderSummary, nowMs: number): boolean {
   return new Date(order.dueAt).getTime() < nowMs;
 }
 
-export default function OrderSearchPanel() {
+interface OrderSearchPanelProps {
+  onSelect: (orderId: number) => void;
+  // 증가할 때마다 현재 페이지 재조회 — OrderViewer 전이 성공(onChanged) 훅.
+  refreshKey: number;
+}
+
+export default function OrderSearchPanel({
+  onSelect,
+  refreshKey,
+}: OrderSearchPanelProps) {
   const [preset, setPreset] = useState<OrderPreset>("active");
   const [fulfillment, setFulfillment] = useState<FulfillmentFilter>("ALL");
   const [items, setItems] = useState<OrderSummary[]>([]);
@@ -136,6 +147,17 @@ export default function OrderSearchPanel() {
   useEffect(() => {
     fetchPage(1);
   }, [fetchPage]);
+
+  // refreshKey 증가 시 현재 페이지 재조회. lastRefreshKeyRef 가드로
+  // fetchPage(프리셋/필터) 변경만으로는 중복 조회하지 않는다.
+  const pagingRef = useRef<PagingType | null>(null);
+  pagingRef.current = paging;
+  const lastRefreshKeyRef = useRef(refreshKey);
+  useEffect(() => {
+    if (refreshKey === lastRefreshKeyRef.current) return;
+    lastRefreshKeyRef.current = refreshKey;
+    fetchPage(pagingRef.current?.currentPage ?? 1);
+  }, [refreshKey, fetchPage]);
 
   const nowMs = Date.now();
   const todayStr = dayjsAU().format("YYYY-MM-DD");
@@ -206,7 +228,12 @@ export default function OrderSearchPanel() {
             paging={paging}
             onPageChange={fetchPage}
             Renderer={({ item }) => (
-              <OrderRow order={item} nowMs={nowMs} todayStr={todayStr} />
+              <OrderRow
+                order={item}
+                nowMs={nowMs}
+                todayStr={todayStr}
+                onSelect={onSelect}
+              />
             )}
           />
         )}
@@ -215,15 +242,17 @@ export default function OrderSearchPanel() {
   );
 }
 
-// 행은 이번 슬라이스에서 비인터랙티브 — onPointerDown 없음 (디테일은 B).
+// 슬라이스 B: 행 탭 → onSelect(order.id) (onPointerDown — 스캐너 트랩 관례).
 function OrderRow({
   order,
   nowMs,
   todayStr,
+  onSelect,
 }: {
   order: OrderSummary;
   nowMs: number;
   todayStr: string;
+  onSelect: (orderId: number) => void;
 }) {
   const overdue = isOverdue(order, nowMs);
   const firstLineName =
@@ -235,8 +264,9 @@ function OrderRow({
 
   return (
     <div
+      onPointerDown={() => onSelect(order.id)}
       className={cn(
-        "h-full flex items-center gap-3 px-4 text-base border-l-4 border-l-transparent",
+        "h-full flex items-center gap-3 px-4 text-base border-l-4 border-l-transparent cursor-pointer active:bg-gray-100",
         overdue && "bg-red-50 border-l-red-500",
       )}
     >
@@ -271,39 +301,4 @@ function OrderRow({
   );
 }
 
-function FulfillmentBadge({ fulfillment }: { fulfillment: OrderFulfillment }) {
-  const isCnc = fulfillment === "CLICK_AND_COLLECT";
-  return (
-    <span
-      className={cn(
-        "w-12 shrink-0 text-center text-[10px] font-bold px-1.5 py-1 rounded tracking-wider",
-        isCnc ? "bg-emerald-100 text-emerald-700" : "bg-violet-100 text-violet-700",
-      )}
-    >
-      {isCnc ? "C&C" : "DLV"}
-    </span>
-  );
-}
-
-const STATUS_BADGE_CLASSES: Record<OrderStatus, string> = {
-  PLACED: "bg-orange-100 text-orange-700",
-  ACCEPTED: "bg-blue-100 text-blue-700",
-  READY: "bg-emerald-100 text-emerald-700",
-  COLLECTED: "bg-gray-100 text-gray-600",
-  CANCELLED: "bg-gray-200 text-gray-500",
-  REJECTED: "bg-red-100 text-red-700",
-  EXPIRED: "bg-red-100 text-red-700",
-};
-
-function StatusBadge({ status }: { status: OrderStatus }) {
-  return (
-    <span
-      className={cn(
-        "w-24 shrink-0 text-center text-[10px] font-bold px-2 py-1 rounded tracking-wider",
-        STATUS_BADGE_CLASSES[status],
-      )}
-    >
-      {status}
-    </span>
-  );
-}
+// FulfillmentBadge / StatusBadge 는 order-badges.tsx 로 분리 (뷰어와 공용).

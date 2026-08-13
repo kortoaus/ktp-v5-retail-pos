@@ -39,6 +39,18 @@ export function getOrderInboxState(): OrderInboxState {
   return state;
 }
 
+// 슬라이스 B: PLACED 발 전이 성공 시 낙관적 -1 (0 클램프).
+// 브로드캐스터 다음 틱 payload 가 정본으로 덮어쓴다 — 차임 갭 제거 전용.
+export function decrementPendingCount(): void {
+  if (!state.payload || state.payload.count == null) return;
+  setOrderInboxState({
+    payload: {
+      ...state.payload,
+      count: Math.max(0, state.payload.count - 1),
+    },
+  });
+}
+
 export function normalizeOrderPendingCountPayload(
   next: unknown,
 ): OrderPendingCountPayload | null {
