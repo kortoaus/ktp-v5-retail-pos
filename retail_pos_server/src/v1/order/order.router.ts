@@ -4,6 +4,7 @@ import {
   acceptOrderController,
   getOrderController,
   getOrdersController,
+  printedOrderController,
   readyOrderController,
   rejectOrderController,
 } from "./order.controller";
@@ -45,6 +46,13 @@ orderRouter.post(
   userMiddleware,
   scopeMiddleware("sale"),
   rejectOrderController,
+);
+
+orderRouter.post(
+  "/:id/printed",
+  userMiddleware,
+  scopeMiddleware("sale"),
+  printedOrderController,
 );
 
 export default orderRouter;

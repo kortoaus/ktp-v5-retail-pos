@@ -95,3 +95,15 @@ export async function rejectOrderService(id: number, body: unknown) {
   );
   return { ok: true, result: requireOk(res) };
 }
+
+// --- 슬라이스 C: 인쇄 기록 프록시 ---
+// POST /device/order/:id/printed — body 패스스루({kind:"picklist"} 또는
+// {kind:"label", lineId}). kind/lineId 검증은 crm(400). 상태 전이가 아니라
+// version 불요, 종결 주문에도 허용(재인쇄). 응답은 전이와 동일한 상세 DTO.
+export async function printedOrderService(id: number, body: unknown) {
+  const res = await crmApiService.post<OrderDetailWire>(
+    `/device/order/${id}/printed`,
+    body,
+  );
+  return { ok: true, result: requireOk(res) };
+}

@@ -5,6 +5,7 @@ import {
   acceptOrderService,
   getOrderDetailService,
   getOrdersService,
+  printedOrderService,
   readyOrderService,
   rejectOrderService,
 } from "./order.service";
@@ -45,4 +46,11 @@ export async function readyOrderController(req: Request, res: Response) {
 export async function rejectOrderController(req: Request, res: Response) {
   const id = parseOrderId(req.params.id);
   res.status(200).json(await rejectOrderService(id, req.body));
+}
+
+// POST /api/order/:id/printed — 인쇄 기록 프록시(슬라이스 C), body 패스스루.
+// kind/lineId 검증은 crm(400). 전이가 아니므로 version 없음.
+export async function printedOrderController(req: Request, res: Response) {
+  const id = parseOrderId(req.params.id);
+  res.status(200).json(await printedOrderService(id, req.body));
 }
