@@ -12,8 +12,9 @@ only thing in the building that talks to the cloud.
 - `src/app.ts` — Express wiring. **Order is load-bearing**: `express.json({limit:"1mb"})` →
   cors → request logger → `/health` `/clear` `/ok` (unauthenticated stubs) →
   `terminalMiddleware` → `/api` router → error handler.
-- `src/router.ts` — mounts 14 modules under `/api`. Each module is
-  `x.router.ts` + `x.controller.ts` + `x.service.ts`.
+- `src/router.ts` — mounts 16 modules under `/api`. Each module is
+  `x.router.ts` + `x.controller.ts` + `x.service.ts`. (The Route Map below still
+  omits `/order` — known doc drift, recorded in api-docs BACKLOG §Z.)
 
 ## Commands
 
@@ -39,6 +40,8 @@ docker compose up -d         # local dev Postgres only (host port 5555)
 | `API_KEY` | Device key **hex only, without the `dk_` prefix** (see Device Auth) |
 | `ITEM_URL` | Declared in `src/libs/constants.ts`, imported by `cloud.api.ts`, **never used**. Dead |
 | `CRON_INSTANCE` | No longer read anywhere in `src`. Dead |
+| `STRIPE_SECRET_KEY` | **Optional.** Stripe secret key for `/api/stripe/*` (Tap to Pay, Fast Checkout tablet). Absent ⇒ those two routes answer `503 {ok:false,msg:"Stripe is not configured"}`; nothing else is affected |
+| `STRIPE_LOCATION_ID` | **Optional.** Terminal Location id. Absent ⇒ `stripe.service.ts` reuses the account's first location (or creates "KTP Dev") and logs the id to pin here |
 
 ## Request Pipeline
 
@@ -74,6 +77,7 @@ docker compose up -d         # local dev Postgres only (host port 5555)
 | `/cashio` | user + `cashio` | `GET|POST /` |
 | `/store` | GET open, POST + `store` | `GET /`, `GET /label` (no consumer in this repo), `POST /` |
 | `/cloud` | none | `POST /migrate/item` (runs the whole down-sync), `GET /post`, `GET|POST /item-sheet/label-update*` |
+| `/stripe` | user + `sale` | `POST /connection-token` (→ `{secret, locationId}`), `POST /payment-intent` (`{amount}` cents → `{id, client_secret}`). **Only outbound-to-Stripe surface**; no key ⇒ clean `503 {ok:false,msg:"Stripe is not configured"}` |
 
 ## Database
 

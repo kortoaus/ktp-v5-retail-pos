@@ -14,6 +14,7 @@ import voucherRouter from "./v1/voucher/voucher.router";
 import customerVoucherRouter from "./v1/customer-voucher/customer-voucher.router";
 import saleRouter from "./v1/sale/sale.router";
 import orderRouter from "./v1/order/order.router";
+import stripeRouter from "./v1/stripe/stripe.router";
 
 const router = Router();
 
@@ -32,4 +33,5 @@ router.use("/voucher", voucherRouter);
 router.use("/customer-voucher", customerVoucherRouter);
 router.use("/sale", saleRouter);
 router.use("/order", orderRouter);
+router.use("/stripe", stripeRouter);
 export default router;
