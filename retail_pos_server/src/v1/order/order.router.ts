@@ -54,6 +54,12 @@ orderRouter.post(
   userMiddleware,
   scopeMiddleware("sale"),
   printedOrderController,
+);
+
+orderRouter.post(
+  "/:id/member-phone",
+  userMiddleware,
+  scopeMiddleware("sale"),
   revealOrderMemberPhoneController,
 );
 
