@@ -4,6 +4,7 @@ import {
   acceptOrderController,
   getOrderController,
   getOrdersController,
+  pickingOrderController,
   printedOrderController,
   revealOrderMemberPhoneController,
   readyOrderController,
@@ -40,6 +41,14 @@ orderRouter.post(
   userMiddleware,
   scopeMiddleware("sale"),
   readyOrderController,
+);
+
+// S2 러너 피킹 확정 — ACCEPTED→READY 의 피킹 변형(crm 프록시).
+orderRouter.post(
+  "/:id/picking",
+  userMiddleware,
+  scopeMiddleware("sale"),
+  pickingOrderController,
 );
 
 orderRouter.post(
