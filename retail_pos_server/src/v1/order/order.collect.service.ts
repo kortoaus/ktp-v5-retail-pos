@@ -26,8 +26,12 @@ export function buildCollectBody(posInvoiceSerial: string): {
 
 // 결과 분류 (순수 — 스윕 판정 로직):
 //   synced   — crm 이 전이(또는 멱등 재확인) 성공. syncedAt 기록.
-//   conflict — 409 TRANSITION_CONFLICT. 영구 실패 — syncedAt 기록 + warn.
-//   retry    — 네트워크/5xx/기타. 그대로 두고 다음 스윕이 재시도.
+//   conflict — 영구 실패 — syncedAt 기록 + warn. 409 TRANSITION_CONFLICT 및
+//              그 외 4xx (400 잘못된 요청, 404 주문 부재 등 — 재시도해도
+//              같은 응답이라 스윕 선두에서 뒤 인보이스를 영원히 막는다).
+//              예외: 401/403 은 인증 미스컨피그(.env API_KEY) — 키를 고치면
+//              회복되므로 synced 마킹으로 collect 를 유실하지 않게 retry.
+//   retry    — 네트워크(0)/타임아웃/5xx/401/403. 다음 스윕이 재시도.
 export type CollectOutcome = "synced" | "conflict" | "retry";
 
 export function classifyCollectResult(res: {
@@ -35,7 +39,10 @@ export function classifyCollectResult(res: {
   status?: number;
 }): CollectOutcome {
   if (res.ok) return "synced";
-  if (res.status === 409) return "conflict";
+  if (res.status === 401 || res.status === 403) return "retry";
+  if (res.status != null && res.status >= 400 && res.status < 500) {
+    return "conflict";
+  }
   return "retry";
 }
 
@@ -65,10 +72,10 @@ export async function collectInvoiceOrder(
   }
 
   if (outcome === "conflict") {
-    // 영구 충돌 — 주문이 이미 닫혀 있다(REJECTED 등). 판매는 성립 유지,
-    // 운영 충돌은 사람 처리 (스펙 §4).
+    // 영구 실패 — 409 는 주문이 이미 닫혀 있음(REJECTED 등), 그 외 4xx 는
+    // 재시도 무의미(부재/요청 불량). 판매는 성립 유지, 사람 처리 (스펙 §4).
     console.warn(
-      `[order.collect] invoice ${inv.id} (order ${inv.externalOrderId}) permanent 409 TRANSITION_CONFLICT — marking synced, needs human follow-up`,
+      `[order.collect] invoice ${inv.id} (order ${inv.externalOrderId}) permanent ${res.status} (${res.msg ?? "no msg"}) — marking synced, needs human follow-up`,
     );
   }
 
@@ -128,15 +135,31 @@ export function triggerSyncPendingOrderCollects() {
   });
 }
 
-// 판매 생성 직후의 직접 시도 — 응답 DTO 의 collectSynced 플래그용.
-// deadline 안에 synced 로 끝나면 true. 시간 초과 시 false 를 돌려주되,
+// 판매 응답 DTO 의 collectResult 트라이스테이트 (S3 리뷰 반영 — 영구 충돌을
+// "자동 재시도 중" 으로 오표시하지 않기 위해 boolean 에서 확장):
+//   collected — deadline 안에 crm 전이 확인.
+//   pending   — 미확인 (타임아웃/네트워크/5xx) — 스윕이 자동 재시도.
+//   conflict  — 영구 실패 (409 등 4xx) — 재시도 없음, 사람 확인 필요.
+export type CollectSaleResult = "collected" | "pending" | "conflict";
+
+// outcome → 응답 트라이스테이트 매핑 (순수).
+export function toCollectSaleResult(
+  outcome: CollectOutcome | "timeout",
+): CollectSaleResult {
+  if (outcome === "synced") return "collected";
+  if (outcome === "conflict") return "conflict";
+  return "pending";
+}
+
+// 판매 생성 직후의 직접 시도 — 응답 DTO 의 collectResult 용.
+// deadline 안에 끝나면 그 outcome 을, 시간 초과 시 "pending" 을 돌려주되,
 // 진행 중이던 호출은 그대로 완주해 syncedAt 을 기록한다 (다음 스윕과
 // 겹쳐도 crm 멱등이라 안전). 판매 완료 UX 를 클라우드 타임아웃(30s)에
 // 볼모잡히지 않게 하는 캡.
 export async function collectInvoiceOrderWithDeadline(
   inv: CollectableInvoice,
   deadlineMs = 4000,
-): Promise<boolean> {
+): Promise<CollectSaleResult> {
   const attempt = collectInvoiceOrder(inv).catch((e): CollectOutcome => {
     console.error("[order.collect] direct collect threw:", e);
     return "retry";
@@ -145,5 +168,5 @@ export async function collectInvoiceOrderWithDeadline(
     setTimeout(() => resolve("timeout"), deadlineMs),
   );
   const result = await Promise.race([attempt, timeout]);
-  return result === "synced";
+  return toCollectSaleResult(result);
 }
