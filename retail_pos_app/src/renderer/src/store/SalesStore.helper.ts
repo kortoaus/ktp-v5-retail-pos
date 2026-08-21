@@ -5,6 +5,10 @@ import { calcMarkdownPrice } from "../libs/pp-barcode";
 export interface Cart {
   lines: SaleLineType[];
   member: SaleMember | null;
+  // S3 — C&C 주문 로드 마킹 (per-cart). externalOrderId = crm RetailOrder.id
+  // 문자열, orderNo 는 배지 표시용. clear/reset(createEmptyCart) 시 소멸.
+  externalOrderId: string | null;
+  orderNo: string | null;
 }
 
 export interface SaleMember {
@@ -26,7 +30,7 @@ export interface AddLineOptions {
 }
 
 export function createEmptyCart(): Cart {
-  return { lines: [], member: null };
+  return { lines: [], member: null, externalOrderId: null, orderNo: null };
 }
 
 export function resolveOriginalPrice(item: SaleLineItem): number {
@@ -150,5 +154,5 @@ export function recalculateCartLines(cart: Cart, memberLevel: number): Cart {
 
     return recalculateLine({ ...line, unit_price_discounted });
   });
-  return { lines, member: cart.member };
+  return { ...cart, lines };
 }

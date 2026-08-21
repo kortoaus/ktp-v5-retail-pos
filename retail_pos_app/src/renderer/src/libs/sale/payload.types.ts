@@ -108,4 +108,9 @@ export interface SaleCreatePayload {
   payments: PaymentPayload[];
 
   note?: string;
+
+  // S3 — C&C 주문 로드 판매만 세팅 (crm RetailOrder.id 문자열, 1..64).
+  // 옵션 + 미로드 시 필드 자체 생략 (후방 호환 — sync-sale-core 소비자
+  // 포함). 서버가 원본 SALE 에만 저장하고 결제 후 crm collect 를 호출한다.
+  externalOrderId?: string;
 }

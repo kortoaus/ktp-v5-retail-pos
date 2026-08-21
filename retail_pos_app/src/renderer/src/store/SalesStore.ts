@@ -30,6 +30,8 @@ interface SalesStoreState {
   changeLineQty: (lineKey: string, qty: number) => void;
   injectLinePrice: (lineKey: string, price: number | null) => void;
   setMember: (member: SaleMember | null) => void;
+  // S3 — 활성 카트에 주문 마킹 (로드 훅 전용). null/null 로 해제.
+  setCartOrder: (externalOrderId: string | null, orderNo: string | null) => void;
   setLineOffset: (offset: number) => void;
   switchCart: (index: number) => void;
   clearActiveCart: () => void;
@@ -61,7 +63,7 @@ export const useSalesStore = create<SalesStoreState>()((set, get) => ({
         lines.push(merged);
         const reindexed = reindexLines(lines);
         const updatedCarts = [...carts];
-        updatedCarts[activeCartIndex] = { lines: reindexed, member };
+        updatedCarts[activeCartIndex] = { ...cart, lines: reindexed };
         set({
           carts: updatedCarts,
           lineOffset: Math.max(0, reindexed.length - LINE_PAGE_SIZE),
@@ -74,7 +76,7 @@ export const useSalesStore = create<SalesStoreState>()((set, get) => ({
     lines.push(newLine);
 
     const updatedCarts = [...carts];
-    updatedCarts[activeCartIndex] = { lines, member };
+    updatedCarts[activeCartIndex] = { ...cart, lines };
     set({
       carts: updatedCarts,
       lineOffset: Math.max(0, lines.length - LINE_PAGE_SIZE),
@@ -89,8 +91,8 @@ export const useSalesStore = create<SalesStoreState>()((set, get) => ({
 
     const updatedCarts = [...carts];
     updatedCarts[activeCartIndex] = {
+      ...cart,
       lines: reindexLines(filtered),
-      member: cart.member,
     };
     set({ carts: updatedCarts });
   },
@@ -116,8 +118,8 @@ export const useSalesStore = create<SalesStoreState>()((set, get) => ({
 
     const updatedCarts = [...carts];
     updatedCarts[activeCartIndex] = {
+      ...cart,
       lines: reindexLines(lines),
-      member: cart.member,
     };
     set({ carts: updatedCarts });
   },
@@ -143,7 +145,7 @@ export const useSalesStore = create<SalesStoreState>()((set, get) => ({
     lines[idx] = updated;
 
     const updatedCarts = [...carts];
-    updatedCarts[activeCartIndex] = { lines, member: cart.member };
+    updatedCarts[activeCartIndex] = { ...cart, lines };
     set({ carts: updatedCarts });
   },
 
@@ -156,6 +158,17 @@ export const useSalesStore = create<SalesStoreState>()((set, get) => ({
     );
     const updatedCarts = [...carts];
     updatedCarts[activeCartIndex] = updatedCart;
+    set({ carts: updatedCarts });
+  },
+
+  setCartOrder: (externalOrderId, orderNo) => {
+    const { carts, activeCartIndex } = get();
+    const updatedCarts = [...carts];
+    updatedCarts[activeCartIndex] = {
+      ...carts[activeCartIndex],
+      externalOrderId,
+      orderNo,
+    };
     set({ carts: updatedCarts });
   },
 

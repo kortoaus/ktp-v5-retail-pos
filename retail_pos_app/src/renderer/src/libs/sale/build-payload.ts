@@ -220,5 +220,10 @@ export function buildSalePayload({
     payments: paymentRows,
 
     note,
+
+    // S3 — 주문 로드 카트만. 미로드 카트는 필드 자체 생략 (옵션, 후방 호환).
+    ...(cart.externalOrderId != null
+      ? { externalOrderId: cart.externalOrderId }
+      : {}),
   };
 }

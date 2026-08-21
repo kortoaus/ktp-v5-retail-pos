@@ -25,7 +25,7 @@ export function getMemberLevelOneEstimate({
   if (currentTotal <= 0) return null;
 
   const estimatedCart = recalculateCartLines(
-    { lines, member: null },
+    { lines, member: null, externalOrderId: null, orderNo: null },
     MEMBER_LEVEL_ONE,
   );
   const memberTotal = estimatedCart.lines.reduce(
