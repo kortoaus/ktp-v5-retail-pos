@@ -504,15 +504,23 @@ export async function createSaleService(
 
     triggerSyncAllSaleInvoices();
 
-    // S3 — 커밋 후 crm collect 훅 (best-effort). deadline 캡 안에 확인되면
-    // collectSynced=true 로 응답; 실패/지연이면 false — 판매는 성립 유지,
-    // 미확인 인보이스는 collect 스윕이 재시도한다 (order.collect.service.ts).
+    // S3 — 커밋 후 crm collect 훅 (best-effort). 응답 DTO 에 트라이스테이트
+    // collectResult(collected/pending/conflict) — pending 은 스윕이 재시도,
+    // conflict 는 영구 실패(사람 확인). 판매는 어느 경우든 성립 유지.
+    // collectSynced 는 구형 앱(부팅 시에만 자동업데이트) 하위호환용 boolean.
     if (invoice.externalOrderId != null) {
-      const collectSynced = await collectInvoiceOrderWithDeadline(invoice);
+      const collectResult = await collectInvoiceOrderWithDeadline(invoice);
       // 직접 시도 후에야 스윕 트리거 — 새 인보이스를 두 경로가 동시에 치는
       // 것을 줄인다 (겹쳐도 crm 멱등이라 안전).
       triggerSyncPendingOrderCollects();
-      return { ok: true, result: { ...invoice, collectSynced } };
+      return {
+        ok: true,
+        result: {
+          ...invoice,
+          collectResult,
+          collectSynced: collectResult === "collected",
+        },
+      };
     }
 
     // 주문 연계 없는 판매도 밀린 collect 를 스윕 (업싱크 트리거 관례).
