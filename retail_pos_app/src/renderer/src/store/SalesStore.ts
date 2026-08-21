@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 import { SaleLineItem } from "../types/sales";
 import { QTY_SCALE } from "../libs/constants";
+import { removeLineFromCart } from "./cart-line-remove";
 import {
   type AddLineOptions,
   type Cart,
@@ -85,15 +86,13 @@ export const useSalesStore = create<SalesStoreState>()((set, get) => ({
 
   removeLine: (lineKey) => {
     const { activeCartIndex, carts } = get();
-    const cart = carts[activeCartIndex];
-    const filtered = cart.lines.filter((l) => l.lineKey !== lineKey);
-    if (filtered.length === cart.lines.length) return;
+    // S3 리뷰 — 순수 리듀서로 위임: 마지막 라인 제거로 카트가 비면 주문
+    // 마킹도 해제된다 (로드 포기 의미론 — cart-line-remove.ts 참조).
+    const next = removeLineFromCart(carts[activeCartIndex], lineKey);
+    if (next === null) return;
 
     const updatedCarts = [...carts];
-    updatedCarts[activeCartIndex] = {
-      ...cart,
-      lines: reindexLines(filtered),
-    };
+    updatedCarts[activeCartIndex] = next;
     set({ carts: updatedCarts });
   },
 
