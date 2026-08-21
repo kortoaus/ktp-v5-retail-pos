@@ -167,6 +167,10 @@ function buildInvoicePayload(
 
     originalInvoiceId: originalCloudId,
 
+    // S3 — C&C 주문 연계 (crm RetailOrder.id 문자열). api-server 업싱크 DTO
+    // 필드명과 동일해야 한다 (스펙 §5 — 어드민/리포트의 주문↔인보이스 역추적).
+    externalOrderId: inv.externalOrderId ?? null,
+
     localShiftId: inv.shiftId,
     terminalId: inv.terminalId,
     userId: inv.userId,
