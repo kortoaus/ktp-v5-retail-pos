@@ -509,6 +509,18 @@ model SaleInvoice {
   // Data-server 의 RetailSaleInvoice.id 를 여기 저장.
   cloudId Int?
 
+  // ── C&C 주문 연계 (S3 — specs/2026-08-21) ────────────────
+  // externalOrderId: crm RetailOrder.id (문자열). **원본 SALE 에만** 저장 —
+  //   REFUND / repay 자식 SALE / SPEND 은 절대 갖지 않는다 (서비스가 보장).
+  //   @unique: Postgres 는 NULL 을 distinct 취급하므로 "NOT NULL 값끼리만
+  //   유니크" — 같은 주문의 이중 인보이스를 DB 레벨에서 차단 (부분 유니크
+  //   인덱스와 동등). 서비스가 먼저 400 으로 거르고, 이 제약은 레이스 방어선.
+  // externalOrderCollectSyncedAt: crm POST /device/order/:id/collect 확인
+  //   시각. null ⟺ collect 스윕 대상. 영구 409(주문이 이미 닫힘)도 여기에
+  //   now 를 기록해 무한 재시도를 막는다 (스펙 §4 — 사람 처리).
+  externalOrderId              String?   @unique
+  externalOrderCollectSyncedAt DateTime?
+
   // ── Relations ───────────────────────────────────────────
   rows     SaleInvoiceRow[]
   payments SaleInvoicePayment[]
