@@ -3,6 +3,8 @@
 //
 // 상태별 정책 (오너 2026-08-21):
 //   READY    — 즉시 로드, 수량 = pickedQty (0/미기록 라인 제외).
+//              전 라인 pickedQty 미기록(피킹 확정 없이 READY — 수신함 경로)
+//              이면 ACCEPTED 식 컨펌 후 주문 수량 폴백 (S3 리뷰).
 //   ACCEPTED — 컨펌 후 로드, 수량 = 주문 qty (캐셔가 카트에서 조정).
 //   PLACED   — 차단 ("접수 먼저").
 //   종결     — 차단 (COLLECTED 는 "이미 결제 완료" — 중복 결제 1차 방어).
@@ -78,11 +80,23 @@ export function useOrderLoad() {
       }
       // 가드 통과 시점의 내로잉을 const 로 고정 (클로저 내 사용).
       const loadStatus: "ACCEPTED" | "READY" = detail.status;
+      // 수량 정책 상태 — 아래 READY 전건 미기록 폴백이 ACCEPTED 로 바꿀 수 있다.
+      let qtyStatus: "ACCEPTED" | "READY" = loadStatus;
       if (loadStatus === "ACCEPTED") {
         const ok = window.confirm(
           "This order hasn't been picked yet. Load with ordered quantities?\n(아직 피킹 확정 전 주문입니다. 주문 수량으로 불러올까요?)",
         );
         if (!ok) return false;
+      } else if (detail.lines.every((line) => line.pickedQty == null)) {
+        // S3 리뷰 — 피킹 확정 없이 수신함에서 READY 로 보낸 주문: pickedQty
+        // 가 전 라인 null 이라 READY 정책(pickedQty, 0 제외)으로는 로드할
+        // 라인이 0 이 되는 막다른 길. ACCEPTED 식 컨펌 후 주문 수량 폴백.
+        // 일부라도 기록된 혼합 케이스는 기존 정책 유지 (기록값, 0 제외).
+        const ok = window.confirm(
+          "Picking was never confirmed for this order. Load with ordered quantities?",
+        );
+        if (!ok) return false;
+        qtyStatus = "ACCEPTED";
       }
 
       // ── 카트 가드 ──
@@ -110,10 +124,15 @@ export function useOrderLoad() {
       const loadable = detail.lines
         .slice()
         .sort((a, b) => a.sort - b.sort)
-        .map((line) => ({ line, qty: chosenQtyOf(line, loadStatus) }))
+        .map((line) => ({ line, qty: chosenQtyOf(line, qtyStatus) }))
         .filter(({ qty }) => qty > 0);
       if (loadable.length === 0) {
-        window.alert("No quantities to load for this order.");
+        // READY 인데 기록된 수량이 전부 0 — 피킹 결과 "집은 게 없음" (S3 리뷰).
+        window.alert(
+          qtyStatus === "READY"
+            ? "Nothing was picked for this order."
+            : "No quantities to load for this order.",
+        );
         return false;
       }
 
