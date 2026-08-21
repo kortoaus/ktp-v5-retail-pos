@@ -12,6 +12,7 @@ import {
   triggerSyncAllSaleInvoices,
   triggerSyncAllShifts,
 } from "../cloud/cloud.sync.service";
+import { triggerSyncPendingOrderCollects } from "../order/order.collect.service";
 
 type OpenShiftDTO = {
   openedNote: string;
@@ -393,6 +394,8 @@ export async function closeTerminalShiftService(
     // cloud view), then push the shift itself.
     triggerSyncAllSaleInvoices();
     triggerSyncAllShifts();
+    // S3 — 미확인 주문 collect 도 같은 트리거에서 스윕.
+    triggerSyncPendingOrderCollects();
 
     return {
       ok: true,

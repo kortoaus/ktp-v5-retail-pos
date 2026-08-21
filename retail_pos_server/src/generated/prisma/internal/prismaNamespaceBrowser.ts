@@ -420,6 +420,8 @@ export const SaleInvoiceScalarFieldEnum = {
   pointsReversed: 'pointsReversed',
   note: 'note',
   cloudId: 'cloudId',
+  externalOrderId: 'externalOrderId',
+  externalOrderCollectSyncedAt: 'externalOrderCollectSyncedAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

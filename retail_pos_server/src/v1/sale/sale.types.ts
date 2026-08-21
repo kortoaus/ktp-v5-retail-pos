@@ -66,6 +66,10 @@ export interface SaleCreatePayload {
   rows: SaleRowPayload[];
   payments: PaymentPayload[];
   note?: string;
+  // S3 — C&C 주문에서 로드된 판매만 세팅 (crm RetailOrder.id 문자열).
+  // 원본 SALE 전용: repay 가 합성하는 자식 SALE payload 에는 절대 넣지
+  // 않는다 (sale.repay.service.synthesizeNewSalePayload). SPEND 무시.
+  externalOrderId?: string;
 }
 
 // ── REFUND payload ─────────────────────────────────────────────

@@ -83,6 +83,9 @@ export type OrderLineWire = {
   deliverySurchargePerUnit: number; // cents
   isAgeRestricted: boolean;
   sort: number;
+  // S2 러너 피킹 확정 수량 (EA 정수). null = 미기록. device/internal DTO 에만
+  // 존재 (소비자형은 필드 자체 제외). S3 로드가 READY 에서 이 값을 쓴다.
+  pickedQty: number | null;
   options: OrderLineOptionWire[];
 };
 

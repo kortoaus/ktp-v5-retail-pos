@@ -6,6 +6,7 @@ import {
   triggerSyncAllSaleInvoices,
   triggerSyncAllShifts,
 } from "./v1/cloud/cloud.sync.service";
+import { triggerSyncPendingOrderCollects } from "./v1/order/order.collect.service";
 import {
   emitLastOrderPendingPayloadToSocket,
   startOrderPendingBroadcaster,
@@ -43,4 +44,6 @@ httpServer.listen(port, () => {
   // while server was down, network hiccup, etc).
   triggerSyncAllSaleInvoices();
   triggerSyncAllShifts();
+  // S3 — 미확인 주문 collect 재시도 (order.collect.service.ts).
+  triggerSyncPendingOrderCollects();
 });

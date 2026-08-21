@@ -16,6 +16,10 @@ import { SaleCreatePayload } from "./sale.types";
 import type { Prisma } from "../../generated/prisma/client";
 import { nowAnchor } from "./sale.refund.service";
 import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
+import {
+  collectInvoiceOrderWithDeadline,
+  triggerSyncPendingOrderCollects,
+} from "../order/order.collect.service";
 import { calculateInvoicePoints } from "./sale.points";
 import {
   redeemCustomerVouchersForSale,
@@ -180,6 +184,21 @@ export function validateAmounts(p: SaleCreatePayload) {
     );
 }
 
+// ── externalOrderId 정규화 (S3) ─────────────────────────────
+// 필드-allowlist 관례: payload 의 값이 있으면 string 1..64 만 통과, 그 외
+// 형태는 400. undefined/null 은 "주문 연계 없음" 으로 null.
+export function normalizeExternalOrderId(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v !== "string")
+    throw new BadRequestException("externalOrderId must be a string");
+  const trimmed = v.trim();
+  if (trimmed.length < 1 || trimmed.length > 64)
+    throw new BadRequestException(
+      "externalOrderId must be 1-64 characters",
+    );
+  return trimmed;
+}
+
 // ── surcharge_share 비례 배분 ──────────────────────────────
 // row.surcharge_share = round(creditSurcharge × row.total / linesTotal).
 // 마지막 row 에 drift 를 흡수해 Σ == creditSurcharge 보장.
@@ -216,6 +235,10 @@ export function allocateSurchargeShares(
 //
 // opts.originalInvoiceId — repay 로 만들어진 새 SALE 이 원본 SALE 에 역참조.
 //   일반 sale 은 null/undefined.
+// opts.externalOrderId — S3 C&C 주문 연계. **createSaleService 만** 정규화된
+//   값을 넘긴다 — repay 의 자식 SALE (synthesizeNewSalePayload) 과 SPEND 은
+//   절대 세팅하지 않아 원본 SALE 에만 저장된다 (payload 를 직접 읽지 않는
+//   이유: 합성 payload 로의 전파 실수 방지).
 export interface BuildSaleInTxOpts {
   payload: SaleCreatePayload;
   context: SaleContext;
@@ -223,14 +246,22 @@ export interface BuildSaleInTxOpts {
   yyyymmdd: string;
   dayStart: Date;
   originalInvoiceId?: number | null;
+  externalOrderId?: string | null;
 }
 
 export async function buildSaleInTx(
   tx: Prisma.TransactionClient,
   opts: BuildSaleInTxOpts,
 ) {
-  const { payload, context, dayStr, yyyymmdd, dayStart, originalInvoiceId } =
-    opts;
+  const {
+    payload,
+    context,
+    dayStr,
+    yyyymmdd,
+    dayStart,
+    originalInvoiceId,
+    externalOrderId,
+  } = opts;
   const { terminal, storeSetting, user, shift } = context;
 
   // Voucher 검증 (tx 범위 — repay 의 경우 refund step 이 이미 balance 를 복구한
@@ -277,6 +308,8 @@ export async function buildSaleInTx(
       type: payload.type,
       // Repay: 새 SALE 이 원본 SALE 을 역참조. 일반 sale/spend 은 null.
       originalInvoiceId: originalInvoiceId ?? null,
+      // S3: C&C 주문 연계 — createSaleService 경로의 원본 SALE 만.
+      externalOrderId: externalOrderId ?? null,
       shiftId: shift.id,
       terminalId: terminal.id,
       userId: user.id,
@@ -378,6 +411,22 @@ export async function createSaleService(
     // 금액 검증은 순수 함수 — tx 밖에서 fail-fast.
     validateAmounts(payload);
 
+    // S3 — C&C 주문 연계. 정규화 후 이중 결제 가드: 같은 주문의 인보이스가
+    // 이미 있으면 400 (DB @unique 제약이 레이스 최종 방어선이지만, 여기서
+    // 먼저 걸러 명확한 메시지를 준다).
+    const externalOrderId = normalizeExternalOrderId(payload.externalOrderId);
+    if (externalOrderId != null) {
+      const existing = await db.saleInvoice.findFirst({
+        where: { externalOrderId },
+        select: { id: true, serial: true },
+      });
+      if (existing) {
+        throw new BadRequestException(
+          `Order already paid on invoice ${existing.serial ?? existing.id} — duplicate order payment blocked`,
+        );
+      }
+    }
+
     const hasCustomerVoucherPayment = payload.payments.some(
       (payment) =>
         payment.type === "VOUCHER" &&
@@ -407,6 +456,7 @@ export async function createSaleService(
             dayStr,
             yyyymmdd,
             dayStart,
+            externalOrderId,
           });
         });
       } catch (persistenceError) {
@@ -454,6 +504,19 @@ export async function createSaleService(
 
     triggerSyncAllSaleInvoices();
 
+    // S3 — 커밋 후 crm collect 훅 (best-effort). deadline 캡 안에 확인되면
+    // collectSynced=true 로 응답; 실패/지연이면 false — 판매는 성립 유지,
+    // 미확인 인보이스는 collect 스윕이 재시도한다 (order.collect.service.ts).
+    if (invoice.externalOrderId != null) {
+      const collectSynced = await collectInvoiceOrderWithDeadline(invoice);
+      // 직접 시도 후에야 스윕 트리거 — 새 인보이스를 두 경로가 동시에 치는
+      // 것을 줄인다 (겹쳐도 crm 멱등이라 안전).
+      triggerSyncPendingOrderCollects();
+      return { ok: true, result: { ...invoice, collectSynced } };
+    }
+
+    // 주문 연계 없는 판매도 밀린 collect 를 스윕 (업싱크 트리거 관례).
+    triggerSyncPendingOrderCollects();
     return { ok: true, result: invoice };
   } catch (e) {
     if (e instanceof HttpException) throw e;

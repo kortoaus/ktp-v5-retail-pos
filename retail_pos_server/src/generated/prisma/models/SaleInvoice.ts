@@ -105,6 +105,8 @@ export type SaleInvoiceMinAggregateOutputType = {
   pointsReversed: number | null
   note: string | null
   cloudId: number | null
+  externalOrderId: string | null
+  externalOrderCollectSyncedAt: Date | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -146,6 +148,8 @@ export type SaleInvoiceMaxAggregateOutputType = {
   pointsReversed: number | null
   note: string | null
   cloudId: number | null
+  externalOrderId: string | null
+  externalOrderCollectSyncedAt: Date | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -187,6 +191,8 @@ export type SaleInvoiceCountAggregateOutputType = {
   pointsReversed: number
   note: number
   cloudId: number
+  externalOrderId: number
+  externalOrderCollectSyncedAt: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -272,6 +278,8 @@ export type SaleInvoiceMinAggregateInputType = {
   pointsReversed?: true
   note?: true
   cloudId?: true
+  externalOrderId?: true
+  externalOrderCollectSyncedAt?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -313,6 +321,8 @@ export type SaleInvoiceMaxAggregateInputType = {
   pointsReversed?: true
   note?: true
   cloudId?: true
+  externalOrderId?: true
+  externalOrderCollectSyncedAt?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -354,6 +364,8 @@ export type SaleInvoiceCountAggregateInputType = {
   pointsReversed?: true
   note?: true
   cloudId?: true
+  externalOrderId?: true
+  externalOrderCollectSyncedAt?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -482,6 +494,8 @@ export type SaleInvoiceGroupByOutputType = {
   pointsReversed: number
   note: string | null
   cloudId: number | null
+  externalOrderId: string | null
+  externalOrderCollectSyncedAt: Date | null
   createdAt: Date
   updatedAt: Date
   _count: SaleInvoiceCountAggregateOutputType | null
@@ -546,6 +560,8 @@ export type SaleInvoiceWhereInput = {
   pointsReversed?: Prisma.IntFilter<"SaleInvoice"> | number
   note?: Prisma.StringNullableFilter<"SaleInvoice"> | string | null
   cloudId?: Prisma.IntNullableFilter<"SaleInvoice"> | number | null
+  externalOrderId?: Prisma.StringNullableFilter<"SaleInvoice"> | string | null
+  externalOrderCollectSyncedAt?: Prisma.DateTimeNullableFilter<"SaleInvoice"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"SaleInvoice"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"SaleInvoice"> | Date | string
   originalInvoice?: Prisma.XOR<Prisma.SaleInvoiceNullableScalarRelationFilter, Prisma.SaleInvoiceWhereInput> | null
@@ -594,6 +610,8 @@ export type SaleInvoiceOrderByWithRelationInput = {
   pointsReversed?: Prisma.SortOrder
   note?: Prisma.SortOrderInput | Prisma.SortOrder
   cloudId?: Prisma.SortOrderInput | Prisma.SortOrder
+  externalOrderId?: Prisma.SortOrderInput | Prisma.SortOrder
+  externalOrderCollectSyncedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   originalInvoice?: Prisma.SaleInvoiceOrderByWithRelationInput
@@ -608,6 +626,7 @@ export type SaleInvoiceOrderByWithRelationInput = {
 export type SaleInvoiceWhereUniqueInput = Prisma.AtLeast<{
   id?: number
   serial?: string
+  externalOrderId?: string
   AND?: Prisma.SaleInvoiceWhereInput | Prisma.SaleInvoiceWhereInput[]
   OR?: Prisma.SaleInvoiceWhereInput[]
   NOT?: Prisma.SaleInvoiceWhereInput | Prisma.SaleInvoiceWhereInput[]
@@ -645,6 +664,7 @@ export type SaleInvoiceWhereUniqueInput = Prisma.AtLeast<{
   pointsReversed?: Prisma.IntFilter<"SaleInvoice"> | number
   note?: Prisma.StringNullableFilter<"SaleInvoice"> | string | null
   cloudId?: Prisma.IntNullableFilter<"SaleInvoice"> | number | null
+  externalOrderCollectSyncedAt?: Prisma.DateTimeNullableFilter<"SaleInvoice"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"SaleInvoice"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"SaleInvoice"> | Date | string
   originalInvoice?: Prisma.XOR<Prisma.SaleInvoiceNullableScalarRelationFilter, Prisma.SaleInvoiceWhereInput> | null
@@ -654,7 +674,7 @@ export type SaleInvoiceWhereUniqueInput = Prisma.AtLeast<{
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   rows?: Prisma.SaleInvoiceRowListRelationFilter
   payments?: Prisma.SaleInvoicePaymentListRelationFilter
-}, "id" | "serial">
+}, "id" | "serial" | "externalOrderId">
 
 export type SaleInvoiceOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
@@ -693,6 +713,8 @@ export type SaleInvoiceOrderByWithAggregationInput = {
   pointsReversed?: Prisma.SortOrder
   note?: Prisma.SortOrderInput | Prisma.SortOrder
   cloudId?: Prisma.SortOrderInput | Prisma.SortOrder
+  externalOrderId?: Prisma.SortOrderInput | Prisma.SortOrder
+  externalOrderCollectSyncedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.SaleInvoiceCountOrderByAggregateInput
@@ -742,6 +764,8 @@ export type SaleInvoiceScalarWhereWithAggregatesInput = {
   pointsReversed?: Prisma.IntWithAggregatesFilter<"SaleInvoice"> | number
   note?: Prisma.StringNullableWithAggregatesFilter<"SaleInvoice"> | string | null
   cloudId?: Prisma.IntNullableWithAggregatesFilter<"SaleInvoice"> | number | null
+  externalOrderId?: Prisma.StringNullableWithAggregatesFilter<"SaleInvoice"> | string | null
+  externalOrderCollectSyncedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"SaleInvoice"> | Date | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"SaleInvoice"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"SaleInvoice"> | Date | string
 }
@@ -778,6 +802,8 @@ export type SaleInvoiceCreateInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   originalInvoice?: Prisma.SaleInvoiceCreateNestedOneWithoutRefundsInput
@@ -826,6 +852,8 @@ export type SaleInvoiceUncheckedCreateInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   refunds?: Prisma.SaleInvoiceUncheckedCreateNestedManyWithoutOriginalInvoiceInput
@@ -865,6 +893,8 @@ export type SaleInvoiceUpdateInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   originalInvoice?: Prisma.SaleInvoiceUpdateOneWithoutRefundsNestedInput
@@ -913,6 +943,8 @@ export type SaleInvoiceUncheckedUpdateInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   refunds?: Prisma.SaleInvoiceUncheckedUpdateManyWithoutOriginalInvoiceNestedInput
@@ -957,6 +989,8 @@ export type SaleInvoiceCreateManyInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -993,6 +1027,8 @@ export type SaleInvoiceUpdateManyMutationInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -1034,6 +1070,8 @@ export type SaleInvoiceUncheckedUpdateManyInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -1090,6 +1128,8 @@ export type SaleInvoiceCountOrderByAggregateInput = {
   pointsReversed?: Prisma.SortOrder
   note?: Prisma.SortOrder
   cloudId?: Prisma.SortOrder
+  externalOrderId?: Prisma.SortOrder
+  externalOrderCollectSyncedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -1152,6 +1192,8 @@ export type SaleInvoiceMaxOrderByAggregateInput = {
   pointsReversed?: Prisma.SortOrder
   note?: Prisma.SortOrder
   cloudId?: Prisma.SortOrder
+  externalOrderId?: Prisma.SortOrder
+  externalOrderCollectSyncedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -1193,6 +1235,8 @@ export type SaleInvoiceMinOrderByAggregateInput = {
   pointsReversed?: Prisma.SortOrder
   note?: Prisma.SortOrder
   cloudId?: Prisma.SortOrder
+  externalOrderId?: Prisma.SortOrder
+  externalOrderCollectSyncedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -1471,6 +1515,8 @@ export type SaleInvoiceCreateWithoutTerminalInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   originalInvoice?: Prisma.SaleInvoiceCreateNestedOneWithoutRefundsInput
@@ -1517,6 +1563,8 @@ export type SaleInvoiceUncheckedCreateWithoutTerminalInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   refunds?: Prisma.SaleInvoiceUncheckedCreateNestedManyWithoutOriginalInvoiceInput
@@ -1590,6 +1638,8 @@ export type SaleInvoiceScalarWhereInput = {
   pointsReversed?: Prisma.IntFilter<"SaleInvoice"> | number
   note?: Prisma.StringNullableFilter<"SaleInvoice"> | string | null
   cloudId?: Prisma.IntNullableFilter<"SaleInvoice"> | number | null
+  externalOrderId?: Prisma.StringNullableFilter<"SaleInvoice"> | string | null
+  externalOrderCollectSyncedAt?: Prisma.DateTimeNullableFilter<"SaleInvoice"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"SaleInvoice"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"SaleInvoice"> | Date | string
 }
@@ -1626,6 +1676,8 @@ export type SaleInvoiceCreateWithoutUserInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   originalInvoice?: Prisma.SaleInvoiceCreateNestedOneWithoutRefundsInput
@@ -1672,6 +1724,8 @@ export type SaleInvoiceUncheckedCreateWithoutUserInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   refunds?: Prisma.SaleInvoiceUncheckedCreateNestedManyWithoutOriginalInvoiceInput
@@ -1737,6 +1791,8 @@ export type SaleInvoiceCreateWithoutShiftInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   originalInvoice?: Prisma.SaleInvoiceCreateNestedOneWithoutRefundsInput
@@ -1783,6 +1839,8 @@ export type SaleInvoiceUncheckedCreateWithoutShiftInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   refunds?: Prisma.SaleInvoiceUncheckedCreateNestedManyWithoutOriginalInvoiceInput
@@ -1848,6 +1906,8 @@ export type SaleInvoiceCreateWithoutRefundsInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   originalInvoice?: Prisma.SaleInvoiceCreateNestedOneWithoutRefundsInput
@@ -1895,6 +1955,8 @@ export type SaleInvoiceUncheckedCreateWithoutRefundsInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   rows?: Prisma.SaleInvoiceRowUncheckedCreateNestedManyWithoutInvoiceInput
@@ -1938,6 +2000,8 @@ export type SaleInvoiceCreateWithoutOriginalInvoiceInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   refunds?: Prisma.SaleInvoiceCreateNestedManyWithoutOriginalInvoiceInput
@@ -1984,6 +2048,8 @@ export type SaleInvoiceUncheckedCreateWithoutOriginalInvoiceInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   refunds?: Prisma.SaleInvoiceUncheckedCreateNestedManyWithoutOriginalInvoiceInput
@@ -2044,6 +2110,8 @@ export type SaleInvoiceUpdateWithoutRefundsInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   originalInvoice?: Prisma.SaleInvoiceUpdateOneWithoutRefundsNestedInput
@@ -2091,6 +2159,8 @@ export type SaleInvoiceUncheckedUpdateWithoutRefundsInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   rows?: Prisma.SaleInvoiceRowUncheckedUpdateManyWithoutInvoiceNestedInput
@@ -2145,6 +2215,8 @@ export type SaleInvoiceCreateWithoutPaymentsInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   originalInvoice?: Prisma.SaleInvoiceCreateNestedOneWithoutRefundsInput
@@ -2192,6 +2264,8 @@ export type SaleInvoiceUncheckedCreateWithoutPaymentsInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   refunds?: Prisma.SaleInvoiceUncheckedCreateNestedManyWithoutOriginalInvoiceInput
@@ -2246,6 +2320,8 @@ export type SaleInvoiceUpdateWithoutPaymentsInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   originalInvoice?: Prisma.SaleInvoiceUpdateOneWithoutRefundsNestedInput
@@ -2293,6 +2369,8 @@ export type SaleInvoiceUncheckedUpdateWithoutPaymentsInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   refunds?: Prisma.SaleInvoiceUncheckedUpdateManyWithoutOriginalInvoiceNestedInput
@@ -2331,6 +2409,8 @@ export type SaleInvoiceCreateWithoutRowsInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   originalInvoice?: Prisma.SaleInvoiceCreateNestedOneWithoutRefundsInput
@@ -2378,6 +2458,8 @@ export type SaleInvoiceUncheckedCreateWithoutRowsInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   refunds?: Prisma.SaleInvoiceUncheckedCreateNestedManyWithoutOriginalInvoiceInput
@@ -2432,6 +2514,8 @@ export type SaleInvoiceUpdateWithoutRowsInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   originalInvoice?: Prisma.SaleInvoiceUpdateOneWithoutRefundsNestedInput
@@ -2479,6 +2563,8 @@ export type SaleInvoiceUncheckedUpdateWithoutRowsInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   refunds?: Prisma.SaleInvoiceUncheckedUpdateManyWithoutOriginalInvoiceNestedInput
@@ -2521,6 +2607,8 @@ export type SaleInvoiceCreateManyTerminalInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -2557,6 +2645,8 @@ export type SaleInvoiceUpdateWithoutTerminalInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   originalInvoice?: Prisma.SaleInvoiceUpdateOneWithoutRefundsNestedInput
@@ -2603,6 +2693,8 @@ export type SaleInvoiceUncheckedUpdateWithoutTerminalInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   refunds?: Prisma.SaleInvoiceUncheckedUpdateManyWithoutOriginalInvoiceNestedInput
@@ -2646,6 +2738,8 @@ export type SaleInvoiceUncheckedUpdateManyWithoutTerminalInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -2686,6 +2780,8 @@ export type SaleInvoiceCreateManyUserInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -2722,6 +2818,8 @@ export type SaleInvoiceUpdateWithoutUserInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   originalInvoice?: Prisma.SaleInvoiceUpdateOneWithoutRefundsNestedInput
@@ -2768,6 +2866,8 @@ export type SaleInvoiceUncheckedUpdateWithoutUserInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   refunds?: Prisma.SaleInvoiceUncheckedUpdateManyWithoutOriginalInvoiceNestedInput
@@ -2811,6 +2911,8 @@ export type SaleInvoiceUncheckedUpdateManyWithoutUserInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -2851,6 +2953,8 @@ export type SaleInvoiceCreateManyShiftInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -2887,6 +2991,8 @@ export type SaleInvoiceUpdateWithoutShiftInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   originalInvoice?: Prisma.SaleInvoiceUpdateOneWithoutRefundsNestedInput
@@ -2933,6 +3039,8 @@ export type SaleInvoiceUncheckedUpdateWithoutShiftInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   refunds?: Prisma.SaleInvoiceUncheckedUpdateManyWithoutOriginalInvoiceNestedInput
@@ -2976,6 +3084,8 @@ export type SaleInvoiceUncheckedUpdateManyWithoutShiftInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -3016,6 +3126,8 @@ export type SaleInvoiceCreateManyOriginalInvoiceInput = {
   pointsReversed?: number
   note?: string | null
   cloudId?: number | null
+  externalOrderId?: string | null
+  externalOrderCollectSyncedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -3052,6 +3164,8 @@ export type SaleInvoiceUpdateWithoutOriginalInvoiceInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   refunds?: Prisma.SaleInvoiceUpdateManyWithoutOriginalInvoiceNestedInput
@@ -3098,6 +3212,8 @@ export type SaleInvoiceUncheckedUpdateWithoutOriginalInvoiceInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   refunds?: Prisma.SaleInvoiceUncheckedUpdateManyWithoutOriginalInvoiceNestedInput
@@ -3141,6 +3257,8 @@ export type SaleInvoiceUncheckedUpdateManyWithoutOriginalInvoiceInput = {
   pointsReversed?: Prisma.IntFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cloudId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  externalOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  externalOrderCollectSyncedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -3231,6 +3349,8 @@ export type SaleInvoiceSelect<ExtArgs extends runtime.Types.Extensions.InternalA
   pointsReversed?: boolean
   note?: boolean
   cloudId?: boolean
+  externalOrderId?: boolean
+  externalOrderCollectSyncedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   originalInvoice?: boolean | Prisma.SaleInvoice$originalInvoiceArgs<ExtArgs>
@@ -3280,6 +3400,8 @@ export type SaleInvoiceSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
   pointsReversed?: boolean
   note?: boolean
   cloudId?: boolean
+  externalOrderId?: boolean
+  externalOrderCollectSyncedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   originalInvoice?: boolean | Prisma.SaleInvoice$originalInvoiceArgs<ExtArgs>
@@ -3325,6 +3447,8 @@ export type SaleInvoiceSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
   pointsReversed?: boolean
   note?: boolean
   cloudId?: boolean
+  externalOrderId?: boolean
+  externalOrderCollectSyncedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   originalInvoice?: boolean | Prisma.SaleInvoice$originalInvoiceArgs<ExtArgs>
@@ -3370,11 +3494,13 @@ export type SaleInvoiceSelectScalar = {
   pointsReversed?: boolean
   note?: boolean
   cloudId?: boolean
+  externalOrderId?: boolean
+  externalOrderCollectSyncedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type SaleInvoiceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "companyId" | "serial" | "dayStr" | "type" | "originalInvoiceId" | "shiftId" | "terminalId" | "userId" | "companyName" | "abn" | "phone" | "address1" | "address2" | "suburb" | "state" | "postcode" | "country" | "terminalName" | "userName" | "memberId" | "memberName" | "memberLevel" | "memberPhoneLast4" | "linesTotal" | "rounding" | "creditSurchargeAmount" | "lineTax" | "surchargeTax" | "total" | "cashChange" | "receiptCount" | "pointsEarned" | "pointsReversed" | "note" | "cloudId" | "createdAt" | "updatedAt", ExtArgs["result"]["saleInvoice"]>
+export type SaleInvoiceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "companyId" | "serial" | "dayStr" | "type" | "originalInvoiceId" | "shiftId" | "terminalId" | "userId" | "companyName" | "abn" | "phone" | "address1" | "address2" | "suburb" | "state" | "postcode" | "country" | "terminalName" | "userName" | "memberId" | "memberName" | "memberLevel" | "memberPhoneLast4" | "linesTotal" | "rounding" | "creditSurchargeAmount" | "lineTax" | "surchargeTax" | "total" | "cashChange" | "receiptCount" | "pointsEarned" | "pointsReversed" | "note" | "cloudId" | "externalOrderId" | "externalOrderCollectSyncedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["saleInvoice"]>
 export type SaleInvoiceInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   originalInvoice?: boolean | Prisma.SaleInvoice$originalInvoiceArgs<ExtArgs>
   refunds?: boolean | Prisma.SaleInvoice$refundsArgs<ExtArgs>
@@ -3446,6 +3572,8 @@ export type $SaleInvoicePayload<ExtArgs extends runtime.Types.Extensions.Interna
     pointsReversed: number
     note: string | null
     cloudId: number | null
+    externalOrderId: string | null
+    externalOrderCollectSyncedAt: Date | null
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["saleInvoice"]>
@@ -3914,6 +4042,8 @@ export interface SaleInvoiceFieldRefs {
   readonly pointsReversed: Prisma.FieldRef<"SaleInvoice", 'Int'>
   readonly note: Prisma.FieldRef<"SaleInvoice", 'String'>
   readonly cloudId: Prisma.FieldRef<"SaleInvoice", 'Int'>
+  readonly externalOrderId: Prisma.FieldRef<"SaleInvoice", 'String'>
+  readonly externalOrderCollectSyncedAt: Prisma.FieldRef<"SaleInvoice", 'DateTime'>
   readonly createdAt: Prisma.FieldRef<"SaleInvoice", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"SaleInvoice", 'DateTime'>
 }

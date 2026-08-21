@@ -14,6 +14,7 @@ import {
   triggerSyncAllSaleInvoices,
   triggerSyncAllShifts,
 } from "./cloud.sync.service";
+import { triggerSyncPendingOrderCollects } from "../order/order.collect.service";
 
 export async function cloudItemMigrateController(req: Request, res: Response) {
   const companyResult = await cloudCompanyMigrateService();
@@ -81,6 +82,8 @@ export async function cloudItemMigrateController(req: Request, res: Response) {
 
   triggerSyncAllSaleInvoices();
   triggerSyncAllShifts();
+  // S3 — 미확인 주문 collect 도 같은 트리거에서 스윕.
+  triggerSyncPendingOrderCollects();
 
   res.status(200).json({
     ok: true,
