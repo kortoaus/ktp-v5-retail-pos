@@ -52,6 +52,15 @@ export function useOrderLoad() {
       }
       const detail: OrderDetail = res.result;
 
+      // ── 이행 방식 게이트 (S3 리뷰) — 로드는 C&C 전용. DELIVERY 주문은
+      //    배송비/서차지가 카트 수식에 없어 로드하면 그만큼 과소청구된다. ──
+      if (detail.fulfillment !== "CLICK_AND_COLLECT") {
+        window.alert(
+          "Delivery orders can't be loaded at the till (delivery fee/surcharge not supported yet).",
+        );
+        return false;
+      }
+
       // ── 상태 정책 ──
       if (detail.status === "PLACED") {
         window.alert("Order not accepted yet — accept it first.");
