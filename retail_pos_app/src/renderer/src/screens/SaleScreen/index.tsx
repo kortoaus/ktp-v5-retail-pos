@@ -8,6 +8,8 @@ import { generateSaleLineItem } from "../../libs/item-utils";
 import { SaleLineItem } from "../../types/sales";
 import { embededPriceParser } from "../../libs/scan-utils";
 import { parseMemberQr } from "../../libs/member-qr";
+import { parseOrderQr } from "../../libs/order-qr";
+import { useOrderLoad } from "../../hooks/useOrderLoad";
 import {
   isPPBarcode,
   parsePPBarcode,
@@ -70,6 +72,7 @@ export default function SaleScreen() {
   const pendingWeightLineRef = useRef<SaleLineItem | null>(null);
   const { readWeight } = useWeight();
   const { cloudHotkeys, cloudHotkeysLoading } = useCloudHotkeys();
+  const { loadOrder } = useOrderLoad();
 
   const lines = useMemo(
     () => carts[activeCartIndex]?.lines ?? [],
@@ -87,6 +90,12 @@ export default function SaleScreen() {
 
   const member = useMemo(
     () => carts[activeCartIndex]?.member ?? null,
+    [carts, activeCartIndex],
+  );
+
+  // S3 — 주문 로드 카트 배지 표시용.
+  const activeOrderNo = useMemo(
+    () => carts[activeCartIndex]?.orderNo ?? null,
     [carts, activeCartIndex],
   );
 
@@ -133,6 +142,21 @@ export default function SaleScreen() {
         return;
       }
 
+      // S3 — 픽업리스트 QR (order%%%<id>). 우선순위: member%%% → order%%%
+      // → PP → 상품 바코드. 정책·주입은 useOrderLoad 가 전담 (배선만).
+      const orderQr = parseOrderQr(rawBarcode);
+      if (orderQr) {
+        try {
+          setLoading(true);
+          await loadOrder(orderQr.orderId);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
       // Check for PP barcode
       if (isPPBarcode(rawBarcode)) {
         const pp = parsePPBarcode(rawBarcode);
@@ -175,7 +199,7 @@ export default function SaleScreen() {
         setLoading(false);
       }
     },
-    [loading, addLineGateway],
+    [loading, addLineGateway, loadOrder],
   );
 
   useBarcodeScanner(scanCallback);
@@ -354,6 +378,12 @@ export default function SaleScreen() {
 
           <PrintLatestInvoiceButton className="w-24 h-full rounded-sm text-sm font-bold bg-gray-200 border border-gray-300" />
           <TopBarButton label="Kick Drawer" onClick={() => kickDrawer()} />
+          {/* S3 — 주문 로드 카트 배지 (Clear Cart / 결제 완료 시 소멸) */}
+          {activeOrderNo && (
+            <span className="h-full px-3 rounded-sm text-sm font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center">
+              Order #{activeOrderNo}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <OrdersPendingButton />

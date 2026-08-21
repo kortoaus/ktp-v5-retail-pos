@@ -83,6 +83,9 @@ export interface OrderLine {
   deliverySurchargePerUnit: number; // cents
   isAgeRestricted: boolean;
   sort: number;
+  // S2 러너 피킹 확정 수량 (EA 정수). null = 미기록. READY 로드 시 이 값을
+  // 쓴다 (0 라인은 제외 — 스펙 §1.2).
+  pickedQty: number | null;
   // 판별자(오너 확정): options.length > 0 = Made to Order, 아니면 Picking.
   options: OrderLineOption[];
 }

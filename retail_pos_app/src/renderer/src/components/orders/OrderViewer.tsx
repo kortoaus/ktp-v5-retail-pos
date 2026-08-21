@@ -12,8 +12,10 @@
 // 상세 재조회로 실상태 학습. Reject 사유는 trim 1~200자.
 
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import OnScreenKeyboard from "../OnScreenKeyboard";
 import { useUser } from "../../contexts/UserContext";
+import { useOrderLoad } from "../../hooks/useOrderLoad";
 import { useZplPrinters } from "../../hooks/useZplPrinters";
 import { printOrderPickList } from "../../libs/printer/order-pick-list-receipt";
 import {
@@ -77,6 +79,8 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
 
   const { user } = useUser();
   const { printers, printLabel } = useZplPrinters();
+  const navigate = useNavigate();
+  const { loadOrder, orderLoading } = useOrderLoad();
 
   useEffect(() => {
     if (orderId == null) return;
@@ -212,6 +216,18 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
     }
   }
 
+  // --- S3: 세일스크린 로드 ---
+  // 활성 상태(ACCEPTED/READY)에서만 노출. 정책/가드/주입은 useOrderLoad 가
+  // 전담 (스캔 진입과 동일 플로우) — 성공 시 뷰어 닫고 /sale 로 이동.
+  async function handleLoadToSale() {
+    if (!detail || orderLoading || inFlight) return;
+    const ok = await loadOrder(detail.id);
+    if (ok) {
+      onClose();
+      navigate("/sale");
+    }
+  }
+
   const handleRevealPhone = async () => {
     if (orderId == null || revealing) return;
     setRevealing(true);
@@ -284,15 +300,27 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
               />
               {/* 픽업리스트 인쇄 — 전이 버튼과 구분되는 secondary 스타일,
                   요약 섹션 직하 배치(장식 최소). 카운트는 PICKLIST_PRINTED. */}
-              <div className="px-4 py-3 border-b border-gray-300">
+              <div className="px-4 py-3 border-b border-gray-300 flex gap-3">
                 <button
                   type="button"
                   disabled={printInFlight}
                   onPointerDown={() => void handlePrintPickList()}
-                  className="w-full h-12 rounded-lg bg-gray-200 font-bold active:bg-gray-300 disabled:opacity-40"
+                  className="flex-1 h-12 rounded-lg bg-gray-200 font-bold active:bg-gray-300 disabled:opacity-40"
                 >
                   {`Print pick list${picklistCount > 0 ? ` (${picklistCount})` : ""}`}
                 </button>
+                {/* S3 — 활성 상태에서만 세일스크린 로드 (스캔 진입과 동일 훅) */}
+                {(detail.status === "ACCEPTED" ||
+                  detail.status === "READY") && (
+                  <button
+                    type="button"
+                    disabled={orderLoading || inFlight}
+                    onPointerDown={() => void handleLoadToSale()}
+                    className="flex-1 h-12 rounded-lg bg-emerald-600 text-white font-bold active:bg-emerald-700 disabled:opacity-40"
+                  >
+                    {orderLoading ? "..." : "Load to Sale"}
+                  </button>
+                )}
               </div>
               <OrderViewerMadeToOrderSection
                 lines={madeToOrderLines}
