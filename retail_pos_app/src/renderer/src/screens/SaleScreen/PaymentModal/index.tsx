@@ -22,6 +22,7 @@ import {
   createSale,
   createSpend,
   getSaleInvoiceById,
+  OrderCollectResult,
   SaleInvoiceCreated,
   SaleInvoiceDetail,
 } from "../../../service/sale.service";
@@ -326,7 +327,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     // Total Points(잔액+적립) 계산용 — 어디에도 저장되지 않는다.
     memberPointsBefore: number | null;
     // S3 — 주문 로드 판매의 collect 결과 표시용. null = 주문 연계 없음.
-    order: { orderNo: string; collectSynced: boolean } | null;
+    order: { orderNo: string; collectResult: OrderCollectResult } | null;
   } | null>(null);
 
   async function handleCompleteSale() {
@@ -371,12 +372,17 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
         change: cal.change,
         receiptPrinted: false,
         memberPointsBefore: activeMember?.points ?? null,
-        // S3 — 주문 로드 카트면 collect 결과 노출 (false = 스윕 자동 재시도).
+        // S3 — 주문 로드 카트면 collect 결과 노출 (pending = 스윕 자동
+        // 재시도, conflict = 영구 실패 — 사람 확인). 구형 서버(트라이스테이트
+        // 이전)는 collectSynced boolean 만 주므로 폴백 매핑 — 필드 전부
+        // 부재면 pending 취급 (S3 리뷰).
         order: saleCartSnapshot.externalOrderId
           ? {
               orderNo:
                 saleCartSnapshot.orderNo ?? saleCartSnapshot.externalOrderId,
-              collectSynced: res.result.collectSynced === true,
+              collectResult:
+                res.result.collectResult ??
+                (res.result.collectSynced === true ? "collected" : "pending"),
             }
           : null,
       });
@@ -1108,7 +1114,7 @@ function ChangeOverlay({
     cashReceived: number;
     change: number;
     receiptPrinted: boolean;
-    order: { orderNo: string; collectSynced: boolean } | null;
+    order: { orderNo: string; collectResult: OrderCollectResult } | null;
   };
   onKickDrawer: () => void;
   onPrintReceipt: () => void;
@@ -1153,20 +1159,35 @@ function ChangeOverlay({
               <span>PRINTED</span>
             </div>
           )}
-          {/* S3 — 주문 로드 판매의 collect 결과. pending 은 스윕 자동 재시도. */}
+          {/* S3 — 주문 로드 판매의 collect 결과. pending 은 스윕 자동 재시도,
+              conflict 는 영구 실패 — 재시도 없음, Orders 화면에서 사람 확인. */}
           {info.order && (
             <div
               className={cn(
-                "flex justify-between font-bold",
-                info.order.collectSynced
+                "font-bold",
+                info.order.collectResult === "collected"
                   ? "text-emerald-700"
-                  : "text-amber-600",
+                  : info.order.collectResult === "conflict"
+                    ? "text-red-600"
+                    : "text-amber-600",
               )}
             >
-              <span>ORDER #{info.order.orderNo}</span>
-              <span>
-                {info.order.collectSynced ? "COLLECTED" : "PENDING (AUTO RETRY)"}
-              </span>
+              <div className="flex justify-between">
+                <span>ORDER #{info.order.orderNo}</span>
+                <span>
+                  {info.order.collectResult === "collected"
+                    ? "COLLECTED"
+                    : info.order.collectResult === "conflict"
+                      ? "NOT COLLECTED"
+                      : "PENDING (AUTO RETRY)"}
+                </span>
+              </div>
+              {info.order.collectResult === "conflict" && (
+                <div className="mt-1 rounded border border-red-400 bg-red-50 p-2">
+                  ORDER CONFLICT — NOT COLLECTED. Check the order in Orders
+                  screen.
+                </div>
+              )}
             </div>
           )}
         </div>

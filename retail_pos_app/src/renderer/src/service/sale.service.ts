@@ -19,11 +19,16 @@ export interface SaleInvoiceCreated {
   pointsEarned: number;
   pointsReversed: number;
   createdAt: string;
-  // S3 — C&C 주문 로드 판매만. collectSynced: 서버의 커밋 후 crm collect
-  // 훅이 deadline 안에 확인됐는지 (false = 스윕이 자동 재시도).
+  // S3 — C&C 주문 로드 판매만. collectResult: 서버의 커밋 후 crm collect
+  // 훅 결과 트라이스테이트 — collected(확인) / pending(스윕 자동 재시도)
+  // / conflict(영구 실패 — 사람 확인). collectSynced 는 구형 서버가 주는
+  // boolean (하위호환 — 앱이 collectResult 부재 시 폴백 매핑).
   externalOrderId?: string | null;
+  collectResult?: OrderCollectResult;
   collectSynced?: boolean;
 }
+
+export type OrderCollectResult = "collected" | "pending" | "conflict";
 
 // 리스트 조회용 — 서버 include: rows, payments, terminal.
 export interface SaleInvoiceListItem {
