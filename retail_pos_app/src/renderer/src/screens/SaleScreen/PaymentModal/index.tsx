@@ -325,6 +325,8 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     // clearActiveCart() 가 member 를 지우기 전의 CRM 잔액 스냅샷. 영수증의
     // Total Points(잔액+적립) 계산용 — 어디에도 저장되지 않는다.
     memberPointsBefore: number | null;
+    // S3 — 주문 로드 판매의 collect 결과 표시용. null = 주문 연계 없음.
+    order: { orderNo: string; collectSynced: boolean } | null;
   } | null>(null);
 
   async function handleCompleteSale() {
@@ -369,6 +371,14 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
         change: cal.change,
         receiptPrinted: false,
         memberPointsBefore: activeMember?.points ?? null,
+        // S3 — 주문 로드 카트면 collect 결과 노출 (false = 스윕 자동 재시도).
+        order: saleCartSnapshot.externalOrderId
+          ? {
+              orderNo:
+                saleCartSnapshot.orderNo ?? saleCartSnapshot.externalOrderId,
+              collectSynced: res.result.collectSynced === true,
+            }
+          : null,
       });
       clearActiveCart();
 
@@ -1098,6 +1108,7 @@ function ChangeOverlay({
     cashReceived: number;
     change: number;
     receiptPrinted: boolean;
+    order: { orderNo: string; collectSynced: boolean } | null;
   };
   onKickDrawer: () => void;
   onPrintReceipt: () => void;
@@ -1140,6 +1151,22 @@ function ChangeOverlay({
             <div className="flex justify-between text-emerald-700">
               <span>RECEIPT</span>
               <span>PRINTED</span>
+            </div>
+          )}
+          {/* S3 — 주문 로드 판매의 collect 결과. pending 은 스윕 자동 재시도. */}
+          {info.order && (
+            <div
+              className={cn(
+                "flex justify-between font-bold",
+                info.order.collectSynced
+                  ? "text-emerald-700"
+                  : "text-amber-600",
+              )}
+            >
+              <span>ORDER #{info.order.orderNo}</span>
+              <span>
+                {info.order.collectSynced ? "COLLECTED" : "PENDING (AUTO RETRY)"}
+              </span>
             </div>
           )}
         </div>

@@ -19,6 +19,10 @@ export interface SaleInvoiceCreated {
   pointsEarned: number;
   pointsReversed: number;
   createdAt: string;
+  // S3 — C&C 주문 로드 판매만. collectSynced: 서버의 커밋 후 crm collect
+  // 훅이 deadline 안에 확인됐는지 (false = 스윕이 자동 재시도).
+  externalOrderId?: string | null;
+  collectSynced?: boolean;
 }
 
 // 리스트 조회용 — 서버 include: rows, payments, terminal.
