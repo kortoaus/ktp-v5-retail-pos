@@ -1,6 +1,10 @@
 import { Request, Response } from "express";
+import { UserModel } from "../../generated/prisma/models";
 import { getCloudQs } from "../../libs/cloud.api";
-import { BadRequestException } from "../../libs/exceptions";
+import {
+  BadRequestException,
+  UnauthorizedException,
+} from "../../libs/exceptions";
 import {
   acceptOrderService,
   getOrderDetailService,
@@ -50,17 +54,24 @@ export async function rejectOrderController(req: Request, res: Response) {
   res.status(200).json(await rejectOrderService(id, req.body));
 }
 
-// POST /api/order/:id/picking — 러너 피킹 확정 프록시(S2). body 는 version/
-// lines 만 통과, pickerName 은 userMiddleware 의 로그인 유저 이름을 서버가
-// 주입(클라이언트 값 무시). 검증은 crm(400), 충돌은 crm 409
-// TRANSITION_CONFLICT 패스스루.
+// pickerName 정규화 — 로컬 유저 이름은 무검증 저장이므로 crm 계약(trim 후
+// 1..50자)에 여기서 맞춘다. 빈 이름은 crm 으로 전달하지 않고 로컬에서
+// 명확한 메시지로 실패시킨다.
+export function resolvePickerName(user: Pick<UserModel, "name">): string {
+  const pickerName = user.name.trim().slice(0, 50);
+  if (pickerName.length === 0) {
+    throw new UnauthorizedException("Staff user has no display name");
+  }
+  return pickerName;
+}
+
+// POST /api/order/:id/picking — 러너 피킹 확정 프록시(S2); 계약 상세는 order.service.ts.
 export async function pickingOrderController(req: Request, res: Response) {
   const id = parseOrderId(req.params.id);
-  const user = res.locals.user as { name?: unknown } | null;
-  const pickerName = typeof user?.name === "string" ? user.name : "";
+  const user = res.locals.user as UserModel;
   res
     .status(200)
-    .json(await pickingOrderService(id, req.body, pickerName));
+    .json(await pickingOrderService(id, req.body, resolvePickerName(user)));
 }
 
 // POST /api/order/:id/printed — 인쇄 기록 프록시(슬라이스 C), body 패스스루.

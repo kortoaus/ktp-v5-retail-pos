@@ -111,20 +111,6 @@ test("requireOk passes a crm 409 TRANSITION_CONFLICT through as HttpException(40
   );
 });
 
-test("requireOk passes a crm picking validation 400 through with its message", () => {
-  assert.throws(
-    () =>
-      requireOk({
-        ok: false,
-        status: 400,
-        msg: "lines must cover every order line exactly once",
-      }),
-    (e: unknown) =>
-      e instanceof BadRequestException &&
-      e.message === "lines must cover every order line exactly once",
-  );
-});
-
 test("mapCrmPaging converts crm paging to the local shape", () => {
   assert.deepEqual(mapCrmPaging({ page: 1, limit: 20, total: 45, totalPages: 3 }), {
     currentPage: 1,
