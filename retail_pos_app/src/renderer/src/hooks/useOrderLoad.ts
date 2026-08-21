@@ -72,6 +72,12 @@ export function useOrderLoad() {
         window.alert("This order is already paid & collected.");
         return false;
       }
+      // S3 리뷰 — 온라인 선결제(Stripe 후속) 주문을 틸에서 또 받는 중복
+      // 결제 방어. 지금 IN_STORE 는 항상 UNPAID 라 no-op 이지만 미리 가드.
+      if (detail.paymentStatus === "PAID") {
+        window.alert("This order was already paid online.");
+        return false;
+      }
       if (detail.status !== "ACCEPTED" && detail.status !== "READY") {
         window.alert(
           `Order ${detail.orderNo} is ${detail.status} — cannot load.`,
@@ -158,7 +164,13 @@ export function useOrderLoad() {
           );
           return false;
         }
-        prepared.push({ data, qty, unitPrice: line.unitPrice });
+        prepared.push({
+          // S3 리뷰 — GST 플래그도 가격처럼 주문 라인 스냅샷이 로컬 카탈로그
+          // 를 이긴다 (와이어에 taxable 실림 — 스냅샷 정합 원칙).
+          data: { ...data, taxable: line.taxable },
+          qty,
+          unitPrice: line.unitPrice,
+        });
       }
 
       // ── 멤버 먼저 부착 (§Y hold 스타일 미검증 최소 멤버) ──

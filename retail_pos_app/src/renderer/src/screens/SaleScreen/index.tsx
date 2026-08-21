@@ -106,6 +106,18 @@ export default function SaleScreen() {
       // Search Member
       const memberQr = parseMemberQr(rawBarcode);
       if (memberQr) {
+        // S3 리뷰 — 주문 로드 카트의 멤버는 주문 스냅샷과 한 몸: 교체하면
+        // 적립/역추적이 다른 멤버로 간다. 카트를 비워야 바꿀 수 있다.
+        // (getState 직접 조회 — scanCallback 클로저의 carts 스테일 방지)
+        const { carts: freshCarts, activeCartIndex: freshIdx } =
+          useSalesStore.getState();
+        const orderCart = freshCarts[freshIdx];
+        if (orderCart?.externalOrderId) {
+          window.alert(
+            `This cart is linked to order #${orderCart.orderNo ?? orderCart.externalOrderId} — clear the cart to change member.`,
+          );
+          return;
+        }
         try {
           setLoading(true);
           const { ok, msg, status, result } = await searchMemberById(
@@ -368,6 +380,15 @@ export default function SaleScreen() {
             }
             active={member !== null}
             onClick={() => {
+              // S3 리뷰 — 주문 로드 카트에서는 멤버 해제/교체 차단 (스캔
+              // 경로와 동일 사유 — 카트 클리어로만 벗어난다).
+              const cart = carts[activeCartIndex];
+              if (cart?.externalOrderId) {
+                window.alert(
+                  `This cart is linked to order #${cart.orderNo ?? cart.externalOrderId} — clear the cart to change member.`,
+                );
+                return;
+              }
               if (member) {
                 setMember(null);
               } else {
