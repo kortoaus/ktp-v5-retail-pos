@@ -96,6 +96,35 @@ export async function rejectOrderService(id: number, body: unknown) {
   return { ok: true, result: requireOk(res) };
 }
 
+// --- S2: 러너 피킹 확정 프록시 ---
+// POST /device/order/:id/picking — ACCEPTED→READY 의 피킹 변형.
+// pickerName 은 클라이언트 body 를 신뢰하지 않고 userMiddleware 가 해석한
+// 로그인 유저 이름을 서버가 주입한다(클라이언트가 보내도 버림). version/
+// lines 만 body 에서 통과 — 구조·커버리지 검증은 crm(400), 상태·버전 충돌은
+// crm 409 TRANSITION_CONFLICT 가 requireOk fall-through 로 그대로 앱에 전달.
+export function buildPickingBody(
+  body: unknown,
+  pickerName: string,
+): { version: unknown; lines: unknown; pickerName: string } {
+  const maybe = (body && typeof body === "object" ? body : {}) as {
+    version?: unknown;
+    lines?: unknown;
+  };
+  return { version: maybe.version, lines: maybe.lines, pickerName };
+}
+
+export async function pickingOrderService(
+  id: number,
+  body: unknown,
+  pickerName: string,
+) {
+  const res = await crmApiService.post<OrderDetailWire>(
+    `/device/order/${id}/picking`,
+    buildPickingBody(body, pickerName),
+  );
+  return { ok: true, result: requireOk(res) };
+}
+
 // --- 슬라이스 C: 인쇄 기록 프록시 ---
 // POST /device/order/:id/printed — body 패스스루({kind:"picklist"} 또는
 // {kind:"label", lineId}). kind/lineId 검증은 crm(400). 상태 전이가 아니라

@@ -7,7 +7,7 @@ import {
   InternalServerException,
   UnauthorizedException,
 } from "../../libs/exceptions";
-import { mapCrmPaging, requireOk } from "./order.service";
+import { buildPickingBody, mapCrmPaging, requireOk } from "./order.service";
 
 test("requireOk returns the result on success", () => {
   const result = requireOk({ ok: true, result: [{ id: 1 }] });
@@ -59,6 +59,69 @@ test("requireOk treats ok:true with null result as a failure", () => {
   assert.throws(
     () => requireOk({ ok: true, result: null, status: 200 }),
     HttpException,
+  );
+});
+
+// --- S2 피킹 프록시 ---
+
+test("buildPickingBody injects the server-side pickerName and passes version/lines through", () => {
+  assert.deepEqual(
+    buildPickingBody(
+      { version: 3, lines: [{ lineId: 1, pickedQty: 2 }] },
+      "Alice",
+    ),
+    { version: 3, lines: [{ lineId: 1, pickedQty: 2 }], pickerName: "Alice" },
+  );
+});
+
+test("buildPickingBody drops a client-supplied pickerName", () => {
+  const built = buildPickingBody(
+    { version: 1, lines: [], pickerName: "Mallory" },
+    "Alice",
+  );
+  assert.equal(built.pickerName, "Alice");
+  // pickerName 외 임의 키도 전달하지 않는다 — version/lines/pickerName 만.
+  assert.deepEqual(Object.keys(built).sort(), [
+    "lines",
+    "pickerName",
+    "version",
+  ]);
+});
+
+test("buildPickingBody tolerates a non-object body (crm 400 handles validation)", () => {
+  assert.deepEqual(buildPickingBody(undefined, "Alice"), {
+    version: undefined,
+    lines: undefined,
+    pickerName: "Alice",
+  });
+  assert.deepEqual(buildPickingBody("junk", "Alice"), {
+    version: undefined,
+    lines: undefined,
+    pickerName: "Alice",
+  });
+});
+
+test("requireOk passes a crm 409 TRANSITION_CONFLICT through as HttpException(409)", () => {
+  assert.throws(
+    () => requireOk({ ok: false, status: 409, msg: "TRANSITION_CONFLICT" }),
+    (e: unknown) =>
+      e instanceof HttpException &&
+      e.statusCode === 409 &&
+      e.message === "TRANSITION_CONFLICT",
+  );
+});
+
+test("requireOk passes a crm picking validation 400 through with its message", () => {
+  assert.throws(
+    () =>
+      requireOk({
+        ok: false,
+        status: 400,
+        msg: "lines must cover every order line exactly once",
+      }),
+    (e: unknown) =>
+      e instanceof BadRequestException &&
+      e.message === "lines must cover every order line exactly once",
   );
 });
 
