@@ -12,6 +12,7 @@ import { buildPriceTag7090V2 } from "../libs/label-7090-v2";
 import { cutCommand, initPrinterCommand } from "../libs/printer/escpos";
 import type { Item } from "../types/models";
 import { useStoreSetting } from "../hooks/useStoreSetting";
+import ZplFontPanel from "../components/settings/ZplFontPanel";
 
 type ScaleType = "CAS" | "DATALOGIC";
 type Parity = "none" | "even" | "odd" | "mark" | "space";
@@ -1151,76 +1152,88 @@ export default function InterfaceSettingsScreen() {
           ) : (
             <div className="space-y-3">
               {zplNet.map((entry, i) => (
-                <div key={i} className="flex items-end gap-3">
-                  <div className="w-24">
-                    <label className={labelClass}>Language</label>
-                    <select
-                      className={selectClass}
-                      value={entry.language}
-                      onChange={(e) =>
-                        updateZplNet(i, "language", e.target.value)
-                      }
+                <div key={i} className="space-y-2">
+                  <div className="flex items-end gap-3">
+                    <div className="w-24">
+                      <label className={labelClass}>Language</label>
+                      <select
+                        className={selectClass}
+                        value={entry.language}
+                        onChange={(e) =>
+                          updateZplNet(i, "language", e.target.value)
+                        }
+                      >
+                        <option value="zpl">ZPL</option>
+                        <option value="slcs">SLCS</option>
+                      </select>
+                    </div>
+                    <div className="w-24">
+                      <label className={labelClass}>Media Size</label>
+                      <select
+                        className={selectClass}
+                        value={entry.mediaSize ?? ""}
+                        onChange={(e) =>
+                          updateZplNet(
+                            i,
+                            "mediaSize",
+                            e.target.value || undefined,
+                          )
+                        }
+                      >
+                        <option value="">None</option>
+                        <option value="7030">70×30</option>
+                        <option value="7090">70×90</option>
+                        <option value="100100">100x100</option>
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <label className={labelClass}>Name</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={entry.name}
+                        onChange={(e) => updateZplNet(i, "name", e.target.value)}
+                        placeholder="Label printer 1"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className={labelClass}>Host</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={entry.host}
+                        onChange={(e) => updateZplNet(i, "host", e.target.value)}
+                        placeholder="192.168.1.50"
+                      />
+                    </div>
+                    <div className="w-24">
+                      <label className={labelClass}>Port</label>
+                      <input
+                        type="number"
+                        className={inputClass}
+                        value={entry.port}
+                        onChange={(e) =>
+                          updateZplNet(i, "port", Number(e.target.value))
+                        }
+                      />
+                    </div>
+                    <button
+                      onClick={() => removeZplNet(i)}
+                      className={`${btnSmClass} border border-gray-300 hover:border-red-400 hover:text-red-600 text-gray-500 mb-0.5`}
                     >
-                      <option value="zpl">ZPL</option>
-                      <option value="slcs">SLCS</option>
-                    </select>
+                      Remove
+                    </button>
                   </div>
-                  <div className="w-24">
-                    <label className={labelClass}>Media Size</label>
-                    <select
-                      className={selectClass}
-                      value={entry.mediaSize ?? ""}
-                      onChange={(e) =>
-                        updateZplNet(
-                          i,
-                          "mediaSize",
-                          e.target.value || undefined,
-                        )
-                      }
-                    >
-                      <option value="">None</option>
-                      <option value="7030">70×30</option>
-                      <option value="7090">70×90</option>
-                      <option value="100100">100x100</option>
-                    </select>
-                  </div>
-                  <div className="flex-1">
-                    <label className={labelClass}>Name</label>
-                    <input
-                      type="text"
-                      className={inputClass}
-                      value={entry.name}
-                      onChange={(e) => updateZplNet(i, "name", e.target.value)}
-                      placeholder="Label printer 1"
+                  {/* Korean font install — ZPL text fields cannot print hangul
+                      until the fonts are in the printer's flash. Network ZPL
+                      only: the transfer needs a socket it can stream over. */}
+                  {entry.language === "zpl" && entry.host.trim() !== "" && (
+                    <ZplFontPanel
+                      host={entry.host}
+                      port={entry.port}
+                      mediaSize={entry.mediaSize}
                     />
-                  </div>
-                  <div className="flex-1">
-                    <label className={labelClass}>Host</label>
-                    <input
-                      type="text"
-                      className={inputClass}
-                      value={entry.host}
-                      onChange={(e) => updateZplNet(i, "host", e.target.value)}
-                      placeholder="192.168.1.50"
-                    />
-                  </div>
-                  <div className="w-24">
-                    <label className={labelClass}>Port</label>
-                    <input
-                      type="number"
-                      className={inputClass}
-                      value={entry.port}
-                      onChange={(e) =>
-                        updateZplNet(i, "port", Number(e.target.value))
-                      }
-                    />
-                  </div>
-                  <button
-                    onClick={() => removeZplNet(i)}
-                    className={`${btnSmClass} border border-gray-300 hover:border-red-400 hover:text-red-600 text-gray-500 mb-0.5`}
-                  >
-                    Remove
-                  </button>
+                  )}
                 </div>
               ))}
             </div>

@@ -8,6 +8,12 @@ import type {
   TextEncodeRequest,
   WeightResult,
 } from '../main/types'
+import type {
+  ZplFontInstallRequest,
+  ZplFontProgressEvent,
+  ZplFontTestPrintRequest,
+} from '../main/ipc/zpl-font'
+import type { PrinterTarget as ZplFontTarget } from '../main/zpl-font'
 
 contextBridge.exposeInMainWorld('electronAPI', {
   getSerialPorts: (): Promise<string[]> => ipcRenderer.invoke('serial:list-ports'),
@@ -53,5 +59,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   testEscposControlLines: (
     request: EscposControlLineMatrixRequest,
   ): Promise<EscposControlLineMatrixResult> =>
-    ipcRenderer.invoke('escpos:test-control-lines', request)
+    ipcRenderer.invoke('escpos:test-control-lines', request),
+
+  zplFontStatus: (target: ZplFontTarget) => ipcRenderer.invoke('zpl-font:status', target),
+  zplFontInstall: (request: ZplFontInstallRequest) =>
+    ipcRenderer.invoke('zpl-font:install', request),
+  zplFontTestPrint: (request: ZplFontTestPrintRequest) =>
+    ipcRenderer.invoke('zpl-font:test-print', request),
+  onZplFontProgress: (callback: (event: ZplFontProgressEvent) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: ZplFontProgressEvent) =>
+      callback(payload)
+    ipcRenderer.on('zpl-font:progress', handler)
+    return () => { ipcRenderer.removeListener('zpl-font:progress', handler) }
+  }
 })

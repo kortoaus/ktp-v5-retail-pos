@@ -136,6 +136,80 @@ export interface AppConfig {
   devices: DeviceConfig
 }
 
+// ── ZPL font install ────────────────────────────────────────────────────────
+// Korean TrueType faces pushed into a network label printer's flash, so ZPL
+// text fields can print hangul instead of being stripped to ASCII. Mirrors
+// src/main/zpl-font; declared here because the renderer cannot import from
+// src/main.
+
+export interface ZplFontTarget {
+  host: string
+  port: number
+}
+
+export type ZplFontState = 'installed' | 'missing' | 'mismatch'
+
+export interface ZplFontStatusEntry {
+  weight: string
+  sourceFile: string
+  objectName: string
+  filename: string
+  bundledSize: number
+  installedSize: number | null
+  state: ZplFontState
+}
+
+export interface ZplFontPrinterIdentity {
+  model: string
+  firmware: string
+  dpmm: number
+  dpi: number
+}
+
+export interface ZplFontStatus {
+  identity: ZplFontPrinterIdentity | null
+  fonts: ZplFontStatusEntry[]
+  installedCount: number
+  totalCount: number
+  freeBytes: number | null
+}
+
+export interface ZplFontInstallProgress {
+  index: number
+  count: number
+  weight: string
+  filename: string
+  sentBytes: number
+  totalBytes: number
+}
+
+export interface ZplFontProgressEvent {
+  target: { host: string; port: number }
+  progress: ZplFontInstallProgress
+}
+
+export interface ZplFontInstallResult {
+  sent: { weight: string; filename: string }[]
+  skipped: { weight: string; filename: string }[]
+  elapsedMs: number
+  status: ZplFontStatus
+}
+
+export type ZplFontResult<T> = { ok: true; data: T } | { ok: false; message: string }
+
+export interface ZplFontInstallRequest {
+  target: { host: string; port: number }
+  force?: boolean
+  weights?: string[]
+}
+
+export interface ZplFontTestPrintRequest {
+  target: { host: string; port: number }
+  widthMm?: number
+  heightMm?: number
+  dpi?: number
+}
+
 export interface ElectronAPI {
   getSerialPorts: () => Promise<string[]>
   openSerialPort: (path: string, baudRate: number) => Promise<void>
@@ -164,6 +238,18 @@ export interface ElectronAPI {
   testEscposControlLines: (
     request: EscposControlLineMatrixRequest,
   ) => Promise<EscposControlLineMatrixResult>
+
+  zplFontStatus: (target: {
+    host: string
+    port: number
+  }) => Promise<ZplFontResult<ZplFontStatus>>
+  zplFontInstall: (
+    request: ZplFontInstallRequest,
+  ) => Promise<ZplFontResult<ZplFontInstallResult>>
+  zplFontTestPrint: (
+    request: ZplFontTestPrintRequest,
+  ) => Promise<ZplFontResult<null>>
+  onZplFontProgress: (callback: (event: ZplFontProgressEvent) => void) => () => void
 }
 
 declare global {

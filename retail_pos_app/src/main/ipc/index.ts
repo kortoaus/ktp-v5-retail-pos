@@ -10,6 +10,7 @@ import {
   registerEscposHandlers,
 } from './escpos'
 import { registerTextEncodingHandlers } from './text-encoding'
+import { registerZplFontHandlers } from './zpl-font'
 
 export function registerAllHandlers(
   getMainWindow: () => BrowserWindow | null,
@@ -22,6 +23,7 @@ export function registerAllHandlers(
   registerScaleHandlers(getMainWindow)
   registerLabelHandlers()
   registerEscposHandlers()
+  registerZplFontHandlers()
 }
 
 export { autoConnectEscposPrinter, autoConnectScale }

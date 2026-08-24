@@ -9,6 +9,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "test:zpl-font": "NODE_OPTIONS=\"--import ./src/main/zpl-font/ts-resolve.mjs\" node --test src/main/zpl-font/commands.test.mjs src/main/zpl-font/service.test.mjs",
     "postinstall": "electron-builder install-app-deps",
     "package:win": "npm run build && electron-builder --win",
     "package:win:publish": "npm run build && electron-builder --win --publish always",
