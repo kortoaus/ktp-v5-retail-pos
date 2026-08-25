@@ -41,6 +41,7 @@ import { kickDrawer } from "../../libs/printer/kick-drawer";
 import SyncButton from "../../components/SyncButton";
 import SyncPostButton from "../../components/SyncPostButton";
 import OrdersPendingButton from "../../components/orders/OrdersPendingButton";
+import OrderSearchModal from "../../components/orders/OrderSearchModal";
 import PaymentModal from "./PaymentModal";
 import CloudHotkeyViewerV2 from "../../components/CloudHotkeyViewerV2";
 
@@ -53,6 +54,7 @@ type ModalTarget =
   | "discount-amount"
   | "discount-percent"
   | "member-search"
+  | "order-search"
   | "payment";
 
 export default function SaleScreen() {
@@ -96,6 +98,12 @@ export default function SaleScreen() {
   // S3 — 주문 로드 카트 배지 표시용.
   const activeOrderNo = useMemo(
     () => carts[activeCartIndex]?.orderNo ?? null,
+    [carts, activeCartIndex],
+  );
+
+  // S3-b — 이미 주문이 연결된 카트에서는 주문 검색 진입을 막는다.
+  const orderLinked = useMemo(
+    () => carts[activeCartIndex]?.externalOrderId != null,
     [carts, activeCartIndex],
   );
 
@@ -396,6 +404,13 @@ export default function SaleScreen() {
               }
             }}
           />
+          {/* S3-b — 온라인 주문 검색 (QR 을 못 쓰는 손님용 수동 진입).
+              이미 주문이 붙은 카트에서는 중복 로드 방지로 비활성. */}
+          <TopBarButton
+            label="Online Order"
+            disabled={orderLinked}
+            onClick={() => setModalTarget("order-search")}
+          />
 
           <PrintLatestInvoiceButton className="w-24 h-full rounded-sm text-sm font-bold bg-gray-200 border border-gray-300" />
           <TopBarButton label="Kick Drawer" onClick={() => kickDrawer()} />
@@ -551,6 +566,15 @@ export default function SaleScreen() {
           setModalTarget(null);
         }}
       />
+      {/* S3-b — 선택 시 모달만 닫고 로드는 useOrderLoad 가 전담
+          (확인 다이얼로그·차단 알럿 포함). */}
+      <OrderSearchModal
+        open={modalTarget === "order-search"}
+        onClose={() => setModalTarget(null)}
+        onSelect={(orderId) => {
+          void loadOrder(orderId);
+        }}
+      />
       {modalTarget === "payment" && (
         <PaymentModal
           onCancel={() => {
@@ -566,17 +590,20 @@ function TopBarButton({
   label,
   onClick,
   active,
+  disabled,
 }: {
   label: string;
   onClick?: () => void;
   active?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <div
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
       className={cn(
-        "w-24 h-full rounded-sm text-sm font-bold flex items-center justify-center border border-gray-300",
+        "w-24 h-full rounded-sm text-sm font-bold flex items-center justify-center text-center leading-tight border border-gray-300",
         active ? "bg-blue-500 text-white" : "bg-gray-200",
+        disabled && "opacity-40",
       )}
     >
       {label}

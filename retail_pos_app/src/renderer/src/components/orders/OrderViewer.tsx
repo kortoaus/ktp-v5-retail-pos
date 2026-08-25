@@ -309,11 +309,14 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
                 >
                   {`Print pick list${picklistCount > 0 ? ` (${picklistCount})` : ""}`}
                 </button>
-                {/* S3 — 활성 상태 + C&C 에서만 세일스크린 로드 (스캔 진입과
-                    동일 훅). DELIVERY 는 배송비/서차지 미지원 — 로드 불가
+                {/* S3 — 활성 상태(PLACED|ACCEPTED|READY) + C&C 에서만
+                    세일스크린 로드 (스캔 진입과 동일 훅). PLACED 는 S3-b 에서
+                    추가 — 로드는 순수 읽기라 미접수 주문도 확인 후 로드할 수
+                    있다(§1). DELIVERY 는 배송비/서차지 미지원 — 로드 불가
                     (useOrderLoad 게이트와 동일 조건). */}
                 {detail.fulfillment === "CLICK_AND_COLLECT" &&
-                  (detail.status === "ACCEPTED" ||
+                  (detail.status === "PLACED" ||
+                    detail.status === "ACCEPTED" ||
                     detail.status === "READY") && (
                   <button
                     type="button"

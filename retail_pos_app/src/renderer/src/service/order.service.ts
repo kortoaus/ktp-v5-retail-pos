@@ -45,6 +45,10 @@ export interface OrderSummary {
   dueAt: string | null; // ISO — server-computed
 }
 
+// qs 는 호출측이 만든 쿼리스트링 그대로 (로컬 서버는 통과, crm 이 해석).
+// 지원 파라미터: preset, fulfillment, page, limit, 그리고 S3-b 의 keyword
+// (주문번호 / 완전한 전화번호 / 이름 2자↑ — 서버가 해석하며, keyword 가 있으면
+// preset 을 무시하고 PLACED|ACCEPTED|READY 로 고정한다. 거부 시 ok:false + msg).
 export const getOrders = async (
   qs: string,
 ): Promise<ApiResponse<OrderSummary[]>> => {
