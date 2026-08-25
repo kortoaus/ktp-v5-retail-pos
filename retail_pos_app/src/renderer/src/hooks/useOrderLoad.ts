@@ -1,13 +1,8 @@
 // S3 — C&C 주문을 활성 카트로 로드 (specs/2026-08-21-pos-order-load-collect-design.md §1).
 // 조립 원칙: SaleScreen/OrderViewer 는 배선만, 정책·주입 로직은 전부 여기.
 //
-// 상태별 정책 (오너 2026-08-21):
-//   READY    — 즉시 로드, 수량 = pickedQty (0/미기록 라인 제외).
-//              전 라인 pickedQty 미기록(피킹 확정 없이 READY — 수신함 경로)
-//              이면 ACCEPTED 식 컨펌 후 주문 수량 폴백 (S3 리뷰).
-//   ACCEPTED — 컨펌 후 로드, 수량 = 주문 qty (캐셔가 카트에서 조정).
-//   PLACED   — 차단 ("접수 먼저").
-//   종결     — 차단 (COLLECTED 는 "이미 결제 완료" — 중복 결제 1차 방어).
+// 상태별 정책은 order-load-policy.ts 에서 순수하게 결정한다. 로드는 CRM에
+// 어떤 쓰기도 하지 않으며, 결제 완료 시에만 서버가 COLLECTED 로 전이한다.
 //
 // 로드 동작 (§X-8 관례): 빈 카트 필수 → 멤버 먼저 부착(§Y hold 스타일 미검증
 // 최소 멤버 — 적립은 업싱크가 CRM 검증 후 처리) → 라인 주입
@@ -27,10 +22,11 @@ import {
 } from "../service/order.service";
 import { useSalesStore } from "../store/SalesStore";
 import type { SaleLineItem } from "../types/sales";
+import { getOrderLoadPolicy, type OrderLoadQtySource } from "./order-load-policy";
 
 // 로드 수량 결정 (순수). null = 이 라인은 제외.
-function chosenQtyOf(line: OrderLine, status: "ACCEPTED" | "READY"): number {
-  if (status === "READY") return line.pickedQty ?? 0;
+function chosenQtyOf(line: OrderLine, qtySource: OrderLoadQtySource): number {
+  if (qtySource === "picked") return line.pickedQty ?? 0;
   return line.qty;
 }
 
@@ -54,55 +50,19 @@ export function useOrderLoad() {
       }
       const detail: OrderDetail = res.result;
 
-      // ── 이행 방식 게이트 (S3 리뷰) — 로드는 C&C 전용. DELIVERY 주문은
-      //    배송비/서차지가 카트 수식에 없어 로드하면 그만큼 과소청구된다. ──
-      if (detail.fulfillment !== "CLICK_AND_COLLECT") {
-        window.alert(
-          "Delivery orders can't be loaded at the till (delivery fee/surcharge not supported yet).",
-        );
+      // ── 상태·결제·이행 방식 정책 ──
+      const policy = getOrderLoadPolicy({
+        status: detail.status,
+        paymentStatus: detail.paymentStatus,
+        fulfillment: detail.fulfillment,
+        pickedQtys: detail.lines.map((line) => line.pickedQty),
+      });
+      if (policy.mode === "block") {
+        window.alert(policy.message);
         return false;
       }
-
-      // ── 상태 정책 ──
-      if (detail.status === "PLACED") {
-        window.alert("Order not accepted yet — accept it first.");
+      if (policy.mode === "confirm" && !window.confirm(policy.message)) {
         return false;
-      }
-      if (detail.status === "COLLECTED") {
-        window.alert("This order is already paid & collected.");
-        return false;
-      }
-      // S3 리뷰 — 온라인 선결제(Stripe 후속) 주문을 틸에서 또 받는 중복
-      // 결제 방어. 지금 IN_STORE 는 항상 UNPAID 라 no-op 이지만 미리 가드.
-      if (detail.paymentStatus === "PAID") {
-        window.alert("This order was already paid online.");
-        return false;
-      }
-      if (detail.status !== "ACCEPTED" && detail.status !== "READY") {
-        window.alert(
-          `Order ${detail.orderNo} is ${detail.status} — cannot load.`,
-        );
-        return false;
-      }
-      // 가드 통과 시점의 내로잉을 const 로 고정 (클로저 내 사용).
-      const loadStatus: "ACCEPTED" | "READY" = detail.status;
-      // 수량 정책 상태 — 아래 READY 전건 미기록 폴백이 ACCEPTED 로 바꿀 수 있다.
-      let qtyStatus: "ACCEPTED" | "READY" = loadStatus;
-      if (loadStatus === "ACCEPTED") {
-        const ok = window.confirm(
-          "This order hasn't been picked yet. Load with ordered quantities?\n(아직 피킹 확정 전 주문입니다. 주문 수량으로 불러올까요?)",
-        );
-        if (!ok) return false;
-      } else if (detail.lines.every((line) => line.pickedQty == null)) {
-        // S3 리뷰 — 피킹 확정 없이 수신함에서 READY 로 보낸 주문: pickedQty
-        // 가 전 라인 null 이라 READY 정책(pickedQty, 0 제외)으로는 로드할
-        // 라인이 0 이 되는 막다른 길. ACCEPTED 식 컨펌 후 주문 수량 폴백.
-        // 일부라도 기록된 혼합 케이스는 기존 정책 유지 (기록값, 0 제외).
-        const ok = window.confirm(
-          "Picking was never confirmed for this order. Load with ordered quantities?",
-        );
-        if (!ok) return false;
-        qtyStatus = "ACCEPTED";
       }
 
       // ── 카트 가드 ──
@@ -130,12 +90,12 @@ export function useOrderLoad() {
       const loadable = detail.lines
         .slice()
         .sort((a, b) => a.sort - b.sort)
-        .map((line) => ({ line, qty: chosenQtyOf(line, qtyStatus) }))
+        .map((line) => ({ line, qty: chosenQtyOf(line, policy.qtySource) }))
         .filter(({ qty }) => qty > 0);
       if (loadable.length === 0) {
         // READY 인데 기록된 수량이 전부 0 — 피킹 결과 "집은 게 없음" (S3 리뷰).
         window.alert(
-          qtyStatus === "READY"
+          policy.qtySource === "picked"
             ? "Nothing was picked for this order."
             : "No quantities to load for this order.",
         );
