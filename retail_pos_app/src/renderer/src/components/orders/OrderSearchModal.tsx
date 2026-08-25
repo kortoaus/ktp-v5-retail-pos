@@ -122,7 +122,7 @@ export default function OrderSearchModal({
 
         {/* 좌 결과 / 우 OnScreenKeyboard — MemberSearchModal 과 동일 관례.
             주문 행은 필드가 많아 결과 열을 넓게 잡는다. */}
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 p-4">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(560px,1fr)] gap-4 p-4">
           <div className="min-w-0 space-y-3">
             <div className="flex items-center gap-2">
               <div className="flex-1 min-w-0 flex items-center gap-2 bg-gray-100 rounded-lg px-3 h-12">
@@ -208,14 +208,14 @@ export default function OrderSearchModal({
             </div>
           </div>
 
-          <div className="border-l border-gray-200 pl-4 flex items-start">
+          <div className="border-l border-gray-200 pl-4 min-w-0">
             <OnScreenKeyboard
               key="order-search-keyword"
               value={keyword}
               onChange={setKeyword}
               onEnter={handleSearch}
               initialLayout="numpad"
-              className="shrink-0"
+              className="w-full"
             />
           </div>
         </div>
