@@ -214,7 +214,7 @@ export default function OrderSearchModal({
               value={keyword}
               onChange={setKeyword}
               onEnter={handleSearch}
-              initialLayout="english"
+              initialLayout="numpad"
               className="shrink-0"
             />
           </div>
