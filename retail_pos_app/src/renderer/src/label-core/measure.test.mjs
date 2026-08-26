@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   clamp,
   code128Modules,
+  estimateLines,
   estimateBarcodeWidth,
   estimateDataMatrixSize,
   estimateQrSize,
@@ -59,4 +60,18 @@ test("symbol width estimates follow the module counts", () => {
   assert.equal(estimateBarcodeWidth("code128", "ABC", 2), (11 * 5 + 13) * 2);
   assert.equal(estimateQrSize(4), 116);
   assert.equal(estimateDataMatrixSize(5), 80);
+});
+
+test("estimateLines counts what a block will wrap to, and stops at the cap", () => {
+  // One short latin word at 20 dots needs ~44 of the 200 available.
+  assert.equal(estimateLines("Sashimi", 20, 200), 1);
+  assert.equal(estimateLines("Assorted Sashimi Platter Deluxe Family Size", 20, 200), 3);
+  assert.equal(estimateLines("Assorted Sashimi Platter Deluxe Family Size", 20, 200, 2), 2);
+
+  // Hangul is full-width and has no spaces to break on, so it breaks per glyph.
+  assert.equal(estimateLines("모듬사시미", 20, 200), 1);
+  assert.equal(estimateLines("모듬사시미 특선 플래터 세트 대용량", 20, 100), 5);
+
+  assert.equal(estimateLines("", 20, 200), 0);
+  assert.equal(estimateLines("Sashimi", 20, 0), 0);
 });
