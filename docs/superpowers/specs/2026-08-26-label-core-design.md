@@ -68,3 +68,47 @@ label-core/
 
 - 폰트 B/BK 는 XD3 에 아직 미주입(M 만) — 진단 라벨은 미주입 폰트 줄이 비어 보일 수 있음. 주입은 POS 폰트 패널(Bixolon 은 `^HW` 응답이 없어 blind — 패널 개선은 별건).
 - 레거시 어휘(`MediaSize` 3종, operations 3슬롯, runner 3종) 통일은 이식 단계.
+
+## 6. 템플릿 단계 (2026-08-26 오후 — 에센셜 확정 후)
+
+**확정된 에센셜**: ZPL 단일 · 폰트 = Noto Sans KR **서브셋** 3웨이트(M/B/BK, 각 ≈2.5MB,
+한글 11,172자 + ASCII 전부 + 기호·자모; 원본 6.2MB 는 Bixolon 사용자 플래시
+한도 초과로 2번째 파일부터 잘림) · 취소선은 `^GB` 선(`strike` 헬퍼, 폭은 `measure`
+근사) · 헤드라인 Black 52~62 가시성 오너 확인("아쉽지만 됨") · 60×40 목업 1D/2D
+오너 확인.
+
+### 6.1 폰트 정본 교체
+`retail_pos_app/resources/fonts/NotoSansKR-{Medium,Bold,Black}.ttf` 를 서브셋
+파일로 교체(같은 파일명·객체명 유지 → `main/zpl-font/catalog.ts` 무변경, 단
+바이트 수는 실측으로 갱신되므로 주석만). 서브셋 생성 스크립트
+`retail_pos_app/scripts/subset-noto-kr.py`(fonttools, 유니코드 범위 명시)를
+리포에 커밋해 재현 가능하게.
+
+### 6.2 템플릿 = `label-core/templates/*.ts` — `(input) → Label` 순수 함수
+공통 입력은 label-core 자체 타입(앱 모델 import 금지; 어댑터는 화면/훅 몫).
+| 파일 | 미디어 | 입력 | 레이아웃 정본 |
+|---|---|---|---|
+| `scale-6040.ts` | 6040 | `ScaleLabelInput`(nameKo/En, packedOn/usedBy 표시문자열, weightText, unit, unitPriceText, wasUnitPriceText?, totalText, wasTotalText?, barcode12 \| pp payload, storeName?, storeAddress?) | 오늘 목업 1D/2D (BACKLOG §AC-12 목업 ZPL 참조): 이름 Bold30 · 정보 4열 · EAN13 60h / QR mag3 · $/kg Bold40 · TOTAL Black48 · 푸터 Black34+M20 중앙 |
+| `ingredient-58100.ts` | 58100 | 위 + `ingredients` | 구 scale `ingredientLabelTemplate` 배치를 464×800 에 옮김(이름 3줄 Bold50, 재료 M20 wrap, 정보 y≈565, 날짜 y≈665, 바코드 y≈638), 푸터 없음 |
+| `price-tag-7030.ts` | 7030 | `PriceTagInput`(nameKo/En, uom, priceCents, wasPriceCents?, promoRange?, barcode) | POS `buildPriceTag7030` 배치(분할 가격 61/41 · was 줄 · ko/en 이름 · 바코드 텍스트 · DataMatrix 350,10) — 550 이 아니라 560 폭 사용 |
+| `price-tag-7090.ts` | 7090 | 위 + `memberPriceCents?`, `promoName?`, `storeName?`, `mode:'current'\|'normal'` | POS `label-7090-v2` 4케이스(normal/promo × guest/member) 좌표 그대로, 헤드라인 Black 52/62(shrink min 36/42), 가격 Black, 점선 구분선은 `^GB` 점 반복 대신 `^GB` 실선 1px(단순화) |
+| `order-100100.ts` | 100100 | `OrderLabelInput`(orderNo, dueText, nameKo/En, qty, optionLines[], orderQrData, ppQrData?) | POS `order-label-zpl` 배치를 800×800 에 옮김, **QR 두 칸을 실제 ^BQ 로**(order QR 필수, PP QR 은 입력 있을 때만) |
+
+모든 템플릿: `strike()` 로 취소선, `shrink` 로 이름/헤드라인 자동축소, `dbg` 통과.
+좌표는 첫 버전이고 `/scale` 페이지에서 실물 튜닝(이 문서의 표는 시작값).
+
+### 6.3 PP 바코드 정본 확장
+`libs/pp-barcode.ts`(sale-core 정본)에 `"00": 2`, `"07"` packedOn ISO, `"08"`
+usedBy offset **추가**(선택 필드, 파서는 기존대로 무시 가능, 클램프 유지).
+러너는 다음 sync 때 반영. label-core 는 이 파일을 import 하지 않고 `ppQrData`
+문자열을 입력으로 받는다(의존 0 유지) — 문자열 생성은 화면 어댑터에서.
+
+### 6.4 `/scale` 페이지 확장
+템플릿 5종 버튼(각각 하드코드 샘플 데이터 — 오늘 목업 값 재사용, 7090 은 4케이스
+버튼) + 기존 진단 라벨 + dbg 토글 + ZPL 미리보기. 프린터의 `mediaSize` 와
+템플릿 미디어가 다르면 경고만(강제 차단 안 함 — 지금 60×40 용지에 7090 을
+찍어보는 식의 테스트 허용).
+
+### 6.5 테스트
+템플릿마다 스냅샷 테스트(샘플 입력 → ZPL 문자열, 요소 경계가 미디어 안), 7090
+4케이스 분기, 100100 옵션 줄 넘침 `+N more`, PP 00/07/08 빌드/파싱 라운드트립.
