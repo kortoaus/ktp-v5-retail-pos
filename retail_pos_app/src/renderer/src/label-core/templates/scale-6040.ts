@@ -24,6 +24,10 @@
  * of each is in `../model`'s `QrAnchor` and in the `qr` case of `../zpl`. Do
  * not "tidy" any of them.
  *
+ * Both files also carry the name-band revision made the same day: the band is
+ * **one centred English line**, not a Korean line over an English one. See
+ * `layoutName6040`.
+ *
  * The grid, in dots at 203 dpi (the numbers the constants below are named for):
  *
  *   top red rule ......... y ≈ 67          bottom red rule ...... y ≈ 229
@@ -83,7 +87,18 @@ export interface ScaleBarcodePP {
 export type ScaleBarcode = ScaleBarcodeEan13 | ScaleBarcodePP;
 
 export interface ScaleLabelInput {
+  /**
+   * Korean name. **Not printed by the 60 × 40 template** — it is here because
+   * the 58 × 100 ingredient label shares this input and does print it.
+   */
   nameKo: string;
+  /**
+   * English name, and the only name the 60 × 40 label shows.
+   *
+   * Printed verbatim. Any prefix the legacy scale convention puts in front of
+   * it (`[30% OFF] `, `[$1.00 OFF] `) is the caller's to prepend — this
+   * template neither builds nor strips one, it only measures what it is given.
+   */
   nameEn: string;
   /** ISO `YYYY-MM-DD`. The template decides whether the year is shown. */
   packedOnIso: string;
@@ -117,15 +132,35 @@ export interface ScaleLabelInput {
 
 const MEDIA_W = 480;
 
-// ── name, above the top red rule (y 67) ─────────────────────────────────────
-// Two lines, not one joined string: the Korean name is the one a customer
-// reads, so it gets the Bold 30 line of its own and the English sits under it.
+// ── name band, above the top red rule (y 67) ────────────────────────────────
+// **English only, centred.** The Korean name is not printed on this label at
+// all (owner decision, 2026-08-26): the band is 67 dots tall, a Korean line and
+// an English line both fit only at 30/24, and the customer this label is for
+// reads the English. `nameKo` stays on `ScaleLabelInput` because the 58 × 100
+// template shares the type and does print it — here it is deliberately ignored.
+//
+// One line at 30 whenever the name fits; two at 24 when it does not. See
+// `layoutName6040` for the rule and for why the band's `y` moves with it.
 const NAME_X = 18;
 const NAME_W = 450;
-const NAME_KO_Y = 4;
-const NAME_KO_SIZE = 30;
-const NAME_EN_Y = 36;
-const NAME_EN_SIZE = 24;
+/**
+ * Fraction of the block a name may measure before it is given a second line.
+ *
+ * `^FB` wraps at the block width exactly, and `measure.ts` is an approximation
+ * fitted to a hardware sample — so a name measuring 449 of 450 is a coin toss
+ * between one line and a printer-wrapped second line at the *one-line* size,
+ * which overflows the band. 5% held back is what turns that coin toss into a
+ * deliberate two-line layout.
+ */
+const NAME_FIT = 0.95;
+const NAME_ONE_LINE_SIZE = 30;
+/** Roughly centres a single 30-dot line in the 0–67 band. */
+const NAME_ONE_LINE_Y = 14;
+const NAME_TWO_LINE_SIZE = 24;
+/** Two 24-dot lines are 48 dots; 6 keeps the pair off both edges of the band. */
+const NAME_TWO_LINE_Y = 6;
+/** Below this the name is unreadable at arm's length. */
+const NAME_MIN_SIZE = 20;
 
 // ── header value row (PACKED ON / USE BY / NET kg) ──────────────────────────
 // The caption band is y 80–102 on the stock; values sit just under it. The
@@ -277,6 +312,50 @@ export function formatScaleDates(packedOnIso: string, usedByIso: string): ScaleD
 }
 
 // ---------------------------------------------------------------------------
+// Name band
+// ---------------------------------------------------------------------------
+
+export interface Name6040Layout {
+  size: number;
+  lines: 1 | 2;
+  y: number;
+}
+
+/**
+ * How the English name is set in the 0–67 band: size, line count, baseline `y`.
+ *
+ * Three cases, in order:
+ *
+ *  1. It measures inside 95% of the block at **30** → one line at 30, sitting
+ *     at y 14 so it is roughly centred in the band.
+ *  2. It does not → **two** lines at 24, moved up to y 6 to make room for the
+ *     second one.
+ *  3. It does not fit two lines of 24 either → the same two lines, shrunk by
+ *     `fitSize` to whatever does fit, and never below 20.
+ *
+ * The shrink is done here rather than by setting `shrink` on the element,
+ * because the emitter's budget is `width * lines` — the full 900 dots — and
+ * would spend the 5% margin case (1) and case (2) are both decided against. One
+ * margin, one place, or the two branches disagree about what "fits" means.
+ *
+ * Pure and exported so the boundary can be tested without rendering a label.
+ */
+export function layoutName6040(nameEn: string): Name6040Layout {
+  const text = (nameEn ?? "").trim();
+  const budget = NAME_W * NAME_FIT;
+
+  if (textWidth(text, NAME_ONE_LINE_SIZE) <= budget) {
+    return { size: NAME_ONE_LINE_SIZE, lines: 1, y: NAME_ONE_LINE_Y };
+  }
+
+  return {
+    size: fitSize(text, budget * 2, NAME_TWO_LINE_SIZE, NAME_MIN_SIZE),
+    lines: 2,
+    y: NAME_TWO_LINE_Y,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Layout
 // ---------------------------------------------------------------------------
 
@@ -358,17 +437,13 @@ export function buildScaleLabel6040(
   opts: TemplateOptions = {},
 ): Label {
   const dates = formatScaleDates(input.packedOnIso, input.usedByIso);
+  const name = layoutName6040(input.nameEn);
 
   const elements: Element[] = [
-    textEl(NAME_X, NAME_KO_Y, input.nameKo.trim(), NAME_KO_SIZE, "B", {
+    textEl(NAME_X, name.y, input.nameEn.trim(), name.size, "B", {
       width: NAME_W,
-      lines: 1,
-      align: "L",
-    }),
-    textEl(NAME_X, NAME_EN_Y, input.nameEn.trim(), NAME_EN_SIZE, "M", {
-      width: NAME_W,
-      lines: 1,
-      align: "L",
+      lines: name.lines,
+      align: "C",
     }),
     textEl(PACKED_X, HEADER_VALUE_Y, dates.packed, dates.size, "B", {
       width: PACKED_W,

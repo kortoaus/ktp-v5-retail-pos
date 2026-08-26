@@ -85,8 +85,14 @@ export type { DiagnosticOptions } from "./diagnostic";
 // library's own — no app model reaches in here, so the adapter that maps an
 // `Item` or a `SaleLine` onto them belongs to the screen, not to the template.
 
-export { buildScaleLabel6040, formatDmy, formatScaleDates } from "./templates/scale-6040";
+export {
+  buildScaleLabel6040,
+  formatDmy,
+  formatScaleDates,
+  layoutName6040,
+} from "./templates/scale-6040";
 export type {
+  Name6040Layout,
   ScaleBarcode,
   ScaleBarcodeEan13,
   ScaleBarcodePP,

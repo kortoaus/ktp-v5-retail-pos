@@ -2,7 +2,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildScaleLabel6040, formatDmy, formatScaleDates } from "./scale-6040.ts";
+import {
+  buildScaleLabel6040,
+  formatDmy,
+  formatScaleDates,
+  layoutName6040,
+} from "./scale-6040.ts";
 import { MEDIA } from "../media.ts";
 import { elementBounds, renderLabel } from "../zpl.ts";
 import { buildPPBarcodeString } from "../../libs/pp-barcode.ts";
@@ -13,8 +18,9 @@ import { buildPPBarcodeString } from "../../libs/pp-barcode.ts";
  * fits the grid. Every coordinate asserted below is that file's.
  */
 const SAMPLE = {
+  /** Carried, never printed on this label — the assertion below is the point. */
   nameKo: "모듬사시미 (테스트)",
-  nameEn: "Assorted Sashimi",
+  nameEn: "DS Salmon Sashimi (A)",
   packedOnIso: "2026-08-26",
   usedByIso: "2026-08-27",
   weightText: "0.512",
@@ -65,9 +71,8 @@ test("1D reproduces the confirmed pre-printed mockup, field for field", () => {
   for (const line of [
     "^PW480",
     "^LL320",
-    // name, above the top red rule
-    "^FO18,4^A@N,30,27,E:NOTOKRB.TTF^FB450,1,0,L,0^FH^FD모듬사시미 (테스트)^FS",
-    "^FO18,36^A@N,24,22,E:NOTOKRM.TTF^FB450,1,0,L,0^FH^FDAssorted Sashimi^FS",
+    // name, above the top red rule — English only, centred, one line at 30
+    "^FO18,14^A@N,30,27,E:NOTOKRB.TTF^FB450,1,0,C,0^FH^FDDS Salmon Sashimi (A)^FS",
     // header value row — PACKED ON / USE BY / NET kg
     "^FO228,106^A@N,24,22,E:NOTOKRB.TTF^FB90,1,0,C,0^FH^FD26/08^FS",
     "^FO322,106^A@N,24,22,E:NOTOKRB.TTF^FB70,1,0,C,0^FH^FD27/08^FS",
@@ -174,6 +179,86 @@ test("dbg rides through to the emitter", () => {
   assert.equal(buildScaleLabel6040(ONE_D).dbg, false);
   assert.equal(buildScaleLabel6040(ONE_D, { dbg: true }).dbg, true);
   assert.ok(renderLabel(buildScaleLabel6040(ONE_D, { copies: 3 })).includes("^PQ3"));
+});
+
+// ---------------------------------------------------------------------------
+// The name band — English only, centred, one line at 30 or two at 24
+// ---------------------------------------------------------------------------
+
+test("the Korean name never reaches the 60 x 40 label", () => {
+  const zpl = renderLabel(buildScaleLabel6040({ ...ONE_D, nameKo: "모듬사시미 (테스트)" }));
+  assert.ok(!zpl.includes("모듬사시미"), "nameKo is carried for the 58 x 100 label, not printed here");
+  assert.ok(zpl.includes("DS Salmon Sashimi (A)"), "nameEn is the only name on this label");
+
+  // And it is the *only* text field above the top red rule.
+  const above = buildScaleLabel6040(ONE_D).elements.filter(
+    (el) => el.kind === "text" && el.y < GRID.topRule,
+  );
+  assert.equal(above.length, 1);
+  assert.equal(above[0].align, "C");
+});
+
+test("a short name gets one Bold 30 line, centred in the band", () => {
+  // 22 characters, mixed case — inside the 95% of 450 the rule allows.
+  assert.deepEqual(layoutName6040("DS Salmon Sashimi 100g"), { size: 30, lines: 1, y: 14 });
+  // 24 characters, UPPERCASE — capitals are wider, and this one still fits.
+  assert.deepEqual(layoutName6040("DS SALMON SASHIMI (AUST)"), { size: 30, lines: 1, y: 14 });
+});
+
+test("a long name gets two Bold 24 lines, moved up to make room", () => {
+  // 34 mixed-case characters: too wide for one line at 30, comfortable at 24.
+  assert.deepEqual(layoutName6040("DS Salmon Sashimi Premium Pack 1kg"), {
+    size: 24,
+    lines: 2,
+    y: 6,
+  });
+  // 28 UPPERCASE characters — four fewer than the mixed case needs, because
+  // capitals measure 0.63 em against lower case's 0.55.
+  assert.deepEqual(layoutName6040("DS SALMON SASHIMI (AUS) 100G"), { size: 24, lines: 2, y: 6 });
+});
+
+test("a name too long for two lines of 24 shrinks, and stops at 20", () => {
+  const sixty = layoutName6040("A".repeat(60));
+  assert.equal(sixty.lines, 2);
+  assert.ok(sixty.size < 24, `shrunk from 24, got ${sixty.size}`);
+  assert.ok(sixty.size >= 20, `never below the floor, got ${sixty.size}`);
+
+  // Past anything a product name plausibly is, it clamps rather than vanishing.
+  assert.equal(layoutName6040("A".repeat(400)).size, 20);
+});
+
+test("the legacy scale tag is measured with the name, not stripped from it", () => {
+  // The screen adapter prepends `[30% OFF] ` / `[$1.00 OFF] `; the template only
+  // measures what it is handed. The tag is what pushes this 21-character name
+  // (one line at 30 on its own) onto two lines.
+  assert.deepEqual(layoutName6040("DS Salmon Sashimi (A)"), { size: 30, lines: 1, y: 14 });
+  assert.deepEqual(layoutName6040("[30% OFF] DS Salmon Sashimi (A)"), {
+    size: 24,
+    lines: 2,
+    y: 6,
+  });
+
+  const zpl = renderLabel(
+    buildScaleLabel6040({ ...ONE_D, nameEn: "[30% OFF] DS Salmon Sashimi (A)" }),
+  );
+  assert.ok(
+    zpl.includes("^FO18,6^A@N,24,22,E:NOTOKRB.TTF^FB450,2,0,C,0^FH^FD[30% OFF] DS Salmon Sashimi (A)^FS"),
+    zpl,
+  );
+});
+
+test("the name band never reaches the top red rule", () => {
+  for (const nameEn of [
+    "DS Salmon Sashimi (A)",
+    "DS Salmon Sashimi Premium Pack 1kg",
+    "NS Shin Black Big Bowl 101g Premium Extra Value Pack",
+    "A".repeat(400),
+  ]) {
+    const el = buildScaleLabel6040({ ...ONE_D, nameEn }).elements.find((e) => e.kind === "text");
+    const box = elementBounds(el);
+    assert.equal(box.x + box.w, 468, "the block stays on the media");
+    assert.ok(box.y + box.h <= GRID.topRule, `${nameEn} ends at ${box.y + box.h}`);
+  }
 });
 
 // ---------------------------------------------------------------------------

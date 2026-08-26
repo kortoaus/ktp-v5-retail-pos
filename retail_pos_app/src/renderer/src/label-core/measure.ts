@@ -10,11 +10,22 @@
  * Ratios are fractions of the em (the `^A@` cell height) for Noto Sans KR:
  * hangul and CJK are full-width by design, Latin is roughly half, digits are
  * tabular and slightly wider than the average letter, spaces are narrow.
+ *
+ * The capital ratio is *not* a guess. Measured on a Zebra ZD421 with
+ * Noto Sans KR Bold on 2026-08-26: in a 450-dot block at size 30, mixed-case
+ * text ran out of room at ≈27 characters and UPPERCASE-only at ≈24 — that is
+ * ≈0.56 em per character mixed and ≈0.63 em per character in caps. Caps
+ * therefore get a class of their own; without it an all-caps product name
+ * measures ~13% narrow and prints clipped. Lower-case keeps 0.55, which is what
+ * makes a mixed string average out to the measured 0.56.
  */
 
 import type { BarcodeSymbology } from "./model";
 
+/** Lower-case Latin and any other proportional Latin glyph (punctuation…). */
 export const EM_LATIN = 0.55;
+/** `A`–`Z`. Hardware-measured, see the header — capitals are visibly wider. */
+export const EM_UPPER = 0.63;
 export const EM_DIGIT = 0.58;
 export const EM_CJK = 1.0;
 export const EM_SPACE = 0.3;
@@ -46,6 +57,10 @@ function charEm(ch: string): number {
   const code = ch.codePointAt(0) ?? 0;
   if (ch === " " || ch === "\t") return EM_SPACE;
   if (code >= 0x30 && code <= 0x39) return EM_DIGIT;
+  // `A`–`Z` only. Accented capitals are rare in a product name here and fall
+  // through to the Latin ratio, which under-measures them slightly — the same
+  // direction of error the whole file already accepts.
+  if (code >= 0x41 && code <= 0x5a) return EM_UPPER;
   if (isFullWidth(code)) return EM_CJK;
   return EM_LATIN;
 }

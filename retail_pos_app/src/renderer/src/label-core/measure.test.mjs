@@ -20,9 +20,40 @@ test("hangul counts as a full em, latin and digits as fractions", () => {
   assert.equal(textEm("가"), 1);
   assert.equal(textEm("가나다"), 3);
   assert.equal(textEm("a"), 0.55);
+  assert.equal(textEm("A"), 0.63);
   assert.equal(textEm("5"), 0.58);
   assert.equal(textEm(" "), 0.3);
   assert.equal(Math.round(textEm("가 a5") * 100), 243); // 1 + .3 + .55 + .58
+  assert.equal(Math.round(textEm("가 A5") * 100), 251); // 1 + .3 + .63 + .58
+});
+
+test("capitals are their own class — a caps name is wider than the same lower-case one", () => {
+  assert.ok(textEm("SALMON") > textEm("salmon"));
+  // Exactly the ratio difference, six glyphs of it.
+  assert.equal(Math.round((textEm("SALMON") - textEm("salmon")) * 100), 48);
+
+  // Punctuation is not a capital: brackets keep the plain Latin ratio.
+  assert.equal(textEm("(A)"), 0.55 + 0.63 + 0.55);
+});
+
+/**
+ * The 2026-08-26 ZD421 measurement these ratios were fitted to: in a 450-dot
+ * block at size 30, Noto Sans KR Bold ran out of room at ≈27 mixed-case
+ * characters and at ≈24 UPPERCASE characters. Both are asserted to land within
+ * 5% of 450 — the ratios are a safety margin, not a metric, so "close" is the
+ * strongest claim available.
+ */
+test("the measured 450-dot capacity at size 30: ~27 mixed, ~24 caps", () => {
+  const mixed = "Assorted Sashimi Platter XL"; // 27 chars
+  const caps = "A".repeat(24);
+
+  assert.equal(mixed.length, 27);
+  for (const [what, width] of [
+    ["mixed", textWidth(mixed, 30)],
+    ["caps", textWidth(caps, 30)],
+  ]) {
+    assert.ok(Math.abs(width - 450) <= 450 * 0.05, `${what} measured ${width}, expected ~450`);
+  }
 });
 
 test("textWidth scales the em advance by the cell height", () => {

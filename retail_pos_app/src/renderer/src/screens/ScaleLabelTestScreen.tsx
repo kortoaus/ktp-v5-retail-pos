@@ -54,6 +54,22 @@ const SCALE_NAME_KO = "DS 연어 사시미 (호주산)";
 const SCALE_NAME_EN = "DS Salmon Sashimi (A)";
 
 /**
+ * A real catalogue name long enough to force the 60 × 40 name band onto two
+ * lines. The band prints English only and picks 30/1 or 24/2 by measurement
+ * (`layoutName6040`), and the short sample above only ever exercises 30/1 —
+ * this one is the other branch, on stock, where a clipped line is visible.
+ */
+const SCALE_NAME_EN_LONG = "NS Shin Black Big Bowl 101g Premium Extra Value Pack";
+
+/**
+ * The legacy scale convention: a markdown is announced by a tag *prepended to
+ * the name*, not by a field of its own. The adapter builds it, the template only
+ * measures it — and here the tag alone is what pushes a name that fits on one
+ * line onto two, which is exactly the interaction worth printing.
+ */
+const SCALE_NAME_EN_TAGGED = `[30% OFF] ${SCALE_NAME_EN}`;
+
+/**
  * The PP payload, built through the canonical builder rather than hand-typed.
  *
  * That is the point of building it here: the screen is the adapter, so this is
@@ -135,6 +151,23 @@ const TEMPLATES: TemplateEntry[] = [
       ),
   },
   {
+    // The name band's other branch: too wide for one line at 30, so two at 24.
+    // Everything else is the 1D sample, so the two prints differ only in the
+    // band above the top red rule.
+    id: "6040-1d-long",
+    label: "6040 · 1D (long name)",
+    media: "6040",
+    build: (dbg) =>
+      buildScaleLabel6040(
+        {
+          ...SCALE_SAMPLE,
+          nameEn: SCALE_NAME_EN_LONG,
+          barcode: { kind: "ean13", data12: EAN13_12 },
+        },
+        { dbg },
+      ),
+  },
+  {
     // The dates straddle a New Year, so `formatScaleDates` has to print
     // DD/MM/YY on both and shrink them into the same pre-printed cells. This is
     // the branch that is easy to break and impossible to see on the 1D sample.
@@ -153,11 +186,17 @@ const TEMPLATES: TemplateEntry[] = [
       ),
   },
   {
+    // The PP payload carries a 30% markdown, so the name carries the tag the
+    // legacy scale puts in front of a marked-down item. The tag is prepended
+    // here, by the adapter — the template is handed one finished string.
     id: "6040-2d",
     label: "6040 · 2D",
     media: "6040",
     build: (dbg) =>
-      buildScaleLabel6040({ ...SCALE_SAMPLE, barcode: { kind: "pp", qrData: PP_QR } }, { dbg }),
+      buildScaleLabel6040(
+        { ...SCALE_SAMPLE, nameEn: SCALE_NAME_EN_TAGGED, barcode: { kind: "pp", qrData: PP_QR } },
+        { dbg },
+      ),
   },
   {
     id: "58100-1d",
