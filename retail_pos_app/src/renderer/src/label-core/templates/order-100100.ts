@@ -25,16 +25,24 @@
  * content column is.
  */
 
+import { estimateQrSize, fitSize, utf8Length } from "../measure";
 import { type Element, type Label } from "../model";
 import { textEl, type TemplateOptions } from "./scale-6040";
 
 export interface OrderLabelInput {
   orderNo: string;
-  /** Already formatted by the caller — the server's `dueAt` is never recomputed here. */
+  /**
+   * Already formatted by the caller — the server's `dueAt` is never recomputed
+   * here. The expected format is moment's `ddd Do MMM HH:mm`, e.g.
+   * `Thu 27th Aug 14:00`. Null or empty prints `-` rather than dropping the
+   * word: a due line that is simply absent reads as "no deadline".
+   */
   dueText?: string | null;
   nameKo: string;
   nameEn: string;
   qty: number;
+  /** Unit of measure printed beside the quantity, e.g. `ea`, `kg`. */
+  uom: string;
   /** One string per option, e.g. `Wasabi: Extra x1`. Wrapped and capped here. */
   optionLines: string[];
   orderQrData: string;
@@ -56,21 +64,76 @@ const OPTION_SIZE = 32;
 const OPTION_LH = 38;
 const OPTION_WRAP = 42;
 const QTY_SIZE = 68;
+/**
+ * Below this the quantity stops being the line you read from across a bench,
+ * which is the only reason it is set at 68 in the first place. A due date long
+ * enough to push past this prints slightly clipped rather than illegibly small.
+ */
+const QTY_MIN_SIZE = 40;
 const FOOTER_SIZE = 24;
 
 const BOX = 220;
+const BOX_THICK = 3;
 const BOX_Y = H - PAD - BOX;
 const BOX_LEFT_X = PAD;
 const BOX_RIGHT_X = W - PAD - BOX;
+/**
+ * Derived from the box top and the *asked* size, not the fitted one, so the
+ * line keeps its place on the label whether or not the due text shrank it.
+ */
 const QTY_Y = BOX_Y - 16 - QTY_SIZE;
 
 /** Caption inside the top of a symbol box, then the symbol under it. */
 const BOX_CAPTION_SIZE = 24;
 const BOX_CAPTION_DY = 6;
-const QR_DY = 34;
-const QR_MAG = 5;
-/** A version-4 QR at magnification 5 — 165 dots — with room to spare in the box. */
-const QR_ESTIMATED = 145;
+
+// ── QR sizing ──────────────────────────────────────────────────────────────
+//
+// Both symbols are *bottom*-anchored: see `QrAnchor` in ../model. Zebra
+// bottom-aligns ^BQ inside a box sized for the magnification's largest symbol,
+// so under ^FO the printed top edge moves with the payload length and a symbol
+// that fits the sample drifts out of its 220-dot box on a longer one. ^FT pins
+// the bottom-left corner instead and the symbol grows upward, which is the only
+// edge that has room here.
+//
+// The magnification is computed per payload rather than fixed, because the two
+// payloads are nowhere near the same size: the order QR is `order%%%<id>`
+// (~11 bytes → version 1, 21 modules) and the PP QR is the full JSON price
+// string (~124 bytes → version 6, 41 modules). One magnification cannot serve
+// both — the 5 this file used to hardcode drew a 105-dot order symbol lost in a
+// 220-dot box and a 205-dot PP symbol that overflowed it.
+//
+/** Border thickness plus a few dots of quiet zone, on every inner edge. */
+const QR_QUIET = 3;
+const QR_PAD = BOX_THICK + QR_QUIET;
+/** Clear air between the caption's baseline band and the top of the symbol. */
+const QR_CAPTION_GAP = 4;
+const QR_MAG_MIN = 2;
+const QR_MAG_MAX = 10;
+
+/** The symbol's bottom-left anchor, and the ceiling the caption leaves it. */
+const QR_BOTTOM_Y = BOX_Y + BOX - QR_PAD;
+const QR_TOP_LIMIT = BOX_Y + BOX_CAPTION_DY + BOX_CAPTION_SIZE + QR_CAPTION_GAP;
+const QR_MAX_W = BOX - QR_PAD * 2;
+const QR_MAX_H = QR_BOTTOM_Y - QR_TOP_LIMIT;
+
+/**
+ * The largest magnification whose estimated symbol fits the box interior.
+ *
+ * `estimateQrSize` is payload-aware — the same estimate `elementBounds` uses to
+ * derive a bottom-anchored symbol's top edge — so what this returns and what
+ * the debug outline draws cannot disagree. Stepping down rather than solving in
+ * closed form keeps the height test (which is what the caption constrains) and
+ * the width test in one place.
+ */
+export function qrMagForBox(data: string, maxW: number, maxH: number): number {
+  const bytes = utf8Length(data);
+  for (let mag = QR_MAG_MAX; mag > QR_MAG_MIN; mag -= 1) {
+    const side = estimateQrSize(mag, bytes);
+    if (side <= maxW && side <= maxH) return mag;
+  }
+  return QR_MAG_MIN;
+}
 
 /**
  * Greedy wrap on spaces, falling back to a hard break for a single long word.
@@ -105,16 +168,38 @@ export function fitOptionLines(lines: string[], maxLines: number): string[] {
   return [...lines.slice(0, cap - 1), `+${lines.length - (cap - 1)} more`];
 }
 
+/**
+ * The one line that carries both numbers someone packing needs: how many, and
+ * by when.
+ *
+ * They used to be two elements a hand's width apart — the quantity above the
+ * symbol boxes and a `Due …` line down between them — which is two places to
+ * look and one of them small. Joined, the due time inherits the quantity's
+ * 68-dot black and the footer keeps only the order number.
+ */
+export function orderQtyLine(qty: number, uom: string, dueText?: string | null): string {
+  const unit = uom.trim().toUpperCase();
+  const due = dueText?.trim();
+  return `${qty}${unit ? ` ${unit}` : ""} / ${due || "-"}`;
+}
+
 function symbolBox(x: number, caption: string, data: string): Element[] {
-  const qrX = x + Math.round((BOX - QR_ESTIMATED) / 2);
   return [
-    { kind: "box", x, y: BOX_Y, w: BOX, h: BOX, thick: 3 },
+    { kind: "box", x, y: BOX_Y, w: BOX, h: BOX, thick: BOX_THICK },
     textEl(x, BOX_Y + BOX_CAPTION_DY, caption, BOX_CAPTION_SIZE, "M", {
       width: BOX,
       lines: 1,
       align: "C",
     }),
-    { kind: "qr", x: qrX, y: BOX_Y + QR_DY, mag: QR_MAG, ec: "M", data },
+    {
+      kind: "qr",
+      x: x + QR_PAD,
+      y: QR_BOTTOM_Y,
+      mag: qrMagForBox(data, QR_MAX_W, QR_MAX_H),
+      anchor: "bottom",
+      ec: "M",
+      data,
+    },
   ];
 }
 
@@ -162,9 +247,16 @@ export function buildOrderLabel100100(
     y += OPTION_LH;
   }
 
-  // ── quantity ─────────────────────────────────────────────────────────────
+  // ── quantity and due, one line ───────────────────────────────────────────
+  //
+  // `fitSize` is the same measurement the name band and the scale label's date
+  // row fit against, uppercase ratio included — `EA` and a month abbreviation
+  // are most of this string, and capitals measure 0.63 em rather than 0.55.
+  // One line is the point of joining the two, so the block is `lines: 1` and
+  // the size steps down until the whole string fits `CONTENT_W`.
+  const qtyLine = orderQtyLine(input.qty, input.uom, input.dueText);
   elements.push(
-    textEl(PAD, QTY_Y, `QTY ${input.qty}`, QTY_SIZE, "BK", {
+    textEl(PAD, QTY_Y, qtyLine, fitSize(qtyLine, CONTENT_W, QTY_SIZE, QTY_MIN_SIZE), "BK", {
       width: CONTENT_W,
       lines: 1,
       align: "L",
@@ -177,20 +269,17 @@ export function buildOrderLabel100100(
     elements.push(...symbolBox(BOX_RIGHT_X, "PP", input.ppQrData));
   }
 
+  // The order number is all that is left between the boxes — the `Due …` line
+  // that used to sit under it now rides with the quantity — so it centres in
+  // the box band rather than hanging above where a second line once was.
   const footerX = BOX_LEFT_X + BOX + 12;
   const footerW = BOX_RIGHT_X - footerX - 12;
-  const footerY = BOX_Y + BOX / 2 - 34;
-  const due = input.dueText?.trim();
+  const footerY = BOX_Y + (BOX - FOOTER_SIZE) / 2;
 
   elements.push(
     textEl(footerX, footerY, input.orderNo.trim() || "-", FOOTER_SIZE, "B", {
       width: footerW,
       lines: 1,
-      align: "C",
-    }),
-    textEl(footerX, footerY + 32, due ? `Due ${due}` : "Due -", FOOTER_SIZE, "M", {
-      width: footerW,
-      lines: 2,
       align: "C",
     }),
   );

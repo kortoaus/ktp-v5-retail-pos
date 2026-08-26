@@ -183,17 +183,19 @@ const PRICE_SAMPLE = {
 
 const ORDER_SAMPLE = {
   orderNo: "SASH-0412",
-  dueText: "27/08 14:00",
+  // moment `ddd Do MMM HH:mm`, which is what the order screens format with.
+  dueText: "Thu 27th Aug 14:00",
   nameKo: NAME_KO,
   nameEn: "Assorted Sashimi Platter",
   qty: 2,
+  uom: "ea",
   optionLines: [
     "Wasabi: Extra x1",
     "Soy Sauce: Low sodium x2",
     "Cut: Thick x1",
     "Note: No coriander x1",
   ],
-  orderQrData: "https://ktpv5.local/order/SASH-0412",
+  orderQrData: "order%%%412",
   ppQrData: PP_QR,
 };
 
