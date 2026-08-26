@@ -10,22 +10,37 @@ import {
   parseDirectoryListing,
   parsePrinterIdentity,
   proofLabel,
+  PROOF_BUILTIN_REFERENCE,
+  PROOF_VERDICT,
   type DirectoryListing,
 } from "./commands";
 import { loadFonts, selectFonts, type BundledFont } from "./catalog";
 import { query, send, withConnection, type ConnectOptions } from "./transport";
 import {
   PrinterBusyError,
+  type FontState,
   type FontStatus,
   type FontStatusEntry,
   type InstallOptions,
   type InstallResult,
+  type PrinterCapabilities,
+  type PrinterIdentity,
   type PrinterTarget,
+  type StatusOptions,
   type TestPrintOptions,
 } from "./types";
 
 const CHUNK_SIZE = 64 * 1024;
-const DEFAULT_DPMM = 8; // 203 dpi, the common ZD421
+const DEFAULT_DPMM = 8; // 203 dpi — the common ZD421, and every Bixolon XD3/XD5 seen so far
+
+/** What a blind status says, and what the panel repeats to the user. */
+const BLIND_STATUS_MESSAGE =
+  "This printer answers no status query, so what it holds cannot be read. " +
+  "Install and confirm from the proof label.";
+
+const BLIND_INSTALL_MESSAGE =
+  "Sent, but this printer reports nothing back — check the proof label that just printed: " +
+  "if the Korean sample rendered, the install is good.";
 
 export interface ZplFontServiceOptions {
   /** Directory holding the bundled .ttf files. */
@@ -38,12 +53,15 @@ export interface ZplFontServiceOptions {
    * printer answers nothing at all — a socket that accepts but does not talk.
    * It is the whole cost of `status()` against such a printer, which is a
    * spinner someone is watching, so it stays short.
+   *
+   * A Bixolon in BPL-Z hits it on every call by design, which is why blind
+   * mode asks ~HI and stops rather than going on to ^HW: one timeout, not two.
    */
   queryTimeoutMs?: number;
 }
 
 export interface ZplFontService {
-  status(target: PrinterTarget): Promise<FontStatus>;
+  status(target: PrinterTarget, opts?: StatusOptions): Promise<FontStatus>;
   install(target: PrinterTarget, opts?: InstallOptions): Promise<InstallResult>;
   testPrint(target: PrinterTarget, opts?: TestPrintOptions): Promise<void>;
   /**
@@ -78,12 +96,74 @@ export function createZplFontService(opts: ZplFontServiceOptions): ZplFontServic
     return parseDirectoryListing(raw);
   }
 
-  async function readIdentity(target: PrinterTarget) {
+  /**
+   * Ask who the printer is, and — the point of this — whether it answers at all.
+   *
+   * A Bixolon XD3/XD5 in BPL-Z accepts the connection, accepts ~HI, and sends
+   * back nothing, ever. That is not a broken printer and not a timeout worth
+   * reporting: it is a printer that will take the fonts and print hangul but
+   * will never confirm either. Silence is therefore classified, not thrown, so
+   * install and testPrint can switch to working blind.
+   *
+   * Failures to *reach* the printer still propagate — an unplugged printer and
+   * a mute one must not look the same.
+   */
+  async function probe(
+    target: PrinterTarget,
+  ): Promise<{ responds: boolean; identity: PrinterIdentity | null }> {
     const raw = await query(connectOpts(target), hostIdentification(), {
       idleMs: 300,
       maxMs: queryTimeoutMs,
     });
-    return parsePrinterIdentity(raw);
+    // Nothing at all within both timeouts, versus bytes we could not parse:
+    // the first is blind mode, the second is a Zebra with an odd ~HI reply.
+    if (!raw.trim()) return { responds: false, identity: null };
+    return { responds: true, identity: parsePrinterIdentity(raw) };
+  }
+
+  function capabilitiesOf(
+    responds: boolean,
+    identity: PrinterIdentity | null,
+    dpiOverride?: number,
+  ): PrinterCapabilities {
+    const caps: PrinterCapabilities = { responds };
+    if (identity?.model) caps.model = identity.model;
+    const dpi = identity?.dpi ?? dpiOverride;
+    if (dpi) caps.dpi = dpi;
+    return caps;
+  }
+
+  /**
+   * The status of a printer that will not talk: bundled fonts, no findings.
+   *
+   * `state` carries the whole distinction — `unknown` before an install (we
+   * have never sent these bytes), `unverified` after one (we sent them and the
+   * printer took them, but only the proof label can say they landed).
+   */
+  function blindStatus(
+    bundled: BundledFont[],
+    state: Extract<FontState, "unknown" | "unverified">,
+    dpiOverride: number | undefined,
+    message: string,
+  ): FontStatus {
+    return {
+      identity: null,
+      capabilities: capabilitiesOf(false, null, dpiOverride),
+      fonts: bundled.map((font) => ({
+        weight: font.weight,
+        sourceFile: font.sourceFile,
+        objectName: font.objectName,
+        filename: font.filename,
+        bundledSize: font.size,
+        installedSize: null,
+        state,
+      })),
+      // Not counted as installed either way: nothing has confirmed anything.
+      installedCount: 0,
+      totalCount: bundled.length,
+      freeBytes: null,
+      message,
+    };
   }
 
   function describe(bundled: BundledFont[], listing: DirectoryListing): FontStatusEntry[] {
@@ -103,14 +183,22 @@ export function createZplFontService(opts: ZplFontServiceOptions): ZplFontServic
     });
   }
 
-  async function status(target: PrinterTarget): Promise<FontStatus> {
+  async function status(target: PrinterTarget, statusOpts: StatusOptions = {}): Promise<FontStatus> {
     const bundled = await loadFonts(fontDir);
-    const identity = await readIdentity(target).catch(() => null);
+    const { responds, identity } = await probe(target);
+
+    // ^HW would be a second silent timeout on a printer that just proved it
+    // does not answer queries, so it is not even asked.
+    if (!responds) {
+      return blindStatus(bundled, "unknown", statusOpts.dpi, BLIND_STATUS_MESSAGE);
+    }
+
     const listing = await readListing(target);
     const fonts = describe(bundled, listing);
 
     return {
       identity,
+      capabilities: capabilitiesOf(true, identity, statusOpts.dpi),
       fonts,
       installedCount: fonts.filter((f) => f.state === "installed").length,
       totalCount: fonts.length,
@@ -154,6 +242,53 @@ export function createZplFontService(opts: ZplFontServiceOptions): ZplFontServic
     });
   }
 
+  /** Stream a batch of fonts in order, reporting progress across the batch. */
+  async function streamAll(
+    target: PrinterTarget,
+    pending: BundledFont[],
+    onProgress: InstallOptions["onProgress"],
+  ): Promise<void> {
+    for (const [i, font] of pending.entries()) {
+      await pushFont(target, font, (sentBytes) =>
+        onProgress?.({
+          index: i + 1,
+          count: pending.length,
+          weight: font.weight,
+          filename: font.filename,
+          sentBytes,
+          totalBytes: font.size,
+        }),
+      );
+    }
+  }
+
+  function resolveDpmm(dpi: number | undefined, identity: PrinterIdentity | null): number {
+    if (dpi) return nearestDpmm(dpi / 25.4);
+    return identity?.dpmm ?? DEFAULT_DPMM;
+  }
+
+  /**
+   * Print the label that shows whether the fonts render.
+   *
+   * `blind` adds the two ^A0 footer lines. On a printer that reports nothing
+   * this label is the entire verification step, so it has to explain itself to
+   * whoever picks it up rather than assume they know what they are looking at.
+   */
+  async function sendProof(
+    target: PrinterTarget,
+    fonts: { filename: string; weight: string }[],
+    opts: { dpmm: number; widthMm?: number; heightMm?: number; blind: boolean },
+  ): Promise<void> {
+    const zpl = proofLabel({
+      dpmm: opts.dpmm,
+      widthMm: opts.widthMm ?? 100,
+      heightMm: opts.heightMm,
+      fonts,
+      footer: opts.blind ? [PROOF_BUILTIN_REFERENCE, PROOF_VERDICT] : undefined,
+    });
+    await send(connectOpts(target), Buffer.from(zpl, "utf8"));
+  }
+
   async function install(
     target: PrinterTarget,
     installOpts: InstallOptions = {},
@@ -166,6 +301,35 @@ export function createZplFontService(opts: ZplFontServiceOptions): ZplFontServic
     try {
       const specs = selectFonts(installOpts.weights);
       const bundled = await loadFonts(fontDir, specs);
+      const { responds, identity } = await probe(target);
+
+      // Blind install. No ^HW beforehand to decide what to skip and none after
+      // to verify, because this printer answers neither — every requested
+      // weight is sent, and the proof label goes out in the same breath so the
+      // user is never left holding an unverifiable "done".
+      //
+      // Still inside the busy set: that proof print shares the port with the
+      // ~DY stream that just finished, and it must not race a label from
+      // anywhere else.
+      if (!responds) {
+        await streamAll(target, bundled, installOpts.onProgress);
+        await sendProof(target, bundled, {
+          dpmm: resolveDpmm(installOpts.dpi, null),
+          widthMm: installOpts.widthMm,
+          heightMm: installOpts.heightMm,
+          blind: true,
+        });
+
+        return {
+          sent: bundled.map(toSpec),
+          skipped: [],
+          elapsedMs: Date.now() - started,
+          status: blindStatus(bundled, "unverified", installOpts.dpi, BLIND_INSTALL_MESSAGE),
+          verified: false,
+          message: BLIND_INSTALL_MESSAGE,
+        };
+      }
+
       const listing = await readListing(target);
       const onPrinter = new Map(listing.entries.map((e) => [e.filename, e.size]));
 
@@ -176,22 +340,11 @@ export function createZplFontService(opts: ZplFontServiceOptions): ZplFontServic
         else pending.push(font);
       }
 
-      for (const [i, font] of pending.entries()) {
-        await pushFont(target, font, (sentBytes) =>
-          installOpts.onProgress?.({
-            index: i + 1,
-            count: pending.length,
-            weight: font.weight,
-            filename: font.filename,
-            sentBytes,
-            totalBytes: font.size,
-          }),
-        );
-      }
+      await streamAll(target, pending, installOpts.onProgress);
 
       // Re-read rather than trust the transfer: the printer is the only thing
       // that can say an object landed at its declared size.
-      const after = await status(target);
+      const after = await status(target, { dpi: installOpts.dpi });
       const bad = after.fonts.filter(
         (f) => pending.some((p) => p.filename === f.filename) && f.state !== "installed",
       );
@@ -208,6 +361,7 @@ export function createZplFontService(opts: ZplFontServiceOptions): ZplFontServic
         skipped: skipped.map(toSpec),
         elapsedMs: Date.now() - started,
         status: after,
+        verified: true,
       };
     } finally {
       busy.delete(id);
@@ -218,27 +372,30 @@ export function createZplFontService(opts: ZplFontServiceOptions): ZplFontServic
     const id = key(target);
     if (busy.has(id)) throw new PrinterBusyError(target);
 
-    const current = await status(target);
+    const current = await status(target, { dpi: printOpts.dpi });
     const wanted = selectFonts(printOpts.weights);
-    const printable = current.fonts.filter(
-      (f) => f.state === "installed" && wanted.some((w) => w.filename === f.filename),
-    );
+    const blind = !current.capabilities.responds;
+
+    // On a printer that reports nothing, "is it installed" is exactly the
+    // question the label exists to answer — refusing to print until something
+    // says it is installed would mean never printing at all. So any bundled
+    // weight may be attempted, and a blank row is the answer.
+    const printable = blind
+      ? wanted.map((w) => ({ filename: w.filename, weight: w.weight }))
+      : current.fonts.filter(
+          (f) => f.state === "installed" && wanted.some((w) => w.filename === f.filename),
+        );
+
     if (!printable.length) {
       throw new Error("no installed font to print with — install first");
     }
 
-    const dpmm = printOpts.dpi
-      ? nearestDpmm(printOpts.dpi / 25.4)
-      : (current.identity?.dpmm ?? DEFAULT_DPMM);
-
-    const zpl = proofLabel({
-      dpmm,
-      widthMm: printOpts.widthMm ?? 100,
+    await sendProof(target, printable, {
+      dpmm: resolveDpmm(printOpts.dpi, current.identity),
+      widthMm: printOpts.widthMm,
       heightMm: printOpts.heightMm,
-      fonts: printable.map((f) => ({ filename: f.filename, weight: f.weight })),
+      blind,
     });
-
-    await send(connectOpts(target), Buffer.from(zpl, "utf8"));
   }
 
   return {

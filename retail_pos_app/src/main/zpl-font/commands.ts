@@ -166,18 +166,39 @@ export interface ProofLabelOptions {
   fonts: ProofLabelFont[];
   /** Sample line printed with each font. */
   sample?: string;
+  /**
+   * Lines printed under the samples in the printer's own ^A0 font.
+   *
+   * Used by blind mode: on a printer that answers no query the label is the
+   * only evidence there is, so it has to carry its own verdict.
+   */
+  footer?: string[];
 }
 
 export const PROOF_SAMPLE = "가나다 한글 ABC 123";
 
 /**
+ * A line the printer can always draw, whatever happened to the download.
+ *
+ * On a blind install a wholly blank label is ambiguous — no font, no media, no
+ * power. This row coming out proves the label itself printed, so blank hangul
+ * above it means the font and nothing else.
+ */
+export const PROOF_BUILTIN_REFERENCE = "Builtin A0 font reference: ABC 123";
+
+/** The verdict a blind install leaves the user to read off the label. */
+export const PROOF_VERDICT = "If Korean shows above, install OK";
+
+/**
  * One label proving the downloaded fonts render.
  *
- * Two things are deliberate. The caption for each row uses the printer's own
- * ^A0 font, so a row whose sample is blank still says which weight failed. And
- * every row is packed into the top of the label rather than spread over it,
+ * Three things are deliberate. The caption for each row uses the printer's own
+ * ^A0 font, so a row whose sample is blank still says which weight failed.
+ * Every row is packed into the top of the label rather than spread over it,
  * because short media clips from the bottom — without that, "the font did not
- * render" and "the paper ran out" produce the same blank space.
+ * render" and "the paper ran out" produce the same blank space. And `footer`
+ * lines are ^A0 too: on a printer that answers no query this label is the whole
+ * verification, so it has to be readable even when every download failed.
  */
 export function proofLabel(opts: ProofLabelOptions): string {
   const { dpmm, widthMm, heightMm, fonts } = opts;
@@ -210,6 +231,11 @@ export function proofLabel(opts: ProofLabelOptions): string {
       `^FO${margin},${y}^A@N,${glyph},${glyph},E:${font.filename}^FH^FD${escapeFieldData(sample)}^FS`,
     );
     y += glyph + s(12);
+  }
+
+  for (const line of opts.footer ?? []) {
+    out.push(`^FO${margin},${y}^A0N,${s(18)},${s(18)}^FH^FD${escapeFieldData(line)}^FS`);
+    y += s(22);
   }
 
   out.push("^XZ");

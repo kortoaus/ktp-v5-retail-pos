@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { MockPrinter } from "./mock-printer.mjs";
 import { createZplFontService } from "./service.ts";
 import { FONTS } from "./catalog.ts";
-import { PROOF_SAMPLE } from "./commands.ts";
+import { PROOF_SAMPLE, PROOF_BUILTIN_REFERENCE, PROOF_VERDICT } from "./commands.ts";
 
 /** The real bundled fonts that ship in the installer. */
 const REAL_FONT_DIR = path.resolve(
@@ -21,7 +21,7 @@ const REAL_FONT_DIR = path.resolve(
  *
  * The payload is packed with ZPL control characters: if the transport were
  * escaping or splitting on them, the stored object would come back the wrong
- * size. Small files keep the tests quick — the real ones are ~6MB each.
+ * size. Small files keep the tests quick — the real ones are ~2.5MB each.
  */
 async function fakeFontDir(sizeBytes = 40_000) {
   const dir = await mkdtemp(path.join(tmpdir(), "zpl-font-"));
@@ -330,5 +330,202 @@ test("the fonts that actually ship are present and are TrueType", async () => {
     }
     const total = status.fonts.reduce((n, f) => n + f.bundledSize, 0);
     assert.ok(total < 32 * 1024 * 1024, "the three fonts must fit in printer flash");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Blind mode — printers that take the fonts but answer no query
+//
+// A Bixolon XD3/XD5 in BPL-Z accepts ~DY downloads and draws ^A@ + ^CI28
+// hangul exactly like a Zebra, and answers ~HI / ^HW / ^HH with no bytes at
+// all. Verified on hardware 2026-08-26. Every query-shaped certainty the rest
+// of this file relies on is unavailable there, so the proof label replaces it.
+// ---------------------------------------------------------------------------
+
+const blind = { silent: true };
+
+test("a silent printer is classified as not responding, not treated as a failure", async () => {
+  const fontDir = await fakeFontDir();
+  await withPrinter(blind, async (printer) => {
+    const service = createZplFontService({ fontDir, connect: fastConnect, queryTimeoutMs: fastQuery });
+    const status = await service.status(printer.target);
+
+    assert.equal(status.capabilities.responds, false);
+    assert.equal(status.identity, null);
+    assert.equal(status.capabilities.dpi, undefined, "no dpi may be invented");
+    assert.equal(status.freeBytes, null);
+    assert.equal(status.totalCount, 3);
+    assert.equal(status.installedCount, 0);
+    assert.deepEqual(new Set(status.fonts.map((f) => f.state)), new Set(["unknown"]));
+    assert.match(status.message, /proof label/i);
+  });
+});
+
+test("a silent printer takes the dpi it is given and nothing more", async () => {
+  const fontDir = await fakeFontDir();
+  await withPrinter(blind, async (printer) => {
+    const service = createZplFontService({ fontDir, connect: fastConnect, queryTimeoutMs: fastQuery });
+    const status = await service.status(printer.target, { dpi: 300 });
+
+    assert.equal(status.capabilities.dpi, 300);
+    assert.equal(status.capabilities.model, undefined);
+  });
+});
+
+test("a printer that answers is still reported as responding, with its own dpi", async () => {
+  const fontDir = await fakeFontDir();
+  await withPrinter({}, async (printer) => {
+    const service = createZplFontService({ fontDir, connect: fastConnect, queryTimeoutMs: fastQuery });
+    // The override must not win over what the printer says about itself.
+    const status = await service.status(printer.target, { dpi: 300 });
+
+    assert.equal(status.capabilities.responds, true);
+    assert.equal(status.capabilities.dpi, 203);
+    assert.equal(status.capabilities.model, "ZD421-200dpi");
+    assert.equal(status.message, undefined);
+  });
+});
+
+test("install on a silent printer streams every weight and proves it with a label", async () => {
+  const fontDir = await fakeFontDir();
+  await withPrinter(blind, async (printer) => {
+    const service = createZplFontService({ fontDir, connect: fastConnect, queryTimeoutMs: fastQuery });
+    const result = await service.install(printer.target, { widthMm: 100 });
+
+    assert.equal(result.sent.length, 3);
+    assert.equal(result.skipped.length, 0);
+    assert.equal(result.verified, false, "nothing on this printer can verify an install");
+    assert.match(result.message, /proof label/i);
+
+    for (const font of result.status.fonts) {
+      assert.equal(font.state, "unverified");
+      assert.equal(font.installedSize, null);
+      // The bytes did land, whatever the printer will admit to.
+      assert.equal(printer.objects.get(font.filename), font.bundledSize);
+    }
+    assert.equal(result.status.installedCount, 0, "unverified is not installed");
+  });
+});
+
+test("the proof label a blind install prints carries its own verdict", async () => {
+  const fontDir = await fakeFontDir();
+  await withPrinter(blind, async (printer) => {
+    const service = createZplFontService({ fontDir, connect: fastConnect, queryTimeoutMs: fastQuery });
+    await service.install(printer.target, { widthMm: 100 });
+
+    const job = printer.lastPrintJob;
+    assert.ok(job, "a blind install must print a proof label unasked");
+    assert.match(job, /\^CI28/);
+    assert.match(job, /\^PW800/);
+    for (const spec of FONTS) {
+      const row = job.split("\n").find((l) => l.includes(`E:${spec.filename}`));
+      assert.ok(row, `${spec.filename} missing from the label`);
+      assert.match(row, /\^A@N/);
+    }
+    assert.ok(job.includes(PROOF_SAMPLE));
+    // Built-in font lines: these print even if every download failed, which is
+    // what separates "the font is wrong" from "the label never came out".
+    assert.ok(job.includes(PROOF_BUILTIN_REFERENCE));
+    assert.ok(job.includes(PROOF_VERDICT));
+    assert.match(job.split("\n").find((l) => l.includes(PROOF_VERDICT)), /\^A0N/);
+  });
+});
+
+test("a blind install does not throw, and repeating it sends everything again", async () => {
+  // With no directory to read there is nothing to skip against — force is moot.
+  const fontDir = await fakeFontDir();
+  await withPrinter(blind, async (printer) => {
+    const service = createZplFontService({ fontDir, connect: fastConnect, queryTimeoutMs: fastQuery });
+    await service.install(printer.target);
+
+    const second = await service.install(printer.target);
+    assert.equal(second.sent.length, 3);
+    assert.equal(second.skipped.length, 0);
+  });
+});
+
+test("a blind install still fails loudly when the printer stops taking bytes", async () => {
+  // Silence about status is not silence about transport: a transfer that dies
+  // is a real error and must not be dressed up as an unverified success.
+  const fontDir = await fakeFontDir(200_000);
+  await withPrinter({ silent: true, failAfterBytes: 20_000 }, async (printer) => {
+    const service = createZplFontService({ fontDir, connect: fastConnect, queryTimeoutMs: fastQuery });
+    await assert.rejects(() => service.install(printer.target));
+    assert.equal(printer.objects.size, 0);
+  });
+});
+
+test("testPrint on a silent printer is allowed with nothing installed", async () => {
+  // "Is it installed" is the question this label answers; refusing to print
+  // until something says yes would mean never printing at all.
+  const fontDir = await fakeFontDir();
+  await withPrinter(blind, async (printer) => {
+    const service = createZplFontService({ fontDir, connect: fastConnect, queryTimeoutMs: fastQuery });
+    await service.testPrint(printer.target, { widthMm: 70 });
+
+    const job = printer.lastPrintJob;
+    assert.match(job, /\^PW560/);
+    for (const spec of FONTS) {
+      assert.ok(job.includes(`E:${spec.filename}`), `${spec.filename} missing from the label`);
+    }
+    assert.ok(job.includes(PROOF_VERDICT));
+  });
+});
+
+test("testPrint on a silent printer honours a single requested weight", async () => {
+  const fontDir = await fakeFontDir();
+  await withPrinter(blind, async (printer) => {
+    const service = createZplFontService({ fontDir, connect: fastConnect, queryTimeoutMs: fastQuery });
+    await service.testPrint(printer.target, { widthMm: 100, weights: ["Bold"] });
+
+    const job = printer.lastPrintJob;
+    assert.ok(job.includes("E:NOTOKRB.TTF"));
+    assert.ok(!job.includes("E:NOTOKRM.TTF"));
+  });
+});
+
+test("a blind proof label assumes 203 dpi until told otherwise", async () => {
+  const fontDir = await fakeFontDir();
+  await withPrinter(blind, async (printer) => {
+    const service = createZplFontService({ fontDir, connect: fastConnect, queryTimeoutMs: fastQuery });
+
+    await service.testPrint(printer.target, { widthMm: 100 });
+    assert.match(printer.lastPrintJob, /\^PW800/);
+
+    await service.testPrint(printer.target, { widthMm: 100, dpi: 300 });
+    assert.match(printer.lastPrintJob, /\^PW1200/);
+  });
+});
+
+test("a printer that answers keeps the plain proof label, with no blind footer", async () => {
+  const fontDir = await fakeFontDir();
+  await withPrinter({}, async (printer) => {
+    const service = createZplFontService({ fontDir, connect: fastConnect, queryTimeoutMs: fastQuery });
+    await service.install(printer.target, { weights: ["Medium"] });
+
+    // A verified install prints nothing by itself — that behaviour is unchanged.
+    assert.equal(printer.lastPrintJob, undefined);
+
+    await service.testPrint(printer.target, { widthMm: 100, weights: ["Medium"] });
+    assert.ok(!printer.lastPrintJob.includes(PROOF_VERDICT));
+    assert.ok(!printer.lastPrintJob.includes(PROOF_BUILTIN_REFERENCE));
+  });
+});
+
+test("the proof print after a blind install stays inside the busy guard", async () => {
+  // The ~DY stream and the proof share one port; anything else printing to it
+  // in between is swallowed by the font transfer and lost.
+  const fontDir = await fakeFontDir(400_000);
+  await withPrinter(blind, async (printer) => {
+    const service = createZplFontService({ fontDir, connect: fastConnect, queryTimeoutMs: fastQuery });
+
+    const running = service.install(printer.target);
+    assert.equal(service.isBusy(printer.target), true);
+    await assert.rejects(() => service.install(printer.target), /already running/);
+    await assert.rejects(() => service.testPrint(printer.target), /already running/);
+
+    await running;
+    assert.equal(service.isBusy(printer.target), false);
+    assert.ok(printer.lastPrintJob.includes(PROOF_VERDICT));
   });
 });

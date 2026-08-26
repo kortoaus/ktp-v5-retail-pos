@@ -3,9 +3,10 @@
  *
  * Separate from the app's existing label transport on purpose. `ipc/label.ts`
  * writes a whole label in one `socket.write()` under a 5s timeout, which is
- * right for a few kilobytes and impossible for a 6MB font: at the ~560 KB/s a
- * ZD421 actually accepts, one weight takes about eleven seconds. This layer
- * streams with backpressure and bounds each chunk instead.
+ * right for a few kilobytes and impossible for a 2.5MB font: at the ~600 KB/s a
+ * ZD421 accepts, one weight takes about four seconds — and a Bixolon XD3/XD5
+ * takes about thirteen at ~195 KB/s. This layer streams with backpressure and
+ * bounds each chunk instead.
  */
 
 import net from "node:net";

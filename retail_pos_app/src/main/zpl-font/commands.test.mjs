@@ -11,6 +11,8 @@ import {
   parsePrinterIdentity,
   proofLabel,
   PROOF_SAMPLE,
+  PROOF_BUILTIN_REFERENCE,
+  PROOF_VERDICT,
 } from "./commands.ts";
 
 test("downloadObjectHeader matches the form in the ZPL guide", () => {
@@ -161,6 +163,36 @@ test("proofLabel keeps the sample inside the printable width", () => {
 test("proofLabel scales layout for a 300 dpi printer", () => {
   const zpl = proofLabel({ dpmm: 12, widthMm: 100, fonts: FONTS });
   assert.match(zpl, /\^PW1200/);
+});
+
+test("proofLabel draws footer lines with the built-in font", () => {
+  // Blind mode's whole verification is this label, so the lines explaining it
+  // must come from a font the printer already has — otherwise a failed
+  // download takes the explanation down with it.
+  const zpl = proofLabel({
+    dpmm: 8,
+    widthMm: 100,
+    fonts: FONTS,
+    footer: [PROOF_BUILTIN_REFERENCE, PROOF_VERDICT],
+  });
+  for (const line of [PROOF_BUILTIN_REFERENCE, PROOF_VERDICT]) {
+    const row = zpl.split("\n").find((l) => l.includes(line));
+    assert.ok(row, `no footer row for ${JSON.stringify(line)}`);
+    assert.match(row, /\^A0N/);
+    assert.doesNotMatch(row, /\^A@/);
+  }
+});
+
+test("proofLabel omits the footer entirely when none is given", () => {
+  const zpl = proofLabel({ dpmm: 8, widthMm: 100, fonts: FONTS });
+  assert.ok(!zpl.includes(PROOF_VERDICT));
+});
+
+test("proofLabel puts the footer below every sample", () => {
+  const zpl = proofLabel({ dpmm: 8, widthMm: 100, fonts: FONTS, footer: [PROOF_VERDICT] });
+  const yOf = (needle) =>
+    Number(zpl.split("\n").find((l) => l.includes(needle)).match(/\^FO\d+,(\d+)/)[1]);
+  assert.ok(yOf(PROOF_VERDICT) > yOf(`E:${FONTS.at(-1).filename}`));
 });
 
 test("proofLabel escapes a caller-supplied sample", () => {

@@ -147,7 +147,14 @@ export interface ZplFontTarget {
   port: number
 }
 
-export type ZplFontState = 'installed' | 'missing' | 'mismatch'
+export type ZplFontState =
+  | 'installed'
+  | 'missing'
+  | 'mismatch'
+  // A printer that answers no status query: 'unknown' before an install,
+  // 'unverified' after one. Bixolon XD3/XD5 in BPL-Z is the whole reason.
+  | 'unknown'
+  | 'unverified'
 
 export interface ZplFontStatusEntry {
   weight: string
@@ -166,12 +173,21 @@ export interface ZplFontPrinterIdentity {
   dpi: number
 }
 
+export interface ZplFontCapabilities {
+  /** False for a printer that never answers ~HI / ^HW — work blind. */
+  responds: boolean
+  model?: string
+  dpi?: number
+}
+
 export interface ZplFontStatus {
   identity: ZplFontPrinterIdentity | null
+  capabilities: ZplFontCapabilities
   fonts: ZplFontStatusEntry[]
   installedCount: number
   totalCount: number
   freeBytes: number | null
+  message?: string
 }
 
 export interface ZplFontInstallProgress {
@@ -193,6 +209,9 @@ export interface ZplFontInstallResult {
   skipped: { weight: string; filename: string }[]
   elapsedMs: number
   status: ZplFontStatus
+  /** False when the printer could not be re-read — the proof label is the check. */
+  verified: boolean
+  message?: string
 }
 
 export type ZplFontResult<T> = { ok: true; data: T } | { ok: false; message: string }
@@ -201,6 +220,10 @@ export interface ZplFontInstallRequest {
   target: { host: string; port: number }
   force?: boolean
   weights?: string[]
+  /** Resolution and media for the proof label a blind install prints. */
+  dpi?: number
+  widthMm?: number
+  heightMm?: number
 }
 
 export interface ZplFontTestPrintRequest {
@@ -239,10 +262,10 @@ export interface ElectronAPI {
     request: EscposControlLineMatrixRequest,
   ) => Promise<EscposControlLineMatrixResult>
 
-  zplFontStatus: (target: {
-    host: string
-    port: number
-  }) => Promise<ZplFontResult<ZplFontStatus>>
+  zplFontStatus: (
+    target: { host: string; port: number },
+    dpi?: number,
+  ) => Promise<ZplFontResult<ZplFontStatus>>
   zplFontInstall: (
     request: ZplFontInstallRequest,
   ) => Promise<ZplFontResult<ZplFontInstallResult>>

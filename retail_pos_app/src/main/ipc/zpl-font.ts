@@ -30,6 +30,13 @@ export interface ZplFontInstallRequest {
   target: PrinterTarget;
   force?: boolean;
   weights?: string[];
+  /**
+   * Resolution and media for the proof label a blind install prints. A printer
+   * that answers ~HI reports its own resolution and ignores the dpi.
+   */
+  dpi?: number;
+  widthMm?: number;
+  heightMm?: number;
 }
 
 export interface ZplFontTestPrintRequest {
@@ -95,9 +102,9 @@ function fail(err: unknown): { ok: false; message: string } {
 export function registerZplFontHandlers(): void {
   ipcMain.handle(
     ZPL_FONT_CHANNELS.status,
-    async (_event, target: PrinterTarget): Promise<ZplFontResult<FontStatus>> => {
+    async (_event, target: PrinterTarget, dpi?: number): Promise<ZplFontResult<FontStatus>> => {
       try {
-        return { ok: true, data: await getService().status(target) };
+        return { ok: true, data: await getService().status(target, { dpi }) };
       } catch (err) {
         return fail(err);
       }
@@ -112,6 +119,9 @@ export function registerZplFontHandlers(): void {
         const data = await getService().install(request.target, {
           force: request.force,
           weights: request.weights,
+          dpi: request.dpi,
+          widthMm: request.widthMm,
+          heightMm: request.heightMm,
           onProgress: (progress: InstallProgress) => {
             if (sender.isDestroyed()) return;
             sender.send(ZPL_FONT_CHANNELS.progress, { target: request.target, progress });

@@ -9,6 +9,11 @@
  *
  * The only thing outside that knows about it is `ipc/zpl-font.ts`, which
  * resolves the packaged font directory and adapts these calls to IPC.
+ *
+ * Two printer families are supported and they differ in one way that shapes
+ * this whole surface: a Zebra answers ~HI and ^HW, a Bixolon XD3/XD5 in BPL-Z
+ * answers nothing while accepting everything. `FontStatus.capabilities.responds`
+ * is that distinction; see README.md for what changes on each side of it.
  */
 
 export { createZplFontService } from "./service";
@@ -20,6 +25,8 @@ export {
   escapeFieldData,
   proofLabel,
   PROOF_SAMPLE,
+  PROOF_BUILTIN_REFERENCE,
+  PROOF_VERDICT,
   assertObjectName,
 } from "./commands";
 
@@ -32,7 +39,9 @@ export type {
   InstallOptions,
   InstallProgress,
   InstallResult,
+  PrinterCapabilities,
   PrinterIdentity,
   PrinterTarget,
+  StatusOptions,
   TestPrintOptions,
 } from "./types";

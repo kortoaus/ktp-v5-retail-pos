@@ -61,7 +61,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ): Promise<EscposControlLineMatrixResult> =>
     ipcRenderer.invoke('escpos:test-control-lines', request),
 
-  zplFontStatus: (target: ZplFontTarget) => ipcRenderer.invoke('zpl-font:status', target),
+  zplFontStatus: (target: ZplFontTarget, dpi?: number) =>
+    ipcRenderer.invoke('zpl-font:status', target, dpi),
   zplFontInstall: (request: ZplFontInstallRequest) =>
     ipcRenderer.invoke('zpl-font:install', request),
   zplFontTestPrint: (request: ZplFontTestPrintRequest) =>

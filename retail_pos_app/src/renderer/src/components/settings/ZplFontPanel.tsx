@@ -27,6 +27,15 @@ const MEDIA_MM: Record<MediaSize, { widthMm: number; heightMm: number }> = {
   "100100": { widthMm: 100, heightMm: 100 },
 };
 
+/** What the printer runs at when it will not say — every unit seen so far. */
+const DEFAULT_DPI = 203;
+
+/**
+ * Rough transfer rates, measured on hardware, used only for the button's
+ * time estimate. A Bixolon is about a third the speed of a Zebra.
+ */
+const BYTES_PER_SEC = { responds: 600_000, blind: 195_000 };
+
 function formatMb(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 }
@@ -37,12 +46,29 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<ZplFontInstallProgress | null>(null);
   const [message, setMessage] = useState("");
+  // Only consulted for a printer that will not report its own resolution.
+  const [dpi, setDpi] = useState(String(DEFAULT_DPI));
+
+  const dpiValue = Number(dpi) >= 100 && Number(dpi) <= 1200 ? Number(dpi) : DEFAULT_DPI;
+
+  /**
+   * The printer answers no status query — a Bixolon XD3/XD5 in BPL-Z.
+   *
+   * It takes the fonts and prints hangul like any Zebra, it just never confirms
+   * anything, so every certainty below has to come off a proof label instead.
+   */
+  const blind = status !== null && !status.capabilities.responds;
 
   // The row stays mounted while its host is edited, so identity is captured per
   // call rather than per render — a check started against one address must not
   // write its result into a row now pointing somewhere else.
   const targetRef = useRef({ host, port });
   targetRef.current = { host, port };
+
+  // Read through a ref for the same reason: putting the dpi in `check`'s deps
+  // would fire a connection attempt on every keystroke in the override box.
+  const dpiRef = useRef(dpiValue);
+  dpiRef.current = dpiValue;
 
   const check = useCallback(async (): Promise<void> => {
     const target = { ...targetRef.current };
@@ -51,7 +77,7 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
     setChecking(true);
     setMessage("");
     try {
-      const result = await window.electronAPI.zplFontStatus(target);
+      const result = await window.electronAPI.zplFontStatus(target, dpiRef.current);
       if (targetRef.current.host !== target.host || targetRef.current.port !== target.port) {
         return; // the row was repointed while this was in flight
       }
@@ -79,20 +105,34 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
     });
   }, []);
 
+  const media = (): { widthMm: number; heightMm: number | undefined } =>
+    mediaSize ? MEDIA_MM[mediaSize] : { widthMm: 100, heightMm: undefined };
+
   const install = async (force: boolean): Promise<void> => {
     const target = { ...targetRef.current };
     setBusy(true);
     setProgress(null);
     setMessage("");
     try {
-      const result = await window.electronAPI.zplFontInstall({ target, force });
+      const size = media();
+      const result = await window.electronAPI.zplFontInstall({
+        target,
+        force,
+        // Carried for the proof label a printer that reports nothing prints
+        // on its own. Never sent to one that answers ~HI: its own reading of
+        // its resolution beats anything typed here.
+        dpi: blind ? dpiValue : undefined,
+        widthMm: size.widthMm,
+        heightMm: size.heightMm,
+      });
       if (result.ok) {
         setStatus(result.data.status);
         const sent = result.data.sent.length;
         setMessage(
-          sent === 0
-            ? "Already installed."
-            : `Installed ${sent} font(s) in ${(result.data.elapsedMs / 1000).toFixed(1)}s.`,
+          result.data.message ??
+            (sent === 0
+              ? "Already installed."
+              : `Installed ${sent} font(s) in ${(result.data.elapsedMs / 1000).toFixed(1)}s.`),
         );
       } else {
         setMessage(result.message);
@@ -109,11 +149,12 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
     setBusy(true);
     setMessage("");
     try {
-      const size = mediaSize ? MEDIA_MM[mediaSize] : { widthMm: 100, heightMm: undefined };
+      const size = media();
       const result = await window.electronAPI.zplFontTestPrint({
         target,
         widthMm: size.widthMm,
         heightMm: size.heightMm,
+        dpi: blind ? dpiValue : undefined,
       });
       setMessage(result.ok ? "Test label sent." : result.message);
     } finally {
@@ -123,13 +164,20 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
 
   const installed = status?.installedCount ?? 0;
   const total = status?.totalCount ?? 0;
-  const complete = status !== null && installed === total;
+  const complete = status !== null && !blind && installed === total;
   const bundledTotal = status?.fonts.reduce((n, f) => n + f.bundledSize, 0) ?? 0;
+  const sentBlind = blind && (status?.fonts.some((f) => f.state === "unverified") ?? false);
 
   let dot = "bg-gray-300";
   let summary = "Not checked";
   if (checking) {
     summary = "Checking…";
+  } else if (blind) {
+    // Neutral, both before and after an install: green would be a claim this
+    // printer has given nobody the right to make.
+    dot = "bg-gray-300";
+    summary = sentBlind ? "Sent · unverified" : "Status unknown";
+    summary += ` · ${status?.capabilities.dpi ?? dpiValue}dpi assumed`;
   } else if (status) {
     if (complete) {
       dot = "bg-green-500";
@@ -144,6 +192,10 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
     if (status.freeBytes !== null) summary += ` · ${formatMb(status.freeBytes)} free`;
     if (status.identity) summary += ` · ${status.identity.dpi}dpi`;
   }
+
+  const seconds = Math.round(
+    bundledTotal / (blind ? BYTES_PER_SEC.blind : BYTES_PER_SEC.responds),
+  );
 
   const pct = progress ? Math.floor((progress.sentBytes / progress.totalBytes) * 100) : 0;
 
@@ -162,6 +214,19 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
           >
             Refresh
           </button>
+          {blind && (
+            /* The printer will not report its resolution, so it has to be told
+               one. 203 covers every unit seen so far; 300 dpi models exist. */
+            <label className="flex items-center gap-1 text-[11px] text-gray-500">
+              dpi
+              <input
+                value={dpi}
+                onChange={(e) => setDpi(e.target.value)}
+                inputMode="numeric"
+                className="w-12 rounded border border-gray-300 px-1 py-0.5 text-right text-[11px] text-gray-700"
+              />
+            </label>
+          )}
           <button
             onClick={() => void install(complete)}
             disabled={busy || checking}
@@ -169,11 +234,13 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
           >
             {complete
               ? "Reinstall"
-              : `Install${bundledTotal ? ` (${formatMb(bundledTotal)}, ~35s)` : ""}`}
+              : `Install${bundledTotal ? ` (${formatMb(bundledTotal)}, ~${seconds}s)` : ""}`}
           </button>
           <button
             onClick={() => void testPrint()}
-            disabled={busy || checking || !status || installed === 0}
+            /* A blind printer can always be asked to print: the label is the
+               only way to find out whether the fonts are there. */
+            disabled={busy || checking || (!blind && (!status || installed === 0))}
             className="rounded border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:border-gray-400 disabled:opacity-40"
           >
             Test print
@@ -198,6 +265,13 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
             Do not print to this printer until the install finishes.
           </p>
         </div>
+      )}
+
+      {blind && !progress && (
+        <p className="mt-1.5 text-[11px] text-gray-500">
+          Printer does not report status (Bixolon) — verify by proof label. Install prints one
+          automatically; Korean on it means the fonts are in.
+        </p>
       )}
 
       {message && !progress && (

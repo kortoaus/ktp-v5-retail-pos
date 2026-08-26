@@ -1,9 +1,11 @@
 /**
  * A ZD421 stand-in for tests.
  *
- * Mimics the two behaviours that make ~DY awkward: it swallows exactly `t`
- * bytes of payload without interpreting them, and it holds the connection open
- * after answering a query instead of sending EOF.
+ * Mimics the three behaviours that make ~DY awkward: it swallows exactly `t`
+ * bytes of payload without interpreting them, it holds the connection open
+ * after answering a query instead of sending EOF, and under `{ silent: true }`
+ * it answers nothing at all — a Bixolon XD3/XD5 in BPL-Z, which takes every
+ * command and never replies to one.
  */
 
 import net from "node:net";
@@ -25,6 +27,9 @@ export class MockPrinter {
       brokenIdentity: opts.brokenIdentity ?? false,
       // A ZD421 on V93.21.37Z answered ^HW with entries and no free-space line.
       reportFreeSpace: opts.reportFreeSpace ?? true,
+      // A Bixolon XD3/XD5 in BPL-Z: reads everything, stores ~DY objects, prints
+      // labels — and answers ~HI/^HW/^HH with no bytes at all, ever.
+      silent: opts.silent ?? false,
       stall: opts.stall ?? false,
       failAfterBytes: opts.failAfterBytes,
       truncateStoredBy: opts.truncateStoredBy ?? 0,
@@ -133,10 +138,10 @@ export class MockPrinter {
           };
           buffer = buffer.subarray(next.at + Buffer.byteLength(dy[0], "latin1"));
         } else if (next.kind === "hi") {
-          socket.write(this.#identity());
+          this.#reply(socket, this.#identity());
           buffer = buffer.subarray(next.at + 3);
         } else if (next.kind === "hw") {
-          socket.write(this.#directory());
+          this.#reply(socket, this.#directory());
           buffer = buffer.subarray(next.at + Buffer.byteLength(hw[0], "latin1"));
         } else if (next.kind === "id") {
           this.objects.delete(id[2].toUpperCase());
@@ -150,6 +155,18 @@ export class MockPrinter {
         }
       }
     });
+  }
+
+  /**
+   * Answer a query — unless this printer is one of the mute ones.
+   *
+   * Silence is modelled as "consumed the command, wrote nothing" rather than as
+   * a dropped connection, because that is what the hardware does: the socket
+   * stays up and the next command is still accepted.
+   */
+  #reply(socket, payload) {
+    if (this.#opts.silent) return;
+    socket.write(payload);
   }
 
   #identity() {

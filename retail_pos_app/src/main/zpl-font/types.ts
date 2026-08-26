@@ -30,7 +30,11 @@ export type FontState =
   /** Not on the printer. */
   | "missing"
   /** Present but a different size — a partial or stale install. */
-  | "mismatch";
+  | "mismatch"
+  /** The printer answers no query, so nothing can be said about it. */
+  | "unknown"
+  /** Sent to a printer that answers no query — proven only by the proof label. */
+  | "unverified";
 
 export interface FontStatusEntry extends FontSpec {
   /** Size of the file shipped with the app. */
@@ -48,14 +52,40 @@ export interface PrinterIdentity {
   dpi: number;
 }
 
+/**
+ * What the printer will tell us about itself.
+ *
+ * `responds: false` is a Bixolon XD3/XD5 in BPL-Z: it takes ~DY downloads and
+ * draws `^A@` + `^CI28` hangul exactly like a Zebra, but answers `~HI`, `^HW`
+ * and `^HH` with no bytes at all. That is a printer to work blind against, not
+ * a failure — everything a query would have told us is simply unavailable, so
+ * the proof label becomes the only verification there is.
+ */
+export interface PrinterCapabilities {
+  /** Whether the printer answered the identity query at all. */
+  responds: boolean;
+  /** From ~HI when it answers; absent otherwise. */
+  model?: string;
+  /** From ~HI, or the caller's override; absent when neither is available. */
+  dpi?: number;
+}
+
 export interface FontStatus {
   /** Null when ~HI could not be parsed; callers fall back to an explicit dpi. */
   identity: PrinterIdentity | null;
+  capabilities: PrinterCapabilities;
   fonts: FontStatusEntry[];
   installedCount: number;
   totalCount: number;
   /** Null when the printer did not report free space in its ^HW reply. */
   freeBytes: number | null;
+  /** Set when the state needs explaining to a person — blind mode does. */
+  message?: string;
+}
+
+export interface StatusOptions {
+  /** Resolution to assume when the printer will not report one. */
+  dpi?: number;
 }
 
 export interface InstallProgress {
@@ -74,6 +104,15 @@ export interface InstallOptions {
   force?: boolean;
   /** Only these weights; all of them when omitted. */
   weights?: string[];
+  /**
+   * Resolution for the proof label a blind install prints. Ignored by a
+   * printer that answers ~HI, which reports its own.
+   */
+  dpi?: number;
+  /** Media width for that proof label, in millimetres. Defaults to 100. */
+  widthMm?: number;
+  /** Media height for it; omitted leaves the printer's own setting. */
+  heightMm?: number;
   onProgress?: (progress: InstallProgress) => void;
 }
 
@@ -84,6 +123,13 @@ export interface InstallResult {
   skipped: FontSpec[];
   elapsedMs: number;
   status: FontStatus;
+  /**
+   * True when the printer was re-read and confirmed the objects landed. False
+   * for a blind install, where the proof label is the only evidence.
+   */
+  verified: boolean;
+  /** Set when the outcome needs explaining — a blind install always does. */
+  message?: string;
 }
 
 export interface TestPrintOptions {
