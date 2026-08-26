@@ -203,10 +203,9 @@ const TOTAL_SIZE = 44;
 // The replacement goes to the caption's **left**: the PRICE box starts at x 356
 // and there is nothing but artwork between the two. See `uomOverride`.
 //
-// **Unverified on hardware.** Measured off the artwork, not yet grid-checked
-// the way the 58 × 100's pair was — and that pair moved 19 dots when it was.
-// Print `buildGridLabel("6040")` on the stock and confirm before relying on it.
-// Named constants so the correction is a one-line change.
+// **Owner-confirmed on hardware (2026-08-26, Zebra .38, red pre-printed stock):**
+// grid label + `$/EA` sample printed, rule crosses the caption and the text
+// clears the PRICE box. Named constants so the correction is a one-line change.
 const UOM_RULE = { x: 297, y: 216, w: 42 };
 const UOM_TEXT = { x: 252, y: 206 };
 const UOM_SIZE = 18;
