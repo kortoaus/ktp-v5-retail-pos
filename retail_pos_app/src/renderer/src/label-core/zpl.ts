@@ -22,6 +22,7 @@ import {
   estimateQrSize,
   fitSize,
   textWidth,
+  utf8Length,
 } from "./measure";
 
 /** Floor for a shrunk text field that gave no `minSize` of its own. */
@@ -102,6 +103,15 @@ export function elementBounds(el: Element): Rect {
       };
     }
     case "qr": {
+      // A bottom-anchored symbol's top edge is *derived* from its size, so that
+      // one needs the real payload-aware estimate — get it wrong and the box
+      // the template packs against is in the wrong place. A top-anchored symbol
+      // has an exact x/y and only an approximate width, and the layouts using
+      // one were tuned against the v3 assumption, so it keeps that.
+      if (el.anchor === "bottom") {
+        const side = estimateQrSize(el.mag, utf8Length(el.data));
+        return { x: el.x, y: el.y - side, w: side, h: side };
+      }
       const side = estimateQrSize(el.mag);
       return { x: el.x, y: el.y, w: side, h: side };
     }
@@ -151,11 +161,23 @@ function renderElement(el: Element): string {
     }
 
     case "qr": {
-      // Model 2. The error-correction level is repeated in the field data
-      // because that is where ^BQ firmware actually reads it from; `A` is
-      // automatic input mode, which is what lets the payload be UTF-8.
-      const ec = el.ec ?? "L";
-      return `^FO${el.x},${el.y}^BQN,2,${el.mag},${ec}^FH^FD${ec}A,${fieldData(el.data)}^FS`;
+      // Model 2, and the field data always starts `LA,`. Both halves of that
+      // are hardware findings from a ZD421, not preferences:
+      //
+      //  * `A` is *automatic* input mode. Manual mode (`LM,B0147…`) picks
+      //    alphanumeric encoding for a payload that looks alphanumeric, and
+      //    QR's alphanumeric charset has no `"`, `[` or `]` — the printer
+      //    silently dropped those characters out of a PP payload. Never send
+      //    manual mode.
+      //  * `L` is the level, and it is the only place the level is read from:
+      //    this firmware ignores ^BQ's own error-correction parameter, so it is
+      //    not emitted at all. `el.ec` is therefore documentation, not control.
+      //
+      // ^FT (field typeset) anchors the bottom-left corner and lets the symbol
+      // grow upward; ^FO anchors the top-left. See `QrAnchor` for why that
+      // matters for a symbol printed against a pre-printed rule.
+      const at = el.anchor === "bottom" ? "^FT" : "^FO";
+      return `${at}${el.x},${el.y}^BQN,2,${el.mag}^FH^FDLA,${fieldData(el.data)}^FS`;
     }
 
     case "datamatrix":

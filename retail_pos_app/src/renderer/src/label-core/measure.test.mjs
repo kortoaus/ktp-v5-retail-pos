@@ -10,8 +10,10 @@ import {
   estimateDataMatrixSize,
   estimateQrSize,
   fitSize,
+  qrModules,
   textEm,
   textWidth,
+  utf8Length,
 } from "./measure.ts";
 
 test("hangul counts as a full em, latin and digits as fractions", () => {
@@ -74,4 +76,51 @@ test("estimateLines counts what a block will wrap to, and stops at the cap", () 
 
   assert.equal(estimateLines("", 20, 200), 0);
   assert.equal(estimateLines("Sashimi", 20, 0), 0);
+});
+
+// ---------------------------------------------------------------------------
+// QR versioning — EC level L, byte mode, which is what the emitter sends
+// ---------------------------------------------------------------------------
+
+test("a qr with no payload given keeps the version-3 assumption", () => {
+  assert.equal(qrModules(), 29);
+  assert.equal(estimateQrSize(4), 116);
+  assert.equal(estimateQrSize(2), 58);
+});
+
+test("the full PP payload is version 7 — 45 modules, 90 dots at mag 2", () => {
+  // 154 bytes is v7's byte-mode capacity at level L, so 147 fits it with room.
+  assert.equal(qrModules(147), 45);
+  assert.equal(estimateQrSize(2, 147), 90);
+
+  // The version boundaries either side of it.
+  assert.equal(qrModules(134), 41, "v6 holds 134");
+  assert.equal(qrModules(135), 45, "135 spills into v7");
+  assert.equal(qrModules(154), 45, "v7 holds 154");
+  assert.equal(qrModules(155), 49, "155 spills into v8");
+});
+
+test("the version table walks up from 21 modules in steps of four", () => {
+  assert.equal(qrModules(1), 21);
+  assert.equal(qrModules(17), 21);
+  assert.equal(qrModules(18), 25);
+  assert.equal(qrModules(53), 29);
+  assert.equal(qrModules(0), 21, "an empty payload is still a symbol");
+
+  // Past the table's v10 it clamps rather than throwing — a small debug box
+  // beats a lost label.
+  assert.equal(qrModules(271), 57);
+  assert.equal(qrModules(9999), 57);
+});
+
+test("utf8Length counts bytes, not code points — the printer counts bytes", () => {
+  assert.equal(utf8Length("abc"), 3);
+  assert.equal(utf8Length("가"), 3);
+  assert.equal(utf8Length("가나다"), 9);
+  assert.equal(utf8Length(""), 0);
+  assert.equal(utf8Length("\u00e9"), 2);
+  assert.equal(utf8Length("\u{1f600}"), 4);
+
+  // Hangul in a payload pushes the version up, which is the point of counting.
+  assert.equal(qrModules(utf8Length("가".repeat(50))), 45);
 });

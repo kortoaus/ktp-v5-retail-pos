@@ -16,6 +16,11 @@
  *
  * Read those two files before changing a number here, and print the change.
  *
+ * The QR line was re-confirmed by scanning on a Zebra ZD421 on 2026-08-26 and
+ * is now `^FT54,205^BQN,2,2^FH^FDLA,{payload}^FS` — bottom-anchored, mag 2,
+ * automatic input mode. The why of each of those three is in `../model`'s
+ * `QrAnchor` and in the `qr` case of `../zpl`; do not "tidy" any of them.
+ *
  * The grid, in dots at 203 dpi (the numbers the constants below are named for):
  *
  *   top red rule ......... y ≈ 67          bottom red rule ...... y ≈ 229
@@ -31,9 +36,10 @@
  * centred in their cells with the mockup's margins rather than pushed against a
  * cell edge. Do not tighten them to "use the space".
  *
- * The 1D and 2D variants are the *same* layout: the pre-printed grid fixes every
- * cell, and only the symbol in the left zone changes. That is why there is one
- * layout function here where the pre-grid version had two.
+ * The three barcode variants are the *same* layout: the pre-printed grid fixes
+ * every cell, and only the contents of the left symbol zone change — an EAN-13,
+ * a PP QR, or both stacked. That is why there is one layout function here where
+ * the pre-grid version had two.
  *
  * Input is still mostly formatted strings — this library knows nothing about
  * cents or `momentAU`. Dates are the exception: they arrive as ISO
@@ -64,7 +70,21 @@ export interface ScaleBarcodePP {
   qrData: string;
 }
 
-export type ScaleBarcode = ScaleBarcodeEan13 | ScaleBarcodePP;
+/**
+ * Both symbols, stacked in the one zone: PP QR over a bare EAN-13.
+ *
+ * The QR is what this POS scans; the EAN-13 is what every *other* scanner in
+ * the building can read — a third-party till, a stocktake gun, the customer's
+ * phone. Printing both is what lets a prepacked item leave the store through a
+ * lane that has never heard of the PP schema.
+ */
+export interface ScaleBarcodePPEan13 {
+  kind: "pp-ean13";
+  qrData: string;
+  data12: string;
+}
+
+export type ScaleBarcode = ScaleBarcodeEan13 | ScaleBarcodePP | ScaleBarcodePPEan13;
 
 export interface ScaleLabelInput {
   nameKo: string;
@@ -72,7 +92,14 @@ export interface ScaleLabelInput {
   /** ISO `YYYY-MM-DD`. The template decides whether the year is shown. */
   packedOnIso: string;
   usedByIso: string;
-  /** The number only — the pre-printed cell says `NET kg`. */
+  /**
+   * The NET cell's contents, printed verbatim.
+   *
+   * Free text, and the template appends nothing to it. A weighed item passes
+   * the number alone (`0.512`) because the pre-printed cell already says
+   * `NET kg`; a non-weighed one passes its own unit with it (`1 EA`), which is
+   * the case that makes appending `unit` here wrong.
+   */
   weightText: string;
   /** `kg`, `ea`, `100g` … not printed on this label (the stock says `$/kg`); the
    * 58 × 100 template, which shares this input, does print and correct it. */
@@ -140,15 +167,38 @@ const TOTAL_W = 114;
 const TOTAL_SIZE = 44;
 
 // ── symbol zone (x 15–243, y 67–229) ────────────────────────────────────────
-// Two anchors, not one: the EAN is 190 dots wide and the QR 87, so each is
-// placed to sit centred in the zone rather than sharing a left edge.
+// The EAN keeps the confirmed 1D mockup's left edge, x = 34. The QR sits 20
+// dots further in at x = 54, which is what centres a 90-dot symbol in the zone
+// — it is 100 dots narrower than the EAN, so sharing a left edge would leave it
+// visibly hanging off to one side. Owner-confirmed on hardware.
+//
+// The QR is *bottom*-anchored rather than top-anchored: see `QrAnchor` in
+// ../model — Zebra bottom-aligns ^BQ inside a box sized for the magnification's
+// largest symbol, so a top-anchored QR's real top edge moves with the payload
+// length and a long PP payload grows down through the red rule at y ≈ 229.
+// Anchoring the bottom fixes the edge that has to stay clear of the rule.
+//
+// Magnification 2, not 3: a full PP payload is ~147 bytes, which is QR version 7
+// (45 modules) at level L, so mag 2 is 90 dots square and mag 3 would be 135 —
+// wider than the zone allows once the payload is real rather than the short
+// sample the mag-3 number was picked against.
 const EAN_X = 34;
 const EAN_Y = 80;
 const EAN_H = 90;
 const EAN_MODULE = 2;
-const QR_X = 60;
-const QR_Y = 80;
-const QR_MAG = 3;
+const QR_X = 54;
+const QR_BOTTOM_Y = 205;
+const QR_MAG = 2;
+
+// ── stacked variant: PP QR over a bare EAN-13 ───────────────────────────────
+// The zone is 162 dots tall and the two symbols have to share it. The QR takes
+// the top: bottom-anchored at 160, ~90 dots tall, so it occupies y 70–160 —
+// just under the top rule at 67. The EAN takes the rest at half its usual
+// height and **without the human-readable line**: the HRI would cost 30 dots
+// this zone does not have, and the digits are already on the label above.
+const COMBO_QR_BOTTOM_Y = 160;
+const COMBO_EAN_Y = 166;
+const COMBO_EAN_H = 48;
 
 // ── footer zone (below the bottom red rule at y 229) ────────────────────────
 const FOOTER_NAME_Y = 238;
@@ -270,19 +320,57 @@ function wasRule(text: string): Line {
   return strike(x, WAS_Y + Math.round(WAS_SIZE / 2), w);
 }
 
-function symbol(barcode: ScaleBarcode): Element {
-  return barcode.kind === "ean13"
-    ? {
-        kind: "barcode",
-        sym: "ean13",
-        x: EAN_X,
-        y: EAN_Y,
-        h: EAN_H,
-        module: EAN_MODULE,
-        hri: true,
-        data: barcode.data12,
-      }
-    : { kind: "qr", x: QR_X, y: QR_Y, mag: QR_MAG, ec: "M", data: barcode.qrData };
+/** The contents of the symbol zone — one symbol, or two stacked. */
+function symbols(barcode: ScaleBarcode): Element[] {
+  switch (barcode.kind) {
+    case "ean13":
+      return [
+        {
+          kind: "barcode",
+          sym: "ean13",
+          x: EAN_X,
+          y: EAN_Y,
+          h: EAN_H,
+          module: EAN_MODULE,
+          hri: true,
+          data: barcode.data12,
+        },
+      ];
+
+    case "pp":
+      return [
+        {
+          kind: "qr",
+          x: QR_X,
+          y: QR_BOTTOM_Y,
+          mag: QR_MAG,
+          anchor: "bottom",
+          data: barcode.qrData,
+        },
+      ];
+
+    case "pp-ean13":
+      return [
+        {
+          kind: "qr",
+          x: QR_X,
+          y: COMBO_QR_BOTTOM_Y,
+          mag: QR_MAG,
+          anchor: "bottom",
+          data: barcode.qrData,
+        },
+        {
+          kind: "barcode",
+          sym: "ean13",
+          x: EAN_X,
+          y: COMBO_EAN_Y,
+          h: COMBO_EAN_H,
+          module: EAN_MODULE,
+          hri: false,
+          data: barcode.data12,
+        },
+      ];
+  }
 }
 
 function footer(input: ScaleLabelInput): Element[] {
@@ -364,7 +452,7 @@ export function buildScaleLabel6040(
       lines: 1,
       align: "R",
     }),
-    symbol(input.barcode),
+    ...symbols(input.barcode),
     ...footer(input),
   );
 

@@ -140,14 +140,62 @@ export function estimateBarcodeWidth(
 /**
  * QR side in dots.
  *
- * Version is chosen by the printer from the payload, so this assumes the
- * 29-module version 3 that a short URL lands on. Longer payloads print bigger
- * than this says — layouts leave slack accordingly.
+ * Version is chosen by the printer from the payload, so with no payload given
+ * this assumes the 29-module version 3 that a short URL lands on. Longer
+ * payloads print bigger than that says — layouts that cannot leave slack pass
+ * the byte length and get the real version instead.
  */
 export const QR_MODULES = 29;
 
-export function estimateQrSize(mag: number): number {
-  return QR_MODULES * Math.max(1, mag);
+/**
+ * Byte-mode payload capacity per QR version at error-correction level **L**.
+ *
+ * L, byte mode, and nothing else, because that is what the emitter sends: the
+ * `LA,` field-data prefix asks for level L and automatic input mode, and any
+ * payload with a brace or a quote in it (every PP payload does) leaves
+ * automatic mode in byte mode. Versions 1–10 are enough — v10 holds 271 bytes
+ * and the largest payload this library prints is a ~147-byte PP string.
+ *
+ * Figures are the ISO/IEC 18004 table; index 0 is version 1.
+ */
+export const QR_L_BYTE_CAPACITY = [17, 32, 53, 78, 106, 134, 154, 192, 230, 271];
+
+/** Side of a QR version in modules — 21 at v1, +4 per version. */
+export function qrVersionModules(version: number): number {
+  return 21 + 4 * (clamp(Math.round(version), 1, 40) - 1);
+}
+
+/**
+ * UTF-8 byte length, without `Buffer` or `TextEncoder`.
+ *
+ * The printer counts bytes, not code points, and this file may not import
+ * anything platform-shaped (see `index.ts`), so the count is done by hand.
+ */
+export function utf8Length(text: string): number {
+  let bytes = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+  }
+  return bytes;
+}
+
+/**
+ * Modules per side for a payload of `byteLength` bytes at EC level L.
+ *
+ * Omit the length and you get the v3 assumption the layouts that cannot know
+ * their payload were tuned against. A payload past v10 is clamped to v10 rather
+ * than throwing — an under-estimate draws a small debug box, an exception loses
+ * the label.
+ */
+export function qrModules(byteLength?: number): number {
+  if (byteLength == null) return QR_MODULES;
+  const index = QR_L_BYTE_CAPACITY.findIndex((cap) => byteLength <= cap);
+  return qrVersionModules(index === -1 ? QR_L_BYTE_CAPACITY.length : index + 1);
+}
+
+export function estimateQrSize(mag: number, byteLength?: number): number {
+  return qrModules(byteLength) * Math.max(1, mag);
 }
 
 /** Data Matrix side in dots, assuming a 16x16 symbol (short payloads). */

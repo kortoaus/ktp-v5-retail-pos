@@ -129,15 +129,61 @@ test("code128 emits ^BCN and can drop the human-readable line", () => {
   );
 });
 
-test("qr is model 2 and repeats the correction level in the field data", () => {
+test("qr is model 2, automatic input mode, and carries no ^BQ correction level", () => {
   assert.deepEqual(
     body({ kind: "qr", x: 40, y: 40, mag: 4, data: "https://ktpv5.local/x" }),
-    ["^FO40,40^BQN,2,4,L^FH^FDLA,https://ktpv5.local/x^FS"],
+    ["^FO40,40^BQN,2,4^FH^FDLA,https://ktpv5.local/x^FS"],
   );
+
+  // ZD421 firmware reads the level from the field data and ignores ^BQ's own
+  // parameter, so `ec` never reaches the printer — `LA,` regardless.
   assert.deepEqual(
     body({ kind: "qr", x: 0, y: 0, mag: 3, ec: "M", data: "가나" }),
-    ["^FO0,0^BQN,2,3,M^FH^FDMA,가나^FS"],
+    ["^FO0,0^BQN,2,3^FH^FDLA,가나^FS"],
   );
+});
+
+test("manual input mode is never emitted — the printer drops \", [ and ] in it", () => {
+  const zpl = body({
+    kind: "qr",
+    x: 0,
+    y: 0,
+    mag: 2,
+    data: '00:{"01":"0213436","02":[6200]}',
+  }).join("\n");
+
+  assert.ok(zpl.includes('^FH^FDLA,00:{"01":"0213436","02":[6200]}^FS'), zpl);
+  assert.ok(!zpl.includes("LM,"), "manual mode mangles the payload");
+  assert.ok(!/\^FD[A-Z]M,/.test(zpl), "no manual mode at any level");
+});
+
+test("a bottom-anchored qr is typeset with ^FT so it grows upward", () => {
+  assert.deepEqual(
+    body({ kind: "qr", x: 34, y: 225, mag: 2, anchor: "bottom", data: "PP" }),
+    ["^FT34,225^BQN,2,2^FH^FDLA,PP^FS"],
+  );
+
+  // The default is unchanged: top-left, ^FO, like every other element.
+  assert.deepEqual(body({ kind: "qr", x: 34, y: 225, mag: 2, anchor: "top", data: "PP" }), [
+    "^FO34,225^BQN,2,2^FH^FDLA,PP^FS",
+  ]);
+  assert.deepEqual(body({ kind: "qr", x: 34, y: 225, mag: 2, data: "PP" }), [
+    "^FO34,225^BQN,2,2^FH^FDLA,PP^FS",
+  ]);
+});
+
+test("a bottom-anchored qr's bounds sit above its anchor, sized by the payload", () => {
+  // 147 bytes is version 7 at level L — 45 modules, 90 dots at mag 2.
+  const long = "x".repeat(147);
+  assert.deepEqual(
+    elementBounds({ kind: "qr", x: 34, y: 225, mag: 2, anchor: "bottom", data: long }),
+    { x: 34, y: 135, w: 90, h: 90 },
+  );
+
+  // A short payload is a smaller symbol, and its bottom edge does not move.
+  const short = elementBounds({ kind: "qr", x: 34, y: 225, mag: 2, anchor: "bottom", data: "x" });
+  assert.equal(short.y + short.h, 225, "the anchored edge is fixed");
+  assert.ok(short.h < 90, `${short.h} < 90`);
 });
 
 test("datamatrix is ^BXN at quality 200", () => {

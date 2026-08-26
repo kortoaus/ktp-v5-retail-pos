@@ -66,7 +66,7 @@ test("the QR variant keeps the ingredient paragraph clear of the symbol", () => 
   const label = buildIngredientLabel58100(QR);
   const zpl = renderLabel(label);
 
-  assert.ok(zpl.includes("^FO280,300^BQN,2,3,M"), zpl);
+  assert.ok(zpl.includes("^FO280,300^BQN,2,3^"), zpl);
   assert.ok(!zpl.includes("^BEN"), "no linear barcode on the QR variant");
 
   const paragraph = label.elements.find((el) => el.kind === "text" && el.lines > 3);

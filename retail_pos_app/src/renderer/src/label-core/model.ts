@@ -74,13 +74,39 @@ export interface Barcode {
 
 export type QrEc = "L" | "M" | "Q" | "H";
 
+/**
+ * Which corner `x, y` names.
+ *
+ * `top` (the default) is the top-left corner — `^FO`, the same as every other
+ * element. `bottom` is the bottom-left corner: the symbol's baseline is fixed
+ * and it grows *upward* as the payload gets longer.
+ *
+ * This exists because of how Zebra draws `^BQ` under `^FO`: the symbol is
+ * bottom-aligned inside a box sized for the largest symbol that magnification
+ * can produce, so a short payload prints lower on the label than a long one and
+ * the top edge moves with the data. When the symbol has to clear a pre-printed
+ * rule (the 60 × 40 stock's red line at y ≈ 229) that is exactly backwards —
+ * anchoring the bottom is what keeps it off the rule. Verified on a ZD421.
+ */
+export type QrAnchor = "top" | "bottom";
+
 export interface Qr {
   kind: "qr";
   x: number;
   y: number;
   /** Module magnification (1-10). */
   mag: number;
+  /**
+   * Requested error-correction level.
+   *
+   * **Ignored by the emitter.** ZD421 firmware takes the level from the field
+   * data, not from `^BQ`'s parameters, and the emitter always sends `LA,` (see
+   * `zpl.ts`). The field is kept so templates that set it still compile and so
+   * a future emitter that can honour it has somewhere to read it from.
+   */
   ec?: QrEc;
+  /** Defaults to `top`. */
+  anchor?: QrAnchor;
   data: string;
 }
 

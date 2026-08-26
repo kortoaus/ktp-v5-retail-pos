@@ -23,9 +23,9 @@ test("the label is 800 × 800 and both symbol boxes carry a real QR", () => {
   assert.ok(zpl.includes("^PW800") && zpl.includes("^LL800"));
   assert.ok(zpl.includes("^FO24,556^GB220,220,3^FS"), "left box");
   assert.ok(zpl.includes("^FO556,556^GB220,220,3^FS"), "right box");
-  assert.equal(zpl.split("^BQN,2,5,M").length - 1, 2, "two QR symbols");
-  assert.ok(zpl.includes(`^FDMA,${SAMPLE.orderQrData}^FS`));
-  assert.ok(zpl.includes(`^FDMA,${SAMPLE.ppQrData}^FS`));
+  assert.equal(zpl.split("^BQN,2,5^").length - 1, 2, "two QR symbols");
+  assert.ok(zpl.includes(`^FDLA,${SAMPLE.orderQrData}^FS`));
+  assert.ok(zpl.includes(`^FDLA,${SAMPLE.ppQrData}^FS`));
 });
 
 test("no PP payload, no PP box — an empty 220-dot square prints nothing usefully", () => {
@@ -33,7 +33,7 @@ test("no PP payload, no PP box — an empty 220-dot square prints nothing useful
 
   assert.ok(zpl.includes("^FO24,556^GB220,220,3^FS"), "the order box stays");
   assert.ok(!zpl.includes("^FO556,556^GB220,220,3^FS"), "the PP box is gone");
-  assert.equal(zpl.split("^BQN,2,5,M").length - 1, 1);
+  assert.equal(zpl.split("^BQN,2,5^").length - 1, 1);
 });
 
 test("the Korean name prints — it used to be dropped for not being ASCII", () => {

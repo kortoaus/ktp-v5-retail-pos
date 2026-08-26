@@ -36,6 +36,7 @@ export type {
   Label,
   Line,
   Qr,
+  QrAnchor,
   QrEc,
   Text,
 } from "./model";
@@ -48,8 +49,11 @@ export {
   estimateLines,
   estimateQrSize,
   fitSize,
+  qrModules,
+  qrVersionModules,
   textEm,
   textWidth,
+  utf8Length,
 } from "./measure";
 
 export { fieldData } from "./escape";
@@ -86,6 +90,7 @@ export type {
   ScaleBarcode,
   ScaleBarcodeEan13,
   ScaleBarcodePP,
+  ScaleBarcodePPEan13,
   ScaleDates,
   ScaleLabelInput,
   TemplateOptions,

@@ -42,23 +42,40 @@ const EAN13_12 = "200000102816";
 const ITEM_BARCODE = "9300001028165";
 
 /**
+ * The 60 × 40 samples use a **real POS item**, not a made-up one.
+ *
+ * PLU `0213436` exists in the catalogue, so a label printed from this screen can
+ * be scanned at a live till and is expected to ring up — which is the only way
+ * to prove the QR encodes what the parser reads. Every other template's sample
+ * data stays generic.
+ */
+const SCALE_PLU = "0213436";
+const SCALE_NAME_KO = "DS 연어 사시미 (호주산)";
+const SCALE_NAME_EN = "DS Salmon Sashimi (A)";
+
+/**
  * The PP payload, built through the canonical builder rather than hand-typed.
  *
  * That is the point of building it here: the screen is the adapter, so this is
- * also the one place that proves `00`/`07`/`08` reach a printed symbol.
+ * also the one place that proves `00`/`07`/`08` reach a printed symbol. Five
+ * distinct price levels and five distinct promo levels, because that is the
+ * long case — 140 bytes, QR version 7 at level L, which is what the 60 × 40
+ * symbol zone was sized against.
  */
 const PP_QR = buildPPBarcodeString({
-  barcode: "9300001",
-  prices: [6200, 6200, 6200, 6200, 6200],
-  promoPrices: [5500, 5500, 5500, 5500, 5500],
+  barcode: SCALE_PLU,
+  prices: [6200, 5900, 5700, 5500, 5300],
+  promoPrices: [5500, 5300, 5100, 4900, 4700],
   weight: 512,
+  discountType: "pct",
+  discountAmount: 300,
   packedOn: "2026-08-26",
   usedBy: 1,
 });
 
 const SCALE_SAMPLE = {
-  nameKo: NAME_KO,
-  nameEn: NAME_EN,
+  nameKo: SCALE_NAME_KO,
+  nameEn: SCALE_NAME_EN,
   packedOnIso: "2026-08-26",
   usedByIso: "2026-08-27",
   weightText: "0.512",
@@ -141,6 +158,18 @@ const TEMPLATES: TemplateEntry[] = [
     media: "6040",
     build: (dbg) =>
       buildScaleLabel6040({ ...SCALE_SAMPLE, barcode: { kind: "pp", qrData: PP_QR } }, { dbg }),
+  },
+  {
+    // Both symbols in the one zone: the QR this POS scans, and a bare EAN-13
+    // for every scanner that has never heard of the PP schema.
+    id: "6040-2d-1d",
+    label: "6040 · 2D+1D",
+    media: "6040",
+    build: (dbg) =>
+      buildScaleLabel6040(
+        { ...SCALE_SAMPLE, barcode: { kind: "pp-ean13", qrData: PP_QR, data12: EAN13_12 } },
+        { dbg },
+      ),
   },
   {
     id: "58100-1d",

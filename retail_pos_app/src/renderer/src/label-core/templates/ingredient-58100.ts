@@ -104,7 +104,10 @@ export function buildIngredientLabel58100(
   input: IngredientLabelInput,
   opts: TemplateOptions = {},
 ): Label {
-  const isQr = input.barcode.kind === "pp";
+  // Negated, so the `pp-ean13` variant the 60 × 40 label added lands on the QR
+  // branch rather than silently reserving EAN room and then printing a QR. This
+  // label has no stacked layout of its own — it prints the QR alone.
+  const isQr = input.barcode.kind !== "ean13";
   const elements: Element[] = [];
 
   // ── name ────────────────────────────────────────────────────────────────

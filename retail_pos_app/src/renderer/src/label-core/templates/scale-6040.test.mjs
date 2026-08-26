@@ -5,6 +5,7 @@ import test from "node:test";
 import { buildScaleLabel6040, formatDmy, formatScaleDates } from "./scale-6040.ts";
 import { MEDIA } from "../media.ts";
 import { elementBounds, renderLabel } from "../zpl.ts";
+import { buildPPBarcodeString } from "../../libs/pp-barcode.ts";
 
 /**
  * The values of `docs/label-mockups/6040-pre-1d.zpl` — the hand-written ZPL the
@@ -25,13 +26,29 @@ const SAMPLE = {
   storeAddress: "42-50 Rowe St. Eastwood NSW 2122",
 };
 
+/**
+ * The PP payload built the way the screen builds it — through the canonical
+ * builder, on the real POS item PLU, with five price levels and five promo
+ * levels. That is the *long* case: 140 bytes, one version short of what the
+ * emitter is sized for, so the snapshot below is a realistic symbol rather than
+ * a toy one.
+ */
+const PP_QR = buildPPBarcodeString({
+  barcode: "0213436",
+  prices: [6200, 5900, 5700, 5500, 5300],
+  promoPrices: [5500, 5300, 5100, 4900, 4700],
+  weight: 512,
+  discountType: "pct",
+  discountAmount: 300,
+  packedOn: "2026-08-26",
+  usedBy: 1,
+});
+
 const ONE_D = { ...SAMPLE, barcode: { kind: "ean13", data12: "200000102816" } };
-const TWO_D = {
+const TWO_D = { ...SAMPLE, barcode: { kind: "pp", qrData: PP_QR } };
+const TWO_D_ONE_D = {
   ...SAMPLE,
-  barcode: {
-    kind: "pp",
-    qrData: '00:{"00":2,"01":"9300001","04":512,"07":"2026-08-26","08":1}',
-  },
+  barcode: { kind: "pp-ean13", qrData: PP_QR, data12: "200000102816" },
 };
 
 /** Cells the values must land in, from the pre-printed grid (dots, 203 dpi). */
@@ -116,19 +133,73 @@ test("2D swaps the EAN for a PP QR and changes nothing else", () => {
   const twoD = renderLabel(buildScaleLabel6040(TWO_D)).split("\n");
 
   assert.ok(!twoD.join("\n").includes("^BEN"), "no linear barcode on the 2D variant");
-  assert.ok(
-    twoD.includes(`^FO60,80^BQN,2,3,M^FH^FDMA,${TWO_D.barcode.qrData}^FS`),
-    twoD.join("\n"),
-  );
+
+  // The line the owner scanned off a ZD421 on 2026-08-26, character for
+  // character. ^FT (not ^FO) so the symbol grows up off the red rule at y 229;
+  // mag 2; no ^BQ correction-level parameter, because this firmware ignores it;
+  // `LA,` so the payload is encoded in automatic mode — manual mode ate the
+  // `"`, `[` and `]` out of exactly this payload.
+  assert.ok(twoD.includes(`^FT54,205^BQN,2,2^FH^FDLA,${PP_QR}^FS`), twoD.join("\n"));
 
   // Every non-symbol line is identical: the grid fixes the rest of the label.
   const strip = (lines) => lines.filter((l) => !l.includes("^BEN") && !l.includes("^BQN"));
   assert.deepEqual(strip(twoD), strip(oneD));
 });
 
-test("nothing lands outside 480 × 320, on either variant", () => {
+test("the 2D QR clears the pre-printed rule whatever the payload does", () => {
+  for (const qrData of [PP_QR, "00:{}", `00:${"x".repeat(140)}`]) {
+    const el = buildScaleLabel6040({ ...SAMPLE, barcode: { kind: "pp", qrData } }).elements.find(
+      (e) => e.kind === "qr",
+    );
+    const box = elementBounds(el);
+    assert.equal(box.y + box.h, 205, `bottom edge is anchored, got ${box.y + box.h}`);
+    assert.ok(box.y > GRID.topRule, `top ${box.y} must stay under the top rule`);
+    assert.ok(box.y + box.h < GRID.bottomRule, "and clear of the bottom rule");
+  }
+});
+
+test("2D+1D stacks a bottom-anchored QR over a bare EAN-13", () => {
+  const zpl = renderLabel(buildScaleLabel6040(TWO_D_ONE_D));
+
+  // QR bottom-anchored at 160, EAN under it at 166 with no human-readable line
+  // — the HRI would cost 30 dots the zone does not have.
+  assert.ok(zpl.includes(`^FT54,160^BQN,2,2^FH^FDLA,${PP_QR}^FS`), zpl);
+  assert.ok(zpl.includes("^FO34,166^BY2,3,48^BEN,48,N,N^FH^FD200000102816^FS"), zpl);
+
+  // Both symbols, and the rest of the grid untouched.
+  const strip = (z) => z.split("\n").filter((l) => !l.includes("^BEN") && !l.includes("^BQN"));
+  assert.deepEqual(strip(zpl), strip(renderLabel(buildScaleLabel6040(ONE_D))));
+});
+
+test("2D+1D fits the media and the symbol zone, and the two do not overlap", () => {
   const [pageW, pageH] = MEDIA["6040"].dots;
-  for (const input of [ONE_D, TWO_D]) {
+  const label = buildScaleLabel6040(TWO_D_ONE_D);
+
+  for (const el of label.elements) {
+    const box = elementBounds(el);
+    assert.ok(box.x >= 0 && box.y >= 0, `${el.kind} starts on the label`);
+    assert.ok(box.x + box.w <= pageW, `${el.kind} right edge ${box.x + box.w} > ${pageW}`);
+    assert.ok(box.y + box.h <= pageH, `${el.kind} bottom ${box.y + box.h} > ${pageH}`);
+  }
+
+  const qr = elementBounds(label.elements.find((el) => el.kind === "qr"));
+  const ean = elementBounds(label.elements.find((el) => el.kind === "barcode"));
+
+  // The QR is 45 modules at mag 2 on this payload, so y 70–160.
+  assert.deepEqual(qr, { x: 54, y: 70, w: 90, h: 90 });
+
+  for (const box of [qr, ean]) {
+    assert.ok(box.x >= GRID.symbolZone.x0, `left ${box.x}`);
+    assert.ok(box.x + box.w <= GRID.symbolZone.x1, `right ${box.x + box.w}`);
+    assert.ok(box.y >= GRID.symbolZone.y0, `top ${box.y}`);
+    assert.ok(box.y + box.h <= GRID.symbolZone.y1, `bottom ${box.y + box.h}`);
+  }
+  assert.ok(qr.y + qr.h <= ean.y, `QR bottom ${qr.y + qr.h} must clear the EAN top ${ean.y}`);
+});
+
+test("nothing lands outside 480 × 320, on any variant", () => {
+  const [pageW, pageH] = MEDIA["6040"].dots;
+  for (const input of [ONE_D, TWO_D, TWO_D_ONE_D]) {
     for (const el of buildScaleLabel6040(input).elements) {
       const box = elementBounds(el);
       assert.ok(box.x >= 0 && box.y >= 0, `${el.kind} starts on the label`);
