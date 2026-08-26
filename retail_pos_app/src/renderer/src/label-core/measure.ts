@@ -77,6 +77,42 @@ export function fitSize(text: string, width: number, size: number, minSize: numb
   return clamp(Math.floor(width / em), floor, Math.round(size));
 }
 
+/**
+ * How many lines `text` will wrap to inside `width` when set at `size`.
+ *
+ * The printer's own ^FB does the real breaking; this exists so a template can
+ * advance its cursor past a block it has not printed yet. It breaks on spaces
+ * where there are any and between characters otherwise, which is what ^FB does
+ * with hangul, and it never reports more than `max`.
+ */
+export function estimateLines(
+  text: string,
+  size: number,
+  width: number,
+  max: number = Number.MAX_SAFE_INTEGER,
+): number {
+  if (!text || width <= 0 || size <= 0) return 0;
+
+  const budget = width / size;
+  const tokens = text.includes(" ") ? text.split(/\s+/).filter(Boolean) : Array.from(text);
+  const glue = text.includes(" ") ? EM_SPACE : 0;
+
+  let lines = 1;
+  let used = 0;
+  for (const token of tokens) {
+    const em = textEm(token);
+    const next = used === 0 ? em : used + glue + em;
+    if (next <= budget || used === 0) {
+      used = next;
+      continue;
+    }
+    lines += 1;
+    used = em;
+    if (lines >= max) return max;
+  }
+  return Math.min(lines, max);
+}
+
 // ---------------------------------------------------------------------------
 // Symbol geometry
 // ---------------------------------------------------------------------------

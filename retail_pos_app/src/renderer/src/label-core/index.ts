@@ -45,6 +45,7 @@ export {
   code128Modules,
   estimateBarcodeWidth,
   estimateDataMatrixSize,
+  estimateLines,
   estimateQrSize,
   fitSize,
   textEm,
@@ -74,3 +75,34 @@ export {
   buildDiagnosticLabel,
 } from "./diagnostic";
 export type { DiagnosticOptions } from "./diagnostic";
+
+// ── templates ───────────────────────────────────────────────────────────────
+// One function per label, each `(input) => Label`. Their input types are this
+// library's own — no app model reaches in here, so the adapter that maps an
+// `Item` or a `SaleLine` onto them belongs to the screen, not to the template.
+
+export { buildScaleLabel6040 } from "./templates/scale-6040";
+export type {
+  ScaleBarcode,
+  ScaleBarcodeEan13,
+  ScaleBarcodePP,
+  ScaleLabelInput,
+  TemplateOptions,
+} from "./templates/scale-6040";
+
+export { buildIngredientLabel58100 } from "./templates/ingredient-58100";
+export type { IngredientLabelInput } from "./templates/ingredient-58100";
+
+export { buildPriceTag7030, formatMoney } from "./templates/price-tag-7030";
+export type { PriceTagInput } from "./templates/price-tag-7030";
+
+export { buildPriceTag7090, getPriceTag7090Model } from "./templates/price-tag-7090";
+export type {
+  PriceTag7090Case,
+  PriceTag7090Input,
+  PriceTag7090Mode,
+  PriceTag7090Model,
+} from "./templates/price-tag-7090";
+
+export { buildOrderLabel100100, fitOptionLines, wrapChars } from "./templates/order-100100";
+export type { OrderLabelInput } from "./templates/order-100100";
