@@ -56,6 +56,20 @@ export {
   utf8Length,
 } from "./measure";
 
+export {
+  GRID_LABEL_SIZE,
+  GRID_MAJOR,
+  GRID_MINOR,
+  GRID_TICK,
+  buildGridLabel,
+} from "./grid";
+
+export { NAME_BAND_FIT, layoutNameBand } from "./name-band";
+export type { NameBandLayout, NameBandSpec } from "./name-band";
+
+export { PREPRINTED_UOM, uomOverride } from "./uom-override";
+export type { UomCaptionRect, UomOverrideSpec } from "./uom-override";
+
 export { fieldData } from "./escape";
 
 export {

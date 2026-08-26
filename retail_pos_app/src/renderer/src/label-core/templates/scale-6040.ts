@@ -55,6 +55,8 @@
 
 import { fitSize, textWidth } from "../measure";
 import { strike, type Element, type Label, type Line, type Text } from "../model";
+import { layoutNameBand, type NameBandLayout } from "../name-band";
+import { uomOverride } from "../uom-override";
 
 /** Every template takes these; nothing here is layout. */
 export interface TemplateOptions {
@@ -197,6 +199,18 @@ const TOTAL_Y = 150;
 const TOTAL_W = 114;
 const TOTAL_SIZE = 44;
 
+// ── unit correction, over the pre-printed `$/kg` caption (x ≈ 299–336, y ≈ 207–225)
+// The replacement goes to the caption's **left**: the PRICE box starts at x 356
+// and there is nothing but artwork between the two. See `uomOverride`.
+//
+// **Unverified on hardware.** Measured off the artwork, not yet grid-checked
+// the way the 58 × 100's pair was — and that pair moved 19 dots when it was.
+// Print `buildGridLabel("6040")` on the stock and confirm before relying on it.
+// Named constants so the correction is a one-line change.
+const UOM_RULE = { x: 297, y: 216, w: 42 };
+const UOM_TEXT = { x: 252, y: 206 };
+const UOM_SIZE = 18;
+
 // ── symbol zone (x 15–243, y 67–229) ────────────────────────────────────────
 // The EAN keeps the confirmed 1D mockup's left edge, x = 34. The QR sits 20
 // dots further in at x = 54, which is what centres a 90-dot symbol in the zone
@@ -315,11 +329,7 @@ export function formatScaleDates(packedOnIso: string, usedByIso: string): ScaleD
 // Name band
 // ---------------------------------------------------------------------------
 
-export interface Name6040Layout {
-  size: number;
-  lines: 1 | 2;
-  y: number;
-}
+export type Name6040Layout = NameBandLayout;
 
 /**
  * How the English name is set in the 0–67 band: size, line count, baseline `y`.
@@ -330,29 +340,23 @@ export interface Name6040Layout {
  *     at y 14 so it is roughly centred in the band.
  *  2. It does not → **two** lines at 24, moved up to y 6 to make room for the
  *     second one.
- *  3. It does not fit two lines of 24 either → the same two lines, shrunk by
- *     `fitSize` to whatever does fit, and never below 20.
+ *  3. It does not fit two lines of 24 either → the same two lines, shrunk to
+ *     whatever does fit, and never below 20.
  *
- * The shrink is done here rather than by setting `shrink` on the element,
- * because the emitter's budget is `width * lines` — the full 900 dots — and
- * would spend the 5% margin case (1) and case (2) are both decided against. One
- * margin, one place, or the two branches disagree about what "fits" means.
- *
- * Pure and exported so the boundary can be tested without rendering a label.
+ * The rule itself lives in `../name-band` — the 58 × 100 label sets its name the
+ * same way at different sizes, and the margin in case (1) has to mean the same
+ * thing on both labels. This function is only this band's numbers.
  */
 export function layoutName6040(nameEn: string): Name6040Layout {
-  const text = (nameEn ?? "").trim();
-  const budget = NAME_W * NAME_FIT;
-
-  if (textWidth(text, NAME_ONE_LINE_SIZE) <= budget) {
-    return { size: NAME_ONE_LINE_SIZE, lines: 1, y: NAME_ONE_LINE_Y };
-  }
-
-  return {
-    size: fitSize(text, budget * 2, NAME_TWO_LINE_SIZE, NAME_MIN_SIZE),
-    lines: 2,
-    y: NAME_TWO_LINE_Y,
-  };
+  return layoutNameBand(nameEn, {
+    width: NAME_W,
+    fit: NAME_FIT,
+    oneLineSize: NAME_ONE_LINE_SIZE,
+    twoLineSize: NAME_TWO_LINE_SIZE,
+    minSize: NAME_MIN_SIZE,
+    yOne: NAME_ONE_LINE_Y,
+    yTwo: NAME_TWO_LINE_Y,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -364,10 +368,13 @@ export function layoutName6040(nameEn: string): Name6040Layout {
  *
  * The PRICE cell has `$` pre-printed to its left, so printing one again gives
  * `$$28.16`. Callers keep passing money as display strings (`$28.16`) because
- * the 58 × 100 label wants them that way, so the sign is stripped here rather
+ * that is what the screens already hold, so the sign is stripped here rather
  * than demanded of the caller.
+ *
+ * Exported for the 58 × 100 template: its stock pre-prints a `$` over *both*
+ * money columns, so it strips the sign from the unit price as well.
  */
-function amountOnly(text: string): string {
+export function amountOnly(text: string): string {
   return text.trim().replace(/^(-?)\$/, "$1");
 }
 
@@ -483,6 +490,11 @@ export function buildScaleLabel6040(
       width: TOTAL_W,
       lines: 1,
       align: "R",
+    }),
+    ...uomOverride(input.unit, {
+      captionRect: UOM_RULE,
+      textPos: UOM_TEXT,
+      size: UOM_SIZE,
     }),
     symbol(input.barcode),
     ...footer(input),

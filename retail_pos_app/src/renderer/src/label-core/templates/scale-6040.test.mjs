@@ -175,6 +175,31 @@ test("the footer and the was-price are optional", () => {
   assert.ok(zpl.includes("28.16"), "the total still prints");
 });
 
+// ---------------------------------------------------------------------------
+// The unit correction — the stock says `$/kg`, the item may not be sold by it
+// ---------------------------------------------------------------------------
+
+test("a kilogram item leaves the pre-printed $/kg caption alone", () => {
+  const label = buildScaleLabel6040(ONE_D);
+  assert.ok(!label.elements.some((el) => el.kind === "text" && el.text.startsWith("$/")));
+  assert.ok(!renderLabel(label).includes("^FO297,216"), "no rule over the caption");
+});
+
+test("an each-priced item strikes the caption and names the real unit", () => {
+  // The replacement goes to the caption's LEFT: the PRICE box starts at x 356.
+  // These coordinates are measured off the artwork and not yet grid-checked on
+  // hardware — see the constants' comment in the template.
+  const zpl = renderLabel(buildScaleLabel6040({ ...ONE_D, unit: "EA", weightText: "1 EA" }));
+
+  assert.ok(zpl.includes("^FO297,216^GB42,2,2^FS"), zpl);
+  assert.ok(zpl.includes("^FO252,206^A@N,18,16,E:NOTOKRB.TTF^FH^FD$/EA^FS"), zpl);
+  // The NET cell takes the caller's free text verbatim — no unit appended here.
+  assert.ok(zpl.includes("^FH^FD1 EA^FS"), zpl);
+
+  const lower = renderLabel(buildScaleLabel6040({ ...ONE_D, unit: "100g" }));
+  assert.ok(lower.includes("^FH^FD$/100G^FS"), lower);
+});
+
 test("dbg rides through to the emitter", () => {
   assert.equal(buildScaleLabel6040(ONE_D).dbg, false);
   assert.equal(buildScaleLabel6040(ONE_D, { dbg: true }).dbg, true);

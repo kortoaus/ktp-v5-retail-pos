@@ -20,6 +20,7 @@ import {
   MEDIA,
   MEDIA_IDS,
   buildDiagnosticLabel,
+  buildGridLabel,
   buildIngredientLabel58100,
   buildOrderLabel100100,
   buildPriceTag7030,
@@ -103,8 +104,72 @@ const SCALE_SAMPLE = {
   storeAddress: STORE_ADDRESS,
 };
 
+/**
+ * A real statement panel, allergen sentence and all.
+ *
+ * The 58 × 100 stock gives the paragraph five lines at 18 and truncates past
+ * them, so the sample has to be a plausible *full* statement — a short list of
+ * ingredients would never show where the cap bites.
+ */
 const INGREDIENTS =
-  "Salmon, Tuna, Kingfish, Rice, Vinegar, Sugar, Salt, Wasabi, Soy Sauce (Water, Soybean, Wheat, Salt), Seaweed, Sesame Oil, Preservative (202)";
+  "Salmon (Atlantic, farmed), Salt. Allergen information: Contains fish. " +
+  "Keep refrigerated below 4C. Consume on day of purchase.";
+
+/**
+ * The 58 × 100 samples share the 60 × 40's item and dates; only the money moves.
+ *
+ * The 2D one carries the 30% markdown the PP payload already declares, so both
+ * `was` columns print and the total is the marked-down amount — that is the
+ * case the pre-printed stock's two `was` slots exist for, and the one worth
+ * holding against real artwork.
+ */
+const INGREDIENT_SAMPLE = {
+  ...SCALE_SAMPLE,
+  ingredients: INGREDIENTS,
+};
+
+const INGREDIENT_MARKDOWN = {
+  ...INGREDIENT_SAMPLE,
+  nameEn: SCALE_NAME_EN_TAGGED,
+  totalText: "$19.71",
+  wasTotalText: "$28.16",
+};
+
+/**
+ * An each-priced item, on stock whose captions all assume kilograms.
+ *
+ * A packaged cracker has no weight at all: the NET box takes `1 EA` as free
+ * text and the pre-printed `$/KG` has to be ruled out and replaced. Its use-by
+ * is 180 days out, which also lands the date row on the other branch of
+ * `formatScaleDates` — different years, so both dates gain the year and shrink
+ * together. Two things this sample proves that the salmon one cannot.
+ */
+const EA_PP_QR = buildPPBarcodeString({
+  barcode: "00031146200139",
+  prices: [130, 140, 140, 140, 140],
+  promoPrices: [150, 150, 150, 150, 150],
+  weight: null,
+  packedOn: "2026-08-26",
+  usedBy: 180,
+});
+
+const EA_SAMPLE = {
+  nameKo: "NS 새우깡 75g",
+  nameEn: "NS Shrimp Crackers 75g",
+  packedOnIso: "2026-08-26",
+  usedByIso: "2027-02-22",
+  weightText: "1 EA",
+  unit: "EA",
+  unitPriceText: "$1.30",
+  totalText: "$1.30",
+  wasUnitPriceText: null,
+  wasTotalText: null,
+  ingredients:
+    "Tapioca Starch, Shrimp (12%), Wheat Flour, Sugar, Salt. " +
+    "Allergen information: Contains crustacean and wheat. Store in a cool dry place.",
+  storeName: STORE_NAME,
+  storeAddress: STORE_ADDRESS,
+};
 
 const PRICE_SAMPLE = {
   nameKo: NAME_KO,
@@ -204,21 +269,29 @@ const TEMPLATES: TemplateEntry[] = [
     media: "58100",
     build: (dbg) =>
       buildIngredientLabel58100(
-        {
-          ...SCALE_SAMPLE,
-          ingredients: INGREDIENTS,
-          barcode: { kind: "ean13", data12: EAN13_12 },
-        },
+        { ...INGREDIENT_SAMPLE, barcode: { kind: "ean13", data12: EAN13_12 } },
         { dbg },
       ),
   },
   {
+    // The mockup's own case: tagged name, both `was` columns, marked-down total.
     id: "58100-2d",
     label: "58100 · 2D",
     media: "58100",
     build: (dbg) =>
       buildIngredientLabel58100(
-        { ...SCALE_SAMPLE, ingredients: INGREDIENTS, barcode: { kind: "pp", qrData: PP_QR } },
+        { ...INGREDIENT_MARKDOWN, barcode: { kind: "pp", qrData: PP_QR } },
+        { dbg },
+      ),
+  },
+  {
+    // Each-priced: the `$/KG` correction and the different-years date branch.
+    id: "58100-2d-ea",
+    label: "58100 · 2D (EA item)",
+    media: "58100",
+    build: (dbg) =>
+      buildIngredientLabel58100(
+        { ...EA_SAMPLE, barcode: { kind: "pp", qrData: EA_PP_QR } },
         { dbg },
       ),
   },
@@ -296,7 +369,13 @@ const TEMPLATES: TemplateEntry[] = [
 
 // ---------------------------------------------------------------------------
 
-type Selection = { kind: "diagnostic" } | { kind: "template"; id: string };
+/**
+ * What the Print button will send.
+ *
+ * `diagnostic` and `grid` both follow the `media` picker; a `template` carries
+ * its own media, which is why it is the one that names an id.
+ */
+type Selection = { kind: "diagnostic" } | { kind: "grid" } | { kind: "template"; id: string };
 
 function printerKey(printer: LabelPrinter): string {
   return printer.type === "serial"
@@ -334,10 +413,12 @@ export default function ScaleLabelTestScreen() {
 
   const activeMedia = template ? template.media : media;
 
-  const label = useMemo(
-    () => (template ? template.build(dbg) : buildDiagnosticLabel(media, { dbg })),
-    [template, media, dbg],
-  );
+  const label = useMemo(() => {
+    if (template) return template.build(dbg);
+    // The grid ignores `dbg` on purpose: outlining a grid outlines every rule.
+    if (selection.kind === "grid") return buildGridLabel(media);
+    return buildDiagnosticLabel(media, { dbg });
+  }, [template, selection.kind, media, dbg]);
   const zpl = useMemo(() => renderLabel(label), [label]);
 
   // Deliberately a warning and not a block: testing a 70 × 90 tag on the 100 ×
@@ -386,6 +467,11 @@ export default function ScaleLabelTestScreen() {
   };
 
   const dots = MEDIA[activeMedia].dots;
+  const selectionLabel = template
+    ? template.label
+    : selection.kind === "grid"
+      ? `Grid ${MEDIA[media].label}`
+      : "Diagnostic";
 
   return (
     <div className="h-full w-full bg-gray-100 flex flex-col">
@@ -484,7 +570,37 @@ export default function ScaleLabelTestScreen() {
               ))}
             </div>
             <span className="text-xs text-gray-400">
-              {template ? template.label : "Diagnostic"} · {dots[0]} × {dots[1]} dots @ 203 dpi
+              {selectionLabel} · {dots[0]} × {dots[1]} dots @ 203 dpi
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-bold text-gray-500 uppercase">
+              Measuring Grid
+            </span>
+            <div className="grid grid-cols-3 gap-2">
+              {MEDIA_IDS.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onPointerDown={() => {
+                    setMedia(id);
+                    setSelection({ kind: "grid" });
+                  }}
+                  className={cn(
+                    "h-12 rounded-lg border text-sm font-semibold transition-colors",
+                    selection.kind === "grid" && media === id
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+                  )}
+                >
+                  {MEDIA[id].label}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-gray-400">
+              Print on the pre-printed stock and read the artwork&rsquo;s corners straight off
+              the numbered lines &mdash; 40-dot rules, 20-dot edge ticks.
             </span>
           </div>
 
@@ -518,7 +634,7 @@ export default function ScaleLabelTestScreen() {
                 : "bg-gray-200 text-gray-400",
             )}
           >
-            {printing ? "Printing..." : `Print ${template ? template.label : "diagnostic label"}`}
+            {printing ? "Printing..." : `Print ${selectionLabel}`}
           </button>
 
           {message && <p className="text-sm text-gray-600 break-words">{message}</p>}
