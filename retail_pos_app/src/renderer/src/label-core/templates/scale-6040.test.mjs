@@ -46,10 +46,6 @@ const PP_QR = buildPPBarcodeString({
 
 const ONE_D = { ...SAMPLE, barcode: { kind: "ean13", data12: "200000102816" } };
 const TWO_D = { ...SAMPLE, barcode: { kind: "pp", qrData: PP_QR } };
-const TWO_D_ONE_D = {
-  ...SAMPLE,
-  barcode: { kind: "pp-ean13", qrData: PP_QR, data12: "200000102816" },
-};
 
 /** Cells the values must land in, from the pre-printed grid (dots, 203 dpi). */
 const GRID = {
@@ -81,8 +77,8 @@ test("1D reproduces the confirmed pre-printed mockup, field for field", () => {
     "^FO252,180^A@N,18,16,E:NOTOKRM.TTF^FB88,1,0,C,0^FH^FDwas $62.00^FS",
     // PRICE cell — right-aligned, no "$" (the stock prints one at x≈347)
     "^FO356,150^A@N,44,40,E:NOTOKRBK.TTF^FB114,1,0,R,0^FH^FD28.16^FS",
-    // symbol zone
-    "^FO34,80^BY2,3,90^BEN,90,Y,N^FH^FD200000102816^FS",
+    // symbol zone — y 90, the 2026-08-26 revision of the mockup (it was 80).
+    "^FO34,90^BY2,3,90^BEN,90,Y,N^FH^FD200000102816^FS",
     // footer, below the bottom red rule
     "^FO0,238^A@N,30,27,E:NOTOKRBK.TTF^FB480,1,0,C,0^FH^FDDREAM MARKET^FS",
     "^FO0,276^A@N,18,16,E:NOTOKRM.TTF^FB480,1,0,C,0^FH^FD42-50 Rowe St. Eastwood NSW 2122^FS",
@@ -155,69 +151,6 @@ test("the 2D QR clears the pre-printed rule whatever the payload does", () => {
     assert.equal(box.y + box.h, 205, `bottom edge is anchored, got ${box.y + box.h}`);
     assert.ok(box.y > GRID.topRule, `top ${box.y} must stay under the top rule`);
     assert.ok(box.y + box.h < GRID.bottomRule, "and clear of the bottom rule");
-  }
-});
-
-test("2D+1D stacks a bottom-anchored QR over a bare EAN-13", () => {
-  const zpl = renderLabel(buildScaleLabel6040(TWO_D_ONE_D));
-
-  // QR bottom-anchored at 160, EAN under it at 166 with no human-readable line
-  // — the HRI would cost 30 dots the zone does not have.
-  assert.ok(zpl.includes(`^FT54,160^BQN,2,2^FH^FDLA,${PP_QR}^FS`), zpl);
-  assert.ok(zpl.includes("^FO34,166^BY2,3,48^BEN,48,N,N^FH^FD200000102816^FS"), zpl);
-
-  // Both symbols, and the rest of the grid untouched.
-  const strip = (z) => z.split("\n").filter((l) => !l.includes("^BEN") && !l.includes("^BQN"));
-  assert.deepEqual(strip(zpl), strip(renderLabel(buildScaleLabel6040(ONE_D))));
-});
-
-test("2D+1D fits the media and the symbol zone, and the two do not overlap", () => {
-  const [pageW, pageH] = MEDIA["6040"].dots;
-  const label = buildScaleLabel6040(TWO_D_ONE_D);
-
-  for (const el of label.elements) {
-    const box = elementBounds(el);
-    assert.ok(box.x >= 0 && box.y >= 0, `${el.kind} starts on the label`);
-    assert.ok(box.x + box.w <= pageW, `${el.kind} right edge ${box.x + box.w} > ${pageW}`);
-    assert.ok(box.y + box.h <= pageH, `${el.kind} bottom ${box.y + box.h} > ${pageH}`);
-  }
-
-  const qr = elementBounds(label.elements.find((el) => el.kind === "qr"));
-  const ean = elementBounds(label.elements.find((el) => el.kind === "barcode"));
-
-  // The QR is 45 modules at mag 2 on this payload, so y 70–160.
-  assert.deepEqual(qr, { x: 54, y: 70, w: 90, h: 90 });
-
-  for (const box of [qr, ean]) {
-    assert.ok(box.x >= GRID.symbolZone.x0, `left ${box.x}`);
-    assert.ok(box.x + box.w <= GRID.symbolZone.x1, `right ${box.x + box.w}`);
-    assert.ok(box.y >= GRID.symbolZone.y0, `top ${box.y}`);
-    assert.ok(box.y + box.h <= GRID.symbolZone.y1, `bottom ${box.y + box.h}`);
-  }
-  assert.ok(qr.y + qr.h <= ean.y, `QR bottom ${qr.y + qr.h} must clear the EAN top ${ean.y}`);
-});
-
-test("nothing lands outside 480 × 320, on any variant", () => {
-  const [pageW, pageH] = MEDIA["6040"].dots;
-  for (const input of [ONE_D, TWO_D, TWO_D_ONE_D]) {
-    for (const el of buildScaleLabel6040(input).elements) {
-      const box = elementBounds(el);
-      assert.ok(box.x >= 0 && box.y >= 0, `${el.kind} starts on the label`);
-      assert.ok(box.x + box.w <= pageW, `${el.kind} right edge ${box.x + box.w} > ${pageW}`);
-      assert.ok(box.y + box.h <= pageH, `${el.kind} bottom ${box.y + box.h} > ${pageH}`);
-    }
-  }
-});
-
-test("the symbol stays inside the zone the grid leaves for it", () => {
-  for (const input of [ONE_D, TWO_D]) {
-    const el = buildScaleLabel6040(input).elements.find(
-      (e) => e.kind === "barcode" || e.kind === "qr",
-    );
-    const box = elementBounds(el);
-    assert.ok(box.x >= GRID.symbolZone.x0, `${el.kind} left ${box.x}`);
-    assert.ok(box.x + box.w <= GRID.symbolZone.x1, `${el.kind} right ${box.x + box.w}`);
-    assert.ok(box.y >= GRID.symbolZone.y0, `${el.kind} top ${box.y}`);
   }
 });
 

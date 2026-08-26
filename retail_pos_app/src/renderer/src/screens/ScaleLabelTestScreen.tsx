@@ -160,18 +160,6 @@ const TEMPLATES: TemplateEntry[] = [
       buildScaleLabel6040({ ...SCALE_SAMPLE, barcode: { kind: "pp", qrData: PP_QR } }, { dbg }),
   },
   {
-    // Both symbols in the one zone: the QR this POS scans, and a bare EAN-13
-    // for every scanner that has never heard of the PP schema.
-    id: "6040-2d-1d",
-    label: "6040 · 2D+1D",
-    media: "6040",
-    build: (dbg) =>
-      buildScaleLabel6040(
-        { ...SCALE_SAMPLE, barcode: { kind: "pp-ean13", qrData: PP_QR, data12: EAN13_12 } },
-        { dbg },
-      ),
-  },
-  {
     id: "58100-1d",
     label: "58100 · 1D",
     media: "58100",

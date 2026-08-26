@@ -90,7 +90,6 @@ export type {
   ScaleBarcode,
   ScaleBarcodeEan13,
   ScaleBarcodePP,
-  ScaleBarcodePPEan13,
   ScaleDates,
   ScaleLabelInput,
   TemplateOptions,
