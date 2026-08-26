@@ -97,7 +97,12 @@ export function useBarcodeScanner(onScan: (barcode: string) => void): void {
         return
       }
 
-      const char = codeToChar(e.code, e.shiftKey)
+      // e.key 가 ASCII 인쇄 문자면 그대로 신뢰한다 — Shift 상태까지 정확하다.
+      // 2D 스캐너는 Shift 를 별도 키 이벤트로 빠르게 보내서 e.shiftKey 가
+      // false 로 잡히는 경우가 있어, e.code 매핑만 쓰면 `"`→`'`, `:`→`;`,
+      // `{`→`[` 로 바뀌어 PP JSON 이 깨진다 (2026-08-26 실측). 한글 IME 로
+      // e.key 가 `ㄱ` 같은 비ASCII 일 때만 기존 e.code 매핑으로 폴백.
+      const char = /^[\x20-\x7e]$/.test(e.key) ? e.key : codeToChar(e.code, e.shiftKey)
       if (char != null) {
         buffer += char
         lastKeyTime = now
