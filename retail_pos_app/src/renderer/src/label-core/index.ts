@@ -131,3 +131,9 @@ export type {
 
 export { buildOrderLabel100100, fitOptionLines, wrapChars } from "./templates/order-100100";
 export type { OrderLabelInput } from "./templates/order-100100";
+
+export {
+  buildShippingLabel100100,
+  layoutShippingName,
+} from "./templates/shipping-100100";
+export type { ShippingLabelInput, ShippingNameLayout } from "./templates/shipping-100100";

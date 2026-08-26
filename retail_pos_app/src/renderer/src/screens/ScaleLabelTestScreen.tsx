@@ -26,6 +26,7 @@ import {
   buildPriceTag7030,
   buildPriceTag7090,
   buildScaleLabel6040,
+  buildShippingLabel100100,
   renderLabel,
   type Label,
   type MediaId,
@@ -199,6 +200,33 @@ const ORDER_SAMPLE = {
   ppQrData: PP_QR,
 };
 
+/**
+ * The 100 × 100 shipping slip — a picking-inspection label for a delivery run.
+ *
+ * The customer name is Korean on purpose: the operations builder this template
+ * replaces stripped every non-ASCII character out of it, so a Korean shop name
+ * printed as blanks. Holding this print against one from the old app is how
+ * that is checked.
+ *
+ * `so%%%<id>` is the delivery scanner's contract and is built by the caller —
+ * this screen is the adapter, so it is built here rather than in the template.
+ * The maps URL is a real `dir/?api=1` navigation link at ~110 bytes, which is
+ * what lands the right-hand symbol on magnification 5 against the left one's 10.
+ */
+const SHIPPING_SAMPLE = {
+  documentId: "SO 24081",
+  customerName: "드림마트 이스트우드 (Dream Mart Eastwood)",
+  // moment `ddd Do MMM` — no time; a delivery run is a day, not an hour.
+  deliveryDateText: "Thu 27th Aug",
+  cycleText: "3",
+  // Suburb, state, postcode. No street: the driver navigates from the map QR.
+  addressText: "Eastwood NSW 2122",
+  saleOrderQrData: "so%%%24081",
+  mapsQrData:
+    "https://www.google.com/maps/dir/?api=1&destination=-33.7905,151.0815" +
+    "&travelmode=driving&dir_action=navigate",
+};
+
 interface TemplateEntry {
   id: string;
   label: string;
@@ -366,6 +394,12 @@ const TEMPLATES: TemplateEntry[] = [
     label: "100100 · order + PP QR",
     media: "100100",
     build: (dbg) => buildOrderLabel100100(ORDER_SAMPLE, { dbg }),
+  },
+  {
+    id: "100100-shipping",
+    label: "100100 · shipping (SO + map QR)",
+    media: "100100",
+    build: (dbg) => buildShippingLabel100100(SHIPPING_SAMPLE, { dbg }),
   },
 ];
 
