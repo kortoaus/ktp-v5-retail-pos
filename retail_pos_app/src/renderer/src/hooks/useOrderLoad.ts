@@ -4,8 +4,8 @@
 // 상태별 정책은 order-load-policy.ts 에서 순수하게 결정한다. 로드는 CRM에
 // 어떤 쓰기도 하지 않으며, 결제 완료 시에만 서버가 COLLECTED 로 전이한다.
 //
-// 로드 동작 (§X-8 관례): 빈 카트 필수 → 멤버 먼저 부착(§Y hold 스타일 미검증
-// 최소 멤버 — 적립은 업싱크가 CRM 검증 후 처리) → 라인 주입
+// 로드 동작 (§X-8 관례): 빈 카트 필수 → 멤버 먼저 부착(멤버 QR 스캔 경로와
+// 같은 CRM 조회 — 실패 시에만 §Y 미검증 최소 멤버 폴백 + 안내) → 라인 주입
 // (unit_price_adjusted = 주문 라인 unitPrice — 스냅샷 가격이 로컬 카탈로그를
 // 이긴다, qty = 정책 수량 × QTY_SCALE). 로컬에 없는 아이템이 하나라도 있으면
 // 전체 중단 (부분 로드 금지 — 금액 정합). 성공 시 카트에 externalOrderId +
@@ -14,6 +14,7 @@
 import { useCallback, useState } from "react";
 import { QTY_SCALE } from "../libs/constants";
 import { generateSaleLineItem } from "../libs/item-utils";
+import { searchMemberById } from "../service/crm.service";
 import { searchItemById } from "../service/item.service";
 import {
   getOrder,
@@ -23,6 +24,14 @@ import {
 import { useSalesStore } from "../store/SalesStore";
 import type { SaleLineItem } from "../types/sales";
 import { getOrderLoadPolicy, type OrderLoadQtySource } from "./order-load-policy";
+
+/**
+ * 멤버 조회 실패 시 안내 (오너 결정 2026-08-26). 로드는 성공하되, 이 카트의
+ * 멤버는 미검증 최소 멤버라 결제단에서 포인트·바우처가 뜨지 않는다.
+ * 러너(ktpv5-retail-runner/src/hooks/useOrderLoad.ts)와 문구 동일.
+ */
+export const MEMBER_UNAVAILABLE_MESSAGE =
+  "Member details unavailable — points and vouchers won't show for this sale.";
 
 // 로드 수량 결정 (순수). null = 이 라인은 제외.
 function chosenQtyOf(line: OrderLine, qtySource: OrderLoadQtySource): number {
@@ -133,15 +142,40 @@ export function useOrderLoad() {
         });
       }
 
-      // ── 멤버 먼저 부착 (§Y hold 스타일 미검증 최소 멤버) ──
-      setMember({
-        id: detail.memberId,
-        name: detail.memberName,
-        level: 1,
-        phone_last4: null,
-        points: null,
-        unverified: true,
-      });
+      // ── 멤버 먼저 부착 — 멤버 QR 스캔 경로와 **같은 조회·같은 매핑** ──
+      //    (오너 결정 2026-08-26) 결제단 바우처/포인트는 실제 level·points 가
+      //    붙어 있어야 뜬다. 그래서 주문의 memberId 로 CRM 을 한 번 조회해
+      //    SaleScreen 의 member%%% 브랜치와 동일한 필드로 부착한다.
+      //    조회 실패(네트워크 단절 / 미조회) 시에만 기존 §Y 미검증 최소
+      //    멤버로 폴백하고 안내한다 — 로드 자체는 계속 성공해야 한다.
+      let memberVerified = false;
+      try {
+        const memberRes = await searchMemberById(detail.memberId);
+        if (memberRes.ok && memberRes.result) {
+          const m = memberRes.result;
+          setMember({
+            id: m.id,
+            name: m.name,
+            level: m.level,
+            phone_last4: m.phone_last4,
+            points: m.points,
+          });
+          memberVerified = true;
+        }
+      } catch (e) {
+        console.error("[order-load] member lookup failed:", e);
+      }
+      if (!memberVerified) {
+        // §Y hold 스타일 미검증 최소 멤버 — 적립은 업싱크가 CRM 검증 후 처리.
+        setMember({
+          id: detail.memberId,
+          name: detail.memberName,
+          level: 1,
+          phone_last4: null,
+          points: null,
+          unverified: true,
+        });
+      }
 
       // ── 라인 주입 — 주문 스냅샷 단가를 adjusted 로 (로컬 카탈로그보다
       //    우선). 라인명에 주문 태그 (PP 마크다운 태그 관례). ──
@@ -153,6 +187,9 @@ export function useOrderLoad() {
       }
 
       setCartOrder(externalOrderId, detail.orderNo);
+      // 안내는 로드 완료 후 — window.alert 은 블로킹이라 라인 주입 전에
+      // 띄우면 "로드가 멈춘 것"처럼 보인다. 로드는 이미 성공했다.
+      if (!memberVerified) window.alert(MEMBER_UNAVAILABLE_MESSAGE);
       return true;
     } catch (e) {
       console.error("[order-load] failed:", e);
