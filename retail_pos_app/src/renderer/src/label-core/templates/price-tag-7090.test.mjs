@@ -144,8 +144,112 @@ test("a four-figure price shrinks until it fits the tag", () => {
 
 test("the barcode reads top-left, bottom-left and inside the Data Matrix", () => {
   const zpl = renderLabel(buildPriceTag7090(CASES["promo-member"]));
-  assert.ok(zpl.includes("^FO475,628^BXN,5,200^FH^FD9300001028165^FS"), zpl);
+  assert.ok(zpl.includes("^FO475,608^BXN,5,200^FH^FD9300001028165^FS"), zpl);
   assert.equal(zpl.split("9300001028165").length - 1, 3);
+});
+
+test("both human-readable digit lines print, in all four cases", () => {
+  for (const [name, input] of Object.entries(CASES)) {
+    const zpl = renderLabel(buildPriceTag7090(input));
+    assert.ok(zpl.includes("^FO24,30^"), `${name}: top-left digit line at y30`);
+    assert.ok(zpl.includes("^FO24,638^"), `${name}: bottom digit line at y638`);
+    // Both carry the barcode itself, not a truncation of it.
+    assert.equal(
+      zpl.split("^FH^FD9300001028165^FS").length - 1,
+      3,
+      `${name}: two digit lines + the Data Matrix`,
+    );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// The member stack
+// ---------------------------------------------------------------------------
+
+const MEMBER_CASES = ["normal-member", "promo-member"];
+
+/** The three rows the shopper reads as one column, plus the raised cents. */
+function memberStack(input) {
+  const els = buildPriceTag7090(input).elements;
+  const text = (pred) => els.find((el) => el.kind === "text" && pred(el));
+  // splitPrice emits the only unblocked Black fields on the tag; everything
+  // else that is Black declares a ^FB width.
+  const big = els.filter((el) => el.kind === "text" && el.weight === "BK" && !el.width);
+
+  return {
+    guest: text((el) => el.text.startsWith("GUEST ")),
+    member: text((el) => el.text === "MEMBER"),
+    dollars: big.find((el) => /^\$\d+$/.test(el.text)),
+    cents: big.find((el) => /^\d{2}$/.test(el.text)),
+  };
+}
+
+test("GUEST, MEMBER and the big price are three separated rows, not a pile", () => {
+  for (const name of MEMBER_CASES) {
+    const { guest, member, dollars, cents } = memberStack(CASES[name]);
+    assert.ok(guest && member && dollars && cents, `${name}: all four rows present`);
+
+    const box = (el) => elementBounds(el);
+    const gap = (prev, next) => box(next).y - (box(prev).y + box(prev).h);
+
+    // 12 dots is the floor the hardware run of 2026-08-26 asked for; the layout
+    // aims higher (16 above MEMBER, 20 below it) so a font tweak has slack.
+    assert.ok(
+      gap(guest, member) >= 12,
+      `${name}: GUEST→MEMBER gap ${gap(guest, member)} < 12`,
+    );
+    assert.ok(
+      gap(member, dollars) >= 12,
+      `${name}: MEMBER→$ gap ${gap(member, dollars)} < 12`,
+    );
+    assert.ok(
+      gap(member, cents) >= 12,
+      `${name}: MEMBER→cents gap ${gap(member, cents)} < 12`,
+    );
+
+    // And the order on the label is the order in the list.
+    assert.ok(box(guest).y < box(member).y, `${name}: GUEST above MEMBER`);
+    assert.ok(box(member).y < box(dollars).y, `${name}: MEMBER above the price`);
+  }
+});
+
+test("both member cases share one price geometry", () => {
+  const [a, b] = MEMBER_CASES.map((name) => memberStack(CASES[name]));
+  for (const key of ["guest", "member", "dollars", "cents"]) {
+    assert.equal(a[key].y, b[key].y, `${key} y`);
+    assert.equal(a[key].size, b[key].size, `${key} size`);
+  }
+  assert.equal(a.dollars.size, 120, "the member price is 120, down from 136/132");
+  assert.equal(a.cents.size, 68);
+});
+
+test("the member stack stays clear of the divider, the Data Matrix and the digits", () => {
+  for (const name of MEMBER_CASES) {
+    const label = buildPriceTag7090(CASES[name]);
+    const bottom = (el) => elementBounds(el).y + elementBounds(el).h;
+    const stack = memberStack(CASES[name]);
+
+    const divider = label.elements.find((el) => el.kind === "line" && el.thick === 1);
+    assert.equal(divider.y, 504, `${name}: divider unmoved`);
+    assert.ok(bottom(stack.dollars) < divider.y, `${name}: price above the divider`);
+
+    const matrix = label.elements.find((el) => el.kind === "datamatrix");
+    assert.equal(matrix.y, 608, `${name}: Data Matrix unmoved`);
+    assert.ok(bottom(stack.dollars) < matrix.y);
+  }
+});
+
+test("the non-member cases are untouched by the member rhythm", () => {
+  // Byte-for-byte: the member fix must not have moved a guest tag.
+  const normal = renderLabel(buildPriceTag7090(CASES["normal-guest"]));
+  assert.ok(normal.includes("^FO92,210^A@N,156,"), normal);
+  assert.ok(normal.includes("^FO200,360^A@N,28,"), "the /kg line");
+
+  const promo = renderLabel(buildPriceTag7090(CASES["promo-guest"]));
+  assert.ok(promo.includes("^FO102,217^A@N,146,"), promo);
+  assert.ok(promo.includes("^FO24,398^A@N,28,"), "Was $ at 28");
+  assert.ok(promo.includes("^FO330,396^A@N,30,"), "SAVE at 30");
+  assert.ok(promo.includes("^FO24,436^A@N,23,"), "the date range at 23");
 });
 
 test("nothing lands outside 560 × 720, in any of the four cases", () => {
@@ -153,10 +257,15 @@ test("nothing lands outside 560 × 720, in any of the four cases", () => {
   const inputs = [
     ...Object.values(CASES),
     { ...CASES["promo-member"], priceCents: 129999, wasPriceCents: 149999, uom: "100g" },
+    { ...CASES["normal-member"], priceCents: 129999, memberPriceCents: 119999, uom: "100g" },
     {
       ...CASES["normal-guest"],
       nameKo: "아주 긴 한글 상품명 테스트 모듬사시미 특선 플래터",
       nameEn: "A Very Long English Product Name That Has To Wrap Twice",
+    },
+    {
+      ...CASES["normal-member"],
+      nameKo: "아주 긴 한글 상품명 테스트 모듬사시미 특선 플래터",
     },
   ];
   for (const input of inputs) {

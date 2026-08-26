@@ -224,7 +224,7 @@ function guestCompactLine(model: PriceTag7090Model, uom: string, baseline: numbe
   return centred(
     baseline,
     `GUEST ${formatMoney(model.guestCents)} /${uom}`,
-    34,
+    MEMBER_GUEST_SIZE,
     24,
     "BK",
     500,
@@ -232,12 +232,69 @@ function guestCompactLine(model: PriceTag7090Model, uom: string, baseline: numbe
 }
 
 function memberCaption(baseline: number): Text {
-  return centred(baseline, "MEMBER", 32, 24, "BK", 300);
+  return centred(baseline, "MEMBER", MEMBER_CAPTION_SIZE, 24, "BK", 300);
 }
 
-function saveLine(cents: number, baseline: number): Element[] {
+// ---------------------------------------------------------------------------
+// The member stack
+// ---------------------------------------------------------------------------
+//
+// `GUEST $62.00 /kg`, `MEMBER`, and the member price are read as one column, so
+// they are laid out as one — the two `*-member` cases share every constant below
+// and differ only in what hangs underneath the price.
+//
+// Hardware, ZD421, 2026-08-26: the first cut set these baselines at 226 / 270 /
+// 374 with the price at 132–136, which puts `MEMBER`'s cell (244…276) *inside*
+// the price's cell (265…401) and leaves GUEST 11 dots off MEMBER. In print that
+// reads as `MEMBER` sitting on top of the `$`, because the `$` overshoots the
+// cap height that `ASCENT` assumes. Rather than guess at the overshoot, the
+// rhythm is now set on the `elementBounds` cell boxes with real clearance:
+//
+//     GUEST   188…222   (34)
+//               +16          ≥ 14
+//     MEMBER  238…270   (32)
+//               +20          ≥ 18
+//     price   290…410  (120)
+//
+// The 26 dots that buys come from the price (136/132 → 120), from the dead space
+// under the 2-dot rule at y176, and — on the promo tag only — from a compressed
+// footer. Everything below the price still sits inside the price cell's bottom
+// fifth, which is descender space no digit and no `$` reaches.
+//
+// Tune the baselines, not the tops, and re-run `price-tag-7090.test.mjs` after:
+// the separation is asserted, not assumed.
+
+/** Baseline of `GUEST $x.xx /uom`. */
+const MEMBER_GUEST_BASELINE = 215;
+const MEMBER_GUEST_SIZE = 34;
+/** Baseline of the `MEMBER` caption. */
+const MEMBER_CAPTION_BASELINE = 264;
+const MEMBER_CAPTION_SIZE = 32;
+/** Baseline of the big member price. */
+const MEMBER_PRICE_BASELINE = 386;
+/** Down from 136/132 — see the clearance table above. */
+const MEMBER_PRICE_SIZE = 120;
+/** Raised cents, held at the ~0.56 proportion the guest tags use. */
+const MEMBER_CENT_SIZE = 68;
+
+function saveLine(cents: number, baseline: number, size: number = 30): Element[] {
   const text = formatSave(cents);
-  return text ? [left(330, baseline, text, 30, "BK", 205, 22)] : [];
+  return text ? [left(330, baseline, text, size, "BK", 205, 22)] : [];
+}
+
+/**
+ * Sizes for the promo footer.
+ *
+ * Defaults are the `promo-guest` figures, which is the layout with room to
+ * spare. `promo-member` spends most of its height on the member stack above and
+ * passes a compressed set — see `MEMBER_*` below for why.
+ */
+interface PromoMetaSizes {
+  was?: number;
+  save?: number;
+  range?: number;
+  /** Baseline distance from the was/save row down to the date range. */
+  rangeGap?: number;
 }
 
 /** `Was $6.50`, the saving, and the promotion dates — the promo footer block. */
@@ -245,16 +302,24 @@ function promoMeta(
   model: PriceTag7090Model,
   promoRange: string | null | undefined,
   baseline: number,
+  sizes: PromoMetaSizes = {},
 ): Element[] {
+  const wasSize = sizes.was ?? 28;
+  const saveSize = sizes.save ?? 30;
+  const rangeSize = sizes.range ?? 23;
+  const rangeGap = sizes.rangeGap ?? 34;
+
   const savedCents =
     model.memberCents !== null
       ? model.baseCents - model.memberCents
       : model.baseCents - model.guestCents;
 
   return [
-    left(MARGIN_X, baseline, `Was ${formatMoney(model.baseCents)}`, 28, "M", 190),
-    ...saveLine(savedCents, baseline),
-    ...(promoRange ? [left(MARGIN_X, baseline + 34, promoRange, 23, "M", 300)] : []),
+    left(MARGIN_X, baseline, `Was ${formatMoney(model.baseCents)}`, wasSize, "M", 190),
+    ...saveLine(savedCents, baseline, saveSize),
+    ...(promoRange
+      ? [left(MARGIN_X, baseline + rangeGap, promoRange, rangeSize, "M", 300)]
+      : []),
   ];
 }
 
@@ -334,12 +399,21 @@ export function buildPriceTag7090(
     }
 
     case "normal-member": {
+      // No promo footer here, so the rows under the price get real clearance
+      // instead of the descender-space tuck the promo tag settles for.
       elements.push(
-        guestCompactLine(model, input.uom, 226),
-        memberCaption(270),
-        ...splitPrice(model.memberCents ?? model.guestCents, CENTER_X, 374, 136, 76, 510),
-        uomLine(416, input.uom, 26, 20),
-        ...saveLine(model.baseCents - (model.memberCents ?? model.baseCents), 454),
+        guestCompactLine(model, input.uom, MEMBER_GUEST_BASELINE),
+        memberCaption(MEMBER_CAPTION_BASELINE),
+        ...splitPrice(
+          model.memberCents ?? model.guestCents,
+          CENTER_X,
+          MEMBER_PRICE_BASELINE,
+          MEMBER_PRICE_SIZE,
+          MEMBER_CENT_SIZE,
+          510,
+        ),
+        uomLine(435, input.uom, 26, 20),
+        ...saveLine(model.baseCents - (model.memberCents ?? model.baseCents), 474),
         divider(504),
       );
       nameBaseline = 548;
@@ -358,12 +432,27 @@ export function buildPriceTag7090(
     }
 
     case "promo-member": {
+      // The busiest of the four: member stack *and* promo footer between the
+      // same two rules. The footer is compressed a step (28/30/23 → 26/28/21,
+      // and the date row pulled up 34 → 32) to pay for the clearance above.
       elements.push(
-        guestCompactLine(model, input.uom, 226),
-        memberCaption(270),
-        ...splitPrice(model.memberCents ?? model.guestCents, CENTER_X, 374, 132, 74, 510),
-        uomLine(416, input.uom, 24, 18),
-        ...promoMeta(model, input.promoRange, 454),
+        guestCompactLine(model, input.uom, MEMBER_GUEST_BASELINE),
+        memberCaption(MEMBER_CAPTION_BASELINE),
+        ...splitPrice(
+          model.memberCents ?? model.guestCents,
+          CENTER_X,
+          MEMBER_PRICE_BASELINE,
+          MEMBER_PRICE_SIZE,
+          MEMBER_CENT_SIZE,
+          510,
+        ),
+        uomLine(424, input.uom, 22, 18),
+        ...promoMeta(model, input.promoRange, 458, {
+          was: 26,
+          save: 28,
+          range: 21,
+          rangeGap: 32,
+        }),
         divider(504),
       );
       nameBaseline = 548;
@@ -373,8 +462,8 @@ export function buildPriceTag7090(
 
   elements.push(
     ...names(input, nameBaseline),
-    { kind: "datamatrix", x: 475, y: 628, size: 5, data: barcodeText },
-    left(MARGIN_X, 684, barcodeText, 20, "M", 390),
+    { kind: "datamatrix", x: 475, y: 608, size: 5, data: barcodeText },
+    left(MARGIN_X, 654, barcodeText, 20, "M", 390),
   );
 
   return {
