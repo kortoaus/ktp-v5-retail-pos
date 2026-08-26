@@ -17,6 +17,7 @@ import {
   IoReceiptOutline,
   IoBarcodeOutline,
   IoNotificationsOutline,
+  IoScaleOutline,
 } from "react-icons/io5";
 
 const btn =
@@ -113,6 +114,14 @@ export default function HomeScreen() {
           className="bg-amber-50 text-amber-800 hover:bg-amber-100"
         >
           Barcode Print
+        </NavBtn>
+        {/* Temporary — moves once the label templates are settled. */}
+        <NavBtn
+          to="/scale"
+          icon={<IoScaleOutline size={24} />}
+          className="bg-amber-50 text-amber-800 hover:bg-amber-100"
+        >
+          Scale / Label Test
         </NavBtn>
         <div className="flex-1 min-w-0">
           <button

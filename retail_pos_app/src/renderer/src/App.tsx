@@ -26,6 +26,7 @@ import SaleInvoiceSearchScreen from "./screens/SaleInvoiceSearchScreen";
 import OrdersScreen from "./screens/OrdersScreen";
 import SaleRefundDetailScreen from "./screens/SaleRefundDetailScreen";
 import SaleRefundPickerScreen from "./screens/SaleRefundPickerScreen";
+import ScaleLabelTestScreen from "./screens/ScaleLabelTestScreen";
 
 function App(): React.JSX.Element {
   return (
@@ -50,6 +51,8 @@ function MainApp() {
 
             <Route path="/price-tag" element={<PriceTagScreen />} />
             <Route path="/barcode-print" element={<BarcodePrintScreen />} />
+            {/* Temporary: label-core diagnostic bench, no user context needed. */}
+            <Route path="/scale" element={<ScaleLabelTestScreen />} />
             <Route path="/server-setup" element={<ServerSetupScreen />} />
 
             <Route path="/sale" element={<ManagerLayout />}>
