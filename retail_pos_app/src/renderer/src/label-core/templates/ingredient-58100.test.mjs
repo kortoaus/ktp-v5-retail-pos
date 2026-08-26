@@ -9,8 +9,8 @@ import { elementBounds, renderLabel } from "../zpl.ts";
 const SAMPLE = {
   nameKo: "모듬사시미 (테스트)",
   nameEn: "Assorted Sashimi",
-  packedOnText: "26/08/26",
-  usedByText: "27/08/26",
+  packedOnIso: "2026-08-26",
+  usedByIso: "2026-08-27",
   weightText: "0.512",
   unit: "kg",
   unitPriceText: "$55.00",

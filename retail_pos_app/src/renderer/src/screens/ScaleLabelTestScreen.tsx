@@ -59,8 +59,8 @@ const PP_QR = buildPPBarcodeString({
 const SCALE_SAMPLE = {
   nameKo: NAME_KO,
   nameEn: NAME_EN,
-  packedOnText: "26/08/26",
-  usedByText: "27/08/26",
+  packedOnIso: "2026-08-26",
+  usedByIso: "2026-08-27",
   weightText: "0.512",
   unit: "kg",
   unitPriceText: "$55.00",
@@ -114,6 +114,24 @@ const TEMPLATES: TemplateEntry[] = [
     build: (dbg) =>
       buildScaleLabel6040(
         { ...SCALE_SAMPLE, barcode: { kind: "ean13", data12: EAN13_12 } },
+        { dbg },
+      ),
+  },
+  {
+    // The dates straddle a New Year, so `formatScaleDates` has to print
+    // DD/MM/YY on both and shrink them into the same pre-printed cells. This is
+    // the branch that is easy to break and impossible to see on the 1D sample.
+    id: "6040-1d-year",
+    label: "6040 · 1D (year-boundary)",
+    media: "6040",
+    build: (dbg) =>
+      buildScaleLabel6040(
+        {
+          ...SCALE_SAMPLE,
+          packedOnIso: "2026-12-31",
+          usedByIso: "2027-01-01",
+          barcode: { kind: "ean13", data12: EAN13_12 },
+        },
         { dbg },
       ),
   },

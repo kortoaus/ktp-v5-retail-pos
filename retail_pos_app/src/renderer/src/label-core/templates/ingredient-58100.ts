@@ -25,7 +25,7 @@
 
 import { fitSize, estimateLines, textWidth } from "../measure";
 import { strike, type Element, type Label } from "../model";
-import { textEl, type ScaleLabelInput, type TemplateOptions } from "./scale-6040";
+import { formatDmy, textEl, type ScaleLabelInput, type TemplateOptions } from "./scale-6040";
 
 export interface IngredientLabelInput extends ScaleLabelInput {
   /** Free text; wrapped by the printer, capped at what fits above the price row. */
@@ -189,15 +189,18 @@ export function buildIngredientLabel58100(
   );
 
   // ── dates ───────────────────────────────────────────────────────────────
+  // Always `DD/MM/YY` here. The 60 × 40 label drops the year to fit a 90-dot
+  // pre-printed cell; this one has 115 dots and no grid to obey, so it keeps
+  // the year the legacy scale terminal always printed.
   elements.push(
-    textEl(15, DATE_Y, input.packedOnText, DATE_SIZE, "M", {
+    textEl(15, DATE_Y, formatDmy(input.packedOnIso, true), DATE_SIZE, "M", {
       width: 115,
       lines: 1,
       align: "L",
       shrink: true,
       minSize: DATE_MIN_SIZE,
     }),
-    textEl(135, DATE_Y, input.usedByText, DATE_SIZE, "M", {
+    textEl(135, DATE_Y, formatDmy(input.usedByIso, true), DATE_SIZE, "M", {
       width: 105,
       lines: 1,
       align: "L",
