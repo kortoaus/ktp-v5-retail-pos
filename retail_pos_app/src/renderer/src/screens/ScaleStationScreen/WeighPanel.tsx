@@ -53,7 +53,7 @@ import PriceLevelsModal from "./PriceLevelsModal";
  * it is worse than one that does not print.
  */
 
-type EditTarget = null | "prices" | "promoPrices" | "markdownPct" | "markdownAmt";
+type EditTarget = null | "prices" | "promoPrices" | "markdownPct";
 
 interface PrintLane {
   id: string;
@@ -260,8 +260,10 @@ export default function WeighPanel({
           </Field>
         </div>
 
-        {/* Markdown — % or $, one at a time. Folds into the total and the 1D
-            embedded price; rides in PP 05/06 only, never in 02/03. */}
+        {/* Markdown — percent only (owner, 2026-08-28; the $ kind stays in
+            scale-core/PP 05=2 for the runner, this station just doesn't offer
+            it). Folds into the total and the 1D embedded price; rides in PP
+            05/06 only, never in 02/03. */}
         <Field label="Markdown">
           <div className="flex gap-3">
             <button
@@ -277,20 +279,6 @@ export default function WeighPanel({
               {weigh.markdown?.type === "pct"
                 ? `${(weigh.markdown.value / 10).toFixed(1).replace(/\.0$/, "")}% OFF`
                 : "% Markdown"}
-            </button>
-            <button
-              type="button"
-              onPointerDown={() => setEditTarget("markdownAmt")}
-              className={cn(
-                "h-14 flex-1 rounded-lg border-2 font-bold",
-                weigh.markdown?.type === "amt"
-                  ? "border-blue-600 bg-blue-600 text-white"
-                  : "border-gray-300 bg-white text-gray-700",
-              )}
-            >
-              {weigh.markdown?.type === "amt"
-                ? `$${fmt(weigh.markdown.value)} OFF`
-                : "$ Markdown"}
             </button>
             {weigh.markdown && (
               <button
@@ -453,16 +441,6 @@ export default function WeighPanel({
       <MarkdownModal
         open={editTarget === "markdownPct"}
         kind="pct"
-        current={weigh.markdown}
-        onConfirm={(next) => {
-          weigh.setMarkdown(next);
-          setEditTarget(null);
-        }}
-        onClose={() => setEditTarget(null)}
-      />
-      <MarkdownModal
-        open={editTarget === "markdownAmt"}
-        kind="amt"
         current={weigh.markdown}
         onConfirm={(next) => {
           weigh.setMarkdown(next);
