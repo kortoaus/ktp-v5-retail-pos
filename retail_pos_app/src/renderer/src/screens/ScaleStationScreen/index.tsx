@@ -81,15 +81,19 @@ export default function ScaleStationScreen() {
         </Link>
       </div>
 
-      <div className="flex-1 min-h-0">
-        {selected ? (
-          <WeighPanel
-            itemId={selected.id}
-            store={store}
-            onBack={() => setSelected(null)}
-          />
-        ) : (
-          <ItemBrowsePanel onPick={setSelected} />
+      {/* Browse stays mounted; the weigh panel sits over it as an overlay so
+          closing it returns to the same keyword/brand filter and scroll
+          (owner, 2026-08-28). */}
+      <div className="flex-1 min-h-0 relative">
+        <ItemBrowsePanel onPick={setSelected} />
+        {selected && (
+          <div className="absolute inset-0 z-20 bg-white">
+            <WeighPanel
+              itemId={selected.id}
+              store={store}
+              onBack={() => setSelected(null)}
+            />
+          </div>
         )}
       </div>
     </div>

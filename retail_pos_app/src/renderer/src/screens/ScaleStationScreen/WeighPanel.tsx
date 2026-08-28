@@ -422,20 +422,14 @@ export default function WeighPanel({
         open={editTarget === "prices"}
         title="Price levels (Lv.0–4)"
         values={weigh.prices}
-        onConfirm={(next) => {
-          weigh.setPrices(next);
-          setEditTarget(null);
-        }}
+        onChange={(next) => weigh.setPrices(next)}
         onClose={() => setEditTarget(null)}
       />
       <PriceLevelsModal
         open={editTarget === "promoPrices"}
         title="Promo price levels (Lv.0–4)"
         values={weigh.promoPrices}
-        onConfirm={(next) => {
-          weigh.setPromoPrices(next);
-          setEditTarget(null);
-        }}
+        onChange={(next) => weigh.setPromoPrices(next)}
         onClose={() => setEditTarget(null)}
       />
       <MarkdownModal

@@ -120,6 +120,26 @@ export type {
   TemplateOptions,
 } from "./templates/scale-6040";
 
+// The only template that returns `Label[]`: free text has no bound, so overflow
+// becomes extra pages rather than a clip. See its header.
+export {
+  FREE_TEXT_BOTTOM,
+  FREE_TEXT_CONTENT_W,
+  FREE_TEXT_LEADING_GAP,
+  FREE_TEXT_PAD,
+  FREE_TEXT_SIZE_DOTS,
+  FREE_TEXT_WRAP_W,
+  buildFreeTextLabels6040,
+  freeTextRows,
+  wrapFreeTextLine,
+} from "./templates/free-text-6040";
+export type {
+  FreeTextLine,
+  FreeTextRow,
+  FreeTextSize,
+  FreeTextWeight,
+} from "./templates/free-text-6040";
+
 export { buildIngredientLabel58100 } from "./templates/ingredient-58100";
 export type { IngredientLabelInput } from "./templates/ingredient-58100";
 

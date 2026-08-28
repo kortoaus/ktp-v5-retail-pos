@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ModalContainer from "../../components/ModalContainer";
 import Numpad from "../../components/Numpads/Numpad";
 import { cn } from "../../libs/cn";
@@ -21,33 +21,54 @@ export default function PriceLevelsModal({
   open,
   title,
   values,
-  onConfirm,
+  onChange,
   onClose,
 }: {
   open: boolean;
   title: string;
   values: number[] | null;
-  onConfirm: (next: number[]) => void;
+  /** Fired on every keypad change — edits are live, there is no Apply step. */
+  onChange: (next: number[]) => void;
   onClose: () => void;
 }) {
+  const [initial, setInitial] = useState<number[]>([]);
   const [draft, setDraft] = useState<number[]>([]);
   const [level, setLevel] = useState(0);
   const [entry, setEntry] = useState("");
 
+  // Reset on OPEN only. `values` is the parent's live state and `onChange`
+  // gives it a new identity on every keystroke — keying this effect on it
+  // would blank the entry after each digit and overwrite CLS's restore point
+  // with whatever was just typed (caught by the runner port's review).
+  const valuesRef = useRef(values);
+  valuesRef.current = values;
   useEffect(() => {
     if (!open) return;
-    setDraft(padToLevelCount(values));
+    const padded = padToLevelCount(valuesRef.current);
+    setInitial(padded);
+    setDraft(padded);
     setLevel(0);
     setEntry("");
-  }, [open, values]);
+  }, [open]);
 
-  const commitEntry = (nextLevel: number) => {
-    const dollars = Number.parseFloat(entry);
-    if (entry !== "" && Number.isFinite(dollars) && dollars >= 0) {
-      setDraft((prev) => editPriceLevel(prev, level, Math.round(dollars * MONEY_SCALE)));
+  // Live editing (owner, 2026-08-28): every keypad change lands in the draft
+  // and the parent immediately; an emptied entry keeps the last committed
+  // figure rather than reverting.
+  const handleEntry = (next: string) => {
+    setEntry(next);
+    const dollars = Number.parseFloat(next);
+    if (next !== "" && Number.isFinite(dollars) && dollars >= 0) {
+      const applied = editPriceLevel(draft, level, Math.round(dollars * MONEY_SCALE));
+      setDraft(applied);
+      onChange(applied);
     }
+  };
+
+  const pickLevel = (nextLevel: number) => {
+    // Tapping the level being edited starts its entry over — nothing changes
+    // until the next digit.
     setEntry("");
-    setLevel(nextLevel);
+    if (nextLevel !== level) setLevel(nextLevel);
   };
 
   return (
@@ -57,7 +78,7 @@ export default function PriceLevelsModal({
           {Array.from({ length: PRICE_LEVEL_COUNT }).map((_, i) => (
             <div
               key={i}
-              onPointerDown={() => commitEntry(i)}
+              onPointerDown={() => pickLevel(i)}
               className={cn(
                 "h-16 rounded-lg border flex flex-col items-center justify-center cursor-pointer",
                 level === i
@@ -80,33 +101,27 @@ export default function PriceLevelsModal({
           has any, are left untouched.
         </p>
 
-        <Numpad val={entry} setVal={setEntry} useDot={true} maxDp={2} />
+        <Numpad val={entry} setVal={handleEntry} useDot={true} maxDp={2} />
 
         <div className="flex gap-3">
+          <button
+            type="button"
+            onPointerDown={() => {
+              // CLS: back to the values the modal opened with, live.
+              setDraft(initial);
+              setEntry("");
+              onChange(initial);
+            }}
+            className="flex-1 py-3 rounded-xl bg-red-600 text-white active:bg-red-700 font-medium"
+          >
+            CLS
+          </button>
           <button
             type="button"
             onPointerDown={onClose}
             className="flex-1 py-3 rounded-xl bg-gray-200 active:bg-gray-300 font-medium"
           >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onPointerDown={() => {
-              // `draft` started as `padToLevelCount(values)`, which keeps any
-              // tail past level 4, and `editPriceLevel` only writes inside the
-              // window — so the array handed back is still the length the
-              // server sent, which is what the PP payload needs.
-              const dollars = Number.parseFloat(entry);
-              onConfirm(
-                entry !== "" && Number.isFinite(dollars) && dollars >= 0
-                  ? editPriceLevel(draft, level, Math.round(dollars * MONEY_SCALE))
-                  : draft,
-              );
-            }}
-            className="flex-1 py-3 rounded-xl bg-blue-600 text-white active:bg-blue-700 font-medium"
-          >
-            Apply
+            Close
           </button>
         </div>
       </div>
