@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { LabelOutput } from '../libs/label-builder'
 import type { MediaId } from '../label-core/media'
 
 type LabelLanguage = 'zpl' | 'slcs'
+
+/**
+ * What `label:print` accepts. Every label this app builds is a ZPL string since
+ * the label-core cutover, so this is a single shape rather than a union — the
+ * legacy `libs/label-builder.ts` that used to own the type (and its `slcs`
+ * arm) was deleted with the rest of the legacy label stack. Mirrored, by hand,
+ * in `src/main/types.ts` and `src/preload/index.d.ts`, which live outside the
+ * renderer.
+ */
+type LabelOutput = { language: 'zpl'; data: string }
 
 /**
  * The media a configured printer is loaded with — label-core's own id set, so

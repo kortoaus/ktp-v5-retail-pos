@@ -1,8 +1,7 @@
 import { ipcMain } from "electron";
 import net from "node:net";
 import { SerialPort } from "serialport";
-import iconv from "iconv-lite";
-import type { LabelSendRequest, SLCSPart } from "../types";
+import type { LabelSendRequest } from "../types";
 
 const TCP_TIMEOUT_MS = 5000;
 const SERIAL_TIMEOUT_MS = 3000;
@@ -116,29 +115,19 @@ function sendSerial(path: string, data: Buffer | string): Promise<void> {
   });
 }
 
-function assembleSLCS(parts: SLCSPart[]): Buffer {
-  const buffers: Buffer[] = [];
-  for (const part of parts) {
-    if (part.type === "euc-kr") {
-      buffers.push(iconv.encode(part.data, "euc-kr"));
-    } else if (part.type === "bytes") {
-      buffers.push(Buffer.from(part.data));
-    } else {
-      buffers.push(Buffer.from(part.data, "ascii"));
-    }
-  }
-  return Buffer.concat(buffers);
-}
-
+/**
+ * Every label job is a raw ZPL string.
+ *
+ * The SLCS assembler that used to live here (euc-kr via iconv-lite, for the
+ * legacy `LabelBuilder` SLCS parts) was deleted with the rest of the legacy
+ * label stack — label-core emits ZPL only, and a printer row still typed
+ * `slcs` receives ZPL anyway (owner decision, 2026-08-26). The `language`
+ * field on the config row is kept; it records how the printer was configured,
+ * not what this handler sends.
+ */
 export function registerLabelHandlers(): void {
   ipcMain.handle("label:print", async (_event, request: LabelSendRequest) => {
-    let data: Buffer | string;
-
-    if (request.label.language === "zpl") {
-      data = request.label.data;
-    } else {
-      data = assembleSLCS(request.label.parts);
-    }
+    const data: string = request.label.data;
 
     try {
       if (request.printer.type === "net") {

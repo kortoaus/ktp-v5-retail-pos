@@ -231,7 +231,7 @@ build` in each project, plus `npx prisma generate` after any schema edit.
   electron-builder icons) is deleted in the working tree though present in git HEAD — CI is
   unaffected, a local `package:win` is not.
 - **Unused surface — do not assume it is live**: `GET /api/brand/*` and `GET /api/store/label` have
-  no consumer here; `WeightLabelScreen.tsx` is unrouted; `decimal.js` is imported nowhere;
+  no consumer here;  `decimal.js` is imported nowhere;
   `ITEM_URL` and `refreshToken` are written and never read.
 
 ## Further Reading

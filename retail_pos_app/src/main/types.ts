@@ -105,19 +105,13 @@ export interface AppConfig {
   devices: DeviceConfig;
 }
 
-export type SLCSPart =
-  | {
-      type: "raw" | "euc-kr";
-      data: string;
-    }
-  | {
-      type: "bytes";
-      data: number[];
-    };
-
-export type LabelOutput =
-  | { language: "zpl"; data: string }
-  | { language: "slcs"; parts: SLCSPart[] };
+/**
+ * A label job. ZPL only — the legacy SLCS parts arm went with the legacy label
+ * stack (2026-08-28). `LabelLanguage` above is unrelated and stays: it types
+ * the printer *row* in `AppConfig`, which records how a printer was configured;
+ * a row typed `slcs` receives ZPL like every other.
+ */
+export type LabelOutput = { language: "zpl"; data: string };
 
 export interface LabelSendRequest {
   printer: {

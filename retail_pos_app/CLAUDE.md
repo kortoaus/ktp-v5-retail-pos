@@ -106,8 +106,7 @@ Terminal" panel if `/api/terminal/me` failed → otherwise children + a persiste
 footer. `ManagerLayout` = `UserProvider > AuthGateway > Outlet`. **`UserProvider` is per-layout, not
 app-wide** — `getMe()` re-runs on every entry into `/sale`, `/manager/*`, `/shift/*`, while `/`,
 `/price-tag`, `/barcode-print`, `/server-setup` have no user context at all. Scope denial renders
-`BlockScreen` via `hasScope()` (`libs/scope-utils.ts`). `screens/WeightLabelScreen.tsx` is unrouted
-and unreferenced — dead code.
+`BlockScreen` via `hasScope()` (`libs/scope-utils.ts`).
 
 ## Cart State
 
@@ -192,7 +191,7 @@ to stub service imports) plus two colocated `*.test.mjs` run ad hoc:
 
 ```bash
 node --experimental-strip-types scripts/tests/invoice-search-scan.test.ts
-node --experimental-strip-types src/renderer/src/libs/label-7090-v2/layout.test.mjs
+npm run test:label-core   # label-core + adapters, node:test
 ```
 
 ## Invariants & Footguns

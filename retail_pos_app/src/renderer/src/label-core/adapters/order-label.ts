@@ -29,9 +29,22 @@
 
 import dayjsAU from "../../libs/dayjsAU";
 import { ORDER_QR_PREFIX } from "../../libs/order-qr";
-import { formatOrderLabelOptionLine } from "../../components/orders/order-label-zpl";
+
 import type { OrderDetail, OrderLine } from "../../service/order.service";
 import type { OrderLabelInput } from "../templates/order-100100";
+
+// 옵션 한 줄: `groupName: optionName x<qty>` (그룹명 비면 옵션명만). 구
+// order-label-zpl.ts 에서 이관 — 그 파일의 마지막 생존자였다 (2026-08-28 클린업).
+export function formatOrderLabelOptionLine(option: {
+  groupName_en: string;
+  optionName_en: string;
+  qty: number;
+}): string {
+  const group = option.groupName_en.trim();
+  const name = option.optionName_en.trim();
+  const body = group ? `${group}: ${name}` : name;
+  return `${body} x${option.qty}`;
+}
 
 /** All the label needs from the order itself. */
 export type OrderLabelOrder = Pick<OrderDetail, "id" | "orderNo" | "dueAt">;
