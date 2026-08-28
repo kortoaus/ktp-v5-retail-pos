@@ -626,76 +626,87 @@ export default function InterfaceSettingsScreen() {
           ) : (
             <div className="space-y-3">
               {zplSerial.map((entry, i) => (
-                <div key={i} className="flex items-end gap-3">
-                  <div className="w-24">
-                    <label className={labelClass}>Language</label>
-                    <select
-                      className={selectClass}
-                      value={entry.language}
-                      onChange={(e) =>
-                        updateZplSerial(i, "language", e.target.value)
-                      }
+                <div key={i} className="space-y-2">
+                  <div className="flex items-end gap-3">
+                    <div className="w-24">
+                      <label className={labelClass}>Language</label>
+                      <select
+                        className={selectClass}
+                        value={entry.language}
+                        onChange={(e) =>
+                          updateZplSerial(i, "language", e.target.value)
+                        }
+                      >
+                        <option value="zpl">ZPL</option>
+                        <option value="slcs">SLCS</option>
+                      </select>
+                    </div>
+                    <div className="w-24">
+                      <label className={labelClass}>Media Size</label>
+                      <select
+                        className={selectClass}
+                        value={entry.mediaSize ?? ""}
+                        onChange={(e) =>
+                          updateZplSerial(
+                            i,
+                            "mediaSize",
+                            e.target.value || undefined,
+                          )
+                        }
+                      >
+                        <option value="">None</option>
+                        <option value="6040">60×40</option>
+                        <option value="58100">58×100</option>
+                        <option value="7030">70×30</option>
+                        <option value="7090">70×90</option>
+                        <option value="100100">100x100</option>
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <label className={labelClass}>Name</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={entry.name}
+                        onChange={(e) =>
+                          updateZplSerial(i, "name", e.target.value)
+                        }
+                        placeholder="Label printer 1"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className={labelClass}>Serial Port</label>
+                      <select
+                        className={selectClass}
+                        value={entry.path}
+                        onChange={(e) =>
+                          updateZplSerial(i, "path", e.target.value)
+                        }
+                      >
+                        <option value="">Select port</option>
+                        {ports.map((p) => (
+                          <option key={p} value={p}>
+                            {p}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      onClick={() => removeZplSerial(i)}
+                      className={`${btnSmClass} border border-gray-300 hover:border-red-400 hover:text-red-600 text-gray-500 mb-0.5`}
                     >
-                      <option value="zpl">ZPL</option>
-                      <option value="slcs">SLCS</option>
-                    </select>
+                      Remove
+                    </button>
                   </div>
-                  <div className="w-24">
-                    <label className={labelClass}>Media Size</label>
-                    <select
-                      className={selectClass}
-                      value={entry.mediaSize ?? ""}
-                      onChange={(e) =>
-                        updateZplSerial(
-                          i,
-                          "mediaSize",
-                          e.target.value || undefined,
-                        )
-                      }
-                    >
-                      <option value="">None</option>
-                      <option value="6040">60×40</option>
-                      <option value="58100">58×100</option>
-                      <option value="7030">70×30</option>
-                      <option value="7090">70×90</option>
-                      <option value="100100">100x100</option>
-                    </select>
-                  </div>
-                  <div className="flex-1">
-                    <label className={labelClass}>Name</label>
-                    <input
-                      type="text"
-                      className={inputClass}
-                      value={entry.name}
-                      onChange={(e) =>
-                        updateZplSerial(i, "name", e.target.value)
-                      }
-                      placeholder="Label printer 1"
+                  {/* Same install over the serial port — minutes rather than
+                      seconds, and the port is locked for the duration, so the
+                      panel never opens it without being asked. */}
+                  {entry.language === "zpl" && entry.path.trim() !== "" && (
+                    <ZplFontPanel
+                      target={{ type: "serial", path: entry.path }}
+                      mediaSize={entry.mediaSize}
                     />
-                  </div>
-                  <div className="flex-1">
-                    <label className={labelClass}>Serial Port</label>
-                    <select
-                      className={selectClass}
-                      value={entry.path}
-                      onChange={(e) =>
-                        updateZplSerial(i, "path", e.target.value)
-                      }
-                    >
-                      <option value="">Select port</option>
-                      {ports.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <button
-                    onClick={() => removeZplSerial(i)}
-                    className={`${btnSmClass} border border-gray-300 hover:border-red-400 hover:text-red-600 text-gray-500 mb-0.5`}
-                  >
-                    Remove
-                  </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -796,12 +807,10 @@ export default function InterfaceSettingsScreen() {
                     </button>
                   </div>
                   {/* Korean font install — ZPL text fields cannot print hangul
-                      until the fonts are in the printer's flash. Network ZPL
-                      only: the transfer needs a socket it can stream over. */}
+                      until the fonts are in the printer's flash. */}
                   {entry.language === "zpl" && entry.host.trim() !== "" && (
                     <ZplFontPanel
-                      host={entry.host}
-                      port={entry.port}
+                      target={{ type: "net", host: entry.host, port: entry.port }}
                       mediaSize={entry.mediaSize}
                     />
                   )}

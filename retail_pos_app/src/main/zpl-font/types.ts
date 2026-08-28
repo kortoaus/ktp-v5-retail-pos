@@ -6,11 +6,15 @@
  * not come apart with it.
  */
 
-/** A network ZPL printer, addressed by raw socket. */
-export interface PrinterTarget {
-  host: string;
-  port: number;
-}
+import { describeTarget, type PrinterTarget } from "./target";
+
+export type {
+  NetPrinterTarget,
+  PrinterTarget,
+  PrinterTargetInput,
+  SerialPrinterTarget,
+} from "./target";
+export { describeTarget, normalizeTarget, sameTarget, targetKey } from "./target";
 
 /** One weight the library can install. */
 export interface FontSpec {
@@ -150,7 +154,7 @@ export class PrinterBusyError extends Error {
   readonly target: PrinterTarget;
 
   constructor(target: PrinterTarget) {
-    super(`a font transfer to ${target.host}:${target.port} is already running`);
+    super(`a font transfer to ${describeTarget(target)} is already running`);
     this.name = "PrinterBusyError";
     this.target = target;
   }

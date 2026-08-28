@@ -38,7 +38,25 @@ export interface CollectOptions {
   maxMs?: number;
 }
 
-export class PrinterConnection {
+/**
+ * What a caller may do with an open printer, whatever it is open over.
+ *
+ * `PrinterConnection` (TCP) and `SerialPrinterConnection` both satisfy this, so
+ * `service.ts` never branches on transport — see `link.ts` for the dispatch.
+ */
+export interface PrinterLink {
+  write(data: string | Uint8Array): Promise<void>;
+  settle(ms?: number): Promise<void>;
+  collect(opts?: CollectOptions): Promise<string>;
+  close(): Promise<void>;
+  /**
+   * Bytes the caller should hand to `write` at a time, when it has a choice.
+   * Serial wants small chunks; TCP does not care and leaves this unset.
+   */
+  readonly chunkSize?: number;
+}
+
+export class PrinterConnection implements PrinterLink {
   #socket: net.Socket;
   #chunks: Buffer[] = [];
   #closed = false;
@@ -197,7 +215,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Open a connection, run `fn`, and always close — even on failure. */
+/**
+ * Open a TCP connection, run `fn`, and always close — even on failure.
+ *
+ * Transport-agnostic callers want `withLink` in `link.ts` instead; this stays
+ * for the net-only path and for tests that mean TCP specifically.
+ */
 export async function withConnection<T>(
   opts: ConnectOptions,
   fn: (conn: PrinterConnection) => Promise<T>,
@@ -208,23 +231,4 @@ export async function withConnection<T>(
   } finally {
     await conn.close();
   }
-}
-
-/** Send one command and read the reply. */
-export function query(
-  opts: ConnectOptions,
-  command: string,
-  collectOpts?: CollectOptions,
-): Promise<string> {
-  return withConnection(opts, async (conn) => {
-    await conn.write(command);
-    return conn.collect(collectOpts);
-  });
-}
-
-/** Send a payload and do not wait for a reply. */
-export async function send(opts: ConnectOptions, payload: string | Uint8Array): Promise<void> {
-  await withConnection(opts, async (conn) => {
-    await conn.write(payload);
-  });
 }

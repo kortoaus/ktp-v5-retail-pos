@@ -15,7 +15,10 @@ import {
   type DirectoryListing,
 } from "./commands";
 import { loadFonts, selectFonts, type BundledFont } from "./catalog";
-import { query, send, withConnection, type ConnectOptions } from "./transport";
+import { query, send, withLink, type LinkOptions } from "./link";
+import { SERIAL_QUERY_TIMEOUT_MS, type SerialLinkOptions } from "./serial-transport";
+import type { ConnectOptions } from "./transport";
+import { normalizeTarget, targetKey, type PrinterTargetInput } from "./target";
 import {
   PrinterBusyError,
   type FontState,
@@ -30,6 +33,12 @@ import {
   type TestPrintOptions,
 } from "./types";
 
+/**
+ * Default read size off disk.
+ *
+ * TCP is happy with 64 KiB. A serial link overrides it downward through
+ * `link.chunkSize` — see `serial-transport.ts` for why 4 KiB there.
+ */
 const CHUNK_SIZE = 64 * 1024;
 const DEFAULT_DPMM = 8; // 203 dpi — the common ZD421, and every Bixolon XD3/XD5 seen so far
 
@@ -47,6 +56,22 @@ export interface ZplFontServiceOptions {
   fontDir: string;
   connect?: Omit<ConnectOptions, "host" | "port">;
   /**
+   * Serial support, including the port opener.
+   *
+   * Omitted, serial targets are refused with a message saying so — this
+   * directory imports no native module, so the host app supplies `serialport`.
+   */
+  serial?: SerialLinkOptions;
+  /**
+   * Reply timeout for a serial target.
+   *
+   * Longer than the network one and for a different reason: a label printer is
+   * often wired TX-only, so "no reply" is the expected answer rather than a
+   * fault, and this is the whole cost of finding that out. It is paid once per
+   * status check, not per font.
+   */
+  serialQueryTimeoutMs?: number;
+  /**
    * How long to wait for a query reply that never starts arriving.
    *
    * Replies end on a quiet period rather than EOF, so this only bites when the
@@ -61,9 +86,9 @@ export interface ZplFontServiceOptions {
 }
 
 export interface ZplFontService {
-  status(target: PrinterTarget, opts?: StatusOptions): Promise<FontStatus>;
-  install(target: PrinterTarget, opts?: InstallOptions): Promise<InstallResult>;
-  testPrint(target: PrinterTarget, opts?: TestPrintOptions): Promise<void>;
+  status(target: PrinterTargetInput, opts?: StatusOptions): Promise<FontStatus>;
+  install(target: PrinterTargetInput, opts?: InstallOptions): Promise<InstallResult>;
+  testPrint(target: PrinterTargetInput, opts?: TestPrintOptions): Promise<void>;
   /**
    * Whether a transfer to this printer is in flight.
    *
@@ -72,7 +97,7 @@ export interface ZplFontService {
    * printer during an install corrupts the font and loses the label. Nothing
    * consumes this yet; the label pipeline can gate on it when it is rewritten.
    */
-  isBusy(target: PrinterTarget): boolean;
+  isBusy(target: PrinterTargetInput): boolean;
 }
 
 export function createZplFontService(opts: ZplFontServiceOptions): ZplFontService {
@@ -80,19 +105,34 @@ export function createZplFontService(opts: ZplFontServiceOptions): ZplFontServic
   const queryTimeoutMs = opts.queryTimeoutMs ?? 8_000;
   const busy = new Set<string>();
 
-  const connectOpts = (target: PrinterTarget): ConnectOptions => ({
-    ...opts.connect,
-    host: target.host,
-    port: target.port,
+  const serialQueryTimeoutMs = opts.serialQueryTimeoutMs ?? SERIAL_QUERY_TIMEOUT_MS;
+
+  const linkOpts = (payloadBytes?: number): LinkOptions => ({
+    net: opts.connect,
+    serial: opts.serial,
+    payloadBytes,
   });
 
-  const key = (target: PrinterTarget) => `${target.host}:${target.port}`;
+  /**
+   * How long to wait for a reply, and how long a gap ends one.
+   *
+   * Serial gets both numbers roughly doubled. At 115200 baud the reply itself
+   * takes measurably longer to arrive, and a printer wired without a return
+   * line never answers at all — being impatient there would misclassify a
+   * talkative printer as a mute one and skip the ^HW verification for nothing.
+   */
+  const replyTiming = (target: PrinterTarget, netIdleMs: number) =>
+    target.type === "serial"
+      ? { idleMs: netIdleMs * 2, maxMs: serialQueryTimeoutMs }
+      : { idleMs: netIdleMs, maxMs: queryTimeoutMs };
 
   async function readListing(target: PrinterTarget): Promise<DirectoryListing> {
-    const raw = await query(connectOpts(target), hostDirectory("E:*.*"), {
-      idleMs: 500,
-      maxMs: queryTimeoutMs,
-    });
+    const raw = await query(
+      target,
+      linkOpts(),
+      hostDirectory("E:*.*"),
+      replyTiming(target, 500),
+    );
     return parseDirectoryListing(raw);
   }
 
@@ -105,16 +145,18 @@ export function createZplFontService(opts: ZplFontServiceOptions): ZplFontServic
    * will never confirm either. Silence is therefore classified, not thrown, so
    * install and testPrint can switch to working blind.
    *
+   * Over serial there is a second, more ordinary way to be mute: plenty of
+   * label printers are cabled TX-only, so the reply has nowhere to go. It is
+   * the same answer either way — work blind — which is why serial gets the
+   * identical treatment rather than a special case.
+   *
    * Failures to *reach* the printer still propagate — an unplugged printer and
    * a mute one must not look the same.
    */
   async function probe(
     target: PrinterTarget,
   ): Promise<{ responds: boolean; identity: PrinterIdentity | null }> {
-    const raw = await query(connectOpts(target), hostIdentification(), {
-      idleMs: 300,
-      maxMs: queryTimeoutMs,
-    });
+    const raw = await query(target, linkOpts(), hostIdentification(), replyTiming(target, 300));
     // Nothing at all within both timeouts, versus bytes we could not parse:
     // the first is blind mode, the second is a Zebra with an odd ~HI reply.
     if (!raw.trim()) return { responds: false, identity: null };
@@ -183,7 +225,11 @@ export function createZplFontService(opts: ZplFontServiceOptions): ZplFontServic
     });
   }
 
-  async function status(target: PrinterTarget, statusOpts: StatusOptions = {}): Promise<FontStatus> {
+  async function status(
+    targetInput: PrinterTargetInput,
+    statusOpts: StatusOptions = {},
+  ): Promise<FontStatus> {
+    const target = normalizeTarget(targetInput);
     const bundled = await loadFonts(fontDir);
     const { responds, identity } = await probe(target);
 
@@ -214,17 +260,23 @@ export function createZplFontService(opts: ZplFontServiceOptions): ZplFontServic
    * has to stay up for all of them. Each font gets its own connection so a
    * failure part-way leaves the printer waiting on that socket alone rather than
    * poisoning the rest of the batch.
+   *
+   * The read size comes from the link. TCP takes 64 KiB happily; serial asks
+   * for 4 KiB, which is also what makes the progress ticks over a four-minute
+   * serial transfer frequent enough for a person to trust that it is moving.
    */
   async function pushFont(
     target: PrinterTarget,
     font: BundledFont,
     onChunk?: (sent: number) => void,
   ): Promise<void> {
-    await withConnection(connectOpts(target), async (conn) => {
+    await withLink(target, linkOpts(font.size), async (conn) => {
       await conn.write(downloadObjectHeader("E:", font.objectName, font.size));
 
       let sent = 0;
-      const stream = createReadStream(font.filePath, { highWaterMark: CHUNK_SIZE });
+      const stream = createReadStream(font.filePath, {
+        highWaterMark: conn.chunkSize ?? CHUNK_SIZE,
+      });
       for await (const chunk of stream) {
         await conn.write(chunk as Uint8Array);
         sent += (chunk as Uint8Array).length;
@@ -286,14 +338,15 @@ export function createZplFontService(opts: ZplFontServiceOptions): ZplFontServic
       fonts,
       footer: opts.blind ? [PROOF_BUILTIN_REFERENCE, PROOF_VERDICT] : undefined,
     });
-    await send(connectOpts(target), Buffer.from(zpl, "utf8"));
+    await send(target, linkOpts(), Buffer.from(zpl, "utf8"));
   }
 
   async function install(
-    target: PrinterTarget,
+    targetInput: PrinterTargetInput,
     installOpts: InstallOptions = {},
   ): Promise<InstallResult> {
-    const id = key(target);
+    const target = normalizeTarget(targetInput);
+    const id = targetKey(target);
     if (busy.has(id)) throw new PrinterBusyError(target);
     busy.add(id);
 
@@ -368,8 +421,12 @@ export function createZplFontService(opts: ZplFontServiceOptions): ZplFontServic
     }
   }
 
-  async function testPrint(target: PrinterTarget, printOpts: TestPrintOptions = {}): Promise<void> {
-    const id = key(target);
+  async function testPrint(
+    targetInput: PrinterTargetInput,
+    printOpts: TestPrintOptions = {},
+  ): Promise<void> {
+    const target = normalizeTarget(targetInput);
+    const id = targetKey(target);
     if (busy.has(id)) throw new PrinterBusyError(target);
 
     const current = await status(target, { dpi: printOpts.dpi });
@@ -402,7 +459,7 @@ export function createZplFontService(opts: ZplFontServiceOptions): ZplFontServic
     status,
     install,
     testPrint,
-    isBusy: (target) => busy.has(key(target)),
+    isBusy: (target) => busy.has(targetKey(normalizeTarget(target))),
   };
 }
 

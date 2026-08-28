@@ -149,8 +149,12 @@ export default function WeighPanel({
       // service exposes no "busy" IPC, but a printer part-way through an
       // install will not answer a second connection — a failed status means
       // busy or unreachable, and either way this must not print.
+      //
+      // Net only. A serial printer needs no probe: `main/serial-port-lock.ts`
+      // refuses the port outright while a font install holds it, and says so.
       if (printer.type === "net") {
         const status = await window.electronAPI.zplFontStatus({
+          type: "net",
           host: printer.host,
           port: printer.port,
         });

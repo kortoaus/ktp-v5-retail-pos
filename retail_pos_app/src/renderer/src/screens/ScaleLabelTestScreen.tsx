@@ -478,8 +478,12 @@ export default function ScaleLabelTestScreen() {
       // so; what it does expose is a status query, and a printer part-way
       // through an install will not answer a second connection. A failed status
       // therefore means "busy or unreachable" — either way, do not print.
+      //
+      // Net only. A serial printer needs no probe: `main/serial-port-lock.ts`
+      // refuses the port outright while a font install holds it, and says so.
       if (selected.type === "net") {
         const status = await window.electronAPI.zplFontStatus({
+          type: "net",
           host: selected.host,
           port: selected.port,
         });

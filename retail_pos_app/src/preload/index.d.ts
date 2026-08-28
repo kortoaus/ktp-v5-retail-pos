@@ -132,15 +132,15 @@ export interface AppConfig {
 }
 
 // ── ZPL font install ────────────────────────────────────────────────────────
-// Korean TrueType faces pushed into a network label printer's flash, so ZPL
-// text fields can print hangul instead of being stripped to ASCII. Mirrors
+// Korean TrueType faces pushed into a label printer's flash, so ZPL text fields
+// can print hangul instead of being stripped to ASCII. Mirrors
 // src/main/zpl-font; declared here because the renderer cannot import from
 // src/main.
 
-export interface ZplFontTarget {
-  host: string
-  port: number
-}
+/** Reached over TCP (seconds per font) or a serial port (minutes per font). */
+export type ZplFontTarget =
+  | { type: 'net'; host: string; port: number }
+  | { type: 'serial'; path: string }
 
 export type ZplFontState =
   | 'installed'
@@ -195,7 +195,7 @@ export interface ZplFontInstallProgress {
 }
 
 export interface ZplFontProgressEvent {
-  target: { host: string; port: number }
+  target: ZplFontTarget
   progress: ZplFontInstallProgress
 }
 
@@ -212,7 +212,7 @@ export interface ZplFontInstallResult {
 export type ZplFontResult<T> = { ok: true; data: T } | { ok: false; message: string }
 
 export interface ZplFontInstallRequest {
-  target: { host: string; port: number }
+  target: ZplFontTarget
   force?: boolean
   weights?: string[]
   /** Resolution and media for the proof label a blind install prints. */
@@ -222,7 +222,7 @@ export interface ZplFontInstallRequest {
 }
 
 export interface ZplFontTestPrintRequest {
-  target: { host: string; port: number }
+  target: ZplFontTarget
   widthMm?: number
   heightMm?: number
   dpi?: number
@@ -258,7 +258,7 @@ export interface ElectronAPI {
   ) => Promise<EscposControlLineMatrixResult>
 
   zplFontStatus: (
-    target: { host: string; port: number },
+    target: ZplFontTarget,
     dpi?: number,
   ) => Promise<ZplFontResult<ZplFontStatus>>
   zplFontInstall: (

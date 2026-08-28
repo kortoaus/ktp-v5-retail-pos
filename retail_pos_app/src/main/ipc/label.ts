@@ -2,6 +2,7 @@ import { ipcMain } from "electron";
 import net from "node:net";
 import { SerialPort } from "serialport";
 import type { LabelSendRequest } from "../types";
+import { createSerialPortHolder, serialPortLock } from "../serial-port-lock";
 
 const TCP_TIMEOUT_MS = 5000;
 const SERIAL_TIMEOUT_MS = 3000;
@@ -43,7 +44,34 @@ function sendTcp(
   });
 }
 
-function sendSerial(path: string, data: Buffer | string): Promise<void> {
+/**
+ * Every label job claims the port under this identity.
+ *
+ * The other claimant is the Korean font installer, which holds the same port
+ * for minutes at a time. A label sent into a running `~DY` transfer is
+ * swallowed by the font — the label never prints and the font is corrupted —
+ * so the two must not interleave. See `main/serial-port-lock.ts`.
+ */
+const LABEL_HOLDER = createSerialPortHolder("a label print job");
+
+/**
+ * Claim the port, print, release — failing fast and by name if the font
+ * installer has it.
+ *
+ * Fail fast rather than queue: a font install runs for ten minutes over serial,
+ * and a label that silently waited that long would be reprinted by hand long
+ * before it appeared.
+ */
+async function sendSerial(path: string, data: Buffer | string): Promise<void> {
+  const release = serialPortLock.acquire(path, LABEL_HOLDER);
+  try {
+    await sendSerialOnPort(path, data);
+  } finally {
+    release();
+  }
+}
+
+function sendSerialOnPort(path: string, data: Buffer | string): Promise<void> {
   const dataSize = Buffer.isBuffer(data)
     ? data.length
     : Buffer.byteLength(data);

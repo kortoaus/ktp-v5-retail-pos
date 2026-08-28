@@ -1,10 +1,15 @@
 /**
- * Korean font install controls for one network ZPL printer.
+ * Korean font install controls for one ZPL printer, network or serial.
  *
  * Self-contained on purpose: the settings screen only decides whether to render
  * it. Everything it knows about fonts goes through window.electronAPI, so the
  * coming label rewrite can move or delete this file without touching anything
  * else.
+ *
+ * The two transports differ in one way the user has to feel: over TCP the whole
+ * install is about thirteen seconds, over serial it is closer to eleven
+ * minutes. Every affordance below that mentions time, or that would touch the
+ * port without being asked, is conditioned on that.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -12,11 +17,11 @@ import type {
   MediaSize,
   ZplFontInstallProgress,
   ZplFontStatus,
+  ZplFontTarget,
 } from "../../../../preload/index.d";
 
 interface Props {
-  host: string;
-  port: number;
+  target: ZplFontTarget;
   mediaSize?: MediaSize;
 }
 
@@ -33,16 +38,35 @@ const MEDIA_MM: Record<MediaSize, { widthMm: number; heightMm: number }> = {
 const DEFAULT_DPI = 203;
 
 /**
- * Rough transfer rates, measured on hardware, used only for the button's
- * time estimate. A Bixolon is about a third the speed of a Zebra.
+ * Rough transfer rates, used only for the time estimate on the button.
+ *
+ * The first two were measured on hardware over TCP: a Bixolon is about a third
+ * the speed of a Zebra. The serial figure is not a measurement but arithmetic —
+ * 115200/8/N/1 is 11,520 bytes per second and the wire, not the printer, is the
+ * limit there. It works out to roughly four minutes a font.
  */
-const BYTES_PER_SEC = { responds: 600_000, blind: 195_000 };
+const BYTES_PER_SEC = { responds: 600_000, blind: 195_000, serial: 11_520 };
 
 function formatMb(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 }
 
-export default function ZplFontPanel({ host, port, mediaSize }: Props) {
+/** Seconds up to a minute and a half, whole minutes after that. */
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  return seconds < 90 ? `~${Math.round(seconds)}s` : `~${Math.round(seconds / 60)}min`;
+}
+
+/** Identity for matching a progress tick to this row. Mirrors zpl-font/target.ts. */
+function keyOf(target: ZplFontTarget): string {
+  return target.type === "serial" ? `serial:${target.path}` : `net:${target.host}:${target.port}`;
+}
+
+function describe(target: ZplFontTarget): string {
+  return target.type === "serial" ? target.path : `${target.host}:${target.port}`;
+}
+
+export default function ZplFontPanel({ target, mediaSize }: Props) {
   const [status, setStatus] = useState<ZplFontStatus | null>(null);
   const [checking, setChecking] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -53,19 +77,24 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
 
   const dpiValue = Number(dpi) >= 100 && Number(dpi) <= 1200 ? Number(dpi) : DEFAULT_DPI;
 
+  const serial = target.type === "serial";
+
   /**
-   * The printer answers no status query — a Bixolon XD3/XD5 in BPL-Z.
+   * The printer answers no status query — a Bixolon XD3/XD5 in BPL-Z, or any
+   * printer cabled without a return line, which is common on serial.
    *
-   * It takes the fonts and prints hangul like any Zebra, it just never confirms
+   * It takes the fonts and prints hangul regardless, it just never confirms
    * anything, so every certainty below has to come off a proof label instead.
+   * Blind is never assumed up front: ~HI is always tried first, on both
+   * transports, and only silence switches this on.
    */
   const blind = status !== null && !status.capabilities.responds;
 
-  // The row stays mounted while its host is edited, so identity is captured per
-  // call rather than per render — a check started against one address must not
-  // write its result into a row now pointing somewhere else.
-  const targetRef = useRef({ host, port });
-  targetRef.current = { host, port };
+  // The row stays mounted while its address is edited, so identity is captured
+  // per call rather than per render — a check started against one printer must
+  // not write its result into a row now pointing somewhere else.
+  const targetRef = useRef(target);
+  targetRef.current = target;
 
   // Read through a ref for the same reason: putting the dpi in `check`'s deps
   // would fire a connection attempt on every keystroke in the override box.
@@ -73,16 +102,16 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
   dpiRef.current = dpiValue;
 
   const check = useCallback(async (): Promise<void> => {
-    const target = { ...targetRef.current };
-    if (!target.host.trim()) return;
+    const current = targetRef.current;
+    if (current.type === "net" && !current.host.trim()) return;
+    if (current.type === "serial" && !current.path.trim()) return;
+    const key = keyOf(current);
 
     setChecking(true);
     setMessage("");
     try {
-      const result = await window.electronAPI.zplFontStatus(target, dpiRef.current);
-      if (targetRef.current.host !== target.host || targetRef.current.port !== target.port) {
-        return; // the row was repointed while this was in flight
-      }
+      const result = await window.electronAPI.zplFontStatus(current, dpiRef.current);
+      if (keyOf(targetRef.current) !== key) return; // repointed while in flight
       if (result.ok) setStatus(result.data);
       else {
         setStatus(null);
@@ -93,16 +122,23 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
     }
   }, []);
 
-  // Check once for the address that was already saved. Editing the host does
-  // not retrigger it — that would fire a connection attempt per keystroke.
+  /**
+   * Check once, for network printers only.
+   *
+   * A serial check opens the physical port and can sit there for twelve seconds
+   * waiting for a reply that a TX-only cable will never deliver — and while it
+   * does, no label can print. Doing that unasked, once per configured row,
+   * every time somebody opens this screen, is not worth a status dot. The
+   * button is right there.
+   */
   useEffect(() => {
+    if (targetRef.current.type === "serial") return;
     void check();
   }, [check]);
 
   useEffect(() => {
     return window.electronAPI.onZplFontProgress((event) => {
-      const target = targetRef.current;
-      if (event.target.host !== target.host || event.target.port !== target.port) return;
+      if (keyOf(event.target) !== keyOf(targetRef.current)) return;
       setProgress(event.progress);
     });
   }, []);
@@ -111,14 +147,13 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
     mediaSize ? MEDIA_MM[mediaSize] : { widthMm: 100, heightMm: undefined };
 
   const install = async (force: boolean): Promise<void> => {
-    const target = { ...targetRef.current };
     setBusy(true);
     setProgress(null);
     setMessage("");
     try {
       const size = media();
       const result = await window.electronAPI.zplFontInstall({
-        target,
+        target: targetRef.current,
         force,
         // Carried for the proof label a printer that reports nothing prints
         // on its own. Never sent to one that answers ~HI: its own reading of
@@ -138,7 +173,10 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
         );
       } else {
         setMessage(result.message);
-        await check();
+        // Re-reading a serial printer means opening the port again for another
+        // ten-odd seconds, right after it just failed. Say what went wrong and
+        // let the user press Refresh.
+        if (!serial) await check();
       }
     } finally {
       setBusy(false);
@@ -147,13 +185,12 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
   };
 
   const testPrint = async (): Promise<void> => {
-    const target = { ...targetRef.current };
     setBusy(true);
     setMessage("");
     try {
       const size = media();
       const result = await window.electronAPI.zplFontTestPrint({
-        target,
+        target: targetRef.current,
         widthMm: size.widthMm,
         heightMm: size.heightMm,
         dpi: blind ? dpiValue : undefined,
@@ -195,9 +232,18 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
     if (status.identity) summary += ` · ${status.identity.dpi}dpi`;
   }
 
-  const seconds = Math.round(
-    bundledTotal / (blind ? BYTES_PER_SEC.blind : BYTES_PER_SEC.responds),
-  );
+  // Serial is wire-limited, so its rate is known before the printer is: it does
+  // not depend on which model answers. That is what lets the estimate show
+  // before the first check, which on serial may never happen.
+  const rate = serial
+    ? BYTES_PER_SEC.serial
+    : blind
+      ? BYTES_PER_SEC.blind
+      : BYTES_PER_SEC.responds;
+  // Before a check there is no reported bundle size; three ~2.45MB faces is what
+  // ships, and an estimate the user can see beforehand is the whole point.
+  const estimateBytes = bundledTotal || (serial ? 3 * 2_450_000 : 0);
+  const estimate = formatDuration(estimateBytes / rate);
 
   const pct = progress ? Math.floor((progress.sentBytes / progress.totalBytes) * 100) : 0;
 
@@ -214,7 +260,7 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
             disabled={checking || busy}
             className="rounded px-2 py-1 text-xs text-gray-500 hover:text-gray-800 disabled:opacity-40"
           >
-            Refresh
+            {status === null ? "Check" : "Refresh"}
           </button>
           {blind && (
             /* The printer will not report its resolution, so it has to be told
@@ -236,13 +282,14 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
           >
             {complete
               ? "Reinstall"
-              : `Install${bundledTotal ? ` (${formatMb(bundledTotal)}, ~${seconds}s)` : ""}`}
+              : `Install${estimateBytes ? ` (${formatMb(estimateBytes)}, ${estimate})` : ""}`}
           </button>
           <button
             onClick={() => void testPrint()}
             /* A blind printer can always be asked to print: the label is the
-               only way to find out whether the fonts are there. */
-            disabled={busy || checking || (!blind && (!status || installed === 0))}
+               only way to find out whether the fonts are there. Same for an
+               unchecked serial printer, which is the normal state there. */
+            disabled={busy || checking || (!serial && !blind && (!status || installed === 0))}
             className="rounded border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:border-gray-400 disabled:opacity-40"
           >
             Test print
@@ -261,24 +308,31 @@ export default function ZplFontPanel({ host, port, mediaSize }: Props) {
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
             <div className="h-full bg-blue-600 transition-all" style={{ width: `${pct}%` }} />
           </div>
-          {/* A ~DY in flight eats everything else arriving on port 9100 until its
+          {/* A ~DY in flight eats everything else arriving on the port until its
               byte count is met, so a label printed now is swallowed and lost. */}
           <p className="mt-1 text-[11px] text-amber-600">
-            Do not print to this printer until the install finishes.
+            {serial
+              ? `Do not print to ${describe(target)} until the install finishes — a label sent now is swallowed by the transfer. Serial is slow; ${estimate} is normal, do not power-cycle the printer.`
+              : "Do not print to this printer until the install finishes."}
           </p>
         </div>
       )}
 
-      {blind && !progress && (
+      {serial && !progress && (
         <p className="mt-1.5 text-[11px] text-gray-500">
-          Printer does not report status (Bixolon) — verify by proof label. Install prints one
-          automatically; Korean on it means the fonts are in.
+          Serial 115200: about 4 minutes per font, {estimate} for all three. The port is locked for
+          the whole transfer, so no label can print from {describe(target)} meanwhile.
         </p>
       )}
 
-      {message && !progress && (
-        <p className="mt-1.5 text-[11px] text-gray-600">{message}</p>
+      {blind && !progress && (
+        <p className="mt-1.5 text-[11px] text-gray-500">
+          Printer does not report status (Bixolon, or a cable with no return line) — verify by proof
+          label. Install prints one automatically; Korean on it means the fonts are in.
+        </p>
       )}
+
+      {message && !progress && <p className="mt-1.5 text-[11px] text-gray-600">{message}</p>}
     </div>
   );
 }
