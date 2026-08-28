@@ -321,6 +321,15 @@ export interface StoreSetting {
   other_point_rate?: number | null; // per-1000 percent (10 = 1%)
 }
 
+/**
+ * `GET /api/store/label` — the store name and its one-line address, joined
+ * server-side, for the 60 × 40 scale label's footer.
+ */
+export interface StoreLabelSetting {
+  name: string;
+  address: string;
+}
+
 export interface CloudPost {
   id: number;
   companyId: number;

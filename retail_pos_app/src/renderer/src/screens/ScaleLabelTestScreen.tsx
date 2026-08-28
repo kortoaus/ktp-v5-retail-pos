@@ -7,8 +7,10 @@
  * The sample data below is the only thing this file owns, and it is the mockup's
  * own values so a print can be held against the printout the owner signed off.
  *
- * It will be reshaped into the real /scale weighing page once the templates are
- * settled; until then it is reachable from a temporary home-screen button.
+ * It used to own `/scale`. The real weighing station took that path on
+ * 2026-08-28 (`screens/ScaleStationScreen/`), and this bench moved to
+ * `/scale/bench`, reachable from the station header. It stays because tuning a
+ * template still means printing these samples on real stock.
  */
 
 import { useMemo, useState } from "react";
@@ -512,8 +514,8 @@ export default function ScaleLabelTestScreen() {
   return (
     <div className="h-full w-full bg-gray-100 flex flex-col">
       <div className="h-16 flex items-center gap-4 px-4 border-b border-gray-200 bg-white">
-        <Link to="/" className="text-sm text-blue-600 hover:text-blue-800 font-medium">
-          &larr; Back
+        <Link to="/scale" className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+          &larr; Scale
         </Link>
         <h1 className="text-lg font-semibold text-gray-900">Scale / Label Test</h1>
         <span className="text-xs text-gray-400">label-core templates</span>

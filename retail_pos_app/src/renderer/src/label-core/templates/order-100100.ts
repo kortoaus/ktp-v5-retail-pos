@@ -27,6 +27,9 @@
 
 import { estimateQrSize, fitSize, utf8Length } from "../measure";
 import { type Element, type Label } from "../model";
+import { qrMagForBox } from "../measure";
+
+export { qrMagForBox };
 import { clippedTextEl, textEl, type TemplateOptions } from "./scale-6040";
 
 export interface OrderLabelInput {
@@ -108,32 +111,14 @@ const QR_QUIET = 3;
 const QR_PAD = BOX_THICK + QR_QUIET;
 /** Clear air between the caption's baseline band and the top of the symbol. */
 const QR_CAPTION_GAP = 4;
-const QR_MAG_MIN = 2;
-const QR_MAG_MAX = 10;
-
 /** The symbol's bottom-left anchor, and the ceiling the caption leaves it. */
 const QR_BOTTOM_Y = BOX_Y + BOX - QR_PAD;
 const QR_TOP_LIMIT = BOX_Y + BOX_CAPTION_DY + BOX_CAPTION_SIZE + QR_CAPTION_GAP;
 const QR_MAX_W = BOX - QR_PAD * 2;
 const QR_MAX_H = QR_BOTTOM_Y - QR_TOP_LIMIT;
+const QR_MAG_MIN = 2;
+const QR_MAG_MAX = 10;
 
-/**
- * The largest magnification whose estimated symbol fits the box interior.
- *
- * `estimateQrSize` is payload-aware — the same estimate `elementBounds` uses to
- * derive a bottom-anchored symbol's top edge — so what this returns and what
- * the debug outline draws cannot disagree. Stepping down rather than solving in
- * closed form keeps the height test (which is what the caption constrains) and
- * the width test in one place.
- */
-export function qrMagForBox(data: string, maxW: number, maxH: number): number {
-  const bytes = utf8Length(data);
-  for (let mag = QR_MAG_MAX; mag > QR_MAG_MIN; mag -= 1) {
-    const side = estimateQrSize(mag, bytes);
-    if (side <= maxW && side <= maxH) return mag;
-  }
-  return QR_MAG_MIN;
-}
 
 /**
  * Greedy wrap on spaces, falling back to a hard break for a single long word.

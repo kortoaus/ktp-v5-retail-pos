@@ -141,7 +141,7 @@ test("2D swaps the EAN for a PP QR and changes nothing else", () => {
   // mag 2; no ^BQ correction-level parameter, because this firmware ignores it;
   // `LA,` so the payload is encoded in automatic mode — manual mode ate the
   // `"`, `[` and `]` out of exactly this payload.
-  assert.ok(twoD.includes(`^FT54,205^BQN,2,2^FH^FDLA,${PP_QR}^FS`), twoD.join("\n"));
+  assert.ok(twoD.includes(`^FT54,224^BQN,2,3^FH^FDLA,${PP_QR}^FS`), twoD.join("\n"));
 
   // Every non-symbol line is identical: the grid fixes the rest of the label.
   const strip = (lines) => lines.filter((l) => !l.includes("^BEN") && !l.includes("^BQN"));
@@ -154,7 +154,7 @@ test("the 2D QR clears the pre-printed rule whatever the payload does", () => {
       (e) => e.kind === "qr",
     );
     const box = elementBounds(el);
-    assert.equal(box.y + box.h, 205, `bottom edge is anchored, got ${box.y + box.h}`);
+    assert.equal(box.y + box.h, 224, `bottom edge is anchored, got ${box.y + box.h}`);
     assert.ok(box.y > GRID.topRule, `top ${box.y} must stay under the top rule`);
     assert.ok(box.y + box.h < GRID.bottomRule, "and clear of the bottom rule");
   }

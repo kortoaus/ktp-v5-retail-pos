@@ -51,7 +51,7 @@
  * shared with the 60 × 40 label), not a caller decision.
  */
 
-import { textWidth } from "../measure";
+import { qrMagForBox, textWidth } from "../measure";
 import { layoutNameBand } from "../name-band";
 import { strike, type Element, type Label } from "../model";
 import { uomOverride } from "../uom-override";
@@ -165,7 +165,13 @@ const UOM_SIZE = 20;
 
 const QR_X = 310;
 const QR_BOTTOM_Y = 440;
-const QR_MAG = 2;
+/**
+ * mag was a fixed 2 — hard to read on the store scanners (owner, 2026-08-28).
+ * Grows to what fits right of the ingredients column (label right edge 464)
+ * and above the caption boxes; the usual PP payload lands on mag 3.
+ */
+const QR_BOX_W = 464 - QR_X;
+const QR_BOX_H = 440 - 302; // statement panel bottom at 302 is the ceiling
 const EAN_X = 24;
 const EAN_Y = 380;
 const EAN_H = 80;
@@ -207,7 +213,7 @@ function symbol(barcode: ScaleBarcode): Element {
         kind: "qr",
         x: QR_X,
         y: QR_BOTTOM_Y,
-        mag: QR_MAG,
+        mag: qrMagForBox(barcode.qrData, QR_BOX_W, QR_BOX_H),
         anchor: "bottom",
         data: barcode.qrData,
       };

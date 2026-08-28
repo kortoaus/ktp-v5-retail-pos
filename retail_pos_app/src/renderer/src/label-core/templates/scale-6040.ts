@@ -59,6 +59,7 @@ import {
   clipToBlock,
   fitSize,
   textWidth,
+  qrMagForBox,
 } from "../measure";
 import { strike, type Element, type Label, type Line, type Text } from "../model";
 import { layoutNameBand, type NameBandLayout } from "../name-band";
@@ -237,8 +238,21 @@ const EAN_Y = 90;
 const EAN_H = 90;
 const EAN_MODULE = 2;
 const QR_X = 54;
-const QR_BOTTOM_Y = 205;
-const QR_MAG = 2;
+/**
+ * 224, not the 205 the first hardware round settled on: the store scanners
+ * struggled at mag 2 (owner, 2026-08-28), and the extra 19 dots of zone height
+ * are what lets the usual 5-level PP payload step up to mag 3. 5 dots of
+ * clearance to the red rule at y≈229 remain.
+ */
+const QR_BOTTOM_Y = 224;
+/**
+ * Symbol zone above the bottom anchor: the red rule at y≈229 below, the name
+ * band's rule at y≈67 above, right rule x≈243. mag was a fixed 2 (≈90 dots) —
+ * hard to read on the store scanners (owner, 2026-08-28) — so it now grows to
+ * whatever fits the zone: the usual 5-level PP payload lands on mag 3.
+ */
+const QR_BOX_W = 243 - QR_X;
+const QR_BOX_H = QR_BOTTOM_Y - 67;
 
 
 // ── footer zone (below the bottom red rule at y 229) ────────────────────────
@@ -472,7 +486,7 @@ function symbol(barcode: ScaleBarcode): Element {
         kind: "qr",
         x: QR_X,
         y: QR_BOTTOM_Y,
-        mag: QR_MAG,
+        mag: qrMagForBox(barcode.qrData, QR_BOX_W, QR_BOX_H),
         anchor: "bottom",
         data: barcode.qrData,
       };

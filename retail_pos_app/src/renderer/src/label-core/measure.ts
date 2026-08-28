@@ -404,3 +404,27 @@ export const DATAMATRIX_MODULES = 16;
 export function estimateDataMatrixSize(size: number): number {
   return DATAMATRIX_MODULES * Math.max(1, size);
 }
+
+
+// Moved from templates/order-100100.ts so any template may pick a QR
+// magnification for a box without importing another template.
+const QR_MAG_MAX = 10;
+const QR_MAG_MIN = 2;
+
+/**
+ * The largest magnification whose estimated symbol fits the box interior.
+ *
+ * `estimateQrSize` is payload-aware — the same estimate `elementBounds` uses to
+ * derive a bottom-anchored symbol's top edge — so what this returns and what
+ * the debug outline draws cannot disagree. Stepping down rather than solving in
+ * closed form keeps the height test (which is what the caption constrains) and
+ * the width test in one place.
+ */
+export function qrMagForBox(data: string, maxW: number, maxH: number): number {
+  const bytes = utf8Length(data);
+  for (let mag = QR_MAG_MAX; mag > QR_MAG_MIN; mag -= 1) {
+    const side = estimateQrSize(mag, bytes);
+    if (side <= maxW && side <= maxH) return mag;
+  }
+  return QR_MAG_MIN;
+}

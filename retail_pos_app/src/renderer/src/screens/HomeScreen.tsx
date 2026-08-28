@@ -115,13 +115,14 @@ export default function HomeScreen() {
         >
           Barcode Print
         </NavBtn>
-        {/* Temporary — moves once the label templates are settled. */}
+        {/* The weighing station. The label-core bench it replaced is still
+            reachable, from a button in the station's own header. */}
         <NavBtn
           to="/scale"
           icon={<IoScaleOutline size={24} />}
           className="bg-amber-50 text-amber-800 hover:bg-amber-100"
         >
-          Scale / Label Test
+          Scale
         </NavBtn>
         <div className="flex-1 min-w-0">
           <button

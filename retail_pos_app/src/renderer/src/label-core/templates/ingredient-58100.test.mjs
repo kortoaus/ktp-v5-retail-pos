@@ -82,7 +82,7 @@ const STOCK = {
  */
 const MOCKUP = [
   `^FO20,212^A@N,18,16,E:NOTOKRM.TTF^FB424,5,0,L,0^FH^FD${INGREDIENTS}^FS`,
-  `^FT310,440^BQN,2,2^FH^FDLA,${PP_QR}^FS`,
+  `^FT310,440^BQN,2,3^FH^FDLA,${PP_QR}^FS`,
   "^FO150,450^A@N,26,23,E:NOTOKRBK.TTF^FH^FDwas 62.00^FS",
   "^FO300,450^A@N,26,23,E:NOTOKRBK.TTF^FH^FDwas 28.16^FS",
   "^FO37,562^A@N,34,31,E:NOTOKRB.TTF^FB94,1,0,C,0^FH^FD0.512^FS",
@@ -257,7 +257,7 @@ test("the 1D variant is an EAN-13 and carries no QR", () => {
 test("the 2D variant is a bottom-anchored QR and carries no barcode", () => {
   const zpl = renderLabel(buildIngredientLabel58100(TWO_D));
   assert.ok(!zpl.includes("^BEN"), "no linear barcode on the 2D variant");
-  assert.ok(zpl.includes("^FT310,440^BQN,2,2^FH^FDLA,"), zpl);
+  assert.ok(zpl.includes("^FT310,440^BQN,2,3^FH^FDLA,"), zpl);
 });
 
 test("the QR's bottom edge is anchored whatever the payload does", () => {

@@ -27,6 +27,7 @@ import OrdersScreen from "./screens/OrdersScreen";
 import SaleRefundDetailScreen from "./screens/SaleRefundDetailScreen";
 import SaleRefundPickerScreen from "./screens/SaleRefundPickerScreen";
 import ScaleLabelTestScreen from "./screens/ScaleLabelTestScreen";
+import ScaleStationScreen from "./screens/ScaleStationScreen";
 
 function App(): React.JSX.Element {
   return (
@@ -51,8 +52,11 @@ function MainApp() {
 
             <Route path="/price-tag" element={<PriceTagScreen />} />
             <Route path="/barcode-print" element={<BarcodePrintScreen />} />
-            {/* Temporary: label-core diagnostic bench, no user context needed. */}
-            <Route path="/scale" element={<ScaleLabelTestScreen />} />
+            {/* The weighing station. No user context, same as the retired
+                ktpv5-scale terminal — see ScaleStationScreen's header. */}
+            <Route path="/scale" element={<ScaleStationScreen />} />
+            {/* label-core diagnostic bench, reachable from the station header. */}
+            <Route path="/scale/bench" element={<ScaleLabelTestScreen />} />
             <Route path="/server-setup" element={<ServerSetupScreen />} />
 
             <Route path="/sale" element={<ManagerLayout />}>

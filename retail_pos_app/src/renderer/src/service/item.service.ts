@@ -20,6 +20,31 @@ export async function searchItemsByKeyword(
   return apiService.get<Item[]>(`/api/item/search/keyword?${params}`);
 }
 
+/**
+ * Scale-only keyword search — the `/scale` station's item browser.
+ *
+ * Same service as `/search/keyword` behind the scenes, with `isScale: true`
+ * added to the where clause (`item.search.service.ts searchItemsService`, the
+ * `scaleOnly` flag). The route predates this screen: it was built for the
+ * retired `ktpv5-scale` Android terminal and is reused rather than rebuilt.
+ *
+ * `brandId` is the brand filter; omitting it searches every brand.
+ */
+export async function searchScaleItemsByKeyword(
+  keyword: string,
+  page = 1,
+  limit = 20,
+  brandId?: number | null,
+): Promise<ApiResponse<Item[]>> {
+  const params = new URLSearchParams({
+    keyword,
+    page: String(page),
+    limit: String(limit),
+  });
+  if (brandId != null) params.set("brandId", String(brandId));
+  return apiService.get<Item[]>(`/api/item/search/keyword/scale?${params}`);
+}
+
 export async function getItemsByIds(ids: number[]): Promise<ApiResponse<Item[]>> {
   return apiService.post<Item[]>(`/api/item/search/ids`, { ids });
 }
