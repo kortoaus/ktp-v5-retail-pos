@@ -39,7 +39,6 @@ import LinePaging from "./LinePaging";
 import PrintLatestInvoiceButton from "../../components/PrintLatestInvoiceButton";
 import { kickDrawer } from "../../libs/printer/kick-drawer";
 import SyncButton from "../../components/SyncButton";
-import SyncPostButton from "../../components/SyncPostButton";
 import OrdersPendingButton from "../../components/orders/OrdersPendingButton";
 import OrderSearchModal from "../../components/orders/OrderSearchModal";
 import PaymentModal from "./PaymentModal";
@@ -377,7 +376,7 @@ export default function SaleScreen() {
         <div className="flex items-center gap-4 h-full py-2">
           <TopBarButton label="← Back" onClick={() => navigate("/")} />
           <TopBarButton
-            label="Search Item"
+            label="Item"
             onClick={() => setModalTarget("item-search")}
           />
           <TopBarButton
@@ -407,13 +406,15 @@ export default function SaleScreen() {
           {/* S3-b — 온라인 주문 검색 (QR 을 못 쓰는 손님용 수동 진입).
               이미 주문이 붙은 카트에서는 중복 로드 방지로 비활성. */}
           <TopBarButton
-            label="Online Order"
+            label="Order"
             disabled={orderLinked}
             onClick={() => setModalTarget("order-search")}
           />
 
           <PrintLatestInvoiceButton className="w-24 h-full rounded-sm text-sm font-bold bg-gray-200 border border-gray-300" />
-          <TopBarButton label="Kick Drawer" onClick={() => kickDrawer()} />
+          <TopBarButton label="Kick Drw" onClick={() => kickDrawer()} />
+          {/* 스케일 스테이션 스위치 — 카트는 전역 스토어라 왕복해도 유지 */}
+          <TopBarButton label="Scale" onClick={() => navigate("/scale")} />
           {/* S3 — 주문 로드 카트 배지 (Clear Cart / 결제 완료 시 소멸) */}
           {activeOrderNo && (
             <span className="h-full px-3 rounded-sm text-sm font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center">
@@ -424,7 +425,6 @@ export default function SaleScreen() {
         <div className="flex items-center gap-4">
           <OrdersPendingButton />
           <SyncButton />
-          <SyncPostButton />
           <CartSwitcher />
         </div>
       </div>

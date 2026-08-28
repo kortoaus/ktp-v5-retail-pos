@@ -50,8 +50,8 @@ export default function PrintLatestInvoiceButton({
       )}
       onClick={handlePrint}
     >
-      <div>Print</div>
       <div>Latest</div>
+      <div>Inv</div>
     </div>
   );
 }

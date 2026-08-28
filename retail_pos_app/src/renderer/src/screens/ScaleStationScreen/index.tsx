@@ -65,6 +65,14 @@ export default function ScaleStationScreen() {
           <span className="text-xs text-gray-400 truncate">{store.name}</span>
         )}
         <div className="flex-1" />
+        {/* Cashiers hop between packing and the till — keep the switch one tap
+            (owner, 2026-08-28). /sale re-runs its own auth gate on entry. */}
+        <Link
+          to="/sale"
+          className="h-9 px-3 flex items-center rounded-lg bg-blue-500 text-sm font-bold text-white active:bg-blue-600"
+        >
+          Sale
+        </Link>
         <Link
           to="/scale/bench"
           className="h-9 px-3 flex items-center rounded-lg border border-gray-300 text-sm font-medium text-gray-600 active:bg-gray-100"

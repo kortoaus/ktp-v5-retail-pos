@@ -11,7 +11,7 @@ export default function CartSwitcher() {
           key={index}
           onClick={() => switchCart(index)}
           className={cn(
-            "w-24 h-10 rounded-sm text-lg font-bold",
+            "w-10 h-10 rounded-sm text-lg font-bold",
             activeCartIndex === index
               ? "bg-blue-500 text-white"
               : "bg-gray-200",
