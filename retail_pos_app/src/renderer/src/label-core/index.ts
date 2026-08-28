@@ -42,7 +42,11 @@ export type {
 } from "./model";
 
 export {
+  ELLIPSIS,
+  FIT_SAFETY,
   clamp,
+  clipToBlock,
+  clipToWidth,
   code128Modules,
   estimateBarcodeWidth,
   estimateDataMatrixSize,
@@ -54,6 +58,7 @@ export {
   textEm,
   textWidth,
   utf8Length,
+  wrapToWidths,
 } from "./measure";
 
 export {

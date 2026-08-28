@@ -17,6 +17,7 @@ import { BUILTIN_FONT, DEFAULT_WEIGHT, FONT_WIDTH_RATIO, fontFile } from "./font
 import { getMedia } from "./media";
 import type { Element, Label, Text } from "./model";
 import {
+  DEFAULT_MIN_TEXT_SIZE,
   estimateBarcodeWidth,
   estimateDataMatrixSize,
   estimateQrSize,
@@ -25,8 +26,10 @@ import {
   utf8Length,
 } from "./measure";
 
-/** Floor for a shrunk text field that gave no `minSize` of its own. */
-export const DEFAULT_MIN_TEXT_SIZE = 12;
+// Lives in `measure.ts` now — the clip guard in `templates/scale-6040.ts` has to
+// resolve a size exactly the way `resolveTextSize` does, and templates may not
+// import the emitter. Re-exported so the old import path still works.
+export { DEFAULT_MIN_TEXT_SIZE };
 
 /** Narrow-bar width when a barcode does not name one. */
 export const DEFAULT_BARCODE_MODULE = 2;

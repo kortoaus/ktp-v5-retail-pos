@@ -29,6 +29,39 @@ export const EM_UPPER = 0.63;
 export const EM_DIGIT = 0.58;
 export const EM_CJK = 1.0;
 export const EM_SPACE = 0.3;
+/**
+ * `…` — three dots and the gaps between them, so nearer an em than a letter.
+ *
+ * U+2026 in Noto Sans KR advances a proportional (Latin-ish) width, not a full
+ * CJK em — 1.0 here made every clip stop a character or two short of the block
+ * (owner, 2026-08-28 hardware round: "ellipsis too conservative"). 0.6 tracks
+ * the real advance closely enough that the FIT_SAFETY margin still covers it.
+ */
+export const EM_ELLIPSIS = 0.6;
+
+/**
+ * The clip marker, U+2026.
+ *
+ * In the printer's font: `scripts/subset-noto-kr.py` keeps `U+2010-2027`, so
+ * the subset that is `~DY`-injected into the printer's flash carries it. If
+ * that range ever narrows, change this to `"..."` — nothing else needs to move,
+ * because every width here is measured rather than assumed.
+ */
+export const ELLIPSIS = "…";
+const ELLIPSIS_CODE = 0x2026;
+
+/**
+ * Fraction of a block a line is fitted against, rather than the whole of it.
+ *
+ * The ratios above are an approximation and the hardware run of 2026-08-28
+ * showed them running slightly *narrow* — text this file called a fit came off
+ * the printer overlapped. Three percent is the cheapest way to buy back that
+ * error; it costs a character on a name that was already at the edge.
+ */
+export const FIT_SAFETY = 0.97;
+
+/** Floor for a shrunk text field that gave no `minSize` of its own. */
+export const DEFAULT_MIN_TEXT_SIZE = 12;
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -56,6 +89,7 @@ function isFullWidth(code: number): boolean {
 function charEm(ch: string): number {
   const code = ch.codePointAt(0) ?? 0;
   if (ch === " " || ch === "\t") return EM_SPACE;
+  if (code === ELLIPSIS_CODE) return EM_ELLIPSIS;
   if (code >= 0x30 && code <= 0x39) return EM_DIGIT;
   // `A`–`Z` only. Accented capitals are rare in a product name here and fall
   // through to the Latin ratio, which under-measures them slightly — the same
@@ -126,6 +160,157 @@ export function estimateLines(
     if (lines >= max) return max;
   }
   return Math.min(lines, max);
+}
+
+// ---------------------------------------------------------------------------
+// Clipping
+// ---------------------------------------------------------------------------
+//
+// ## Why this exists (hardware, 2026-08-28)
+//
+// `^FB` **does not truncate**. Given more text than its block can hold, a Zebra
+// keeps drawing the overflow *on the last line it was given* — the printed
+// result is two strings on top of each other. A photo of a 70 × 30 tag came back
+// reading `Botttlashait.RonDreShoup`: an English name set at its 18-dot floor in
+// a 252-dot block, folded onto itself.
+//
+// So "shrink to the floor and hope" is not a safe fallback, and neither is any
+// measurement that runs a little narrow. Every text element that declares a
+// block width now has its text cut to something that measurably fits, with `…`
+// marking the cut. Shrinking still happens first — the clip is the last resort,
+// not the first.
+
+/**
+ * The longest prefix of `text` that satisfies `fits`, marked with an ellipsis.
+ *
+ * Returns `text` untouched when it already fits, which is the common case; the
+ * per-character walk only runs on a string that is actually too long, and those
+ * are product names, not paragraphs. Trailing whitespace is dropped before the
+ * marker so a cut at a word boundary does not print `word …`.
+ */
+function longestPrefix(
+  text: string,
+  fits: (candidate: string) => boolean,
+  marker: string = ELLIPSIS,
+): string {
+  if (fits(text)) return text;
+
+  const chars = Array.from(text);
+  for (let keep = chars.length - 1; keep > 0; keep -= 1) {
+    const candidate = chars.slice(0, keep).join("").trimEnd() + marker;
+    if (fits(candidate)) return candidate;
+  }
+  // Not even one character and the marker fit. Print the marker if it fits on
+  // its own, otherwise nothing — an empty field is ugly, overlapped ink is a
+  // reprint.
+  return marker && fits(marker) ? marker : "";
+}
+
+/**
+ * Fits, in em-dots rather than whole dots.
+ *
+ * `textWidth` rounds up to a whole dot and `fitSize` rounds its division down,
+ * so the two disagree by up to one dot — enough to make a line that `fitSize`
+ * just chose a size for look, to `textWidth`, like it needs clipping. Comparing
+ * the unrounded advance keeps the two in step; the missing dot is inside the
+ * `FIT_SAFETY` margin either way.
+ */
+function fitsWidth(text: string, size: number, maxW: number): boolean {
+  return textEm(text) * size <= maxW;
+}
+
+/**
+ * `text` cut until it measures no wider than `maxW` at `size`.
+ *
+ * Pure geometry: no safety factor is applied here, so callers that want one
+ * pass an already-reduced `maxW` (see `clipToBlock`).
+ */
+export function clipToWidth(text: string, size: number, maxW: number): string {
+  if (!text || maxW <= 0 || size <= 0) return text;
+  return longestPrefix(text, (candidate) => fitsWidth(candidate, size, maxW));
+}
+
+/**
+ * `text` cut until it fits a `^FB` block of `width` × `lines` at `size`.
+ *
+ * Two conditions, because a block has two ways to overflow: the total advance
+ * has to fit the block's whole area, *and* the text has to wrap into no more
+ * than `lines` rows — a name that measures 1.9 lines wide can still need three
+ * rows once the wrap wastes the end of each one. `estimateLines` is the same
+ * wrap model the templates use to place what comes after the block, so both
+ * agree by construction.
+ *
+ * `safety` is deliberately *not* charged to text that already fits. A date in a
+ * 70-dot block that measures 69 is a date the hardware prints correctly, and
+ * clipping it to `27/0…` to buy a margin nobody needed is a worse label. The
+ * margin is spent only once the string has to be cut anyway, where it is free:
+ * the cut is already losing a character, so it may as well lose it with room to
+ * spare.
+ */
+export function clipToBlock(
+  text: string,
+  size: number,
+  width: number,
+  lines: number = 1,
+  safety: number = FIT_SAFETY,
+  marker: string = ELLIPSIS,
+): string {
+  if (!text || width <= 0 || size <= 0) return text;
+
+  const rows = Math.max(1, Math.round(lines));
+  const fits = (candidate: string, budget: number): boolean =>
+    fitsWidth(candidate, size, width * rows * budget) &&
+    (rows === 1 || estimateLines(candidate, size, width * budget, rows + 1) <= rows);
+
+  if (fits(text, 1)) return text;
+  return longestPrefix(text, (candidate) => fits(candidate, safety), marker);
+}
+
+/**
+ * Wrap `text` onto rows that may each be a different width.
+ *
+ * ## Why a template would do its own wrapping
+ *
+ * `^FB` wraps, but on the printer's terms: one width for the whole block, and
+ * leading of its own choosing (the font's height, not a number we pass). A
+ * layout that needs *uniform* leading, or a last row narrower than the ones
+ * above it — because that row runs alongside something else, like the 70 × 30
+ * tag's barcode digits — cannot be one `^FB` block at all. It has to be one
+ * element per row, and that means deciding the breaks here.
+ *
+ * Same wrap model as `estimateLines`, so the two agree: break on spaces where
+ * the string has any and between characters otherwise (which is what `^FB` does
+ * with hangul), and never break a token that is alone on its row.
+ *
+ * Returns at most `widths.length` rows. Whatever is left over when the last row
+ * fills up is **kept on that row** rather than dropped, so the caller sees a row
+ * that is too long and can cut it with `clipToBlock` — losing text silently is
+ * how a name ends up truncated with nothing to say it was.
+ */
+export function wrapToWidths(text: string, size: number, widths: number[]): string[] {
+  const trimmed = text.trim();
+  if (!trimmed || widths.length === 0 || size <= 0) return [];
+
+  const bySpace = trimmed.includes(" ");
+  const tokens = bySpace ? trimmed.split(/\s+/).filter(Boolean) : Array.from(trimmed);
+  const glue = bySpace ? " " : "";
+
+  const rows: string[] = [];
+  let row = "";
+
+  for (const token of tokens) {
+    const next = row ? row + glue + token : token;
+    const lastRow = rows.length === widths.length - 1;
+    if (!row || lastRow || textEm(next) * size <= widths[rows.length]) {
+      row = next;
+      continue;
+    }
+    rows.push(row);
+    row = token;
+  }
+  if (row) rows.push(row);
+
+  return rows;
 }
 
 // ---------------------------------------------------------------------------

@@ -53,7 +53,13 @@
  * `formatScaleDates`), not a caller decision.
  */
 
-import { fitSize, textWidth } from "../measure";
+import {
+  DEFAULT_MIN_TEXT_SIZE,
+  FIT_SAFETY,
+  clipToBlock,
+  fitSize,
+  textWidth,
+} from "../measure";
 import { strike, type Element, type Label, type Line, type Text } from "../model";
 import { layoutNameBand, type NameBandLayout } from "../name-band";
 import { uomOverride } from "../uom-override";
@@ -255,6 +261,63 @@ export function textEl(
   return { kind: "text", x, y, text, size, weight, ...extra };
 }
 
+/**
+ * `textEl` for text that came from **outside** the template — a product name, a
+ * promotion headline, an address, a scanned barcode.
+ *
+ * ## What it defends against (hardware, 2026-08-28)
+ *
+ * `^FB` does not truncate. Given more text than its block holds, the printer
+ * keeps drawing the overflow *on the last line it was given*, and the label
+ * comes back with two strings on top of each other — a 70 × 30 tag printed
+ * `Botttlashait.RonDreShoup` where an English name should have been. Shrinking
+ * to a floor is not a fallback, because a floor is exactly where a long name
+ * ends up.
+ *
+ * So a block built here always leaves measurably fitting: shrink as far as the
+ * floor allows, then cut what is still too long and mark the cut with `…`. The
+ * size is *baked* rather than left to the emitter, because the cut has to be
+ * computed at the size the printer will actually use — `resolveTextSize` caps
+ * `fitSize` at `el.size`, so a baked size survives it unchanged.
+ *
+ * ## Why this is not simply what `textEl` does
+ *
+ * `measure.ts` is an approximation, and it is not biased one way: it runs ~4%
+ * *high* on a digit string (the confirmed 60 × 40 mockup prints `0.512` at 34
+ * in a 94-dot block, which this file measures at 98). Clipping every block
+ * would therefore cut hardware-confirmed fields that print perfectly well. The
+ * fields at risk are the ones whose length nobody controls, and those are the
+ * ones that come through here.
+ */
+export function clippedTextEl(
+  x: number,
+  y: number,
+  text: string,
+  size: number,
+  weight: "M" | "B" | "BK",
+  extra: TextBlock & { width: number; clipMarker?: string },
+): Text {
+  const lines = Math.max(1, extra.lines ?? 1);
+  const fitted = extra.shrink
+    ? fitSize(
+        text,
+        extra.width * lines * FIT_SAFETY,
+        size,
+        extra.minSize ?? DEFAULT_MIN_TEXT_SIZE,
+      )
+    : Math.round(size);
+
+  return {
+    kind: "text",
+    x,
+    y,
+    text: clipToBlock(text, fitted, extra.width, lines, FIT_SAFETY, extra.clipMarker),
+    size: fitted,
+    weight,
+    ...extra,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Dates
 // ---------------------------------------------------------------------------
@@ -419,7 +482,7 @@ function footer(input: ScaleLabelInput): Element[] {
   const out: Element[] = [];
   if (input.storeName) {
     out.push(
-      textEl(0, FOOTER_NAME_Y, input.storeName, FOOTER_NAME_SIZE, "BK", {
+      clippedTextEl(0, FOOTER_NAME_Y, input.storeName, FOOTER_NAME_SIZE, "BK", {
         width: MEDIA_W,
         lines: 1,
         align: "C",
@@ -428,7 +491,7 @@ function footer(input: ScaleLabelInput): Element[] {
   }
   if (input.storeAddress) {
     out.push(
-      textEl(0, FOOTER_ADDR_Y, input.storeAddress, FOOTER_ADDR_SIZE, "M", {
+      clippedTextEl(0, FOOTER_ADDR_Y, input.storeAddress, FOOTER_ADDR_SIZE, "M", {
         width: MEDIA_W,
         lines: 1,
         align: "C",
@@ -446,7 +509,7 @@ export function buildScaleLabel6040(
   const name = layoutName6040(input.nameEn);
 
   const elements: Element[] = [
-    textEl(NAME_X, name.y, input.nameEn.trim(), name.size, "B", {
+    clippedTextEl(NAME_X, name.y, input.nameEn.trim(), name.size, "B", {
       width: NAME_W,
       lines: name.lines,
       align: "C",

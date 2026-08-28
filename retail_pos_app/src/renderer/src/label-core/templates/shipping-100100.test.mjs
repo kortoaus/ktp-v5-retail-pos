@@ -5,7 +5,7 @@ import test from "node:test";
 import { buildShippingLabel100100, layoutShippingName } from "./shipping-100100.ts";
 import { MEDIA } from "../media.ts";
 import { estimateQrSize, textWidth, utf8Length } from "../measure.ts";
-import { elementBounds, renderLabel } from "../zpl.ts";
+import { elementBounds, renderLabel, resolveTextSize } from "../zpl.ts";
 
 const MAPS_URL =
   "https://www.google.com/maps/dir/?api=1&destination=-33.7905,151.0815" +
@@ -195,12 +195,19 @@ test("the Delivery / Cycle box has two columns and a divider", () => {
   assert.ok(wide.size < 80, `expected a shrink, got ${wide.size}`);
   assert.ok(textWidth(wide.text, wide.size) <= 344, "and it fits the column");
 
-  // Past the format, 40 is the floor and ^FB344,1 clips rather than spilling —
-  // the same trade the document id and the name band make. What matters is that
-  // the block width still declares the column, so nothing crosses the divider.
-  const overlong = dateEl("Wednesday the 30th of September");
+  // Past the format, 40 is the floor — and a floor is not a fallback. `^FB` does
+  // not clip its overflow, it prints it on top of the last line (hardware,
+  // 2026-08-28), so the value is cut to something that measurably fits and the
+  // cut is marked. The block width still declares the column either way, so
+  // nothing crosses the divider.
+  const overlong = buildShippingLabel100100({
+    ...SAMPLE,
+    deliveryDateText: "Wednesday the 30th of September",
+  }).elements.find((el) => el.kind === "text" && el.text.startsWith("Wednesday"));
   assert.equal(overlong.size, 40);
   assert.equal(overlong.width, 344);
+  assert.ok(overlong.text.endsWith("…"), `"${overlong.text}" was not clipped`);
+  assert.ok(textWidth(overlong.text, overlong.size) <= 344, "and it fits the column");
   assert.equal(elementBounds(overlong).x + elementBounds(overlong).w, 384);
 });
 
@@ -330,4 +337,45 @@ test("dbg and copies ride through", () => {
   assert.equal(buildShippingLabel100100(SAMPLE, { copies: 3 }).copies, 3);
   assert.equal(buildShippingLabel100100(SAMPLE, { copies: 1 }).copies, undefined);
   assert.ok(renderLabel(buildShippingLabel100100(SAMPLE, { copies: 3 })).includes("^PQ3"));
+});
+
+// ---------------------------------------------------------------------------
+// The clip guard
+// ---------------------------------------------------------------------------
+//
+// `^FB` does not truncate. Given more text than the block holds it prints the
+// overflow *on top of* the last line it was given, and the label comes back
+// with two strings on one row (hardware, 2026-08-28). Caller text is therefore
+// cut to something that measurably fits, with `…` marking the cut.
+
+const ABSURD_KO = "넓은상품명".repeat(20);
+const ABSURD_EN = "WIDE PRODUCT NAME ".repeat(10);
+
+function assertFits(el, what, cut = true) {
+  assert.ok(el, `${what}: element built`);
+  if (cut) assert.ok(el.text.endsWith("…"), `${what}: "${el.text}" was not cut`);
+  assert.ok(
+    textWidth(el.text, resolveTextSize(el)) <= el.width * (el.lines ?? 1),
+    `${what}: "${el.text}" measures wider than its ${el.width} × ${el.lines ?? 1} block`,
+  );
+}
+
+const head = (label, prefix) =>
+  label.elements.find((el) => el.kind === "text" && el.text.startsWith(prefix));
+
+test("caller text is cut to fit rather than printed over itself", () => {
+  const label = buildShippingLabel100100({
+    ...SAMPLE,
+    documentId: "SO 24081 / 24082 / 24083 / 24084 / 24085 / 24086 / 24087",
+    customerName: ABSURD_KO,
+    deliveryDateText: "Wednesday the 30th of September, before noon",
+    cycleText: "every second week of the month",
+    addressText: "42-50 Rowe Street, Eastwood, New South Wales 2122, Australia",
+  });
+
+  assertFits(head(label, "SO 24081"), "document id");
+  assertFits(head(label, "넓은"), "customer name band");
+  assertFits(head(label, "Wednesday"), "delivery column");
+  assertFits(head(label, "every second"), "cycle column");
+  assertFits(head(label, "42-50 Rowe"), "address");
 });

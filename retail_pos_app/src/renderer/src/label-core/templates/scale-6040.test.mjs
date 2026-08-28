@@ -9,7 +9,8 @@ import {
   layoutName6040,
 } from "./scale-6040.ts";
 import { MEDIA } from "../media.ts";
-import { elementBounds, renderLabel } from "../zpl.ts";
+import { textWidth } from "../measure.ts";
+import { elementBounds, renderLabel, resolveTextSize } from "../zpl.ts";
 import { buildPPBarcodeString } from "../../libs/pp-barcode.ts";
 
 /**
@@ -361,4 +362,48 @@ test("formatDmy is the one date formatter both scale labels share", () => {
   assert.equal(formatDmy("2026-08-26", false), "26/08");
   assert.equal(formatDmy("2026-08-26", true), "26/08/26");
   assert.equal(formatDmy("2027-01-01", true), "01/01/27");
+});
+
+// ---------------------------------------------------------------------------
+// The clip guard
+// ---------------------------------------------------------------------------
+//
+// `^FB` does not truncate. Given more text than the block holds it prints the
+// overflow *on top of* the last line it was given, and the label comes back
+// with two strings on one row (hardware, 2026-08-28). Caller text is therefore
+// cut to something that measurably fits, with `…` marking the cut.
+
+const ABSURD_KO = "넓은상품명".repeat(20);
+const ABSURD_EN = "WIDE PRODUCT NAME ".repeat(10);
+
+function assertFits(el, what, cut = true) {
+  assert.ok(el, `${what}: element built`);
+  if (cut) assert.ok(el.text.endsWith("…"), `${what}: "${el.text}" was not cut`);
+  assert.ok(
+    textWidth(el.text, resolveTextSize(el)) <= el.width * (el.lines ?? 1),
+    `${what}: "${el.text}" measures wider than its ${el.width} × ${el.lines ?? 1} block`,
+  );
+}
+
+const head = (label, prefix) =>
+  label.elements.find((el) => el.kind === "text" && el.text.startsWith(prefix));
+
+test("caller text is cut to fit rather than printed over itself", () => {
+  const label = buildScaleLabel6040({
+    ...ONE_D,
+    nameEn: ABSURD_EN,
+    storeName: "DREAM MARKET EASTWOOD AND CARLINGFORD AND EPPING",
+    storeAddress: "42-50 Rowe Street, Eastwood, New South Wales 2122, Australia",
+  });
+
+  assertFits(head(label, "WIDE"), "name band");
+  assertFits(head(label, "DREAM MARKET"), "store name");
+  assertFits(head(label, "42-50 Rowe"), "store address");
+
+  // The pre-printed grid's own cells are *not* clipped: their contents are
+  // formatted values of bounded length, and `measure.ts` runs ~4% high on a
+  // digit string — clipping `0.512` in its 94-dot cell would cut a field the
+  // hardware prints correctly. See `clippedTextEl` in ./scale-6040.ts.
+  const weight = label.elements.find((el) => el.kind === "text" && el.text === "0.512");
+  assert.ok(weight, "the NET cell prints its value verbatim");
 });

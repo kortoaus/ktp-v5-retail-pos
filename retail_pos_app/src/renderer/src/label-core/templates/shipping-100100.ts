@@ -42,7 +42,7 @@ import { estimateLines, fitSize } from "../measure";
 import { type Element, type Label } from "../model";
 import { NAME_BAND_FIT } from "../name-band";
 import { qrMagForBox } from "./order-100100";
-import { textEl, type TemplateOptions } from "./scale-6040";
+import { clippedTextEl, textEl, type TemplateOptions } from "./scale-6040";
 
 export interface ShippingLabelInput {
   /** Already formatted by the caller, e.g. `SO 12345`. */
@@ -156,7 +156,7 @@ function boxColumn(x: number, caption: string, value: string): Element[] {
       lines: 1,
       align: "L",
     }),
-    textEl(
+    clippedTextEl(
       x + COL_PAD,
       VALUE_Y,
       value,
@@ -196,7 +196,7 @@ export function buildShippingLabel100100(
   const name = layoutShippingName(customerName);
 
   const elements: Element[] = [
-    textEl(
+    clippedTextEl(
       PAD,
       DOC_Y,
       documentId,
@@ -204,7 +204,7 @@ export function buildShippingLabel100100(
       "B",
       { width: CONTENT_W, lines: 1, align: "L" },
     ),
-    textEl(PAD, NAME_Y, customerName, name.size, "B", {
+    clippedTextEl(PAD, NAME_Y, customerName, name.size, "B", {
       width: CONTENT_W,
       lines: name.lines,
       align: "L",
@@ -218,7 +218,7 @@ export function buildShippingLabel100100(
 
   const address = orDash(input.addressText);
   elements.push(
-    textEl(PAD, ADDR_Y, address, fitSize(address, CONTENT_W, ADDR_SIZE, ADDR_MIN_SIZE), "M", {
+    clippedTextEl(PAD, ADDR_Y, address, fitSize(address, CONTENT_W, ADDR_SIZE, ADDR_MIN_SIZE), "M", {
       width: CONTENT_W,
       lines: 1,
       align: "L",

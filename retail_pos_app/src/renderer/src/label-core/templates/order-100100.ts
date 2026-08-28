@@ -27,7 +27,7 @@
 
 import { estimateQrSize, fitSize, utf8Length } from "../measure";
 import { type Element, type Label } from "../model";
-import { textEl, type TemplateOptions } from "./scale-6040";
+import { clippedTextEl, textEl, type TemplateOptions } from "./scale-6040";
 
 export interface OrderLabelInput {
   orderNo: string;
@@ -215,7 +215,7 @@ export function buildOrderLabel100100(
   const enLines = nameEn ? wrapChars(nameEn, NAME_WRAP).slice(0, NAME_MAX_LINES) : [];
   for (const line of enLines) {
     elements.push(
-      textEl(PAD, y, line, NAME_SIZE, "B", { width: CONTENT_W, lines: 1, align: "L" }),
+      clippedTextEl(PAD, y, line, NAME_SIZE, "B", { width: CONTENT_W, lines: 1, align: "L" }),
     );
     y += NAME_LH;
   }
@@ -223,7 +223,7 @@ export function buildOrderLabel100100(
   const nameKo = input.nameKo.trim();
   if (nameKo) {
     elements.push(
-      textEl(PAD, y, nameKo, KO_SIZE, "B", { width: CONTENT_W, lines: 1, align: "L" }),
+      clippedTextEl(PAD, y, nameKo, KO_SIZE, "B", { width: CONTENT_W, lines: 1, align: "L" }),
     );
     y += KO_LH;
   }
@@ -242,7 +242,7 @@ export function buildOrderLabel100100(
 
   for (const line of fitOptionLines(optionLines, maxOptionLines)) {
     elements.push(
-      textEl(PAD, y, line, OPTION_SIZE, "M", { width: CONTENT_W, lines: 1, align: "L" }),
+      clippedTextEl(PAD, y, line, OPTION_SIZE, "M", { width: CONTENT_W, lines: 1, align: "L" }),
     );
     y += OPTION_LH;
   }
@@ -256,7 +256,7 @@ export function buildOrderLabel100100(
   // the size steps down until the whole string fits `CONTENT_W`.
   const qtyLine = orderQtyLine(input.qty, input.uom, input.dueText);
   elements.push(
-    textEl(PAD, QTY_Y, qtyLine, fitSize(qtyLine, CONTENT_W, QTY_SIZE, QTY_MIN_SIZE), "BK", {
+    clippedTextEl(PAD, QTY_Y, qtyLine, fitSize(qtyLine, CONTENT_W, QTY_SIZE, QTY_MIN_SIZE), "BK", {
       width: CONTENT_W,
       lines: 1,
       align: "L",
@@ -277,7 +277,7 @@ export function buildOrderLabel100100(
   const footerY = BOX_Y + (BOX - FOOTER_SIZE) / 2;
 
   elements.push(
-    textEl(footerX, footerY, input.orderNo.trim() || "-", FOOTER_SIZE, "B", {
+    clippedTextEl(footerX, footerY, input.orderNo.trim() || "-", FOOTER_SIZE, "B", {
       width: footerW,
       lines: 1,
       align: "C",

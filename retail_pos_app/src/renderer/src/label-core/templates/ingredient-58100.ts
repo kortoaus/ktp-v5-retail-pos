@@ -57,6 +57,7 @@ import { strike, type Element, type Label } from "../model";
 import { uomOverride } from "../uom-override";
 import {
   amountOnly,
+  clippedTextEl,
   formatScaleDates,
   textEl,
   type ScaleBarcode,
@@ -68,10 +69,14 @@ export interface IngredientLabelInput extends ScaleLabelInput {
   /**
    * The statement panel. Free text, wrapped by the printer.
    *
-   * Capped at five lines by `^FB` and **not shrunk**: a longer statement is
-   * truncated at the fifth line rather than set in type nobody can read. If
-   * that starts happening the statement is too long for this label, which is a
-   * catalogue problem, not a layout one.
+   * Five lines and **not shrunk**: a longer statement is cut at the fifth line
+   * rather than set in type nobody can read. If that starts happening the
+   * statement is too long for this label, which is a catalogue problem, not a
+   * layout one.
+   *
+   * The cut is *ours*, made by `clippedTextEl`. `^FB` does not truncate — it
+   * prints the sixth line's worth of text on top of the fifth (hardware,
+   * 2026-08-28), which is why this cannot be left to the printer.
    */
   ingredients?: string | null;
 }
@@ -223,7 +228,7 @@ export function buildIngredientLabel58100(
   });
 
   const elements: Element[] = [
-    textEl(NAME_X, name.y, input.nameEn.trim(), name.size, "B", {
+    clippedTextEl(NAME_X, name.y, input.nameEn.trim(), name.size, "B", {
       width: NAME_W,
       lines: NAME_LINES,
       align: "L",
@@ -233,7 +238,7 @@ export function buildIngredientLabel58100(
   const ingredients = input.ingredients?.trim();
   if (ingredients) {
     elements.push(
-      textEl(INGREDIENT_X, INGREDIENT_Y, ingredients, INGREDIENT_SIZE, "M", {
+      clippedTextEl(INGREDIENT_X, INGREDIENT_Y, ingredients, INGREDIENT_SIZE, "M", {
         width: INGREDIENT_W,
         lines: INGREDIENT_LINES,
         align: "L",

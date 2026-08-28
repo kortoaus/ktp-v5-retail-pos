@@ -4,7 +4,8 @@ import test from "node:test";
 
 import { buildIngredientLabel58100 } from "./ingredient-58100.ts";
 import { MEDIA } from "../media.ts";
-import { elementBounds, renderLabel } from "../zpl.ts";
+import { textWidth } from "../measure.ts";
+import { elementBounds, renderLabel, resolveTextSize } from "../zpl.ts";
 import { buildPPBarcodeString } from "../../libs/pp-barcode.ts";
 
 /**
@@ -361,4 +362,41 @@ test("dbg and copies ride through", () => {
   assert.equal(buildIngredientLabel58100(ONE_D).dbg, false);
   assert.equal(buildIngredientLabel58100(ONE_D, { dbg: true }).dbg, true);
   assert.ok(renderLabel(buildIngredientLabel58100(ONE_D, { copies: 2 })).includes("^PQ2"));
+});
+
+// ---------------------------------------------------------------------------
+// The clip guard
+// ---------------------------------------------------------------------------
+//
+// `^FB` does not truncate. Given more text than the block holds it prints the
+// overflow *on top of* the last line it was given, and the label comes back
+// with two strings on one row (hardware, 2026-08-28). Caller text is therefore
+// cut to something that measurably fits, with `…` marking the cut.
+
+const ABSURD_KO = "넓은상품명".repeat(20);
+const ABSURD_EN = "WIDE PRODUCT NAME ".repeat(10);
+
+function assertFits(el, what, cut = true) {
+  assert.ok(el, `${what}: element built`);
+  if (cut) assert.ok(el.text.endsWith("…"), `${what}: "${el.text}" was not cut`);
+  assert.ok(
+    textWidth(el.text, resolveTextSize(el)) <= el.width * (el.lines ?? 1),
+    `${what}: "${el.text}" measures wider than its ${el.width} × ${el.lines ?? 1} block`,
+  );
+}
+
+const head = (label, prefix) =>
+  label.elements.find((el) => el.kind === "text" && el.text.startsWith(prefix));
+
+test("caller text is cut to fit rather than printed over itself", () => {
+  const label = buildIngredientLabel58100({
+    ...ONE_D,
+    nameEn: ABSURD_EN,
+    ingredients: INGREDIENTS.repeat(6),
+  });
+
+  assertFits(head(label, "WIDE"), "name band");
+  // The statement panel is five `^FB` rows and deliberately unshrunk: past five
+  // rows the overflow used to land on the fifth. Now it is cut there.
+  assertFits(head(label, "Salmon (Atlantic"), "ingredient statement");
 });

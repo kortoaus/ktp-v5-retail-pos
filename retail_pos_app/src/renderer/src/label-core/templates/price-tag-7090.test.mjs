@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildPriceTag7090, getPriceTag7090Model } from "./price-tag-7090.ts";
+import { ELLIPSIS, textWidth } from "../measure.ts";
 import { MEDIA } from "../media.ts";
 import { elementBounds, renderLabel, resolveTextSize } from "../zpl.ts";
 
@@ -116,8 +117,12 @@ test("the headline is Black 52 on promo, 62 otherwise, and shrinks no further th
     ...CASES["promo-guest"],
     promoName: "Manager's Weekend Special Extravaganza",
   });
-  assert.ok(resolveTextSize(long) < long.size, "a long headline shrinks");
-  assert.ok(resolveTextSize(long) >= long.minSize, "but not below the floor");
+  assert.ok(resolveTextSize(long) < 52, "a long headline shrinks");
+  assert.equal(resolveTextSize(long), long.minSize, "down to the floor, not past it");
+  // …and at the floor it is *cut*, because `^FB` prints what does not fit on
+  // top of what does. Hardware, 2026-08-28.
+  assert.ok(long.text.endsWith(ELLIPSIS), `"${long.text}" was not clipped`);
+  assert.ok(textWidth(long.text, resolveTextSize(long)) <= long.width);
 });
 
 test("the price is Black, split, and centred as one unit", () => {
@@ -252,6 +257,60 @@ test("the non-member cases are untouched by the member rhythm", () => {
   assert.ok(promo.includes("^FO24,436^A@N,23,"), "the date range at 23");
 });
 
+// ---------------------------------------------------------------------------
+// Names
+// ---------------------------------------------------------------------------
+
+/** Two full Korean rows at 40 in a 430-dot block. */
+const LONG_KO = "혼다시보틀 (테스트) 가다랑어 국물용 조미료";
+const LONG_EN = "Hondashi Bonito Soup Stock Bottle Katsuo Dashi";
+
+/** Top of the bottom digit line — the floor the name block may not reach. */
+const DIGIT_LINE_Y = 638;
+
+/** A clipped name no longer equals what went in, so names are found by their head. */
+const nameOf = (label, text) =>
+  label.elements.find((el) => el.kind === "text" && el.text.startsWith(text.slice(0, 8)));
+
+test("two Korean rows plus one English row still clear the digit line", () => {
+  // The busiest case (member stack *and* promo footer) and the plainest one:
+  // if the tall tag fits, the short one has room to spare.
+  for (const name of ["promo-member", "normal-guest"]) {
+    const label = buildPriceTag7090({ ...CASES[name], nameKo: LONG_KO, nameEn: LONG_EN });
+    const ko = nameOf(label, LONG_KO);
+    const en = nameOf(label, LONG_EN);
+
+    assert.equal(ko.text, LONG_KO, `${name}: two rows hold the whole name, uncut`);
+    assert.equal(ko.lines, 2, `${name}: the Korean name takes both rows`);
+    assert.equal(ko.size, 40, `${name}: at full size — the Korean name does not shrink`);
+    assert.equal(en.lines, 1, `${name}: English never takes a second row`);
+
+    const koBox = elementBounds(ko);
+    const enBox = elementBounds(en);
+    assert.ok(enBox.y >= koBox.y + koBox.h, `${name}: English under the Korean block`);
+    assert.ok(
+      enBox.y + enBox.h <= DIGIT_LINE_Y,
+      `${name}: English bottom ${enBox.y + enBox.h} > ${DIGIT_LINE_Y}`,
+    );
+
+    const digits = label.elements.find(
+      (el) => el.kind === "text" && el.text === BASE.barcode && el.y === DIGIT_LINE_Y,
+    );
+    assert.ok(digits, `${name}: the digit line is where it always was`);
+  }
+});
+
+test("a long English name shrinks toward 20 instead of wrapping", () => {
+  const label = buildPriceTag7090({ ...CASES["promo-member"], nameEn: LONG_EN });
+  const en = nameOf(label, LONG_EN);
+  assert.equal(en.lines, 1);
+  assert.ok(resolveTextSize(en) < 27, `still at ${resolveTextSize(en)}`);
+  assert.equal(resolveTextSize(en), 20, "and stops at the 20-dot floor");
+  // Still too wide at the floor, so it is cut rather than printed over itself.
+  assert.ok(en.text.endsWith(ELLIPSIS), `"${en.text}" was not clipped`);
+  assert.ok(textWidth(en.text, resolveTextSize(en)) <= en.width);
+});
+
 test("nothing lands outside 560 × 720, in any of the four cases", () => {
   const [pageW, pageH] = MEDIA["7090"].dots;
   const inputs = [
@@ -267,6 +326,8 @@ test("nothing lands outside 560 × 720, in any of the four cases", () => {
       ...CASES["normal-member"],
       nameKo: "아주 긴 한글 상품명 테스트 모듬사시미 특선 플래터",
     },
+    { ...CASES["promo-member"], nameKo: LONG_KO, nameEn: LONG_EN },
+    { ...CASES["normal-guest"], nameKo: LONG_KO, nameEn: LONG_EN },
   ];
   for (const input of inputs) {
     for (const el of buildPriceTag7090(input).elements) {
@@ -280,4 +341,59 @@ test("nothing lands outside 560 × 720, in any of the four cases", () => {
 
 test("dbg rides through", () => {
   assert.equal(buildPriceTag7090(CASES["normal-guest"], { dbg: true }).dbg, true);
+});
+
+// ---------------------------------------------------------------------------
+// The clip guard
+// ---------------------------------------------------------------------------
+
+const ABSURD_KO = "넓은상품명".repeat(20);
+const ABSURD_EN = "WIDE PRODUCT NAME ".repeat(10);
+
+function assertFits(el, what, cut = true) {
+  assert.ok(el, `${what}: element built`);
+  if (cut) assert.ok(el.text.endsWith(ELLIPSIS), `${what}: "${el.text}" was not cut`);
+  assert.ok(
+    textWidth(el.text, resolveTextSize(el)) <= el.width * (el.lines ?? 1),
+    `${what}: "${el.text}" measures wider than its ${el.width} × ${el.lines ?? 1} block`,
+  );
+}
+
+const head = (label, prefix) =>
+  label.elements.find((el) => el.kind === "text" && el.text.startsWith(prefix));
+
+test("caller text is cut to fit rather than printed over itself", () => {
+  // `^FB` prints what does not fit on top of what does — the 2026-08-28 photos
+  // show a promo headline and an English name both folded onto themselves.
+  const label = buildPriceTag7090({
+    ...CASES["promo-member"],
+    promoName: "Manager's Weekend Special Extravaganza Sale Event 123456789",
+    nameKo: ABSURD_KO,
+    nameEn: ABSURD_EN,
+    promoRange: "the whole of the month of September and the first week of October",
+    uom: "100g of drained weight",
+    barcode: "9300001028165930000102816593000010281659300001028165",
+  });
+
+  assertFits(head(label, "Manager's"), "promo headline");
+  assertFits(head(label, "넓은"), "Korean name");
+  assertFits(head(label, "WIDE"), "English name");
+  assertFits(head(label, "the whole"), "promotion dates");
+  assertFits(head(label, "/100g"), "the unit line");
+  // Shrinking was enough for this one — the cut is the last resort, not the
+  // first, and a 500-dot block with a 24-dot floor has room to absorb a wordy
+  // unit. What matters is the same invariant either way.
+  assertFits(head(label, "GUEST "), "the GUEST line", false);
+  assertFits(head(label, "93000010"), "the barcode digit line");
+});
+
+test("a cut name still clears the digit line", () => {
+  for (const name of ["promo-member", "normal-guest"]) {
+    const label = buildPriceTag7090({ ...CASES[name], nameKo: ABSURD_KO, nameEn: ABSURD_EN });
+    const en = elementBounds(head(label, "WIDE"));
+    assert.ok(
+      en.y + en.h <= DIGIT_LINE_Y,
+      `${name}: English bottom ${en.y + en.h} > ${DIGIT_LINE_Y}`,
+    );
+  }
 });

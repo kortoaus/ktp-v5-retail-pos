@@ -26,7 +26,7 @@
 
 import { estimateLines, textWidth } from "../measure";
 import { type Element, type Label, type Text } from "../model";
-import { textEl, type TemplateOptions } from "./scale-6040";
+import { clippedTextEl, textEl, type TemplateOptions } from "./scale-6040";
 import { formatMoney, type PriceTagInput } from "./price-tag-7030";
 
 export type PriceTag7090Case =
@@ -76,7 +76,7 @@ function centred(
   blockW: number,
 ): Text {
   const x = Math.round(CENTER_X - blockW / 2);
-  return textEl(x, topOf(baseline, size), text, size, weight, {
+  return clippedTextEl(x, topOf(baseline, size), text, size, weight, {
     width: blockW,
     lines: 1,
     align: "C",
@@ -94,7 +94,7 @@ function left(
   blockW: number,
   minSize?: number,
 ): Text {
-  return textEl(x, topOf(baseline, size), text, size, weight, {
+  return clippedTextEl(x, topOf(baseline, size), text, size, weight, {
     width: blockW,
     lines: 1,
     align: "L",
@@ -328,10 +328,31 @@ function divider(y: number): Element {
   return { kind: "line", x: MARGIN_X, y, w: CONTENT_W, h: 1, thick: 1 };
 }
 
+// ---------------------------------------------------------------------------
+// Names
+// ---------------------------------------------------------------------------
+//
+// The name zone runs from the first Korean cell top (y516 on the two tallest
+// cases) down to the bottom digit line at y638 — 122 dots. The owner's rule
+// (2026-08-28) caps it at **Korean up to 2 lines plus English 1**: a Korean
+// name that needs more is the one that gets clipped, and an English name that
+// needs more shrinks toward 20 rather than taking a second row. That makes
+// KO2 + EN2 unreachable, which is what the 122 dots can actually hold.
+//
+// `NAME_KO_LH` is 42, down from the 46 the first cut used, and that four dots
+// is exactly what the busiest case needed: at 46 a two-line Korean name put the
+// English cell at y618…645, seven dots *into* the digit line. At 42 it lands at
+// y610…637 — one dot clear, and the clearance is exact, not statistical, since
+// both cells are emitted at absolute coordinates. 43 does not fit; this is the
+// smallest tightening that works. Asserted in `price-tag-7090.test.mjs`.
+
 const NAME_W = 430;
 const NAME_KO_SIZE = 40;
-const NAME_KO_LH = 46;
+/** Baseline pitch of the Korean block. See the note above before raising it. */
+const NAME_KO_LH = 42;
 const NAME_EN_SIZE = 27;
+/** English shrinks to this rather than wrapping — there is no second row for it. */
+const NAME_EN_MIN = 20;
 const NAME_MAX_LINES = 2;
 
 function names(input: PriceTag7090Input, baseline: number): Element[] {
@@ -343,7 +364,7 @@ function names(input: PriceTag7090Input, baseline: number): Element[] {
   if (ko) {
     const lines = estimateLines(ko, NAME_KO_SIZE, NAME_W, NAME_MAX_LINES);
     out.push(
-      textEl(MARGIN_X, topOf(cursor, NAME_KO_SIZE), ko, NAME_KO_SIZE, "B", {
+      clippedTextEl(MARGIN_X, topOf(cursor, NAME_KO_SIZE), ko, NAME_KO_SIZE, "B", {
         width: NAME_W,
         lines,
         align: "L",
@@ -354,10 +375,12 @@ function names(input: PriceTag7090Input, baseline: number): Element[] {
 
   if (en) {
     out.push(
-      textEl(MARGIN_X, topOf(cursor, NAME_EN_SIZE), en, NAME_EN_SIZE, "B", {
+      clippedTextEl(MARGIN_X, topOf(cursor, NAME_EN_SIZE), en, NAME_EN_SIZE, "B", {
         width: NAME_W,
-        lines: estimateLines(en, NAME_EN_SIZE, NAME_W, NAME_MAX_LINES),
+        lines: 1,
         align: "L",
+        shrink: true,
+        minSize: NAME_EN_MIN,
       }),
     );
   }

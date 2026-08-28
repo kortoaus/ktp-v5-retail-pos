@@ -3,7 +3,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ELLIPSIS,
+  FIT_SAFETY,
   clamp,
+  clipToBlock,
+  clipToWidth,
+  wrapToWidths,
   code128Modules,
   estimateLines,
   estimateBarcodeWidth,
@@ -154,4 +159,106 @@ test("utf8Length counts bytes, not code points — the printer counts bytes", ()
 
   // Hangul in a payload pushes the version up, which is the point of counting.
   assert.equal(qrModules(utf8Length("가".repeat(50))), 45);
+});
+
+// ---------------------------------------------------------------------------
+// Clipping
+// ---------------------------------------------------------------------------
+//
+// `^FB` does not truncate: given more text than the block holds it prints the
+// overflow *on top of* the last line it was given. A 70 × 30 tag came back from
+// the 2026-08-28 hardware run reading `Botttlashait.RonDreShoup`. Everything
+// below exists so that cannot reach a printer again.
+
+test("the ellipsis is measured wider than a letter, narrower than an em", () => {
+  // Noto KR advances U+2026 like a proportional glyph; 1.0 wasted a character
+  // of every clip (owner hardware round 2026-08-28), a letter-width would let
+  // the marker overflow the block it pays for.
+  assert.equal(textEm(ELLIPSIS), 0.6);
+  assert.ok(FIT_SAFETY > 0.9 && FIT_SAFETY < 1, "a margin, not a redesign");
+});
+
+test("text that fits is returned untouched", () => {
+  // No safety factor is charged to a string that already fits: clipping a date
+  // that prints correctly today would be a worse label, not a safer one.
+  assert.equal(clipToWidth("Assorted Sashimi", 24, 400), "Assorted Sashimi");
+  assert.equal(clipToBlock("27/08", 24, 70), "27/08");
+  assert.equal(clipToBlock("가나다라마바사", 40, 160, 2), "가나다라마바사");
+});
+
+test("text that does not fit comes back cut, marked, and measurably fitting", () => {
+  const long = "Hondashi Bonito Soup Stock Bottle Katsuo Dashi";
+
+  const cut = clipToWidth(long, 18, 252);
+  assert.ok(cut.length < long.length, "something was dropped");
+  assert.ok(cut.endsWith(ELLIPSIS), `"${cut}" carries no marker`);
+  assert.ok(long.startsWith(cut.slice(0, -1)), "and what is left is a prefix of the original");
+  assert.ok(textWidth(cut, 18) <= 252, `"${cut}" still overflows`);
+
+  // `clipToWidth` is raw geometry — the margin belongs to `clipToBlock`, which
+  // spends it only on a string it has to cut anyway (see FIT_SAFETY).
+  const block = clipToBlock(long, 18, 252);
+  assert.ok(block.endsWith(ELLIPSIS));
+  assert.ok(textEm(block) * 18 <= 252 * FIT_SAFETY, "the cut keeps the safety margin");
+  assert.ok(block.length <= cut.length, "which costs it a character, not a redesign");
+});
+
+test("a wrapped block is cut by rows as well as by width", () => {
+  // 20 hangul at 40 dots is 800 dots of advance; two 160-dot rows hold eight.
+  const cut = clipToBlock("가".repeat(20), 40, 160, 2);
+  assert.ok(cut.endsWith(ELLIPSIS));
+  assert.ok(textWidth(cut, 40) <= 160 * 2);
+  assert.ok(estimateLines(cut, 40, 160, 3) <= 2, "and it really wraps into two rows");
+});
+
+test("a trailing space is dropped before the marker", () => {
+  const cut = clipToWidth("Aaaa bbbb cccc dddd", 20, 120);
+  assert.ok(!cut.includes(" " + ELLIPSIS), `"${cut}" kept its trailing space`);
+});
+
+test("a block too small for anything degrades rather than throwing", () => {
+  assert.equal(clipToWidth("Assorted", 40, 10), "");
+  assert.equal(clipToWidth("", 24, 100), "");
+  // A zero-width block is a template that declared no block; nothing to fit to.
+  assert.equal(clipToBlock("Assorted", 24, 0), "Assorted");
+});
+
+// ---------------------------------------------------------------------------
+// Wrapping onto rows of different widths
+// ---------------------------------------------------------------------------
+
+test("a name wraps onto rows that need not be the same width", () => {
+  // The 70 × 30 tag's third row runs beside the barcode digits, so it is narrow;
+  // one `^FB` block cannot express that, which is why this exists.
+  const rows = wrapToWidths("Assorted Sashimi Platter Special", 26, [424, 424, 252]);
+  assert.ok(rows.length >= 1 && rows.length <= 3);
+  rows.forEach((row, i) => {
+    assert.ok(textEm(row) * 26 <= [424, 424, 252][i], `row ${i}: "${row}" overflows`);
+  });
+  assert.equal(rows.join(" "), "Assorted Sashimi Platter Special", "no word is lost");
+});
+
+test("hangul breaks between characters, latin between words", () => {
+  // Same rule `estimateLines` uses, and the same rule `^FB` follows.
+  assert.deepEqual(wrapToWidths("가나다라", 40, [80, 80]), ["가나", "다라"]);
+  assert.deepEqual(wrapToWidths("aa bb cc", 40, [1000]), ["aa bb cc"]);
+});
+
+test("what will not fit stays on the last row, for the caller to cut", () => {
+  // Dropping it silently is how a name ends up truncated with nothing to say so.
+  const rows = wrapToWidths("가".repeat(10), 40, [80]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0], "가".repeat(10), "the remainder is kept, not lost");
+  assert.ok(clipToBlock(rows[0], 40, 80).endsWith(ELLIPSIS), "and the clip marks it");
+});
+
+test("a token wider than its row still gets a row of its own", () => {
+  const rows = wrapToWidths("가나다라마 bb", 40, [80, 80]);
+  assert.equal(rows[0], "가나다라마", "an unbreakable token is not dropped");
+  assert.equal(rows[1], "bb");
+});
+
+test("no text, no rows", () => {
+  assert.deepEqual(wrapToWidths("   ", 26, [424]), []);
+  assert.deepEqual(wrapToWidths("name", 26, []), []);
 });

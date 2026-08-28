@@ -11,7 +11,7 @@ import {
 } from "./order-100100.ts";
 import { MEDIA } from "../media.ts";
 import { estimateQrSize, textWidth, utf8Length } from "../measure.ts";
-import { elementBounds, renderLabel } from "../zpl.ts";
+import { elementBounds, renderLabel, resolveTextSize } from "../zpl.ts";
 
 const SAMPLE = {
   orderNo: "SASH-0412",
@@ -264,4 +264,49 @@ test("nothing lands outside 800 × 800", () => {
 
 test("dbg rides through", () => {
   assert.equal(buildOrderLabel100100(SAMPLE, { dbg: true }).dbg, true);
+});
+
+// ---------------------------------------------------------------------------
+// The clip guard
+// ---------------------------------------------------------------------------
+//
+// `^FB` does not truncate. Given more text than the block holds it prints the
+// overflow *on top of* the last line it was given, and the label comes back
+// with two strings on one row (hardware, 2026-08-28). Caller text is therefore
+// cut to something that measurably fits, with `…` marking the cut.
+
+const ABSURD_KO = "넓은상품명".repeat(20);
+const ABSURD_EN = "WIDE PRODUCT NAME ".repeat(10);
+
+function assertFits(el, what, cut = true) {
+  assert.ok(el, `${what}: element built`);
+  if (cut) assert.ok(el.text.endsWith("…"), `${what}: "${el.text}" was not cut`);
+  assert.ok(
+    textWidth(el.text, resolveTextSize(el)) <= el.width * (el.lines ?? 1),
+    `${what}: "${el.text}" measures wider than its ${el.width} × ${el.lines ?? 1} block`,
+  );
+}
+
+const head = (label, prefix) =>
+  label.elements.find((el) => el.kind === "text" && el.text.startsWith(prefix));
+
+test("caller text is cut to fit rather than printed over itself", () => {
+  const label = buildOrderLabel100100({
+    ...SAMPLE,
+    nameEn: ABSURD_EN,
+    nameKo: ABSURD_KO,
+    optionLines: [ABSURD_KO],
+    orderNo: "SASH-0412-0412-0412-0412-0412",
+    uom: "boxes of twenty-four",
+    dueText: "Thursday the 27th of August at two in the afternoon",
+  });
+
+  // The name and option rows are wrapped by character count, which is a count,
+  // not a width — a row of hangul at the same count is twice as wide.
+  // A Latin row of the same character count is half the width, so this one
+  // fits as wrapped — the count-based wrap is only a problem for hangul.
+  assertFits(head(label, "WIDE"), "English name row", false);
+  assertFits(head(label, "넓은"), "Korean name row");
+  assertFits(head(label, "SASH-0412"), "order number");
+  assertFits(head(label, "2 BOXES"), "quantity and due");
 });
