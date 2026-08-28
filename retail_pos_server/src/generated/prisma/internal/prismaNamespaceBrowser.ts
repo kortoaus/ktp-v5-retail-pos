@@ -72,7 +72,8 @@ export const ModelName = {
   SaleInvoiceRow: 'SaleInvoiceRow',
   Voucher: 'Voucher',
   VoucherEvent: 'VoucherEvent',
-  DocCounter: 'DocCounter'
+  DocCounter: 'DocCounter',
+  FreeTextTemplate: 'FreeTextTemplate'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -519,6 +520,17 @@ export const DocCounterScalarFieldEnum = {
 export type DocCounterScalarFieldEnum = (typeof DocCounterScalarFieldEnum)[keyof typeof DocCounterScalarFieldEnum]
 
 
+export const FreeTextTemplateScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  lines: 'lines',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type FreeTextTemplateScalarFieldEnum = (typeof FreeTextTemplateScalarFieldEnum)[keyof typeof FreeTextTemplateScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -533,6 +545,13 @@ export const NullableJsonNullValueInput = {
 } as const
 
 export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
+
+
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
 
 
 export const QueryMode = {

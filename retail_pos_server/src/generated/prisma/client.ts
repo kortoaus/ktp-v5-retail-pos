@@ -147,3 +147,8 @@ export type VoucherEvent = Prisma.VoucherEventModel
  * 
  */
 export type DocCounter = Prisma.DocCounterModel
+/**
+ * Model FreeTextTemplate
+ * 
+ */
+export type FreeTextTemplate = Prisma.FreeTextTemplateModel

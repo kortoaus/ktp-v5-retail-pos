@@ -806,8 +806,31 @@ model VoucherEvent {
 
 model DocCounter {
   id      Int      @id @default(autoincrement())
-  date    DateTime @unique // counter resets when date changes (e.g. daily for sale orders) 
+  date    DateTime @unique // counter resets when date changes (e.g. daily for sale orders)
   counter Int      @default(0)
+}
+
+// 자유 텍스트 라벨 템플릿 — 계량 러너(ktpv5-retail-runner) 의 자유 텍스트
+// 편집기가 이름 붙여 저장하는 문구 묶음. 원래 단말 AsyncStorage 였는데,
+// 태블릿이 깨지거나 교체되면 통째로 사라져 매장 공용 자산이 못 되므로
+// 2026-08-28 이 테이블로 옮겼다. 클라우드로는 올라가지 않는다 — 매장 로컬
+// 자산이고 up-sync 대상이 아니다(cloudId 없음).
+model FreeTextTemplate {
+  id   Int    @id @default(autoincrement())
+  // 표시 이름 겸 덮어쓰기 키. 저장 시 trim 된다. @unique 는 정확 일치라
+  // 대소문자 구분 — 실제 덮어쓰기 판정은 서비스가 lower(name) 으로 한다.
+  name String @unique
+
+  // FreeTextLine[] — `{ text: string, size: "S"|"M"|"L", weight: "M"|"B"|"BK" }`.
+  // 정본 타입은 label-core `templates/free-text-6040` 이고, 이 서버는 라벨을
+  // 그리지 않으므로 스키마로 강제하지 않고 저장 전 검증만 한다
+  // (`free-text-template.validate.ts`).
+  lines Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
 }
 
 // Local Data End

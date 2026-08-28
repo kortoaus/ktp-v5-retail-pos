@@ -12,7 +12,7 @@ only thing in the building that talks to the cloud.
 - `src/app.ts` — Express wiring. **Order is load-bearing**: `express.json({limit:"1mb"})` →
   cors → request logger → `/health` `/clear` `/ok` (unauthenticated stubs) →
   `terminalMiddleware` → `/api` router → error handler.
-- `src/router.ts` — mounts 16 modules under `/api`. Each module is
+- `src/router.ts` — mounts 17 modules under `/api`. Each module is
   `x.router.ts` + `x.controller.ts` + `x.service.ts`. (The Route Map below still
   omits `/order` — known doc drift, recorded in api-docs BACKLOG §Z.)
 
@@ -77,6 +77,7 @@ docker compose up -d         # local dev Postgres only (host port 5555)
 | `/cashio` | user + `cashio` | `GET|POST /` |
 | `/store` | GET open, POST + `store` | `GET /`, `GET /label` (no consumer in this repo), `POST /` |
 | `/cloud` | none | `POST /migrate/item` (runs the whole down-sync), `GET /post`, `GET|POST /item-sheet/label-update*` |
+| `/free-text-template` | none | `GET /` (newest-updated first), `POST /` (upsert by `lower(name)`), `DELETE /:id` (missing id = no-op ok). Store-owned free-text label templates for the scale runner (`ktpv5-retail-runner`); moved off device AsyncStorage 2026-08-28 so a replaced tablet keeps them. `lines` is `Json` — `free-text-template.validate.ts` is effectively that column's schema |
 | `/stripe` | user + `sale` | `POST /connection-token` (→ `{secret, locationId}`), `POST /payment-intent` (`{amount}` cents → `{id, client_secret}`). **Only outbound-to-Stripe surface**; no key ⇒ clean `503 {ok:false,msg:"Stripe is not configured"}` |
 
 ## Database
@@ -92,7 +93,7 @@ docker compose up -d         # local dev Postgres only (host port 5555)
   ItemCategory Price PromoPrice CloudHotkey CloudHotkeyItem`.
 - POS-owned (up-sync or local-only): `Terminal Hotkey StoreSetting User TerminalShift
   CashInOut SaleInvoice SaleInvoiceRow SaleInvoicePayment Voucher VoucherEvent DocCounter
-  PrintedItemSheet`.
+  PrintedItemSheet FreeTextTemplate`.
 - `companyId = 1` and `storeSetting.id = 1` are hard-coded everywhere. Single-store deployment.
 
 ## Cloud Sync — api-server (`API_URL`)
@@ -165,7 +166,8 @@ failure voids the already-redeemed vouchers before rethrowing.
 npm run build && node --test dist/v1/sale/sale.doc-counter.test.js
 ```
 
-Files: `sale.{points,refund.points,doc-counter}.test.ts`, `store.service.test.ts`. All are
+Files: `sale.{points,refund.points,doc-counter}.test.ts`, `store.service.test.ts`,
+`free-text-template.validate.test.ts`. All are
 pure-function tests with injected deps — none touch Postgres. Keep it that way.
 
 ## Gotchas

@@ -405,7 +405,8 @@ export const ModelName = {
   SaleInvoiceRow: 'SaleInvoiceRow',
   Voucher: 'Voucher',
   VoucherEvent: 'VoucherEvent',
-  DocCounter: 'DocCounter'
+  DocCounter: 'DocCounter',
+  FreeTextTemplate: 'FreeTextTemplate'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -421,7 +422,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "company" | "brand" | "item" | "itemScaleData" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter"
+    modelProps: "company" | "brand" | "item" | "itemScaleData" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter" | "freeTextTemplate"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2053,6 +2054,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    FreeTextTemplate: {
+      payload: Prisma.$FreeTextTemplatePayload<ExtArgs>
+      fields: Prisma.FreeTextTemplateFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.FreeTextTemplateFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FreeTextTemplatePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.FreeTextTemplateFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FreeTextTemplatePayload>
+        }
+        findFirst: {
+          args: Prisma.FreeTextTemplateFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FreeTextTemplatePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.FreeTextTemplateFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FreeTextTemplatePayload>
+        }
+        findMany: {
+          args: Prisma.FreeTextTemplateFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FreeTextTemplatePayload>[]
+        }
+        create: {
+          args: Prisma.FreeTextTemplateCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FreeTextTemplatePayload>
+        }
+        createMany: {
+          args: Prisma.FreeTextTemplateCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.FreeTextTemplateCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FreeTextTemplatePayload>[]
+        }
+        delete: {
+          args: Prisma.FreeTextTemplateDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FreeTextTemplatePayload>
+        }
+        update: {
+          args: Prisma.FreeTextTemplateUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FreeTextTemplatePayload>
+        }
+        deleteMany: {
+          args: Prisma.FreeTextTemplateDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.FreeTextTemplateUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.FreeTextTemplateUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FreeTextTemplatePayload>[]
+        }
+        upsert: {
+          args: Prisma.FreeTextTemplateUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FreeTextTemplatePayload>
+        }
+        aggregate: {
+          args: Prisma.FreeTextTemplateAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateFreeTextTemplate>
+        }
+        groupBy: {
+          args: Prisma.FreeTextTemplateGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.FreeTextTemplateGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.FreeTextTemplateCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.FreeTextTemplateCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -2520,6 +2595,17 @@ export const DocCounterScalarFieldEnum = {
 export type DocCounterScalarFieldEnum = (typeof DocCounterScalarFieldEnum)[keyof typeof DocCounterScalarFieldEnum]
 
 
+export const FreeTextTemplateScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  lines: 'lines',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type FreeTextTemplateScalarFieldEnum = (typeof FreeTextTemplateScalarFieldEnum)[keyof typeof FreeTextTemplateScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -2534,6 +2620,13 @@ export const NullableJsonNullValueInput = {
 } as const
 
 export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
+
+
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
 
 
 export const QueryMode = {
@@ -2858,6 +2951,7 @@ export type GlobalOmitConfig = {
   voucher?: Prisma.VoucherOmit
   voucherEvent?: Prisma.VoucherEventOmit
   docCounter?: Prisma.DocCounterOmit
+  freeTextTemplate?: Prisma.FreeTextTemplateOmit
 }
 
 /* Types for Logging */

@@ -15,6 +15,7 @@ import customerVoucherRouter from "./v1/customer-voucher/customer-voucher.router
 import saleRouter from "./v1/sale/sale.router";
 import orderRouter from "./v1/order/order.router";
 import stripeRouter from "./v1/stripe/stripe.router";
+import freeTextTemplateRouter from "./v1/free-text-template/free-text-template.router";
 
 const router = Router();
 
@@ -34,4 +35,5 @@ router.use("/customer-voucher", customerVoucherRouter);
 router.use("/sale", saleRouter);
 router.use("/order", orderRouter);
 router.use("/stripe", stripeRouter);
+router.use("/free-text-template", freeTextTemplateRouter);
 export default router;
