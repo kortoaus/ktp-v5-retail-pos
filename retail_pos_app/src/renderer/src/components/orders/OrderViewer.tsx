@@ -16,7 +16,10 @@ import { useNavigate } from "react-router-dom";
 import OnScreenKeyboard from "../OnScreenKeyboard";
 import { useUser } from "../../contexts/UserContext";
 import { useOrderLoad } from "../../hooks/useOrderLoad";
-import { useZplPrinters } from "../../hooks/useZplPrinters";
+import { pickLabelPrinters, useZplPrinters } from "../../hooks/useZplPrinters";
+import { toOrderLabelInput } from "../../label-core/adapters/order-label";
+import { buildOrderLabel100100 } from "../../label-core/templates/order-100100";
+import { renderLabel } from "../../label-core/zpl";
 import { printOrderPickList } from "../../libs/printer/order-pick-list-receipt";
 import {
   acceptOrder,
@@ -30,16 +33,12 @@ import {
   type OrderPrintedBody,
 } from "../../service/order.service";
 import { decrementPendingCount } from "./orderInboxStore";
-import { buildOrderLabelZpl } from "./order-label-zpl";
 import {
   buildLabelPrintedCounts,
   countPicklistPrinted,
 } from "./order-print-events";
 import type { OrderStatusAction } from "./order-status-policy";
-import {
-  buildPickListRenderModel,
-  formatOrderDueDisplay,
-} from "./pick-list-render";
+import { buildPickListRenderModel } from "./pick-list-render";
 import OrderViewerSummary from "./OrderViewerSummary";
 import OrderViewerMadeToOrderSection from "./OrderViewerMadeToOrderSection";
 import OrderViewerPickingSection from "./OrderViewerPickingSection";
@@ -185,24 +184,17 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
 
   async function handlePrintLabel(line: OrderLine) {
     if (!detail || printInFlight) return;
-    // 제작 라벨은 ZPL 100×100 전용 — media 100100 ZPL 프린터가 설정에
-    // 없으면 알럿 후 중단(스펙).
-    const printer = printers.find(
-      (p) => p.mediaSize === "100100" && p.language === "zpl",
-    );
+    // 제작 라벨은 100×100 전용 — media 100100 프린터가 설정에 없으면 알럿 후
+    // 중단(스펙). language 는 보지 않는다: label-core 전환 이후 모든 라벨은
+    // ZPL 로 나가고, slcs 로 등록된 행도 ZPL 을 받는다(오너 확정 2026-08-26).
+    const printer = pickLabelPrinters(printers, "100100")[0];
     if (!printer) {
       window.alert("No 100x100 ZPL label printer configured.");
       return;
     }
     setPrintInFlight(true);
     try {
-      const zpl = buildOrderLabelZpl(
-        {
-          orderNo: detail.orderNo,
-          dueDisplay: formatOrderDueDisplay(detail.dueAt),
-        },
-        line,
-      );
+      const zpl = renderLabel(buildOrderLabel100100(toOrderLabelInput(detail, line)));
       const result = await printLabel(printer, { language: "zpl", data: zpl });
       if (!result.ok) {
         console.error("[order-label] print failed:", result.message);

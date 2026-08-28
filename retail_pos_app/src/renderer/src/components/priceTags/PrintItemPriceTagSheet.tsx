@@ -9,10 +9,19 @@ import {
 import { getItemsByIds } from "../../service/item.service";
 import { CloudItemSheet, CloudItemSheetRow, Item } from "../../types/models";
 import { cn } from "../../libs/cn";
-import { LabelPrinter, useZplPrinters } from "../../hooks/useZplPrinters";
-import { buildPriceTag7030 } from "../../libs/label-templates";
-import { buildPriceTag7090V2 } from "../../libs/label-7090-v2";
-import { mergeLabelOutputs } from "../../libs/label-builder";
+import {
+  LabelPrinter,
+  pickLabelPrinters,
+  useZplPrinters,
+} from "../../hooks/useZplPrinters";
+import { buildPriceTag7030 } from "../../label-core/templates/price-tag-7030";
+import { buildPriceTag7090 } from "../../label-core/templates/price-tag-7090";
+import { mergeJobs } from "../../label-core/merge";
+import {
+  shouldPrint7090,
+  toPriceTag7030Input,
+  toPriceTag7090Input,
+} from "../../label-core/adapters/item-price-tag";
 import PagingRowList from "../list/PagingRowList";
 import SearchItemSheetList from "./SearchItemSheetList";
 import LoadingOverlay from "../LoadingOverlay";
@@ -41,12 +50,13 @@ export default function PrintItemPriceTagSheet() {
   const { printLabel, printers } = useZplPrinters();
   const { storeSetting } = useStoreSetting();
 
+  // Media only — a row typed `slcs` still receives ZPL (`pickLabelPrinters`).
   const printers7030 = useMemo(
-    () => printers.filter((p) => p.mediaSize === "7030"),
+    () => pickLabelPrinters(printers, "7030"),
     [printers],
   );
   const printers7090 = useMemo(
-    () => printers.filter((p) => p.mediaSize === "7090"),
+    () => pickLabelPrinters(printers, "7090"),
     [printers],
   );
   const printedSheetStorageKey = terminal
@@ -181,7 +191,7 @@ export default function PrintItemPriceTagSheet() {
       }
 
       for (const item of itemResult.result) {
-        if (shouldPrint7090(item, selectedPrinter7090 !== null)) {
+        if (selectedPrinter7090 !== null && shouldPrint7090(item)) {
           p7090.push(item);
         } else {
           p7030.push(item);
@@ -213,35 +223,39 @@ export default function PrintItemPriceTagSheet() {
     setProcessing(true);
     try {
       if (p7030.length > 0) {
-        const merged = mergeLabelOutputs(
-          p7030.map((item) =>
-            buildPriceTag7030(selectedPrinter7030.language, item),
-          ),
+        const data = mergeJobs(
+          p7030.map((item) => buildPriceTag7030(toPriceTag7030Input(item))),
         );
-        if (merged) {
-          const result = await printLabel(selectedPrinter7030, merged);
-          if (!result.ok) {
-            window.alert(result.message || "Failed to print 70x30 labels");
-            return;
-          }
+        const result = await printLabel(selectedPrinter7030, {
+          language: "zpl",
+          data,
+        });
+        if (!result.ok) {
+          window.alert(result.message || "Failed to print 70x30 labels");
+          return;
         }
       }
 
       if (selectedPrinter7090 !== null && p7090.length > 0) {
-        const labels = await Promise.all(
+        // A label-update sheet always prints what is charged today, never the
+        // pre-promotion shelf price — hence `mode: "current"` with no toggle.
+        const data = mergeJobs(
           p7090.map((item) =>
-            buildPriceTag7090V2(selectedPrinter7090.language, item, {
-              storeName: storeSetting?.name,
-            }),
+            buildPriceTag7090(
+              toPriceTag7090Input(item, {
+                mode: "current",
+                storeName: storeSetting?.name,
+              }),
+            ),
           ),
         );
-        const merged = mergeLabelOutputs(labels);
-        if (merged) {
-          const result = await printLabel(selectedPrinter7090, merged);
-          if (!result.ok) {
-            window.alert(result.message || "Failed to print 70x90 labels");
-            return;
-          }
+        const result = await printLabel(selectedPrinter7090, {
+          language: "zpl",
+          data,
+        });
+        if (!result.ok) {
+          window.alert(result.message || "Failed to print 70x90 labels");
+          return;
         }
       }
 
@@ -481,20 +495,10 @@ function formatQty(qty: number): string {
     .replace(/\.?0+$/, "");
 }
 
-function shouldPrint7090(item: Item, has7090Printer: boolean): boolean {
-  if (!has7090Printer) return false;
-  if (item.promoPrice !== null) return true;
-
-  const guestPrice = item.price?.prices[0];
-  const memberPrice = item.price?.prices[1];
-
-  return (
-    typeof guestPrice === "number" &&
-    typeof memberPrice === "number" &&
-    memberPrice > 0 &&
-    memberPrice < guestPrice
-  );
-}
+// `shouldPrint7090` moved to `label-core/adapters/item-price-tag.ts` on
+// 2026-08-26 so the manual price-tag tab can route the same way. The
+// "is a 70x90 printer even selected" half of the old signature stayed here,
+// at the call site, where the answer lives.
 
 function readPrintedSheetIds(storageKey: string): Set<number> {
   try {

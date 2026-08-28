@@ -22,6 +22,8 @@ interface Props {
 
 /** Label dimensions in millimetres for each configured media size. */
 const MEDIA_MM: Record<MediaSize, { widthMm: number; heightMm: number }> = {
+  "6040": { widthMm: 60, heightMm: 40 },
+  "58100": { widthMm: 58, heightMm: 100 },
   "7030": { widthMm: 70, heightMm: 30 },
   "7090": { widthMm: 70, heightMm: 90 },
   "100100": { widthMm: 100, heightMm: 100 },

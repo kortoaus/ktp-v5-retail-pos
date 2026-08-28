@@ -5,16 +5,26 @@ import { useBarcodeScanner } from "../../hooks/useBarcodeScanner";
 import SearchItemList from "../SearchItemList";
 import PagingRowList from "../list/PagingRowList";
 import { itemNameParser } from "../../libs/item-utils";
-import { buildPriceTag7030 } from "../../libs/label-templates";
-import { buildPriceTag7090V2 } from "../../libs/label-7090-v2";
-import { mergeLabelOutputs } from "../../libs/label-builder";
-import { LabelPrinter, useZplPrinters } from "../../hooks/useZplPrinters";
+import { buildPriceTag7030 } from "../../label-core/templates/price-tag-7030";
+import {
+  buildPriceTag7090,
+  type PriceTag7090Mode,
+} from "../../label-core/templates/price-tag-7090";
+import { mergeJobs } from "../../label-core/merge";
+import {
+  toPriceTag7030Input,
+  toPriceTag7090Input,
+} from "../../label-core/adapters/item-price-tag";
+import {
+  LabelPrinter,
+  pickLabelPrinters,
+  useZplPrinters,
+} from "../../hooks/useZplPrinters";
 import { MONEY_DP, MONEY_SCALE } from "../../libs/constants";
 import { useStoreSetting } from "../../hooks/useStoreSetting";
 import { getPriceTagQueueBadge } from "./price-tag-queue-badge";
 
 const QUEUE_PAGE_SIZE = 10;
-type PriceTag7090PrintMode = "current" | "normal";
 
 export default function PrintItemPriceTag() {
   const [queue, setQueue] = useState<Item[]>([]);
@@ -35,12 +45,14 @@ export default function PrintItemPriceTag() {
 
   useBarcodeScanner(scanCallback);
 
+  // Media is the only thing that decides where a job can go. A printer row
+  // typed `slcs` still receives ZPL — see `pickLabelPrinters`.
   const printers7030 = useMemo(
-    () => printers.filter((p) => p.mediaSize === "7030"),
+    () => pickLabelPrinters(printers, "7030"),
     [printers],
   );
   const printers7090 = useMemo(
-    () => printers.filter((p) => p.mediaSize === "7090"),
+    () => pickLabelPrinters(printers, "7090"),
     [printers],
   );
   const hasPromoQueued = useMemo(
@@ -48,36 +60,41 @@ export default function PrintItemPriceTag() {
     [queue],
   );
 
-  const handlePrintLabel7030 = (printer: LabelPrinter) => {
+  const handlePrintLabel7030 = async (printer: LabelPrinter) => {
     if (queue.length === 0) return;
-    const merged = mergeLabelOutputs(
-      queue.map((item) => buildPriceTag7030(printer.language, item)),
-    );
-    if (merged) printLabel(printer, merged);
+    try {
+      const data = mergeJobs(
+        queue.map((item) => buildPriceTag7030(toPriceTag7030Input(item))),
+      );
+      const result = await printLabel(printer, { language: "zpl", data });
+      if (!result.ok) {
+        window.alert(result.message || "Failed to print 70x30 labels");
+      }
+    } catch (err) {
+      window.alert(
+        err instanceof Error ? err.message : "Failed to print 70x30 labels",
+      );
+    }
   };
 
   const handlePrintLabel7090 = async (
     printer: LabelPrinter,
-    priceMode: PriceTag7090PrintMode,
+    mode: PriceTag7090Mode,
   ) => {
     if (queue.length === 0 || printing7090Ref.current) return;
     printing7090Ref.current = true;
     setPrinting7090(true);
     try {
-      const labels = await Promise.all(
+      const data = mergeJobs(
         queue.map((item) =>
-          buildPriceTag7090V2(printer.language, item, {
-            priceMode,
-            storeName: storeSetting?.name,
-          }),
+          buildPriceTag7090(
+            toPriceTag7090Input(item, { mode, storeName: storeSetting?.name }),
+          ),
         ),
       );
-      const merged = mergeLabelOutputs(labels);
-      if (merged) {
-        const result = await printLabel(printer, merged);
-        if (!result.ok) {
-          window.alert(result.message || "Failed to print 70x90 labels");
-        }
+      const result = await printLabel(printer, { language: "zpl", data });
+      if (!result.ok) {
+        window.alert(result.message || "Failed to print 70x90 labels");
       }
     } catch (err) {
       window.alert(
@@ -141,7 +158,7 @@ export default function PrintItemPriceTag() {
               {printers7030.map((p) => (
                 <button
                   key={p.name}
-                  onPointerDown={() => handlePrintLabel7030(p)}
+                  onPointerDown={() => void handlePrintLabel7030(p)}
                   className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
                 >
                   {p.name}

@@ -16,7 +16,8 @@ export interface ScaleConfig {
 }
 
 export type LabelLanguage = 'zpl' | 'slcs'
-export type MediaSize = '7030' | '7090' | '100100'
+/** Kept in step by hand with `label-core/media.ts MediaId` — preload cannot import it. */
+export type MediaSize = '6040' | '58100' | '7030' | '7090' | '100100'
 export type EscposSerialParity = 'none' | 'even' | 'odd' | 'mark' | 'space'
 export type EscposSerialHandshaking = 'none' | 'dtr-dsr' | 'rts-cts' | 'xon-xoff'
 export type ReceiptPrintMode = 'raster' | 'escpos'
