@@ -73,6 +73,7 @@ export const ModelName = {
   Voucher: 'Voucher',
   VoucherEvent: 'VoucherEvent',
   DocCounter: 'DocCounter',
+  SyncCursor: 'SyncCursor',
   FreeTextTemplate: 'FreeTextTemplate'
 } as const
 
@@ -518,6 +519,14 @@ export const DocCounterScalarFieldEnum = {
 } as const
 
 export type DocCounterScalarFieldEnum = (typeof DocCounterScalarFieldEnum)[keyof typeof DocCounterScalarFieldEnum]
+
+
+export const SyncCursorScalarFieldEnum = {
+  key: 'key',
+  value: 'value'
+} as const
+
+export type SyncCursorScalarFieldEnum = (typeof SyncCursorScalarFieldEnum)[keyof typeof SyncCursorScalarFieldEnum]
 
 
 export const FreeTextTemplateScalarFieldEnum = {

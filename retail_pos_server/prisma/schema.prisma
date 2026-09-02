@@ -810,6 +810,15 @@ model DocCounter {
   counter Int      @default(0)
 }
 
+// 클라우드 pull 커서 KV — 소형 메타 저장소. 키 예: "member-anonymize:afterId"
+// (cloud.member-anonymize.service.ts — api-server 멤버 익명화 이벤트 커서).
+// 값이 가리키는 UPDATE 가 멱등이라는 전제에서만 쓸 것 — 커서 유실/되감기 시
+// 처음부터 재생해도 무해해야 한다.
+model SyncCursor {
+  key   String @id
+  value Int
+}
+
 // 자유 텍스트 라벨 템플릿 — 계량 러너(ktpv5-retail-runner) 의 자유 텍스트
 // 편집기가 이름 붙여 저장하는 문구 묶음. 원래 단말 AsyncStorage 였는데,
 // 태블릿이 깨지거나 교체되면 통째로 사라져 매장 공용 자산이 못 되므로

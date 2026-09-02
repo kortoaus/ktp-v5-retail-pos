@@ -128,6 +128,11 @@ export type VoucherEvent = Prisma.VoucherEventModel
  */
 export type DocCounter = Prisma.DocCounterModel
 /**
+ * Model SyncCursor
+ * 
+ */
+export type SyncCursor = Prisma.SyncCursorModel
+/**
  * Model FreeTextTemplate
  * 
  */

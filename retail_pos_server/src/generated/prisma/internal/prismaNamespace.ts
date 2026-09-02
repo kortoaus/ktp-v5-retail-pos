@@ -406,6 +406,7 @@ export const ModelName = {
   Voucher: 'Voucher',
   VoucherEvent: 'VoucherEvent',
   DocCounter: 'DocCounter',
+  SyncCursor: 'SyncCursor',
   FreeTextTemplate: 'FreeTextTemplate'
 } as const
 
@@ -422,7 +423,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "company" | "brand" | "item" | "itemScaleData" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter" | "freeTextTemplate"
+    modelProps: "company" | "brand" | "item" | "itemScaleData" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter" | "syncCursor" | "freeTextTemplate"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2054,6 +2055,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    SyncCursor: {
+      payload: Prisma.$SyncCursorPayload<ExtArgs>
+      fields: Prisma.SyncCursorFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.SyncCursorFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SyncCursorPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.SyncCursorFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SyncCursorPayload>
+        }
+        findFirst: {
+          args: Prisma.SyncCursorFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SyncCursorPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.SyncCursorFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SyncCursorPayload>
+        }
+        findMany: {
+          args: Prisma.SyncCursorFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SyncCursorPayload>[]
+        }
+        create: {
+          args: Prisma.SyncCursorCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SyncCursorPayload>
+        }
+        createMany: {
+          args: Prisma.SyncCursorCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.SyncCursorCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SyncCursorPayload>[]
+        }
+        delete: {
+          args: Prisma.SyncCursorDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SyncCursorPayload>
+        }
+        update: {
+          args: Prisma.SyncCursorUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SyncCursorPayload>
+        }
+        deleteMany: {
+          args: Prisma.SyncCursorDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.SyncCursorUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.SyncCursorUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SyncCursorPayload>[]
+        }
+        upsert: {
+          args: Prisma.SyncCursorUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SyncCursorPayload>
+        }
+        aggregate: {
+          args: Prisma.SyncCursorAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateSyncCursor>
+        }
+        groupBy: {
+          args: Prisma.SyncCursorGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SyncCursorGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.SyncCursorCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SyncCursorCountAggregateOutputType> | number
+        }
+      }
+    }
     FreeTextTemplate: {
       payload: Prisma.$FreeTextTemplatePayload<ExtArgs>
       fields: Prisma.FreeTextTemplateFieldRefs
@@ -2595,6 +2670,14 @@ export const DocCounterScalarFieldEnum = {
 export type DocCounterScalarFieldEnum = (typeof DocCounterScalarFieldEnum)[keyof typeof DocCounterScalarFieldEnum]
 
 
+export const SyncCursorScalarFieldEnum = {
+  key: 'key',
+  value: 'value'
+} as const
+
+export type SyncCursorScalarFieldEnum = (typeof SyncCursorScalarFieldEnum)[keyof typeof SyncCursorScalarFieldEnum]
+
+
 export const FreeTextTemplateScalarFieldEnum = {
   id: 'id',
   name: 'name',
@@ -2951,6 +3034,7 @@ export type GlobalOmitConfig = {
   voucher?: Prisma.VoucherOmit
   voucherEvent?: Prisma.VoucherEventOmit
   docCounter?: Prisma.DocCounterOmit
+  syncCursor?: Prisma.SyncCursorOmit
   freeTextTemplate?: Prisma.FreeTextTemplateOmit
 }
 
