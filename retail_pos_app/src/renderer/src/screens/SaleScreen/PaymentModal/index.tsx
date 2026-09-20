@@ -401,11 +401,12 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
 
       // 영수증 용 detail 재조회 (rows + payments 포함). 실패해도 거래와 cart
       // clear 는 이미 확정됐고, Print Receipt 에서 다시 조회할 수 있다.
-      const detailRes = await getSaleInvoiceById(res.result.id);
+      const invoiceId = res.result.id;
+      const detailRes = await getSaleInvoiceById(invoiceId);
       const detail = detailRes.ok ? detailRes.result : null;
       if (detail) {
         setCompletedInfo((prev) =>
-          prev && prev.invoice.id === res.result.id ? { ...prev, detail } : prev,
+          prev && prev.invoice.id === invoiceId ? { ...prev, detail } : prev,
         );
       }
     } finally {

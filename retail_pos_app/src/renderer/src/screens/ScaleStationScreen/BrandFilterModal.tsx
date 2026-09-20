@@ -16,29 +16,37 @@ const PAGE_SIZE = 12;
  * read it. Keyword is optional — an empty search lists every brand, which is
  * how an operator who does not know the spelling finds one.
  */
-export default function BrandFilterModal({
-  open,
-  onClose,
-  selected,
-  onSelect,
-}: {
+type Props = {
   open: boolean;
   onClose: () => void;
   selected: Brand | null;
   onSelect: (brand: Brand | null) => void;
-}) {
+};
+
+export default function BrandFilterModal(props: Props) {
+  return (
+    <ModalContainer open={props.open} onClose={props.onClose} title="Brand" maxWidth="max-w-2xl" align="top">
+      {props.open && <BrandFilterBody {...props} />}
+    </ModalContainer>
+  );
+}
+
+function BrandFilterBody({ onClose, selected, onSelect }: Props) {
   const [keyword, setKeyword] = useState("");
   const [brands, setBrands] = useState<Brand[]>([]);
   const [paging, setPaging] = useState<PagingType | null>(null);
   const [loading, setLoading] = useState(false);
   const pageRef = useRef(1);
+  const requestIdRef = useRef(0);
 
   const fetchBrands = useCallback(
     async (page: number, kw: string) => {
-      pageRef.current = page;
+      const requestId = ++requestIdRef.current;
       setLoading(true);
       const res = await searchBrands(kw, page, PAGE_SIZE);
+      if (requestId !== requestIdRef.current) return;
       if (res.ok && res.result) {
+        pageRef.current = page;
         setBrands(res.result);
         setPaging(res.paging);
       }
@@ -48,105 +56,111 @@ export default function BrandFilterModal({
   );
 
   useEffect(() => {
-    if (!open) return;
-    setKeyword("");
     void fetchBrands(1, "");
-  }, [open, fetchBrands]);
+    return () => { ++requestIdRef.current; };
+  }, [fetchBrands]);
 
   const hasPrev = paging?.hasPrev ?? false;
   const hasNext = paging?.hasNext ?? false;
 
   return (
-    <ModalContainer open={open} onClose={onClose} title="Brand" maxWidth="max-w-2xl">
-      <div className="px-4 py-4 flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <KeyboardInputText
-            className="flex-1 bg-white"
-            value={keyword}
-            onChange={setKeyword}
-            onEnter={() => void fetchBrands(1, keyword)}
-            placeholder="Brand name"
-          />
-          <button
-            type="button"
-            onPointerDown={() => void fetchBrands(1, keyword)}
-            className="h-9 rounded-lg bg-gray-600 px-4 text-sm font-medium text-white active:bg-gray-700 shrink-0"
-          >
-            Search
-          </button>
-        </div>
+    <div className="px-4 py-4 flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <KeyboardInputText
+          className="flex-1 bg-white"
+          value={keyword}
+          onChange={setKeyword}
+          onEnter={() => void fetchBrands(1, keyword)}
+          placeholder="Brand name"
+          initialLayout="english"
+        />
+        <button
+          type="button"
+          onPointerDown={() => void fetchBrands(1, keyword)}
+          className="h-9 rounded-lg bg-gray-600 px-4 text-sm font-medium text-white active:bg-gray-700 shrink-0"
+        >
+          Search
+        </button>
+      </div>
 
-        <div className="grid grid-cols-3 gap-2 min-h-[260px] content-start">
-          <button
-            type="button"
-            onPointerDown={() => {
-              onSelect(null);
-              onClose();
-            }}
-            className={cn(
-              "h-14 rounded-lg border px-2 text-sm font-semibold transition-colors",
-              selected == null
-                ? "border-blue-500 bg-blue-50 text-blue-700"
-                : "border-gray-200 bg-white text-gray-600",
-            )}
-          >
-            All brands
-          </button>
-          {brands.map((brand) => (
+      {/* A 224px well keeps this panel above the keyboard at 1366x768.
+          Every result state occupies the same scroll area. */}
+      <div className="h-56 overflow-y-auto">
+        {loading ? (
+          <div className="h-full flex items-center justify-center text-sm text-gray-400">Loading brands…</div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 content-start">
             <button
-              key={brand.id}
               type="button"
               onPointerDown={() => {
-                onSelect(brand);
+                onSelect(null);
                 onClose();
               }}
               className={cn(
-                "h-14 rounded-lg border px-2 text-sm font-semibold transition-colors overflow-hidden",
-                selected?.id === brand.id
+                "h-14 rounded-lg border px-2 text-sm font-semibold transition-colors",
+                selected == null
                   ? "border-blue-500 bg-blue-50 text-blue-700"
                   : "border-gray-200 bg-white text-gray-600",
               )}
             >
-              <div className="truncate">{brand.name_en || brand.name_ko}</div>
-              {brand.name_ko && brand.name_en && (
-                <div className="truncate text-xs font-normal text-gray-400">
-                  {brand.name_ko}
-                </div>
-              )}
+              All brands
             </button>
-          ))}
-          {!loading && brands.length === 0 && (
-            <div className="col-span-3 flex items-center justify-center text-sm text-gray-400">
-              No brands found.
-            </div>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            disabled={!hasPrev}
-            onPointerDown={() => hasPrev && void fetchBrands(pageRef.current - 1, keyword)}
-            className={cn(
-              "h-11 rounded-lg bg-slate-500 text-sm font-medium text-white",
-              !hasPrev && "opacity-40",
+            {brands.map((brand) => (
+              <button
+                key={brand.id}
+                type="button"
+                onPointerDown={() => {
+                  onSelect(brand);
+                  onClose();
+                }}
+                className={cn(
+                  "h-14 rounded-lg border px-2 text-sm font-semibold transition-colors overflow-hidden",
+                  selected?.id === brand.id
+                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    : "border-gray-200 bg-white text-gray-600",
+                )}
+              >
+                <div className="truncate">{brand.name_en || brand.name_ko}</div>
+                {brand.name_ko && brand.name_en && (
+                  <div className="truncate text-xs font-normal text-gray-400">
+                    {brand.name_ko}
+                  </div>
+                )}
+              </button>
+            ))}
+            {brands.length === 0 && (
+              <div className="col-span-3 flex items-center justify-center text-sm text-gray-400">
+                No brands found.
+              </div>
             )}
-          >
-            Prev
-          </button>
-          <button
-            type="button"
-            disabled={!hasNext}
-            onPointerDown={() => hasNext && void fetchBrands(pageRef.current + 1, keyword)}
-            className={cn(
-              "h-11 rounded-lg bg-slate-500 text-sm font-medium text-white",
-              !hasNext && "opacity-40",
-            )}
-          >
-            Next
-          </button>
-        </div>
+          </div>
+        )}
       </div>
-    </ModalContainer>
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          disabled={loading || !hasPrev}
+          onPointerDown={() => !loading && hasPrev && void fetchBrands(pageRef.current - 1, keyword)}
+          className={cn(
+            "h-11 rounded-lg bg-slate-500 text-sm font-medium text-white",
+            !hasPrev && "opacity-40",
+          )}
+        >
+          Prev
+        </button>
+        <button
+          type="button"
+          disabled={loading || !hasNext}
+          onPointerDown={() => !loading && hasNext && void fetchBrands(pageRef.current + 1, keyword)}
+          className={cn(
+            "h-11 rounded-lg bg-slate-500 text-sm font-medium text-white",
+            !hasNext && "opacity-40",
+          )}
+        >
+          Next
+        </button>
+      </div>
+    </div>
   );
 }

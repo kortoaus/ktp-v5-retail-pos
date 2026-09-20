@@ -4,7 +4,10 @@ import { useScaleStatus } from "../../hooks/useScaleStatus";
 import { cn } from "../../libs/cn";
 import type { ScaleLabelStore } from "../../label-core/adapters/scale-label";
 import { getStoreLabelSetting } from "../../service/store.service";
-import { Item } from "../../types/models";
+import { useTerminal } from "../../contexts/TerminalContext";
+import { useScaleRecentItems } from "../../hooks/useScaleRecentItems";
+import { apiService } from "../../libs/api";
+import { recentItemsStorageKey } from "../../libs/scale-recent-items";
 import ItemBrowsePanel from "./ItemBrowsePanel";
 import WeighPanel from "./WeighPanel";
 
@@ -26,7 +29,15 @@ import WeighPanel from "./WeighPanel";
  * station.
  */
 export default function ScaleStationScreen() {
-  const [selected, setSelected] = useState<Item | null>(null);
+  const { terminal } = useTerminal();
+  if (!terminal) return null;
+  const storageKey = recentItemsStorageKey(apiService.getBaseURL(), terminal.id);
+  return <ScaleStation key={storageKey} storageKey={storageKey} />;
+}
+
+function ScaleStation({ storageKey }: { storageKey: string }) {
+  const [selected, setSelected] = useState<number | null>(null);
+  const { recentItems, record } = useScaleRecentItems(storageKey);
   const [store, setStore] = useState<ScaleLabelStore>({});
   const scaleConnected = useScaleStatus();
 
@@ -85,11 +96,13 @@ export default function ScaleStationScreen() {
           closing it returns to the same keyword/brand filter and scroll
           (owner, 2026-08-28). */}
       <div className="flex-1 min-h-0 relative">
-        <ItemBrowsePanel onPick={setSelected} />
-        {selected && (
+        <ItemBrowsePanel onPick={setSelected} recentItems={recentItems} />
+        {selected != null && (
           <div className="absolute inset-0 z-20 bg-white">
             <WeighPanel
-              itemId={selected.id}
+              key={selected}
+              itemId={selected}
+              onItemLoaded={record}
               store={store}
               onBack={() => setSelected(null)}
             />

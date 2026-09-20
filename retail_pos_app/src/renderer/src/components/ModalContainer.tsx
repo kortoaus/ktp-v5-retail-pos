@@ -7,6 +7,7 @@ interface ModalContainerProps {
   title: string;
   children: React.ReactNode;
   maxWidth?: string;
+  align?: "center" | "top";
 }
 
 export default function ModalContainer({
@@ -15,6 +16,7 @@ export default function ModalContainer({
   title,
   children,
   maxWidth = "max-w-md",
+  align = "center",
 }: ModalContainerProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -33,7 +35,7 @@ export default function ModalContainer({
 
   return (
     <div
-      className={cn("fixed inset-0 flex items-center justify-center p-4", open ? "bg-black/50" : "bg-transparent")}
+      className={cn("fixed inset-0 flex justify-center p-4", align === "top" ? "items-start" : "items-center", open ? "bg-black/50" : "bg-transparent")}
       style={{ zIndex: 999 }}
     >
       {open && (

@@ -89,11 +89,12 @@ export default function PrintItemPriceTagSheet() {
 
   useEffect(() => {
     if (!printedSheetStorageKey || !printedSheetMigrationKey) return;
+    const migrationKey = printedSheetMigrationKey;
     if (localStorage.getItem(printedSheetMigrationKey) === "1") return;
 
     const oldIds = [...readPrintedSheetIds(printedSheetStorageKey)];
     if (oldIds.length === 0) {
-      localStorage.setItem(printedSheetMigrationKey, "1");
+      localStorage.setItem(migrationKey, "1");
       return;
     }
 
@@ -116,7 +117,7 @@ export default function PrintItemPriceTagSheet() {
         for (const sheetId of migratedIds) next.add(sheetId);
         return next;
       });
-      localStorage.setItem(printedSheetMigrationKey, "1");
+      localStorage.setItem(migrationKey, "1");
     }
 
     migratePrintedSheetIds().catch((err) => {
@@ -280,9 +281,10 @@ export default function PrintItemPriceTagSheet() {
         return;
       }
 
+      const printedSheetId = res.result.sheetId;
       setPrintedSheetIds((prev) => {
         const next = new Set(prev);
-        next.add(res.result.sheetId);
+        next.add(printedSheetId);
         return next;
       });
     } catch (err) {

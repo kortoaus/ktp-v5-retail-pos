@@ -1,71 +1,70 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import KeyboardInputText from "../../components/KeyboardInputText";
-import { PagingType } from "../../libs/api";
 import { CF_URL } from "../../libs/cf-image-utils";
 import { cn } from "../../libs/cn";
 import { MONEY_DP, MONEY_SCALE } from "../../libs/constants";
 import { itemNameParser } from "../../libs/item-utils";
+import { applyBrowsePage, initialBrowseListState } from "../../libs/scale-browse-page-policy";
+import type { RecentItemEntry } from "../../libs/scale-recent-items";
 import { searchScaleItemsByKeyword } from "../../service/item.service";
 import { Brand, Item } from "../../types/models";
 import BrandFilterModal from "./BrandFilterModal";
-
-/**
- * The `/scale` station's item browser: keyword and/or brand, tap to weigh.
- *
- * A grid rather than the `SearchItemList` row list the price-tag screens use.
- * Weighing is a two-tap job an operator repeats all day and often knows the
- * product by its picture, not its barcode — so this trades density for target
- * size and a thumbnail. It searches `/api/item/search/keyword/scale`, which
- * filters to `isScale` items; there is nothing to weigh outside that set.
- */
+import RecentItemsRow from "./RecentItemsRow";
 
 const PAGE_SIZE = 12;
+type BrowseQuery = { keyword: string; brandId: number | null };
 
-export default function ItemBrowsePanel({
-  onPick,
-}: {
-  onPick: (item: Item) => void;
+export default function ItemBrowsePanel({ onPick, recentItems }: {
+  onPick: (itemId: number) => void;
+  recentItems: RecentItemEntry[];
 }) {
   const [keyword, setKeyword] = useState("");
   const [brand, setBrand] = useState<Brand | null>(null);
   const [brandOpen, setBrandOpen] = useState(false);
-  const [items, setItems] = useState<Item[]>([]);
-  const [paging, setPaging] = useState<PagingType | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
-  const pageRef = useRef(1);
+  const [list, setList] = useState(initialBrowseListState<Item>);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const requestIdRef = useRef(0);
+  const busyRef = useRef(false);
+  const queryRef = useRef<BrowseQuery>({ keyword: "", brandId: null });
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const fetchItems = useCallback(
-    async (page: number, kw: string, brandId: number | null) => {
-      pageRef.current = page;
-      setLoading(true);
-      const res = await searchScaleItemsByKeyword(kw, page, PAGE_SIZE, brandId);
-      if (res.ok && res.result) {
-        setItems(res.result);
-        setPaging(res.paging);
-      } else {
-        setItems([]);
-        setPaging(null);
-      }
-      setSearched(true);
-      setLoading(false);
-    },
-    [],
-  );
+  const fetchItems = useCallback(async (page: number, query: BrowseQuery, append: boolean) => {
+    const requestId = ++requestIdRef.current;
+    busyRef.current = true;
+    setLoading(!append);
+    setLoadingMore(append);
+    if (!append) {
+      queryRef.current = query;
+      setList(initialBrowseListState<Item>());
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    }
+    const res = await searchScaleItemsByKeyword(query.keyword, page, PAGE_SIZE, query.brandId);
+    // Ignore superseded searches and responses from a closed panel. No cache or
+    // prefetch survives a remount; returning from weighing keeps this panel alive.
+    if (requestId !== requestIdRef.current) return;
+    setList((previous) => applyBrowsePage(previous, { append, page }, {
+      ok: res.ok, result: res.result,
+      msg: res.msg || "Unable to load scale items.", hasNext: res.paging?.hasNext,
+    }));
+    busyRef.current = false;
+    setLoading(false);
+    setLoadingMore(false);
+  }, []);
 
-  // First paint lists the scale catalogue rather than an empty grid — with no
-  // keyword the route returns every `isScale` item, which is a usable menu.
   useEffect(() => {
-    void fetchItems(1, "", null);
+    void fetchItems(1, { keyword: "", brandId: null }, false);
+    return () => { ++requestIdRef.current; };
   }, [fetchItems]);
 
-  const search = useCallback(
-    (page: number) => void fetchItems(page, keyword, brand?.id ?? null),
-    [fetchItems, keyword, brand],
-  );
-
-  const hasPrev = paging?.hasPrev ?? false;
-  const hasNext = paging?.hasNext ?? false;
+  const search = (nextBrand: Brand | null = brand) => {
+    void fetchItems(1, { keyword: keyword.trim(), brandId: nextBrand?.id ?? null }, false);
+  };
+  const loadMore = () => {
+    if (busyRef.current || !list.hasMore) return;
+    // Paging and retries use the submitted query, even if the input was edited.
+    void fetchItems(list.page + 1, queryRef.current, true);
+  };
 
   return (
     <div className="h-full w-full flex flex-col bg-gray-100">
@@ -74,98 +73,100 @@ export default function ItemBrowsePanel({
           className="flex-1 max-w-md bg-white"
           value={keyword}
           onChange={setKeyword}
-          onEnter={() => search(1)}
+          onEnter={() => search()}
           placeholder="Name or barcode"
+          initialLayout="english"
         />
-        <button
-          type="button"
-          onPointerDown={() => search(1)}
-          className="h-9 rounded-lg bg-gray-600 px-4 text-sm font-medium text-white active:bg-gray-700 shrink-0"
+        <div
+          role="button"
+          onPointerDown={() => search()}
+          className="h-9 flex items-center rounded-lg bg-gray-600 px-4 text-sm font-medium text-white active:bg-gray-700 shrink-0 cursor-pointer"
         >
           Search
-        </button>
-        <button
-          type="button"
+        </div>
+        <div
+          role="button"
           onPointerDown={() => setBrandOpen(true)}
           className={cn(
-            "h-9 rounded-lg border px-4 text-sm font-medium shrink-0 max-w-[220px] truncate",
-            brand
-              ? "border-blue-500 bg-blue-50 text-blue-700"
-              : "border-gray-300 bg-white text-gray-600",
+            "h-9 flex items-center rounded-lg border px-4 text-sm font-medium shrink-0 max-w-[220px] cursor-pointer",
+            brand ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-300 bg-white text-gray-600",
           )}
         >
-          {brand ? brand.name_en || brand.name_ko : "All brands"}
-        </button>
+          <span className="truncate">{brand ? brand.name_en || brand.name_ko : "All brands"}</span>
+        </div>
         {brand && (
-          <button
-            type="button"
-            onPointerDown={() => {
-              setBrand(null);
-              void fetchItems(1, keyword, null);
-            }}
-            className="h-9 px-2 text-sm font-medium text-red-600 shrink-0"
+          <div
+            role="button"
+            onPointerDown={() => { setBrand(null); search(null); }}
+            className="h-9 flex items-center px-2 text-sm font-medium text-red-600 shrink-0 cursor-pointer"
           >
             Clear
-          </button>
-        )}
-        <div className="flex-1" />
-        <span className="text-xs text-gray-400 shrink-0">
-          {paging ? `Page ${paging.currentPage} / ${paging.totalPages}` : ""}
-        </span>
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto p-3">
-        <div className="grid grid-cols-4 gap-3">
-          {items.map((item) => (
-            <ItemCard key={item.id} item={item} onPick={onPick} />
-          ))}
-        </div>
-        {!loading && searched && items.length === 0 && (
-          <div className="h-40 flex items-center justify-center text-sm text-gray-400">
-            No scale items match this search.
           </div>
         )}
       </div>
 
-      <div className="h-14 shrink-0 grid grid-cols-2 gap-3 px-3 py-2 bg-white border-t border-gray-200">
-        <button
-          type="button"
-          disabled={!hasPrev}
-          onPointerDown={() => hasPrev && search(pageRef.current - 1)}
-          className={cn(
-            "rounded-lg bg-slate-500 text-sm font-semibold text-white",
-            !hasPrev && "opacity-40",
-          )}
-        >
-          Prev
-        </button>
-        <button
-          type="button"
-          disabled={!hasNext}
-          onPointerDown={() => hasNext && search(pageRef.current + 1)}
-          className={cn(
-            "rounded-lg bg-slate-500 text-sm font-semibold text-white",
-            !hasNext && "opacity-40",
-          )}
-        >
-          Next
-        </button>
+      <RecentItemsRow items={recentItems} onPick={onPick} />
+
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-3">
+        {loading ? (
+          <div className="h-full flex items-center justify-center text-sm text-gray-400">Loading items…</div>
+        ) : list.error !== null ? (
+          <div className="h-full flex flex-col items-center justify-center gap-3">
+            <p role="alert" className="text-sm text-red-700">{list.error}</p>
+            <div
+              role="button"
+              onPointerDown={() => {
+                if (!busyRef.current) void fetchItems(1, queryRef.current, false);
+              }}
+              className="h-12 px-6 flex items-center rounded-lg bg-blue-600 text-sm font-semibold text-white cursor-pointer active:bg-blue-700"
+            >
+              Retry search
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-4 gap-3">
+              {list.items.map((item) => <ItemCard key={item.id} item={item} onPick={onPick} />)}
+            </div>
+            {list.items.length === 0 && (
+              <div className="h-40 flex items-center justify-center text-sm text-gray-400">
+                No scale items match this search.
+              </div>
+            )}
+          </>
+        )}
       </div>
+
+      {!loading && list.hasMore && (
+        <div className="shrink-0 flex items-center gap-3 px-3 py-2 bg-white border-t border-gray-200">
+          {list.loadMoreError !== null && (
+            <p role="alert" className="flex-1 text-sm text-red-700">{list.loadMoreError}</p>
+          )}
+          <div
+            role="button"
+            aria-disabled={loadingMore}
+            onPointerDown={loadMore}
+            className={cn(
+              "h-11 flex-1 flex items-center justify-center rounded-lg bg-slate-500 text-sm font-semibold text-white cursor-pointer",
+              loadingMore && "opacity-40",
+            )}
+          >
+            {loadingMore ? "Loading…" : list.loadMoreError !== null ? "Retry load more" : "Load more"}
+          </div>
+        </div>
+      )}
 
       <BrandFilterModal
         open={brandOpen}
         onClose={() => setBrandOpen(false)}
         selected={brand}
-        onSelect={(next) => {
-          setBrand(next);
-          void fetchItems(1, keyword, next?.id ?? null);
-        }}
+        onSelect={(next) => { setBrand(next); search(next); }}
       />
     </div>
   );
 }
 
-function ItemCard({ item, onPick }: { item: Item; onPick: (item: Item) => void }) {
+function ItemCard({ item, onPick }: { item: Item; onPick: (itemId: number) => void }) {
   const { name_en, name_ko } = itemNameParser(item);
   const price = item.promoPrice?.prices[0] ?? item.price?.prices[0] ?? 0;
   const hasPromo = item.promoPrice != null;
@@ -176,7 +177,7 @@ function ItemCard({ item, onPick }: { item: Item; onPick: (item: Item) => void }
     // a focused button would fire on the next scan. Same rule PaymentModal and
     // CloudHotkeyViewerV2 follow — do not "fix" this into a button.
     <div
-      onPointerDown={() => onPick(item)}
+      onPointerDown={() => onPick(item.id)}
       className="h-40 rounded-xl border border-gray-200 bg-white p-2 flex flex-col cursor-pointer active:border-blue-500 active:bg-blue-50 overflow-hidden"
     >
       <div className="h-16 shrink-0 flex items-center justify-center overflow-hidden rounded-lg bg-gray-50">

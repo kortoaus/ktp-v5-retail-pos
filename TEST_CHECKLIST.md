@@ -278,3 +278,22 @@
 - [ ] Enter 꾹 누르기 → 제출 1회만 (키 리핏으로 검색/OTP 연타 안 됨)
 - [ ] CapsLock 켠 상태 영문 타이핑 → 대문자 (Shift 병용 시 소문자)
 - [ ] ⚠ 알려진 동작: 멤버 검색 모달이 열려 있을 때 로열티 카드 스캔은 멤버 연결이 아니라 검색 필드에 텍스트로 들어감 — 스캔 전 모달을 닫을 것
+
+---
+
+## 15. Scale Station (`/scale`)
+
+Run on a 1366x768 terminal with a configured serial scale and label printers.
+
+- [ ] Connection badge: check connected/disconnected states against the serial scale; return from weighing and confirm the connection remains available.
+- [ ] Browse: search by name/barcode, apply and clear a brand, select an item, then return to the same filter, loaded results and scroll position. Scan an HID barcode ending in Enter and confirm it does not activate a browse tile or paging control.
+- [ ] Brand filter: panel stays anchored at the top when the on-screen keyboard opens. Loading, no results, one result and a full page occupy the same fixed list well; scroll the well to reach every brand. Check Search, Prev, Next, All brands and selected-brand highlighting.
+- [ ] Close and reopen the brand filter during a slow search: it starts with an empty keyword and fresh results; late responses from the closed filter do not appear.
+- [ ] Recent items: selecting an item adds it only after its weigh lookup succeeds, even without printing. Failed lookups add nothing. Check names, item identities, thumbnails/placeholders and horizontal scrolling; dragging the row must not select an item.
+- [ ] Reselect a recent item: fresh item data/prices load and the item moves to the front without duplication. Select 13 different items and confirm only the latest 12 remain. Reload/reopen the station and confirm persistence; another terminal must have an independent history.
+- [ ] Weigh: test live and fixed weight items, normal/promo prices, price-level edits, markdown and packed/used-by dates. Confirm totals and previews follow the existing rules.
+- [ ] Four lanes: print 1D Scale and 2D Normal on 60x40, and 1D Ingredient and 2D Ingredient on 58x100. Check media routing, physical label contents and barcode scans at the till.
+- [ ] Disabled reasons: verify empty platter, missing price, invalid/missing 7-digit PLU and missing printer prevent the applicable print action and show the expected reason/status. Check printer busy/failure handling.
+- [ ] Paging retry: fail the first search and confirm a full results-area error with Retry search (not a misleading empty result). Restore the server and retry successfully.
+- [ ] Load multiple pages, fail the next Load more request, and confirm every loaded item remains, with a footer Retry load more action. Retry failures keep the same page; recovery appends it once. Edit an unsubmitted keyword before retrying and confirm the original query is retried.
+- [ ] Start a slow browse request, submit a newer search/brand, and confirm only the latest response appears. Leave and reopen the station while a request is pending; no old results or stale prefetch should appear.

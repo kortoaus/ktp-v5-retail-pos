@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   buildIngredientLabel58100,
   buildScaleLabel6040,
@@ -22,6 +22,7 @@ import {
 } from "../../hooks/useZplPrinters";
 import { useLiveWeight } from "../../hooks/useLiveWeight";
 import { useWeighItem } from "../../hooks/useWeighItem";
+import type { Item } from "../../types/models";
 import MarkdownModal from "./MarkdownModal";
 import PriceLevelsModal from "./PriceLevelsModal";
 
@@ -112,10 +113,12 @@ export default function WeighPanel({
   itemId,
   store,
   onBack,
+  onItemLoaded,
 }: {
   itemId: number;
   store: ScaleLabelStore;
   onBack: () => void;
+  onItemLoaded: (item: Item) => void;
 }) {
   const { weight, weightString } = useLiveWeight(true);
   const weigh = useWeighItem(itemId, weightString);
@@ -123,6 +126,11 @@ export default function WeighPanel({
   const [editTarget, setEditTarget] = useState<EditTarget>(null);
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+
+  // Match runner: record only the fresh item returned by the weigh lookup.
+  useEffect(() => {
+    if (weigh.item) onItemLoaded(weigh.item);
+  }, [weigh.item, onItemLoaded]);
 
   const label = weigh.label;
   const labelOk = label != null && typeof label !== "string";
