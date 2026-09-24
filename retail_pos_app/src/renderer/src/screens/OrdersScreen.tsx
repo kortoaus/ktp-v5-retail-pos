@@ -343,8 +343,9 @@ export default function OrdersScreen() {
     });
   }
 
-  async function printPickSummary() {
-    const date = buckets?.nextDeliveryDate;
+  // Today(당일 아침 출력이 기본 — 오너 2026-09-25) = 오늘 배송일, Next = 다음 배송일.
+  async function printPickSummary(target: "today" | "next") {
+    const date = target === "today" ? today : buckets?.nextDeliveryDate;
     if (!date) {
       setNotice({ tone: "error", text: "No next delivery day — check delivery settings." });
       return;
@@ -664,8 +665,11 @@ export default function OrdersScreen() {
           {workBar !== "upcoming" && workBar !== "out" && (
             <>
               <span className="w-px h-6 bg-gray-300" />
-              {workBar === "tomorrow" && (
-                <WorkButton onPress={() => void printPickSummary()} disabled={busy != null}>
+              {(workBar === "tomorrow" || workBar === "today") && (
+                <WorkButton
+                  onPress={() => void printPickSummary(workBar === "today" ? "today" : "next")}
+                  disabled={busy != null}
+                >
                   Print pick summary
                 </WorkButton>
               )}
