@@ -70,63 +70,82 @@ export function drawDriverSheet(ctx: CanvasRenderingContext2D, model: DriverShee
   ctx.fillRect(PAD, y, maxText, 4);
   y += 16;
 
-  /* ── 정류장 ── */
-  for (const stop of model.stops) {
-    // "STOP 1" (좌) · "#260924-313" (우)
-    font(ctx, FONT_LG, true);
-    ctx.fillText(`STOP ${stop.stopNo}`, PAD, y);
-    font(ctx, FONT, true);
-    ctx.textAlign = "right";
-    ctx.fillText(stop.orderNo, W - PAD, y + 4);
-    ctx.textAlign = "left";
-    y += LH + 10;
-
-    left(stop.name, FONT, true, LH);
-    left(`Ph ${stop.phone}`, FONT + 2, true, LH + 2);
-    for (const a of stop.addressLines) left(a, FONT, false, LH - 2);
-
-    if (stop.note) {
-      y += 6;
-      font(ctx, FONT_SM);
-      const noteLines = wrapToWidth(`Note: ${stop.note}`, maxText - 24, measure);
-      const boxH = noteLines.length * (LH - 6) + 16;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(PAD, y, maxText, boxH);
-      let ny = y + 8;
-      for (const line of noteLines) {
-        ctx.fillText(line, PAD + 12, ny);
-        ny += LH - 6;
-      }
-      y += boxH + 4;
-    }
-
-    if (stop.ageCheck) {
-      y += 6;
-      ctx.fillRect(PAD, y, maxText, LH + 8);
+  /* ── 배달일 섹션 → 정류장 ── */
+  for (const section of model.sections) {
+    // 배달일이 여럿일 때만: 검은 띠에 흰 글자 "Thu 24 Sep · 9am–9pm" (번호는 섹션마다 1부터).
+    if (section.header) {
+      font(ctx, FONT_LG, true);
+      const headerLines = wrapToWidth(section.header, maxText - 24, measure);
+      const bandH = headerLines.length * (LH + 4) + 16;
+      ctx.fillRect(PAD, y, maxText, bandH);
       ctx.fillStyle = "#fff";
-      font(ctx, FONT, true);
       ctx.textAlign = "center";
-      ctx.fillText("ID CHECK 18+", W / 2, y + 6);
+      let hy = y + 10;
+      for (const line of headerLines) {
+        ctx.fillText(line, W / 2, hy);
+        hy += LH + 4;
+      }
       ctx.textAlign = "left";
       ctx.fillStyle = "#000";
-      y += LH + 14;
+      y += bandH + 16;
     }
+    for (const stop of section.stops) {
+      // "STOP 1" (좌) · "#260924-313" (우)
+      font(ctx, FONT_LG, true);
+      ctx.fillText(`STOP ${stop.stopNo}`, PAD, y);
+      font(ctx, FONT, true);
+      ctx.textAlign = "right";
+      ctx.fillText(stop.orderNo, W - PAD, y + 4);
+      ctx.textAlign = "left";
+      y += LH + 10;
 
-    // 품목 수 (좌) · □ Delivered (우)
-    y += 6;
-    font(ctx, FONT_SM);
-    ctx.fillText(stop.itemsLine, PAD, y + 2);
-    font(ctx, FONT, true);
-    const label = "Delivered";
-    const labelW = ctx.measureText(label).width;
-    const boxX = W - PAD - labelW - BOX - 12;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(boxX, y, BOX, BOX);
-    ctx.fillText(label, W - PAD - labelW, y);
-    y += LH + 6;
+      left(stop.name, FONT, true, LH);
+      left(`Ph ${stop.phone}`, FONT + 2, true, LH + 2);
+      for (const a of stop.addressLines) left(a, FONT, false, LH - 2);
 
-    drawDashed(ctx, y);
-    y += 16;
+      if (stop.note) {
+        y += 6;
+        font(ctx, FONT_SM);
+        const noteLines = wrapToWidth(`Note: ${stop.note}`, maxText - 24, measure);
+        const boxH = noteLines.length * (LH - 6) + 16;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(PAD, y, maxText, boxH);
+        let ny = y + 8;
+        for (const line of noteLines) {
+          ctx.fillText(line, PAD + 12, ny);
+          ny += LH - 6;
+        }
+        y += boxH + 4;
+      }
+
+      if (stop.ageCheck) {
+        y += 6;
+        ctx.fillRect(PAD, y, maxText, LH + 8);
+        ctx.fillStyle = "#fff";
+        font(ctx, FONT, true);
+        ctx.textAlign = "center";
+        ctx.fillText("ID CHECK 18+", W / 2, y + 6);
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#000";
+        y += LH + 14;
+      }
+
+      // 품목 수 (좌) · □ Delivered (우)
+      y += 6;
+      font(ctx, FONT_SM);
+      ctx.fillText(stop.itemsLine, PAD, y + 2);
+      font(ctx, FONT, true);
+      const label = "Delivered";
+      const labelW = ctx.measureText(label).width;
+      const boxX = W - PAD - labelW - BOX - 12;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(boxX, y, BOX, BOX);
+      ctx.fillText(label, W - PAD - labelW, y);
+      y += LH + 6;
+
+      drawDashed(ctx, y);
+      y += 16;
+    }
   }
 
   /* ── 꼬리말 ── */
@@ -140,8 +159,14 @@ export function renderDriverSheetCanvas(model: DriverSheetModel): HTMLCanvasElem
   scratch.width = W;
   scratch.height =
     400 +
-    model.stops.reduce(
-      (s, stop) => s + 420 + stop.addressLines.length * 40 + (stop.note?.length ?? 0) * 2,
+    model.sections.reduce(
+      (acc, section) =>
+        acc +
+        (section.header ? 120 : 0) +
+        section.stops.reduce(
+          (s, stop) => s + 420 + stop.addressLines.length * 40 + (stop.note?.length ?? 0) * 2,
+          0,
+        ),
       0,
     );
   const sctx = scratch.getContext("2d");

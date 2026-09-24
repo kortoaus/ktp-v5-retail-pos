@@ -5,8 +5,16 @@
 // 데이터 = GET /api/order/delivery-manifest?ids=…&include=contactPhone 1요청 (crm 이 주문별
 // contactPhone 을 멤버 현재 전화로 복호화 — 탈퇴·익명화는 null). 위→아래:
 // 머리 "DRIVER RUN — Thu 24 Sep · 9am–9pm" / "Printed 24/09/2026 4:10pm · 3 stops" →
-// 정류장(postcode→suburb→address 안정 정렬): 번호·주문번호·이름·전화(04xx xxx xxx)·주소 줄·
-// 메모·ID CHECK 18+·품목 수(라인 수)·□ Delivered → 꼬리말(개인정보 경고).
+// 배달일 섹션 → 정류장 → 꼬리말(개인정보 경고).
+//
+// 묶음·정렬 룰 (오너 2026-09-24): 주문 1건 = 정류장 1줄 (같은 주소여도 합치지 않는다).
+// 정류장은 배달일(deliveryDate, crm 트리아지와 같은 ETA 날짜)별로 묶고, 같은 날 안에서
+// postcode → suburb → address 안정 정렬. deliveryDate 없음 → runDate 로 묶는다.
+// 배달일이 여럿(Out 버킷의 과기한 주문 등)이면 날짜 오름차순 섹션마다 머리
+// "Thu 24 Sep · 9am–9pm" 를 찍고 정류장 번호는 섹션마다 1부터 다시 (restart) — 기사는
+// 날짜 머리 아래 번호로 읽는다. 제목은 한 날짜면 "DRIVER RUN — {날짜·시간창}",
+// 여럿이면 "DRIVER RUN — {n} delivery days". 한 날짜면 섹션 머리는 찍지 않는다(제목과 중복).
+// 정류장 줄: 번호·주문번호·이름·전화(04xx xxx xxx)·주소 줄·메모·ID CHECK 18+·품목 수(라인 수)·□ Delivered.
 // node --test 로 직접 실행 — 런타임 import 는 같은 폴더 순수 모듈만.
 
 import {
@@ -35,10 +43,16 @@ export type DriverStop = {
   itemsLine: string; // "5 items · 3 lines"
 };
 
+export type DriverSheetSection = {
+  date: string; // Sydney YYYY-MM-DD
+  header: string | null; // "Thu 24 Sep · 9am–9pm" — 배달일이 여럿일 때만, 한 날짜면 null
+  stops: DriverStop[]; // stopNo 는 섹션마다 1부터
+};
+
 export type DriverSheetModel = {
-  title: string; // "DRIVER RUN — Thu 24 Sep · 9am–9pm"
-  printedLine: string; // "Printed 24/09/2026 4:10pm · 3 stops"
-  stops: DriverStop[];
+  title: string; // "DRIVER RUN — Thu 24 Sep · 9am–9pm" | "DRIVER RUN — 2 delivery days"
+  printedLine: string; // "Printed 24/09/2026 4:10pm · 3 stops" (전체 정류장 수)
+  sections: DriverSheetSection[]; // 배달일 오름차순
   footer: string;
 };
 
@@ -55,7 +69,7 @@ export type DriverSheetInput = Pick<
   | "shippingNote"
   | "requiresAgeCheck"
   | "lines"
-> & { contactPhone?: string | null };
+> & { contactPhone?: string | null; deliveryDate?: string | null };
 
 export type BuildDriverSheetOptions = {
   runDate: string; // Sydney YYYY-MM-DD (버킷 today)
@@ -82,13 +96,33 @@ export function formatAuPhone(raw: string | null | undefined): string | null {
   return value;
 }
 
-// "DRIVER RUN — Thu 24 Sep · 9am–9pm" (시간창 한쪽이라도 null 이면 날짜만).
+// "Thu 24 Sep · 9am–9pm" (시간창 한쪽이라도 null 이면 날짜만) — 제목·섹션 머리 공용.
+export function formatDriverDayLabel(date: string, window: DeliveryWindow = null): string {
+  const day = formatDayLabel(date);
+  if (!window || window.startMinutes == null || window.endMinutes == null) return day;
+  return `${day} · ${formatClock12(window.startMinutes)}–${formatClock12(window.endMinutes)}`;
+}
+
+// "DRIVER RUN — Thu 24 Sep · 9am–9pm".
 export function formatDriverRunTitle(runDate: string, window: DeliveryWindow = null): string {
-  const day = formatDayLabel(runDate);
-  if (!window || window.startMinutes == null || window.endMinutes == null) {
-    return `DRIVER RUN — ${day}`;
+  return `DRIVER RUN — ${formatDriverDayLabel(runDate, window)}`;
+}
+
+// 배달일별 묶음 (날짜 오름차순), 섹션 안은 sortStops. 빈/없는 deliveryDate → runDate.
+export function groupStopsByDate<T extends DriverSheetInput>(
+  orders: T[],
+  runDate: string,
+): { date: string; orders: T[] }[] {
+  const byDate = new Map<string, T[]>();
+  for (const order of orders) {
+    const date = clean(order.deliveryDate) || runDate;
+    const bucket = byDate.get(date);
+    if (bucket) bucket.push(order);
+    else byDate.set(date, [order]);
   }
-  return `DRIVER RUN — ${day} · ${formatClock12(window.startMinutes)}–${formatClock12(window.endMinutes)}`;
+  return [...byDate.keys()]
+    .sort()
+    .map((date) => ({ date, orders: sortStops(byDate.get(date)!) }));
 }
 
 // postcode → suburb → address1 → address2, 빈 값은 뒤로. 동률은 입력 순서 유지(안정).
@@ -124,7 +158,7 @@ export function buildDriverSheetModel(
   orders: DriverSheetInput[],
   options: BuildDriverSheetOptions,
 ): DriverSheetModel {
-  const stops = sortStops(orders).map((o, i): DriverStop => {
+  const toStop = (o: DriverSheetInput, i: number): DriverStop => {
     const locality = [o.shippingSuburb, o.shippingState, o.shippingPostcode]
       .map(clean)
       .filter(Boolean)
@@ -141,12 +175,24 @@ export function buildDriverSheetModel(
       ageCheck: o.requiresAgeCheck === true,
       itemsLine: formatItemsLine(o.lines),
     };
-  });
-  const n = stops.length;
+  };
+  const window = options.deliveryWindow ?? null;
+  const groups = groupStopsByDate(orders, options.runDate);
+  const multi = groups.length > 1;
+  const sections = groups.map(
+    (g): DriverSheetSection => ({
+      date: g.date,
+      header: multi ? formatDriverDayLabel(g.date, window) : null,
+      stops: g.orders.map(toStop), // 번호는 섹션마다 1부터 (restart)
+    }),
+  );
+  const n = orders.length;
   return {
-    title: formatDriverRunTitle(options.runDate, options.deliveryWindow ?? null),
+    title: multi
+      ? `DRIVER RUN — ${groups.length} delivery days`
+      : formatDriverRunTitle(groups[0]?.date ?? options.runDate, window),
     printedLine: `Printed ${formatPrintedAt(options.printedAt)} · ${n} stop${n === 1 ? "" : "s"}`,
-    stops,
+    sections,
     footer: DRIVER_SHEET_FOOTER,
   };
 }
@@ -167,15 +213,22 @@ export function buildDriverSheetEscposLines(model: DriverSheetModel): EscposLine
   wrapped(model.title, { align: "center", bold: true, tall: true });
   wrapped(model.printedLine, { align: "center" });
   divider("=");
-  for (const stop of model.stops) {
-    L.push({ text: leftRight(`STOP ${stop.stopNo}`, stop.orderNo), bold: true, tall: true });
-    wrapped(stop.name, { bold: true });
-    L.push({ text: `Ph ${stop.phone}`, bold: true });
-    for (const a of stop.addressLines) wrapped(a);
-    if (stop.note) wrapped(`Note: ${stop.note}`, {}, "");
-    if (stop.ageCheck) L.push({ text: " ID CHECK 18+ ", bold: true, invert: true });
-    L.push({ text: leftRight(escposSafe(stop.itemsLine), "[ ] Delivered") });
-    divider();
+  for (const section of model.sections) {
+    // 배달일이 여럿일 때만 섹션 머리 (정류장 번호는 섹션마다 1부터).
+    if (section.header) {
+      wrapped(section.header, { align: "center", bold: true, tall: true });
+      divider("=");
+    }
+    for (const stop of section.stops) {
+      L.push({ text: leftRight(`STOP ${stop.stopNo}`, stop.orderNo), bold: true, tall: true });
+      wrapped(stop.name, { bold: true });
+      L.push({ text: `Ph ${stop.phone}`, bold: true });
+      for (const a of stop.addressLines) wrapped(a);
+      if (stop.note) wrapped(`Note: ${stop.note}`, {}, "");
+      if (stop.ageCheck) L.push({ text: " ID CHECK 18+ ", bold: true, invert: true });
+      L.push({ text: leftRight(escposSafe(stop.itemsLine), "[ ] Delivered") });
+      divider();
+    }
   }
   wrapped(model.footer, { align: "center", bold: true });
   return L;

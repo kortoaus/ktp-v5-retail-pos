@@ -200,6 +200,9 @@ export interface DeliveryManifestOrder {
   shippingNote: string | null;
   requiresAgeCheck: boolean;
   total: number;
+  // 배달일 (시드니 "YYYY-MM-DD") — crm 트리아지 분류기와 같은 ETA 날짜. 드라이버 런시트
+  // 배달일 섹션 키. 구버전 crm 응답엔 없을 수 있음(→ 렌더가 runDate 로 묶음).
+  deliveryDate?: string | null;
   lines: DeliveryManifestLine[];
   // include=contactPhone(드라이버 런시트) 때만 존재 — 멤버 현재 전화, 탈퇴·익명화 null.
   // 인쇄에만 쓰고 state·캐시·로그에 남기지 말 것.

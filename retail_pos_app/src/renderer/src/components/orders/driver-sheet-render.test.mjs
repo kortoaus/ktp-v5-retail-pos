@@ -7,8 +7,10 @@ import {
   buildDriverSheetModel,
   DRIVER_SHEET_FOOTER,
   formatAuPhone,
+  formatDriverDayLabel,
   formatDriverRunTitle,
   formatItemsLine,
+  groupStopsByDate,
   NO_PHONE_TEXT,
   sortStops,
 } from "./driver-sheet-render.ts";
@@ -31,6 +33,7 @@ function stop(overrides = {}) {
     shippingPostcode: "2000",
     shippingNote: null,
     requiresAgeCheck: false,
+    deliveryDate: "2026-09-24",
     lines: [{ qty: 2 }, { qty: 1 }],
     ...overrides,
   };
@@ -51,6 +54,26 @@ test("formatDriverRunTitle: 날짜 + 시간창, 시간창 없으면 날짜만", 
   assert.equal(formatDriverRunTitle("2026-09-24", WINDOW), "DRIVER RUN — Thu 24 Sep · 9am–9pm");
   assert.equal(formatDriverRunTitle("2026-09-24", { startMinutes: 540, endMinutes: null }), "DRIVER RUN — Thu 24 Sep");
   assert.equal(formatDriverRunTitle("2026-09-24", null), "DRIVER RUN — Thu 24 Sep");
+  assert.equal(formatDriverDayLabel("2026-09-23", WINDOW), "Wed 23 Sep · 9am–9pm");
+  assert.equal(formatDriverDayLabel("2026-09-23"), "Wed 23 Sep");
+});
+
+test("groupStopsByDate: 배달일 오름차순 묶음, 날짜 안은 postcode 정렬, deliveryDate 없음/빈 값 → runDate", () => {
+  const rows = [
+    stop({ id: 1, deliveryDate: "2026-09-24", shippingPostcode: "2100" }),
+    stop({ id: 2, deliveryDate: "2026-09-23", shippingPostcode: "2200" }),
+    stop({ id: 3, deliveryDate: null, shippingPostcode: "2000" }),
+    stop({ id: 4, deliveryDate: "2026-09-23", shippingPostcode: "2000" }),
+    stop({ id: 5, deliveryDate: undefined, shippingPostcode: "2150" }),
+    stop({ id: 6, deliveryDate: "  ", shippingPostcode: "2050" }),
+  ];
+  assert.deepEqual(
+    groupStopsByDate(rows, "2026-09-24").map((g) => [g.date, g.orders.map((o) => o.id)]),
+    [
+      ["2026-09-23", [4, 2]],
+      ["2026-09-24", [3, 6, 1, 5]],
+    ],
+  );
 });
 
 test("sortStops: postcode → suburb → address, 빈 postcode 뒤, 동률은 입력 순서 유지", () => {
@@ -89,7 +112,10 @@ test("buildDriverSheetModel: 머리·정류장 번호·전체 전화·주소·�
   assert.equal(model.title, "DRIVER RUN — Thu 24 Sep · 9am–9pm");
   assert.equal(model.printedLine, "Printed 24/09/2026 4:10pm · 2 stops");
   assert.equal(model.footer, DRIVER_SHEET_FOOTER);
-  assert.deepEqual(model.stops[0], {
+  assert.equal(model.sections.length, 1);
+  assert.equal(model.sections[0].header, null); // 한 날짜 = 섹션 머리 없음 (제목과 중복)
+  const stops = model.sections[0].stops;
+  assert.deepEqual(stops[0], {
     stopNo: 1,
     orderId: 12,
     orderNo: "#260924-12",
@@ -100,14 +126,59 @@ test("buildDriverSheetModel: 머리·정류장 번호·전체 전화·주소·�
     ageCheck: false,
     itemsLine: "3 items · 2 lines",
   });
-  assert.equal(model.stops[1].stopNo, 2);
-  assert.equal(model.stops[1].phone, "0412 345 678");
-  assert.equal(model.stops[1].ageCheck, true);
-  assert.equal(model.stops[1].addressLines.at(-1), "Brookvale NSW 2100");
+  assert.equal(stops[1].stopNo, 2);
+  assert.equal(stops[1].phone, "0412 345 678");
+  assert.equal(stops[1].ageCheck, true);
+  assert.equal(stops[1].addressLines.at(-1), "Brookvale NSW 2100");
 
   const one = buildDriverSheetModel([stop()], { runDate: "2026-09-24", printedAt: PRINTED });
   assert.equal(one.printedLine, "Printed 24/09/2026 4:10pm · 1 stop");
   assert.equal(one.title, "DRIVER RUN — Thu 24 Sep");
+
+  // 한 날짜인데 runDate 와 다르면 제목은 그 배달일 (재인쇄된 과기한 주문만 고른 경우)
+  const late = buildDriverSheetModel([stop({ deliveryDate: "2026-09-22" })], { runDate: "2026-09-24", printedAt: PRINTED });
+  assert.equal(late.title, "DRIVER RUN — Tue 22 Sep");
+});
+
+test("buildDriverSheetModel: 같은 주소 주문 2건 = 정류장 2줄 (합치지 않음)", () => {
+  const model = buildDriverSheetModel(
+    [stop({ id: 21, orderNo: "260924-21" }), stop({ id: 22, orderNo: "260924-22" })],
+    { runDate: "2026-09-24", printedAt: PRINTED },
+  );
+  const stops = model.sections[0].stops;
+  assert.deepEqual(stops.map((s) => [s.stopNo, s.orderId]), [[1, 21], [2, 22]]);
+  assert.deepEqual(stops[0].addressLines, stops[1].addressLines);
+  assert.equal(model.printedLine, "Printed 24/09/2026 4:10pm · 2 stops");
+});
+
+test("buildDriverSheetModel: 배달일 여럿 — 제목 n delivery days, 날짜 섹션 머리, 번호는 섹션마다 1부터", () => {
+  const model = buildDriverSheetModel(
+    [
+      stop({ id: 31, orderNo: "260924-31", shippingPostcode: "2100" }),
+      stop({ id: 32, orderNo: "260923-32", deliveryDate: "2026-09-23", shippingPostcode: "2000" }), // 과기한 Out
+      stop({ id: 33, orderNo: "260924-33", shippingPostcode: "2000" }),
+      stop({ id: 34, orderNo: "260924-34", deliveryDate: null, shippingPostcode: "2050" }), // → runDate
+    ],
+    { runDate: "2026-09-24", deliveryWindow: WINDOW, printedAt: PRINTED },
+  );
+  assert.equal(model.title, "DRIVER RUN — 2 delivery days");
+  assert.equal(model.printedLine, "Printed 24/09/2026 4:10pm · 4 stops");
+  assert.deepEqual(
+    model.sections.map((sec) => [sec.date, sec.header, sec.stops.map((s) => [s.stopNo, s.orderId])]),
+    [
+      ["2026-09-23", "Wed 23 Sep · 9am–9pm", [[1, 32]]],
+      ["2026-09-24", "Thu 24 Sep · 9am–9pm", [[1, 33], [2, 34], [3, 31]]],
+    ],
+  );
+
+  const text = escposLinesToText(buildDriverSheetEscposLines(model));
+  assert.match(text, /DRIVER RUN - 2 delivery days/);
+  const wed = text.indexOf("Wed 23 Sep - 9am-9pm");
+  const thu = text.indexOf("Thu 24 Sep - 9am-9pm");
+  assert.ok(wed > 0 && thu > wed, "section headers in date order");
+  assert.equal((text.match(/STOP 1\s/g) ?? []).length, 2);
+  assert.ok(text.indexOf("#260923-32") > wed && text.indexOf("#260923-32") < thu);
+  for (const l of buildDriverSheetEscposLines(model)) assert.ok(cellWidth(l.text) <= ESC_LINE, `too wide: ${l.text}`);
 });
 
 test("escpos: 42칸 이내 ASCII, 체크박스·ID CHECK·전화·꼬리말", () => {
@@ -125,6 +196,7 @@ test("escpos: 42칸 이내 ASCII, 체크박스·ID CHECK·전화·꼬리말", ()
   }
   const text = escposLinesToText(lines);
   assert.match(text, /DRIVER RUN - Thu 24 Sep - 9am-9pm/);
+  assert.doesNotMatch(text.replace(/DRIVER RUN - Thu 24 Sep - 9am-9pm/, ""), /Thu 24 Sep/); // 한 날짜 = 섹션 머리 없음
   assert.match(text, /Printed 24\/09\/2026 4:10pm - 2 stops/);
   assert.match(text, /STOP 1\s+#260924-1/);
   assert.match(text, /Ph 0412 345 678/);
