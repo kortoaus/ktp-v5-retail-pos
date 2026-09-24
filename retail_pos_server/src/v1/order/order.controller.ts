@@ -7,6 +7,8 @@ import {
 } from "../../libs/exceptions";
 import {
   acceptOrderService,
+  bulkDeliveryTransitionOrdersService,
+  deliveryTransitionOrderService,
   getOrderDetailService,
   getOrdersService,
   pickingOrderService,
@@ -52,6 +54,31 @@ export async function readyOrderController(req: Request, res: Response) {
 export async function rejectOrderController(req: Request, res: Response) {
   const id = parseOrderId(req.params.id);
   res.status(200).json(await rejectOrderService(id, req.body));
+}
+
+// --- 2026-09-24 딜리버리 전이 (J6) — 단건 schedule/dispatch/deliver, 일괄
+// schedule/dispatch. body 패스스루, 검증은 crm.
+export async function scheduleOrderController(req: Request, res: Response) {
+  const id = parseOrderId(req.params.id);
+  res.status(200).json(await deliveryTransitionOrderService(id, "schedule", req.body));
+}
+
+export async function dispatchOrderController(req: Request, res: Response) {
+  const id = parseOrderId(req.params.id);
+  res.status(200).json(await deliveryTransitionOrderService(id, "dispatch", req.body));
+}
+
+export async function deliverOrderController(req: Request, res: Response) {
+  const id = parseOrderId(req.params.id);
+  res.status(200).json(await deliveryTransitionOrderService(id, "deliver", req.body));
+}
+
+export async function bulkScheduleOrdersController(req: Request, res: Response) {
+  res.status(200).json(await bulkDeliveryTransitionOrdersService("schedule", req.body));
+}
+
+export async function bulkDispatchOrdersController(req: Request, res: Response) {
+  res.status(200).json(await bulkDeliveryTransitionOrdersService("dispatch", req.body));
 }
 
 // pickerName 정규화 — 로컬 유저 이름은 무검증 저장이므로 crm 계약(trim 후

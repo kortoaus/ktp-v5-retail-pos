@@ -74,3 +74,42 @@ test("getVisibleOrderStatusActions returns nothing on terminal statuses", () => 
     assert.deepEqual(getVisibleOrderStatusActions(from, ["admin"]), [], from);
   }
 });
+
+// --- 2026-09-24 DELIVERY 전이 map ---
+
+test("delivery map hides READY and walks ACCEPTED -> SCHEDULED -> DISPATCHED -> DELIVERED", () => {
+  assert.equal(canTransitionOrderStatus("ACCEPTED", "READY", "DELIVERY"), false);
+  assert.deepEqual(getVisibleOrderStatusActions("PLACED", ["sale"], "DELIVERY"), [
+    "ACCEPTED",
+    "REJECTED",
+  ]);
+  assert.deepEqual(getVisibleOrderStatusActions("ACCEPTED", ["sale"], "DELIVERY"), [
+    "SCHEDULED",
+    "REJECTED",
+  ]);
+  assert.deepEqual(getVisibleOrderStatusActions("SCHEDULED", ["sale"], "DELIVERY"), [
+    "DISPATCHED",
+    "REJECTED",
+  ]);
+  assert.deepEqual(getVisibleOrderStatusActions("DISPATCHED", ["sale"], "DELIVERY"), [
+    "DELIVERED",
+    "REJECTED",
+  ]);
+  assert.deepEqual(getVisibleOrderStatusActions("DELIVERED", ["admin"], "DELIVERY"), []);
+});
+
+test("click-and-collect map is unchanged and never offers delivery actions", () => {
+  assert.deepEqual(
+    getVisibleOrderStatusActions("ACCEPTED", ["sale"], "CLICK_AND_COLLECT"),
+    ["READY", "REJECTED"],
+  );
+  assert.equal(canTransitionOrderStatus("ACCEPTED", "SCHEDULED"), false);
+  assert.equal(canTransitionOrderStatus("SCHEDULED", "DISPATCHED"), false);
+});
+
+test("pending-payment / abandoned expose no actions", () => {
+  for (const from of ["PENDING_PAYMENT", "ABANDONED"]) {
+    assert.deepEqual(getVisibleOrderStatusActions(from, ["admin"]), [], from);
+    assert.deepEqual(getVisibleOrderStatusActions(from, ["admin"], "DELIVERY"), [], from);
+  }
+});

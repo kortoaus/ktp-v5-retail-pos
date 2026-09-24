@@ -8,9 +8,25 @@
 
 import dayjsAU from "../../libs/dayjsAU";
 import type { OrderDetail } from "../../service/order.service";
-import { FulfillmentBadge, StatusBadge } from "./order-badges";
+import {
+  FulfillmentBadge,
+  PaymentAlertBadge,
+  StatusBadge,
+} from "./order-badges";
+import {
+  getOrderPaymentAlerts,
+  getOrderPaymentStateLabel,
+} from "./order-payment-alerts";
 
-const PHONE_REVEAL_STATUSES = ["PLACED", "ACCEPTED", "READY"] as const;
+// 활성 상태 — DELIVERY 진행 상태(SCHEDULED/DISPATCHED)는 배송 조정 통화가
+// 필요할 수 있어 포함 (2026-09-24).
+const PHONE_REVEAL_STATUSES = [
+  "PLACED",
+  "ACCEPTED",
+  "READY",
+  "SCHEDULED",
+  "DISPATCHED",
+] as const;
 
 // dueAt 재계산 금지 — 서버 계산 ISO 표시만.
 function fmtDateTime(iso: string | null): string {
@@ -34,6 +50,7 @@ export default function OrderViewerSummary({
   const canReveal = PHONE_REVEAL_STATUSES.some(
     (status) => status === detail.status,
   );
+  const paymentAlerts = getOrderPaymentAlerts(detail, Date.now());
 
   return (
     <div className="p-4 border-b border-gray-300">
@@ -41,6 +58,9 @@ export default function OrderViewerSummary({
         <span className="font-mono text-lg font-bold">{detail.orderNo}</span>
         <StatusBadge status={detail.status} />
         <FulfillmentBadge fulfillment={detail.fulfillment} />
+        {paymentAlerts.map((alert) => (
+          <PaymentAlertBadge key={alert.key} alert={alert} />
+        ))}
       </div>
       <div className="mt-2 space-y-1 text-base">
         <div className="flex justify-between">
@@ -85,6 +105,16 @@ export default function OrderViewerSummary({
           <span className="text-gray-500">Placed</span>
           <span>{fmtDateTime(detail.placedAt)}</span>
         </div>
+        {/* STRIPE(온라인 선결제) — 결제 상태는 payment.state 가 정본
+            (레거시 paymentStatus 는 로드 차단용 투영). POS 결제 대상 아님. */}
+        {detail.paymentMethod === "STRIPE" && (
+          <div className="flex justify-between">
+            <span className="text-gray-500">Payment</span>
+            <span>
+              Online card · {getOrderPaymentStateLabel(detail.payment.state)}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

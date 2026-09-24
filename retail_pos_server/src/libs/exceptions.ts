@@ -1,7 +1,10 @@
 export class HttpException extends Error {
+  // result — 선택적 구조화 상세 (예: crm 402 PAYMENT_CAPTURE_FAILED 의 { reason }).
+  // 있을 때만 에러 envelope 에 실린다 (없으면 기존 { ok, msg } 그대로).
   constructor(
     public statusCode: number,
     message: string,
+    public result: unknown = null,
   ) {
     super(message);
     this.name = this.constructor.name;

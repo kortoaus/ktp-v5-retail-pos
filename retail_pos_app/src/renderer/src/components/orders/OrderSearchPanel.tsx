@@ -17,7 +17,12 @@ import {
   type OrderStatus,
   type OrderSummary,
 } from "../../service/order.service";
-import { FulfillmentBadge, StatusBadge } from "./order-badges";
+import {
+  FulfillmentBadge,
+  PaymentAlertBadge,
+  StatusBadge,
+} from "./order-badges";
+import { getOrderPaymentAlerts } from "./order-payment-alerts";
 
 const PAGE_SIZE = 10;
 
@@ -36,7 +41,13 @@ const FULFILLMENT_FILTERS: { key: FulfillmentFilter; label: string }[] = [
   { key: "DELIVERY", label: "Delivery" },
 ];
 
-const ACTIVE_STATUSES: OrderStatus[] = ["PLACED", "ACCEPTED", "READY"];
+const ACTIVE_STATUSES: OrderStatus[] = [
+  "PLACED",
+  "ACCEPTED",
+  "READY",
+  "SCHEDULED",
+  "DISPATCHED",
+];
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 
@@ -255,6 +266,9 @@ function OrderRow({
   onSelect: (orderId: number) => void;
 }) {
   const overdue = isOverdue(order, nowMs);
+  // 온라인 결제 경고(캡처 실패·환불 필요·4일 자동취소 임박 앰버) — 서버 값 표시만.
+  const paymentAlerts = getOrderPaymentAlerts(order, nowMs);
+  const autoVoidSoon = paymentAlerts.some((a) => a.key === "autoVoidSoon");
   const firstLineName =
     order.firstLineNameEn ?? order.firstLineNameKo ?? "—";
   const lineSummary =
@@ -267,6 +281,7 @@ function OrderRow({
       onPointerDown={() => onSelect(order.id)}
       className={cn(
         "h-full flex items-center gap-3 px-4 text-base border-l-4 border-l-transparent cursor-pointer active:bg-gray-100",
+        autoVoidSoon && "bg-amber-50 border-l-amber-500",
         overdue && "bg-red-50 border-l-red-500",
       )}
     >
@@ -281,9 +296,14 @@ function OrderRow({
           (…{order.memberPhoneLast3})
         </span>
       </span>
-      <span className="flex-1 min-w-0 truncate text-gray-600">
-        <span className="text-sm text-gray-400 mr-1">{order.lineCount}×</span>
-        {lineSummary}
+      <span className="flex-1 min-w-0 flex items-center gap-2">
+        {paymentAlerts.map((alert) => (
+          <PaymentAlertBadge key={alert.key} alert={alert} />
+        ))}
+        <span className="min-w-0 truncate text-gray-600">
+          <span className="text-sm text-gray-400 mr-1">{order.lineCount}×</span>
+          {lineSummary}
+        </span>
       </span>
       <span className="w-20 shrink-0 text-right font-mono">
         ${fmtMoney(order.total)}

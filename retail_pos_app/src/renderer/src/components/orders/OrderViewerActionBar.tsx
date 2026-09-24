@@ -2,7 +2,10 @@
 // 버튼으로 노출(유효하지 않은 전이는 미표시, 비활성 아님). disabled 는
 // 공유 in-flight boolean 하나 (v1 관례). onPointerDown 만 사용(스캐너 트랩).
 
-import type { OrderStatus } from "../../service/order.service";
+import type {
+  OrderFulfillment,
+  OrderStatus,
+} from "../../service/order.service";
 import {
   getVisibleOrderStatusActions,
   type OrderStatusAction,
@@ -11,21 +14,30 @@ import {
 const ACTION_LABELS: Record<OrderStatusAction, string> = {
   ACCEPTED: "Accept",
   READY: "Ready",
+  SCHEDULED: "Schedule",
+  DISPATCHED: "Dispatch",
+  DELIVERED: "Delivered",
   REJECTED: "Reject",
 };
 
 export default function OrderViewerActionBar({
   status,
+  fulfillment,
   userScopes,
   inFlight,
   onAction,
 }: {
   status: OrderStatus;
+  fulfillment: OrderFulfillment;
   userScopes: readonly string[];
   inFlight: boolean;
   onAction: (action: OrderStatusAction) => void;
 }) {
-  const actions = getVisibleOrderStatusActions(status, userScopes);
+  const actions = getVisibleOrderStatusActions(
+    status,
+    userScopes,
+    fulfillment,
+  );
   if (actions.length === 0) return null;
 
   return (

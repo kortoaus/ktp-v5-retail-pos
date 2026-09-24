@@ -49,7 +49,18 @@ export function getOrderLoadPolicy({
     case "CANCELLED":
     case "REJECTED":
     case "EXPIRED":
+    case "ABANDONED":
       return { mode: "block", message: CANCELLED_ORDER_MESSAGE };
+    // DELIVERY 전용 상태 (2026-09-24) — 위의 DELIVERY 차단이 먼저 걸리므로
+    // 도달 불가. 방어적으로 차단.
+    case "PENDING_PAYMENT":
+    case "SCHEDULED":
+    case "DISPATCHED":
+    case "DELIVERED":
+      return {
+        mode: "block",
+        message: "Delivery orders can't be loaded at the till.",
+      };
     case "PLACED":
       return {
         mode: "confirm",

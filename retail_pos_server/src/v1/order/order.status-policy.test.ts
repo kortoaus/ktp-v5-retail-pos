@@ -106,3 +106,46 @@ test("assertOrderStatusAdminAllowed gates READY -> REJECTED on admin", () => {
     UnauthorizedException,
   );
 });
+
+// --- 2026-09-24 DELIVERY 전이 map (crm 스펙 §3.2) ---
+
+test("delivery map: ACCEPTED -> SCHEDULED | REJECTED, never READY", () => {
+  assert.equal(canTransitionOrderStatus("ACCEPTED", "SCHEDULED", "DELIVERY"), true);
+  assert.equal(canTransitionOrderStatus("ACCEPTED", "REJECTED", "DELIVERY"), true);
+  assert.equal(canTransitionOrderStatus("ACCEPTED", "READY", "DELIVERY"), false);
+  assert.deepEqual(getVisibleOrderStatusActions("ACCEPTED", ["sale"], "DELIVERY"), [
+    "SCHEDULED",
+    "REJECTED",
+  ]);
+});
+
+test("delivery map: SCHEDULED -> DISPATCHED, DISPATCHED -> DELIVERED (+ reject, no admin)", () => {
+  assert.deepEqual(getVisibleOrderStatusActions("SCHEDULED", ["sale"], "DELIVERY"), [
+    "DISPATCHED",
+    "REJECTED",
+  ]);
+  assert.deepEqual(getVisibleOrderStatusActions("DISPATCHED", ["sale"], "DELIVERY"), [
+    "DELIVERED",
+    "REJECTED",
+  ]);
+  assert.deepEqual(getVisibleOrderStatusActions("DELIVERED", ["admin"], "DELIVERY"), []);
+});
+
+test("click-and-collect map never offers delivery transitions", () => {
+  assert.equal(canTransitionOrderStatus("ACCEPTED", "SCHEDULED"), false);
+  assert.equal(canTransitionOrderStatus("SCHEDULED", "DISPATCHED"), false);
+  assert.throws(
+    () => assertOrderStatusTransitionAllowed("ACCEPTED", "SCHEDULED"),
+    BadRequestException,
+  );
+  assert.doesNotThrow(() =>
+    assertOrderStatusTransitionAllowed("ACCEPTED", "SCHEDULED", "DELIVERY"),
+  );
+});
+
+test("pending-payment and abandoned statuses allow nothing in either map", () => {
+  for (const from of ["PENDING_PAYMENT", "ABANDONED"] as const) {
+    assert.deepEqual(getVisibleOrderStatusActions(from, ["admin"]), [], from);
+    assert.deepEqual(getVisibleOrderStatusActions(from, ["admin"], "DELIVERY"), [], from);
+  }
+});

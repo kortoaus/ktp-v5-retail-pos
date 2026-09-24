@@ -7,7 +7,12 @@ import {
   InternalServerException,
   UnauthorizedException,
 } from "../../libs/exceptions";
-import { buildPickingBody, mapCrmPaging, requireOk } from "./order.service";
+import {
+  buildPickingBody,
+  mapCrmPaging,
+  requireOk,
+  requireTransitionOk,
+} from "./order.service";
 
 test("requireOk returns the result on success", () => {
   const result = requireOk({ ok: true, result: [{ id: 1 }] });
@@ -131,4 +136,52 @@ test("mapCrmPaging returns null for missing or malformed paging", () => {
   assert.equal(mapCrmPaging(undefined), null);
   assert.equal(mapCrmPaging({ page: "x", totalPages: 3 }), null);
   assert.equal(mapCrmPaging("paging"), null);
+});
+
+// --- 2026-09-24 딜리버리 전이: 결제 사유 코드 보존 (J6) ---
+
+test("requireTransitionOk passes crm 402 PAYMENT_CAPTURE_FAILED through with its reason", () => {
+  assert.throws(
+    () =>
+      requireTransitionOk({
+        ok: false,
+        status: 402,
+        msg: "PAYMENT_CAPTURE_FAILED",
+        result: { reason: "AUTH_EXPIRED" },
+      }),
+    (e: unknown) =>
+      e instanceof HttpException &&
+      e.statusCode === 402 &&
+      e.message === "PAYMENT_CAPTURE_FAILED" &&
+      (e.result as { reason: string }).reason === "AUTH_EXPIRED",
+  );
+});
+
+test("requireTransitionOk keeps coded crm 503s instead of the generic unavailable message", () => {
+  for (const code of ["PAYMENT_PROVIDER_UNAVAILABLE", "STRIPE_NOT_CONFIGURED"]) {
+    assert.throws(
+      () => requireTransitionOk({ ok: false, status: 503, msg: code }),
+      (e: unknown) =>
+        e instanceof HttpException && e.statusCode === 503 && e.message === code,
+    );
+  }
+});
+
+test("requireTransitionOk falls back to requireOk for uncoded 5xx, network and 409", () => {
+  assert.throws(
+    () => requireTransitionOk({ ok: false, status: 500, msg: "Internal Server Error" }),
+    (e: unknown) =>
+      e instanceof InternalServerException &&
+      e.message === "CRM order service unavailable",
+  );
+  assert.throws(
+    () => requireTransitionOk({ ok: false, status: 0, msg: "Network Error" }),
+    InternalServerException,
+  );
+  assert.throws(
+    () => requireTransitionOk({ ok: false, status: 409, msg: "TRANSITION_CONFLICT" }),
+    (e: unknown) =>
+      e instanceof HttpException && e.statusCode === 409 && e.message === "TRANSITION_CONFLICT",
+  );
+  assert.deepEqual(requireTransitionOk({ ok: true, result: { id: 1 } }), { id: 1 });
 });

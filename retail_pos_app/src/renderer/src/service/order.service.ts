@@ -4,16 +4,59 @@
 
 import apiService, { ApiResponse } from "../libs/api";
 
+// 2026-09-24 Uncles 딜리버리+Stripe (crm 스펙 §3.1): SCHEDULED·DISPATCHED·
+// DELIVERED 는 DELIVERY 전용. PENDING_PAYMENT·ABANDONED 는 crm 이 현장 목록에서
+// 걸러내지만 유니온에는 방어적으로 포함.
 export type OrderStatus =
+  | "PENDING_PAYMENT"
   | "PLACED"
   | "ACCEPTED"
   | "READY"
+  | "SCHEDULED"
+  | "DISPATCHED"
+  | "DELIVERED"
   | "COLLECTED"
   | "CANCELLED"
   | "REJECTED"
-  | "EXPIRED";
+  | "EXPIRED"
+  | "ABANDONED";
 
 export type OrderFulfillment = "CLICK_AND_COLLECT" | "DELIVERY";
+
+// 실제 결제 상태 8값. 레거시 paymentStatus 는 로드 차단용 2값 투영
+// (STRIPE → "PAID") — 표시는 payment.state 를 읽는다 (crm 스펙 §5.7).
+export type OrderPaymentState =
+  | "UNPAID"
+  | "PAID"
+  | "PENDING"
+  | "AUTHORIZED"
+  | "CAPTURED"
+  | "VOIDED"
+  | "PARTIALLY_REFUNDED"
+  | "REFUNDED";
+
+export interface OrderPaymentSummary {
+  state: OrderPaymentState;
+  refundDue: boolean;
+  lastError: string | null; // 캡처 실패 등 (예: AUTH_EXPIRED)
+}
+
+export interface OrderRefund {
+  amount: number; // cents
+  status: string;
+  refundedAt: string; // ISO
+}
+
+export interface OrderPaymentDetail extends OrderPaymentSummary {
+  authorizedAmount: number | null; // cents
+  capturedAmount: number | null; // cents
+  refundedAmount: number; // cents
+  authorizedAt: string | null;
+  capturedAt: string | null;
+  voidedAt: string | null;
+  refunds: OrderRefund[];
+  stripePaymentIntentId: string | null;
+}
 
 export type OrderPreset = "new" | "dueSoon" | "today" | "active" | "history";
 
@@ -23,7 +66,8 @@ export interface OrderSummary {
   status: OrderStatus;
   fulfillment: OrderFulfillment;
   paymentMethod: "IN_STORE" | "STRIPE";
-  paymentStatus: "UNPAID" | "PAID";
+  paymentStatus: "UNPAID" | "PAID"; // legacy projection — STRIPE is always "PAID"
+  payment: OrderPaymentSummary;
   memberId: string;
   memberName: string;
   memberPhoneLast3: string;
@@ -43,6 +87,9 @@ export interface OrderSummary {
   placedAt: string; // ISO
   version: number;
   dueAt: string | null; // ISO — server-computed
+  // STRIPE 4일 자동 보이드 (crm 스펙 §7) — 서버 계산, 재계산 금지.
+  autoVoidAt: string | null; // ISO
+  autoVoidSoon: boolean; // placedAt+72h 경과 → 앰버
 }
 
 // qs 는 호출측이 만든 쿼리스트링 그대로 (로컬 서버는 통과, crm 이 해석).
@@ -108,7 +155,8 @@ export interface OrderDetail {
   fulfillment: OrderFulfillment;
   status: OrderStatus;
   paymentMethod: "IN_STORE" | "STRIPE";
-  paymentStatus: "UNPAID" | "PAID";
+  paymentStatus: "UNPAID" | "PAID"; // legacy projection — STRIPE is always "PAID"
+  payment: OrderPaymentDetail;
   memberId: string;
   memberName: string;
   memberPhoneLast3: string;
@@ -137,8 +185,14 @@ export interface OrderDetail {
   cancelledAt: string | null;
   rejectedAt: string | null;
   expiredAt: string | null;
+  scheduledAt: string | null;
+  dispatchedAt: string | null;
+  deliveredAt: string | null;
+  abandonedAt: string | null;
   createdAt: string; // ISO
   dueAt: string | null; // ISO — server-computed
+  autoVoidAt: string | null; // ISO
+  autoVoidSoon: boolean;
   lines: OrderLine[];
   events: OrderEvent[];
 }
@@ -175,6 +229,37 @@ export const rejectOrder = async (
   return await apiService.post<OrderDetail>(`/api/order/${id}/reject`, {
     version,
     reason,
+  });
+};
+
+// --- 2026-09-24 딜리버리 전이 (crm 스펙 §5.3) ---
+// POS 는 단건만 쓴다 (일괄 Schedule/Dispatch 는 러너 전담, 스펙 §9).
+// schedule 은 Stripe 캡처를 동반 — 실패는 402 PAYMENT_CAPTURE_FAILED
+// (result.reason) / 503 PAYMENT_PROVIDER_UNAVAILABLE / STRIPE_NOT_CONFIGURED.
+export const scheduleOrder = async (
+  id: number,
+  version: number,
+): Promise<ApiResponse<OrderDetail>> => {
+  return await apiService.post<OrderDetail>(`/api/order/${id}/schedule`, {
+    version,
+  });
+};
+
+export const dispatchOrder = async (
+  id: number,
+  version: number,
+): Promise<ApiResponse<OrderDetail>> => {
+  return await apiService.post<OrderDetail>(`/api/order/${id}/dispatch`, {
+    version,
+  });
+};
+
+export const deliverOrder = async (
+  id: number,
+  version: number,
+): Promise<ApiResponse<OrderDetail>> => {
+  return await apiService.post<OrderDetail>(`/api/order/${id}/deliver`, {
+    version,
   });
 };
 

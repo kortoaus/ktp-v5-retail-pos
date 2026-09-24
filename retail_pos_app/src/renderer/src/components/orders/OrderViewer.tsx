@@ -23,11 +23,14 @@ import { renderLabel } from "../../label-core/zpl";
 import { printOrderPickList } from "../../libs/printer/order-pick-list-receipt";
 import {
   acceptOrder,
+  deliverOrder,
+  dispatchOrder,
   getOrder,
   revealOrderMemberPhone,
   readyOrder,
   recordOrderPrinted,
   rejectOrder,
+  scheduleOrder,
   type OrderDetail,
   type OrderLine,
   type OrderPrintedBody,
@@ -38,6 +41,7 @@ import {
   countPicklistPrinted,
 } from "./order-print-events";
 import type { OrderStatusAction } from "./order-status-policy";
+import { isOrderCharged } from "./order-payment-alerts";
 import { buildPickListRenderModel } from "./pick-list-render";
 import OrderViewerSummary from "./OrderViewerSummary";
 import OrderViewerMadeToOrderSection from "./OrderViewerMadeToOrderSection";
@@ -50,9 +54,47 @@ const CONFIRM_TEXTS: Record<OrderStatusAction, (orderNo: string) => string> = {
     `Accept order ${orderNo}? Customer will be notified.`,
   READY: (orderNo) =>
     `Mark order ${orderNo} as ready? Customer will be notified.`,
+  // 2026-09-24 딜리버리 (crm 스펙 §3.2) — schedule 은 카드 캡처 지점.
+  SCHEDULED: (orderNo) =>
+    `Schedule delivery for order ${orderNo}? The customer's card will be charged now. Customer will be notified.`,
+  DISPATCHED: (orderNo) =>
+    `Mark order ${orderNo} as dispatched (left the store)? Customer will be notified.`,
+  DELIVERED: (orderNo) =>
+    `Mark order ${orderNo} as delivered? Customer will be notified.`,
   REJECTED: (orderNo) =>
     `Reject order ${orderNo}? Customer will be notified.`,
 };
+
+// crm 결제 사유 코드 → 현장 문구 (crm 스펙 §6.2, 영문). 전이 없음 — 상세
+// 재조회로 lastError 배지를 학습한다.
+function paymentFailureMessage(
+  msg: string,
+  result: unknown,
+): string | null {
+  if (msg === "PAYMENT_CAPTURE_FAILED") {
+    const reason = (result as { reason?: unknown } | null)?.reason;
+    if (reason === "AUTH_EXPIRED") {
+      return "Card hold expired — this order can't be charged. Reject it and ask the customer to re-order.";
+    }
+    return `Card charge failed${typeof reason === "string" ? ` (${reason})` : ""}. The order was not scheduled.`;
+  }
+  if (msg === "PAYMENT_PROVIDER_UNAVAILABLE") {
+    return "Payment service unavailable — try again.";
+  }
+  if (msg === "STRIPE_NOT_CONFIGURED") {
+    return "Online payment isn't configured.";
+  }
+  return null;
+}
+
+// Reject 모달 부제 — STRIPE 는 결제 효과를 알린다 (스펙 §5.5·§6.4).
+function rejectPaymentNotice(detail: OrderDetail): string | null {
+  if (detail.paymentMethod !== "STRIPE") return null;
+  if (isOrderCharged(detail)) {
+    return "This order was already charged. Refund it in the Stripe Dashboard after rejecting.";
+  }
+  return "The customer's card hold will be released (not charged).";
+}
 
 interface Props {
   orderId: number | null;
@@ -106,7 +148,11 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
 
   async function runTransition(action: OrderStatusAction, reason?: string) {
     if (!detail || inFlight) return;
-    if (!window.confirm(CONFIRM_TEXTS[action](detail.orderNo))) return;
+    const notice = action === "REJECTED" ? rejectPaymentNotice(detail) : null;
+    const confirmText = CONFIRM_TEXTS[action](detail.orderNo);
+    if (!window.confirm(notice ? `${confirmText}\n\n${notice}` : confirmText)) {
+      return;
+    }
     setInFlight(true);
     try {
       const prevStatus = detail.status;
@@ -115,7 +161,13 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
           ? await acceptOrder(detail.id, detail.version)
           : action === "READY"
             ? await readyOrder(detail.id, detail.version)
-            : await rejectOrder(detail.id, detail.version, reason ?? "");
+            : action === "SCHEDULED"
+              ? await scheduleOrder(detail.id, detail.version)
+              : action === "DISPATCHED"
+                ? await dispatchOrder(detail.id, detail.version)
+                : action === "DELIVERED"
+                  ? await deliverOrder(detail.id, detail.version)
+                  : await rejectOrder(detail.id, detail.version, reason ?? "");
       if (res.ok && res.result) {
         setDetail(res.result);
         setRejectOpen(false);
@@ -130,7 +182,15 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
         setRejectReason("");
         await refetchDetail();
       } else {
-        window.alert(res.msg || "Failed to update order");
+        const paymentMsg = paymentFailureMessage(res.msg, res.result);
+        if (paymentMsg) {
+          window.alert(paymentMsg);
+          // 캡처 실패는 crm 이 lastError/이벤트를 기록한다 — 배지 갱신.
+          await refetchDetail();
+          onChanged();
+        } else {
+          window.alert(res.msg || "Failed to update order");
+        }
       }
     } finally {
       setInFlight(false);
@@ -307,6 +367,8 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
                     있다(§1). DELIVERY 는 배송비/서차지 미지원 — 로드 불가
                     (useOrderLoad 게이트와 동일 조건). */}
                 {detail.fulfillment === "CLICK_AND_COLLECT" &&
+                  // STRIPE(온라인 선결제) 주문은 POS 결제 대상이 아니다 (스펙 D7·§6.5).
+                  detail.paymentMethod !== "STRIPE" &&
                   (detail.status === "PLACED" ||
                     detail.status === "ACCEPTED" ||
                     detail.status === "READY") && (
@@ -337,6 +399,7 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
               )}
               <OrderViewerActionBar
                 status={detail.status}
+                fulfillment={detail.fulfillment}
                 userScopes={user?.scope ?? []}
                 inFlight={inFlight}
                 onAction={handleAction}
@@ -364,6 +427,16 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
               Reject order {detail.orderNo} — reason (required, sent to
               customer)
             </div>
+            {rejectPaymentNotice(detail) && (
+              <div
+                className={
+                  "mb-2 text-sm font-semibold " +
+                  (isOrderCharged(detail) ? "text-red-600" : "text-gray-600")
+                }
+              >
+                {rejectPaymentNotice(detail)}
+              </div>
+            )}
             <div className="min-h-[44px] border border-gray-300 rounded-lg px-3 py-2 text-lg mb-1">
               {rejectReason || (
                 <span className="text-gray-400">Type a reason...</span>

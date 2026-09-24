@@ -38,7 +38,11 @@ app.use("/api", router);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof HttpException) {
-    res.status(err.statusCode).json({ ok: false, msg: err.message });
+    res.status(err.statusCode).json(
+      err.result == null
+        ? { ok: false, msg: err.message }
+        : { ok: false, msg: err.message, result: err.result },
+    );
     return;
   }
   console.error("Unhandled error:", err);

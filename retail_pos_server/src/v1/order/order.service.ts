@@ -6,7 +6,11 @@ import {
   UnauthorizedException,
 } from "../../libs/exceptions";
 import { PagingType } from "../../types/cloud";
-import type { OrderDetailWire, OrderSummaryWire } from "./order.types";
+import type {
+  OrderBulkResultWire,
+  OrderDetailWire,
+  OrderSummaryWire,
+} from "./order.types";
 
 // NOTE: customer-voucher.service.ts 의 requireOk 판 복제 (스펙 지시 — 공용화는
 // 클린업 패스로 기록만, BACKLOG 참조).
@@ -33,6 +37,28 @@ export function requireOk<T>(res: {
     throw new HttpException(res.status ?? 502, msg);
   }
   return res.result;
+}
+
+// 전이 전용 판 — crm 이 결제(Stripe) 사유 코드로 거절한 경우를 뭉개지 않고
+// 그대로 앱에 전달한다 (2026-09-24 스펙 §6.2): 402 PAYMENT_CAPTURE_FAILED
+// (result.reason = AUTH_EXPIRED 등), 503 PAYMENT_PROVIDER_UNAVAILABLE /
+// STRIPE_NOT_CONFIGURED. 코드형(UPPER_SNAKE) msg 의 5xx 만 통과 — crm 전역
+// 핸들러의 "Internal Server Error" 나 네트워크 실패(status 0)는 기존
+// requireOk 매핑("CRM order service unavailable") 그대로.
+const CRM_ERROR_CODE = /^[A-Z][A-Z0-9_]+$/;
+
+export function requireTransitionOk<T>(res: {
+  ok: boolean;
+  msg?: string;
+  status?: number;
+  result?: T | null;
+}): T {
+  if (!res.ok && res.status && res.msg && CRM_ERROR_CODE.test(res.msg)) {
+    if (res.status === 402 || res.status >= 500) {
+      throw new HttpException(res.status, res.msg, res.result ?? null);
+    }
+  }
+  return requireOk(res);
 }
 
 // crm paging({page,limit,total,totalPages}) → 로컬 표준 paging 변환.
@@ -77,7 +103,7 @@ export async function acceptOrderService(id: number, body: unknown) {
     `/device/order/${id}/accept`,
     body,
   );
-  return { ok: true, result: requireOk(res) };
+  return { ok: true, result: requireTransitionOk(res) };
 }
 
 export async function readyOrderService(id: number, body: unknown) {
@@ -85,12 +111,43 @@ export async function readyOrderService(id: number, body: unknown) {
     `/device/order/${id}/ready`,
     body,
   );
-  return { ok: true, result: requireOk(res) };
+  return { ok: true, result: requireTransitionOk(res) };
 }
 
 export async function rejectOrderService(id: number, body: unknown) {
   const res = await crmApiService.post<OrderDetailWire>(
     `/device/order/${id}/reject`,
+    body,
+  );
+  return { ok: true, result: requireTransitionOk(res) };
+}
+
+// --- 2026-09-24 딜리버리 전이 프록시 (crm 스펙 §5.3, J6) ---
+// 전부 DELIVERY 전용 — fulfillment·상태 검증은 crm(409 TRANSITION_CONFLICT /
+// NOT_FOR_CLICK_AND_COLLECT). 단건 body { version } 패스스루, 일괄 body
+// { orders: [{ id, version }] } ≤50 패스스루(검증 crm 400) — 응답
+// { results: [{ id, ok, status?, version?, code?, detail? }] } (부분 성공).
+// schedule 은 Stripe 캡처를 동반한다 — crmApiService 30s 타임아웃 관례 유지.
+export type DeliveryTransitionKind = "schedule" | "dispatch" | "deliver";
+
+export async function deliveryTransitionOrderService(
+  id: number,
+  kind: DeliveryTransitionKind,
+  body: unknown,
+) {
+  const res = await crmApiService.post<OrderDetailWire>(
+    `/device/order/${id}/${kind}`,
+    body,
+  );
+  return { ok: true, result: requireTransitionOk(res) };
+}
+
+export async function bulkDeliveryTransitionOrdersService(
+  kind: "schedule" | "dispatch",
+  body: unknown,
+) {
+  const res = await crmApiService.post<OrderBulkResultWire>(
+    `/device/order/${kind}`,
     body,
   );
   return { ok: true, result: requireOk(res) };
@@ -122,7 +179,7 @@ export async function pickingOrderService(
     `/device/order/${id}/picking`,
     buildPickingBody(body, pickerName),
   );
-  return { ok: true, result: requireOk(res) };
+  return { ok: true, result: requireTransitionOk(res) };
 }
 
 // --- 슬라이스 C: 인쇄 기록 프록시 ---
