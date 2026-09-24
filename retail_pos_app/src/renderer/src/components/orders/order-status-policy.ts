@@ -71,14 +71,19 @@ export function canTransitionOrderStatus(
   return transitionsFor(fulfillment)[fromStatus].includes(toStatus);
 }
 
-// READY 발 reject 만 admin 스코프 요구 (v1 manager 게이트 계승). DELIVERY
-// 캡처 이후(SCHEDULED·DISPATCHED) reject 는 스펙(§6.4)상 게이트 없이 경고
-// 문구("already charged — refund in Stripe Dashboard")만 — 앱 확인 모달 몫.
+// admin 스코프 요구 reject: READY 발(v1 manager 게이트 계승) + DELIVERY 캡처 이후
+// (SCHEDULED·DISPATCHED — 이미 카드 청구됨, 거절 = 환불 필수). 후자는 오너 결정
+// 2026-09-24 로 스펙 §6.4(경고만)를 강화 — 직원 실수 한 번이 손님 돈 문제가 되므로.
 export function requiresAdminForOrderStatusTransition(
   fromStatus: OrderStatus,
   toStatus: OrderStatusAction,
 ): boolean {
-  return fromStatus === "READY" && toStatus === "REJECTED";
+  return (
+    toStatus === "REJECTED" &&
+    (fromStatus === "READY" ||
+      fromStatus === "SCHEDULED" ||
+      fromStatus === "DISPATCHED")
+  );
 }
 
 // 버튼 노출 규칙: 전이 유효 + (admin 필요 시 admin 보유)만 노출 —

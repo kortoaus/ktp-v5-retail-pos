@@ -119,13 +119,16 @@ test("delivery map: ACCEPTED -> SCHEDULED | REJECTED, never READY", () => {
   ]);
 });
 
-test("delivery map: SCHEDULED -> DISPATCHED, DISPATCHED -> DELIVERED (+ reject, no admin)", () => {
+test("delivery map: SCHEDULED -> DISPATCHED, DISPATCHED -> DELIVERED (+ reject, admin-only)", () => {
+  // post-capture reject is admin-only (owner 2026-09-24)
   assert.deepEqual(getVisibleOrderStatusActions("SCHEDULED", ["sale"], "DELIVERY"), [
     "DISPATCHED",
-    "REJECTED",
   ]);
   assert.deepEqual(getVisibleOrderStatusActions("DISPATCHED", ["sale"], "DELIVERY"), [
     "DELIVERED",
+  ]);
+  assert.deepEqual(getVisibleOrderStatusActions("SCHEDULED", ["sale", "admin"], "DELIVERY"), [
+    "DISPATCHED",
     "REJECTED",
   ]);
   assert.deepEqual(getVisibleOrderStatusActions("DELIVERED", ["admin"], "DELIVERY"), []);
@@ -148,4 +151,10 @@ test("pending-payment and abandoned statuses allow nothing in either map", () =>
     assert.deepEqual(getVisibleOrderStatusActions(from, ["admin"]), [], from);
     assert.deepEqual(getVisibleOrderStatusActions(from, ["admin"], "DELIVERY"), [], from);
   }
+});
+
+test("admin is required for post-capture DELIVERY reject (SCHEDULED/DISPATCHED -> REJECTED, owner 2026-09-24)", () => {
+  assert.equal(requiresAdminForOrderStatusTransition("SCHEDULED", "REJECTED"), true);
+  assert.equal(requiresAdminForOrderStatusTransition("DISPATCHED", "REJECTED"), true);
+  assert.equal(requiresAdminForOrderStatusTransition("SCHEDULED", "DISPATCHED"), false);
 });
