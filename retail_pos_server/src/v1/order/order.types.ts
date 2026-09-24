@@ -57,8 +57,17 @@ export type OrderPaymentDetailWire = {
   capturedAt: string | null;
   voidedAt: string | null;
   refunds: OrderRefundWire[];
+  // 결제수단 표시 (crm 2026-09-24 후속) — 브랜드·끝 4자리·지갑만. 구 crm 은 필드 없음.
+  method?: OrderPaymentMethodWire | null;
+  receiptUrl?: string | null;
   stripePaymentIntentId: string | null;
   lastError: string | null;
+};
+
+export type OrderPaymentMethodWire = {
+  brand: string | null; // Stripe card.brand 원문
+  last4: string | null;
+  wallet: "apple_pay" | "google_pay" | null;
 };
 
 // STRIPE 4일 자동 보이드 (crm 스펙 §7) — STRIPE ∧ AUTHORIZED ∧ PLACED|ACCEPTED

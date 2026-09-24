@@ -5,6 +5,7 @@
 // 배지 없음. 현장 UI 는 영문.
 
 import type {
+  OrderPaymentMethod,
   OrderPaymentState,
   OrderPaymentSummary,
 } from "../../service/order.service";
@@ -72,6 +73,39 @@ const PAYMENT_STATE_LABELS: Record<OrderPaymentState, string> = {
 
 export function getOrderPaymentStateLabel(state: OrderPaymentState): string {
   return PAYMENT_STATE_LABELS[state] ?? state;
+}
+
+// 결제수단 한 줄 — "Visa •••• 4242" / "Apple Pay (Visa •••• 4242)". 미기록 = null.
+const CARD_BRAND_LABELS: Record<string, string> = {
+  visa: "Visa",
+  mastercard: "Mastercard",
+  amex: "Amex",
+  discover: "Discover",
+  diners: "Diners Club",
+  jcb: "JCB",
+  unionpay: "UnionPay",
+  eftpos_au: "eftpos",
+};
+const WALLET_LABELS: Record<string, string> = {
+  apple_pay: "Apple Pay",
+  google_pay: "Google Pay",
+};
+
+export function formatOrderPaymentMethod(
+  method: OrderPaymentMethod | null | undefined,
+): string | null {
+  if (!method) return null;
+  const raw = method.brand?.trim() ?? "";
+  const brand = raw
+    ? CARD_BRAND_LABELS[raw.toLowerCase()] ??
+      raw.charAt(0).toUpperCase() + raw.slice(1)
+    : null;
+  const card = [brand, method.last4 ? `•••• ${method.last4}` : null]
+    .filter(Boolean)
+    .join(" ");
+  const wallet = method.wallet ? (WALLET_LABELS[method.wallet] ?? null) : null;
+  if (wallet) return card ? `${wallet} (${card})` : wallet;
+  return card || null;
 }
 
 // 이미 청구된 STRIPE 주문인가 — reject 경고 문구 분기용 (스펙 §6.4).

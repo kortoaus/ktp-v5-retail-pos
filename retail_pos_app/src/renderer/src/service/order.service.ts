@@ -55,7 +55,17 @@ export interface OrderPaymentDetail extends OrderPaymentSummary {
   capturedAt: string | null;
   voidedAt: string | null;
   refunds: OrderRefund[];
+  // Card shown to staff: brand + last4 + wallet only (crm follow-up 2026-09-24).
+  // Optional — an older crm omits it.
+  method?: OrderPaymentMethod | null;
+  receiptUrl?: string | null;
   stripePaymentIntentId: string | null;
+}
+
+export interface OrderPaymentMethod {
+  brand: string | null; // Stripe card.brand raw (visa | mastercard | amex ...)
+  last4: string | null;
+  wallet: "apple_pay" | "google_pay" | null;
 }
 
 export type OrderPreset = "new" | "dueSoon" | "today" | "active" | "history";

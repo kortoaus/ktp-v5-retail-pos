@@ -15,6 +15,7 @@ import {
 } from "./order-badges";
 import {
   getOrderPaymentAlerts,
+  formatOrderPaymentMethod,
   getOrderPaymentStateLabel,
 } from "./order-payment-alerts";
 
@@ -115,6 +116,13 @@ export default function OrderViewerSummary({
             </span>
           </div>
         )}
+        {detail.paymentMethod === "STRIPE" &&
+          formatOrderPaymentMethod(detail.payment.method) && (
+            <div className="flex justify-between">
+              <span className="text-gray-500">Card</span>
+              <span>{formatOrderPaymentMethod(detail.payment.method)}</span>
+            </div>
+          )}
       </div>
     </div>
   );

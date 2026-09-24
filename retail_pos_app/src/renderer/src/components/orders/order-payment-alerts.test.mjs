@@ -84,3 +84,25 @@ test("state labels and charged check", () => {
     false,
   );
 });
+
+test("payment method line: brand •••• last4, wallet wraps the card, unknown brand title-cased", async () => {
+  const { formatOrderPaymentMethod } = await import("./order-payment-alerts.ts");
+  assert.equal(
+    formatOrderPaymentMethod({ brand: "visa", last4: "4242", wallet: null }),
+    "Visa •••• 4242",
+  );
+  assert.equal(
+    formatOrderPaymentMethod({ brand: "mastercard", last4: "0716", wallet: "apple_pay" }),
+    "Apple Pay (Mastercard •••• 0716)",
+  );
+  assert.equal(
+    formatOrderPaymentMethod({ brand: null, last4: null, wallet: "google_pay" }),
+    "Google Pay",
+  );
+  assert.equal(
+    formatOrderPaymentMethod({ brand: "link", last4: "1111", wallet: null }),
+    "Link •••• 1111",
+  );
+  assert.equal(formatOrderPaymentMethod(null), null);
+  assert.equal(formatOrderPaymentMethod(undefined), null);
+});
