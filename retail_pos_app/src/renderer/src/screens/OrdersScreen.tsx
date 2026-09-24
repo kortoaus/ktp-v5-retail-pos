@@ -30,6 +30,7 @@ import { PagingType } from "../libs/api";
 import {
   bulkTransitionOrders,
   getDeliveryManifest,
+  getOrder,
   getOrders,
   recordOrdersPrintedBulk,
   scheduleOrder,
@@ -72,11 +73,10 @@ import {
   type TriageView,
 } from "../components/orders/triage-format";
 import { replaceTriageRows } from "../components/orders/triage-merge";
-import {
-  buildPackingSlipModel,
-  buildPickSummaryModel,
-} from "../components/orders/pick-list-render";
-import { printOrderPickList } from "../libs/printer/order-pick-list-receipt";
+import { buildPickSummaryModel } from "../components/orders/pick-list-render";
+import { buildOrderInvoiceModel } from "../components/orders/order-invoice-render";
+import { printOrderInvoice } from "../libs/printer/order-invoice-receipt";
+import { useStoreSetting } from "../hooks/useStoreSetting";
 import { printDeliveryPickSummary } from "../libs/printer/delivery-pick-summary-receipt";
 
 // 1단별 칩 기억 — 세션(프로세스) 동안만.
@@ -116,6 +116,7 @@ export default function OrdersScreen() {
   const { user, loading: userLoading } = useUser();
   const inbox = useSyncExternalStore(subscribeOrderInbox, getOrderInboxState);
   const buckets = inbox.buckets;
+  const { storeSetting } = useStoreSetting();
   useBucketsFallback();
 
   // --- 화면 상태 ---
@@ -365,7 +366,10 @@ export default function OrdersScreen() {
     }
   }
 
-  async function printPackingSlips() {
+  // 주문 인보이스 일괄 (오너 결정 2026-09-24 — 구 packing slip 대체). 요청 수 = 매니페스트 1
+  // (인쇄 대상 필터: 미스케줄/스케줄 딜리버리만) + 대상 주문당 상세 1 (매니페스트엔 단가·
+  // 합계·결제·placedAt 이 없다). 한 장씩 인쇄, 실패 시 중단. printed 기록 POST 는 그대로.
+  async function printInvoices() {
     const chosen = listOrders.filter((o) => selected.has(o.id));
     if (chosen.length === 0) return;
     setBusy(`Printing 0/${chosen.length}`);
@@ -375,8 +379,8 @@ export default function OrdersScreen() {
         setNotice({ tone: "error", text: res.msg || "Failed to load the delivery manifest" });
         return;
       }
-      const byId = new Map(res.result.orders.map((o) => [o.id, o]));
-      const printable = chosen.filter((o) => byId.has(o.id));
+      const inManifest = new Set(res.result.orders.map((o) => o.id));
+      const printable = chosen.filter((o) => inManifest.has(o.id));
       const skipped = chosen.length - printable.length;
       const printedAt = new Date(); // 배치 1회 고정 (A4)
       const printedIds: number[] = [];
@@ -384,12 +388,16 @@ export default function OrdersScreen() {
       for (let i = 0; i < printable.length; i += 1) {
         setBusy(`Printing ${i + 1}/${printable.length}`);
         const order = printable[i];
-        const model = buildPackingSlipModel(byId.get(order.id)!, order.deliveryEtaDate, {
+        const detailRes = await getOrder(order.id);
+        if (!detailRes.ok || !detailRes.result) {
+          failure = `Printing stopped at ${i + 1}/${printable.length}: ${detailRes.msg || `order ${order.orderNo} not loaded`}`;
+          break;
+        }
+        const model = buildOrderInvoiceModel(detailRes.result, storeSetting, {
           printedAt,
-          index: i + 1,
-          count: printable.length,
+          deliveryWindow: buckets?.deliveryWindow ?? null,
         });
-        const result = await printOrderPickList(model);
+        const result = await printOrderInvoice(model);
         if (!result.ok) {
           failure = `Printing stopped at ${i + 1}/${printable.length}: ${result.message}`;
           break;
@@ -398,13 +406,13 @@ export default function OrdersScreen() {
       }
       if (printedIds.length > 0) {
         const rec = await recordOrdersPrintedBulk(printedIds.map((id) => ({ id, kind: "picklist" as const })));
-        if (!rec.ok) console.error("[packing-slips] printed record failed:", rec.msg);
+        if (!rec.ok) console.error("[invoices] printed record failed:", rec.msg);
       }
       const skippedText = skipped > 0 ? ` ${skipped} skipped (only unscheduled/scheduled deliveries print).` : "";
       setNotice(
         failure
           ? { tone: "error", text: `${failure}. ${printedIds.length} printed.${skippedText}` }
-          : { tone: "info", text: `${printedIds.length} packing slip${printedIds.length === 1 ? "" : "s"} printed.${skippedText}` },
+          : { tone: "info", text: `${printedIds.length} invoice${printedIds.length === 1 ? "" : "s"} printed.${skippedText}` },
       );
     } finally {
       setBusy(null);
@@ -595,10 +603,10 @@ export default function OrdersScreen() {
                 </WorkButton>
               )}
               <WorkButton
-                onPress={() => void printPackingSlips()}
+                onPress={() => void printInvoices()}
                 disabled={busy != null || selectedCount === 0}
               >
-                Print packing slips ({selectedCount})
+                Print invoices ({selectedCount})
               </WorkButton>
             </>
           )}

@@ -305,6 +305,7 @@ export interface CashInOut {
 
 export interface StoreSetting {
   id: number;
+  companyName?: string; // server row carries it (read-only here)
   name: string;
   phone?: string | null;
   address1: string;

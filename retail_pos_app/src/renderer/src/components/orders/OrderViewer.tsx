@@ -26,6 +26,9 @@ import { toOrderLabelInput } from "../../label-core/adapters/order-label";
 import { buildOrderLabel100100 } from "../../label-core/templates/order-100100";
 import { renderLabel } from "../../label-core/zpl";
 import { printOrderPickList } from "../../libs/printer/order-pick-list-receipt";
+import { printOrderInvoice } from "../../libs/printer/order-invoice-receipt";
+import { useStoreSetting } from "../../hooks/useStoreSetting";
+import { buildOrderInvoiceModel } from "./order-invoice-render";
 import {
   acceptOrder,
   deliverOrder,
@@ -114,6 +117,7 @@ export default function OrderViewer({
   const [refundOpen, setRefundOpen] = useState(false);
 
   const { user } = useUser();
+  const { storeSetting } = useStoreSetting();
   const { printers, printLabel } = useZplPrinters();
   const navigate = useNavigate();
   const { loadOrder, orderLoading } = useOrderLoad();
@@ -243,6 +247,30 @@ export default function OrderViewer({
       await recordPrinted(detail.id, { kind: "picklist" });
     } catch (err) {
       console.error("[order-pick-list] print failed:", err);
+    } finally {
+      setPrintInFlight(false);
+    }
+  }
+
+  // 주문 인보이스 (오너 결정 2026-09-24) — 모든 수령 방식. 일괄 "Print invoices" 와 같은
+  // 문서라 같은 printed 기록(kind "picklist")을 남긴다. 실패는 알리고 기록하지 않는다.
+  async function handlePrintInvoice() {
+    if (!detail || printInFlight) return;
+    setPrintInFlight(true);
+    try {
+      const result = await printOrderInvoice(
+        buildOrderInvoiceModel(detail, storeSetting, {
+          printedAt: new Date(),
+          deliveryWindow,
+        }),
+      );
+      if (!result.ok) {
+        window.alert(result.message);
+        return;
+      }
+      await recordPrinted(detail.id, { kind: "picklist" });
+    } catch (err) {
+      console.error("[order-invoice] print failed:", err);
     } finally {
       setPrintInFlight(false);
     }
@@ -390,6 +418,14 @@ export default function OrderViewer({
                   className="flex-1 h-12 rounded-lg bg-gray-200 font-bold active:bg-gray-300 disabled:opacity-40"
                 >
                   {`Print pick list${picklistCount > 0 ? ` (${picklistCount})` : ""}`}
+                </button>
+                <button
+                  type="button"
+                  disabled={printInFlight}
+                  onPointerDown={() => void handlePrintInvoice()}
+                  className="flex-1 h-12 rounded-lg bg-gray-200 font-bold active:bg-gray-300 disabled:opacity-40"
+                >
+                  Print invoice
                 </button>
                 {/* S3 — 활성 상태(PLACED|ACCEPTED|READY) + C&C 에서만
                     세일스크린 로드 (스캔 진입과 동일 훅). PLACED 는 S3-b 에서
