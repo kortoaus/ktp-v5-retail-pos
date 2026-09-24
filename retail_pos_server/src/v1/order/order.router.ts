@@ -55,11 +55,6 @@ orderRouter.post(
   userMiddleware,
   scopeMiddleware("sale"),
   acceptOrderController,
-  bulkDispatchOrdersController,
-  bulkScheduleOrdersController,
-  deliverOrderController,
-  dispatchOrderController,
-  scheduleOrderController,
 );
 
 orderRouter.post(
