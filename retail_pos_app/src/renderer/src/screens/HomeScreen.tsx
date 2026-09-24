@@ -77,7 +77,7 @@ export default function HomeScreen() {
           </>
         )}
         <NavBtn
-          to="/manager/orders"
+          to="/manager/orders?bucket=new"
           icon={<IoNotificationsOutline size={24} />}
           className="bg-blue-50 text-blue-700 hover:bg-blue-100"
         >

@@ -2,7 +2,7 @@
 // 목록은 항상 실시간 프록시(crm /device/order)이며 로컬 캐시가 없다.
 // dueAt 은 서버 계산 값 — 여기서는 비교/표시만 한다 (재계산 금지).
 
-import apiService, { ApiResponse } from "../libs/api";
+import apiService, { ApiResponse, PagingType } from "../libs/api";
 
 // 2026-09-24 Uncles 딜리버리+Stripe (crm 스펙 §3.1): SCHEDULED·DISPATCHED·
 // DELIVERED 는 DELIVERY 전용. PENDING_PAYMENT·ABANDONED 는 crm 이 현장 목록에서
@@ -37,8 +37,10 @@ export type OrderPaymentState =
 
 export interface OrderPaymentSummary {
   state: OrderPaymentState;
-  refundDue: boolean;
+  refundDue: boolean; // = "OPEN refund request exists" cache (refund-ticket spec §4.4)
   lastError: string | null; // 캡처 실패 등 (예: AUTH_EXPIRED)
+  // OPEN 환불 요청 티켓 요약 — 정보 배지 "Refund requested" (이슈 아님). 구 crm 은 없음.
+  openRefundRequest?: { count: number; amount: number } | null;
 }
 
 export interface OrderRefund {
@@ -60,6 +62,7 @@ export interface OrderPaymentDetail extends OrderPaymentSummary {
   method?: OrderPaymentMethod | null;
   receiptUrl?: string | null;
   stripePaymentIntentId: string | null;
+  refundable?: number; // cents — crm 계산 잔여 환불가능액
 }
 
 export interface OrderPaymentMethod {
@@ -96,11 +99,212 @@ export interface OrderSummary {
   shippingPostcode: string | null;
   placedAt: string; // ISO
   version: number;
-  dueAt: string | null; // ISO — server-computed
+  dueAt: string | null; // ISO — server-computed, display/back-compat only
   // STRIPE 4일 자동 보이드 (crm 스펙 §7) — 서버 계산, 재계산 금지.
   autoVoidAt: string | null; // ISO
   autoVoidSoon: boolean; // placedAt+72h 경과 → 앰버
+  // 트리아지 (crm 분류기 정본). 과기한/이슈 판정은 이것만 — dueAt 비교 금지 (F3).
+  triage?: OrderTriage;
 }
+
+// --- 2026-09-24 매장 주문 트리아지 (트리아지 스펙 §3·§4) ---
+export type TriageBucket =
+  | "new"
+  | "pickup.today"
+  | "pickup.ready"
+  | "pickup.upcoming"
+  | "delivery.today"
+  | "delivery.out"
+  | "delivery.tomorrow"
+  | "delivery.upcoming";
+
+export type TriageListBucket = TriageBucket | "issues";
+
+export type TriageIssueKind =
+  | "ACCEPT_OVERDUE"
+  | "NOT_SCHEDULED"
+  | "PAYMENT_FAILED"
+  | "AUTO_VOID_SOON"
+  | "PICKUP_NOT_READY"
+  | "NOT_COLLECTED"
+  | "DELIVERY_LATE";
+
+export interface OrderTriage {
+  bucket: TriageBucket | null;
+  issues: TriageIssueKind[];
+  issueText: string[]; // server-built English, same order as issues
+}
+
+export interface OrderBuckets {
+  asOf: string;
+  today: string; // Sydney YYYY-MM-DD
+  nextDeliveryDate: string | null;
+  deliveryWindow: { startMinutes: number | null; endMinutes: number | null };
+  counts: {
+    new: { total: number; pickup: number; delivery: number };
+    issues: { total: number; byKind: Record<TriageIssueKind, number> };
+    pickup: { today: number; ready: number; upcoming: number };
+    delivery: {
+      today: number;
+      out: number;
+      tomorrow: number;
+      upcoming: number;
+      tomorrowToSchedule: number;
+      tomorrowScheduled: number;
+    };
+  };
+}
+
+// 목록 paging — pos_server 가 crm paging 의 total/bucket/asOf 를 있으면 싣는다.
+// bucket 에코가 없으면 구 crm 이 bucket 을 무시한 것 → "Server update required".
+export type OrderListPaging = PagingType & {
+  total?: number;
+  bucket?: string;
+  asOf?: string;
+};
+
+export const getOrderBuckets = async (): Promise<ApiResponse<OrderBuckets>> => {
+  return await apiService.get<OrderBuckets>("/api/order/buckets");
+};
+
+// --- 딜리버리 매니페스트 (인쇄용 1요청, 스펙 §4.3) ---
+export interface DeliveryManifestLine {
+  id: number;
+  sourceItemId: number;
+  nameEn: string;
+  nameKo: string;
+  qty: number;
+  isAgeRestricted: boolean;
+  options: {
+    groupNameEn: string;
+    groupNameKo: string;
+    optionNameEn: string;
+    optionNameKo: string;
+    qty: number;
+  }[];
+}
+
+export interface DeliveryManifestOrder {
+  id: number;
+  orderNo: string;
+  status: string;
+  version: number;
+  memberName: string;
+  memberPhoneLast3: string;
+  shippingLabel: string | null;
+  shippingAddress1: string | null;
+  shippingAddress2: string | null;
+  shippingSuburb: string | null;
+  shippingState: string | null;
+  shippingPostcode: string | null;
+  shippingNote: string | null;
+  requiresAgeCheck: boolean;
+  total: number;
+  lines: DeliveryManifestLine[];
+}
+
+export interface DeliveryManifest {
+  date: string;
+  orderCount: number;
+  truncated: boolean;
+  orders: DeliveryManifestOrder[];
+  totals: {
+    sourceItemId: number;
+    nameEn: string;
+    nameKo: string;
+    qty: number;
+    orderCount: number;
+  }[];
+}
+
+export const getDeliveryManifest = async (query: {
+  date?: string;
+  ids?: number[];
+}): Promise<ApiResponse<DeliveryManifest>> => {
+  const params = new URLSearchParams();
+  if (query.date) params.set("date", query.date);
+  if (query.ids && query.ids.length > 0) params.set("ids", query.ids.join(","));
+  const qs = params.toString();
+  return await apiService.get<DeliveryManifest>(
+    `/api/order/delivery-manifest${qs ? `?${qs}` : ""}`,
+  );
+};
+
+export type OrderPrintedBulkItem = { id: number; kind: "picklist" };
+
+export const recordOrdersPrintedBulk = async (
+  items: OrderPrintedBulkItem[],
+): Promise<ApiResponse<{ results: { id: number; ok: boolean; code?: string }[] }>> => {
+  return await apiService.post(`/api/order/printed`, { items });
+};
+
+// --- 일괄 전이 (스펙 §6.5) — ≤50, 호출측이 10건 청크 순차 ---
+export type OrderBulkItemInput = { id: number; version: number };
+export type OrderBulkItemResult =
+  | { id: number; ok: true; status: OrderStatus; version: number }
+  | { id: number; ok: false; code: string; detail?: string };
+
+export const bulkTransitionOrders = async (
+  kind: "schedule" | "dispatch",
+  orders: OrderBulkItemInput[],
+): Promise<ApiResponse<{ results: OrderBulkItemResult[] }>> => {
+  return await apiService.post<{ results: OrderBulkItemResult[] }>(
+    `/api/order/${kind}`,
+    { orders },
+  );
+};
+
+// --- 환불 요청 티켓 (환불 티켓 스펙 §5.2·§10.1) — POS 는 요청만 ---
+export type RefundRequestReason =
+  | "REJECTED_AFTER_CAPTURE"
+  | "PICKING_SHORTFALL"
+  | "CUSTOMER_REQUEST"
+  | "OTHER";
+
+export type ManualRefundRequestReason = Exclude<
+  RefundRequestReason,
+  "REJECTED_AFTER_CAPTURE"
+>;
+
+export interface RefundRequest {
+  id: number;
+  reason: RefundRequestReason;
+  status: "OPEN" | "COMPLETED" | "DECLINED";
+  requestedAmount: number;
+  processedAmount: number | null;
+  note: string;
+  source: "POS" | "RUNNER" | "SYSTEM";
+  sourceTerminal: string;
+  requestedByName: string;
+  lines: { orderLineId: number; name_en: string; qty: number; amount: number }[];
+  declineReason: string | null;
+  processedAt: string | null;
+  createdAt: string;
+  processing: boolean;
+}
+
+export type CreateRefundRequestBody = {
+  requestKey: string;
+  reason: ManualRefundRequestReason;
+  lines?: { lineId: number; qty: number }[];
+  amount?: number;
+  note?: string;
+};
+
+export const createRefundRequest = async (
+  orderId: number,
+  body: CreateRefundRequestBody,
+): Promise<
+  ApiResponse<RefundRequest & { refundable: number; otherOpenAmount: number }>
+> => {
+  return await apiService.post(`/api/order/${orderId}/refund-requests`, body);
+};
+
+export const getRefundRequests = async (
+  orderId: number,
+): Promise<ApiResponse<{ requests: RefundRequest[]; refundable: number }>> => {
+  return await apiService.get(`/api/order/${orderId}/refund-requests`);
+};
 
 // qs 는 호출측이 만든 쿼리스트링 그대로 (로컬 서버는 통과, crm 이 해석).
 // 지원 파라미터: preset, fulfillment, page, limit, 그리고 S3-b 의 keyword
@@ -203,6 +407,8 @@ export interface OrderDetail {
   dueAt: string | null; // ISO — server-computed
   autoVoidAt: string | null; // ISO
   autoVoidSoon: boolean;
+  triage?: OrderTriage;
+  refundRequests?: RefundRequest[]; // createdAt asc
   lines: OrderLine[];
   events: OrderEvent[];
 }

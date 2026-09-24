@@ -19,6 +19,11 @@ export default function OrderViewerPickingSection({
         {lines.map((line) => (
           <div key={line.id} className="flex items-center gap-3 text-base">
             <span className="flex-1 min-w-0">
+              {line.isAgeRestricted && (
+                <span className="mr-2 text-[11px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                  18+
+                </span>
+              )}
               {line.name_en}
               {line.name_ko && (
                 <span className="text-gray-500"> {line.name_ko}</span>

@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from "../../libs/exceptions";
 import { FindManyQuery } from "../../libs/query";
+import { normalizeUserScopes } from "./user.scopes";
 
 export const getUserByCodeService = async (code: string) => {
   try {
@@ -38,7 +39,8 @@ type UpsertUserDTO = {
 };
 
 export const upsertUserService = async (dto: UpsertUserDTO) => {
-  const { id, name, scope, code, archived } = dto;
+  const { id, name, code, archived } = dto;
+  const scope = normalizeUserScopes(dto.scope);
 
   if (id === 1) {
     throw new BadRequestException("You cannot update the admin user");

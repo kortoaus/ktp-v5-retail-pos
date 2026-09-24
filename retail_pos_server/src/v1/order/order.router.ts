@@ -4,6 +4,11 @@ import {
   acceptOrderController,
   bulkDispatchOrdersController,
   bulkScheduleOrdersController,
+  bulkPrintedOrdersController,
+  createRefundRequestController,
+  getDeliveryManifestController,
+  getOrderBucketsController,
+  listRefundRequestsController,
   deliverOrderController,
   dispatchOrderController,
   scheduleOrderController,
@@ -27,6 +32,28 @@ orderRouter.get(
 
 // 리터럴 라우트가 생기면 반드시 /:id 보다 먼저 등록할 것
 // (sale.router.ts 의 /latest 관례 — Express 라우트 순서는 load-bearing).
+
+// 트리아지 (2026-09-24 트리아지 스펙 §5) — 리터럴, /:id 보다 먼저.
+orderRouter.get(
+  "/buckets",
+  userMiddleware,
+  scopeMiddleware("sale"),
+  getOrderBucketsController,
+);
+
+orderRouter.get(
+  "/delivery-manifest",
+  userMiddleware,
+  scopeMiddleware("sale"),
+  getDeliveryManifestController,
+);
+
+orderRouter.post(
+  "/printed",
+  userMiddleware,
+  scopeMiddleware("sale"),
+  bulkPrintedOrdersController,
+);
 
 // 딜리버리 일괄 전이 (2026-09-24 crm 스펙 §5.3) — 리터럴, /:id 계열보다 먼저.
 orderRouter.post(
@@ -107,6 +134,22 @@ orderRouter.post(
   userMiddleware,
   scopeMiddleware("sale"),
   printedOrderController,
+);
+
+// 환불 요청 티켓 (환불 티켓 스펙 §10.1·Q4) — 생성은 refund_ticket 스코프
+// (sale 과 별개, 기존 refund = 매장 판매 환불과도 별개). 조회는 sale.
+orderRouter.post(
+  "/:id/refund-requests",
+  userMiddleware,
+  scopeMiddleware("refund_ticket"),
+  createRefundRequestController,
+);
+
+orderRouter.get(
+  "/:id/refund-requests",
+  userMiddleware,
+  scopeMiddleware("sale"),
+  listRefundRequestsController,
 );
 
 orderRouter.post(

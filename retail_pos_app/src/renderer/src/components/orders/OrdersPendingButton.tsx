@@ -5,6 +5,7 @@ import { useSyncExternalStore } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "../../libs/cn";
 import { getOrderInboxState, subscribeOrderInbox } from "./orderInboxStore";
+import { ORDERS_NEW_PATH } from "./triage-format";
 
 export default function OrdersPendingButton() {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ export default function OrdersPendingButton() {
   return (
     <button
       type="button"
-      onPointerDown={() => navigate("/manager/orders")}
+      onPointerDown={() => navigate(ORDERS_NEW_PATH)}
       className={cn(
         "h-9 min-w-[110px] whitespace-nowrap rounded-lg border px-3 text-sm font-bold tabular-nums",
         !connected

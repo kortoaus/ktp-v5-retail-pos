@@ -267,6 +267,8 @@ export interface TerminalShift {
   cloudId?: number | null;
 }
 
+// 서버 정본 미러: retail_pos_server/src/v1/user/user.scopes.ts (동기 수정).
+// refund_ticket = 온라인 주문 "Request refund"(사무실에 요청만) — refund(매장 판매 환불)와 별개.
 export const SCOPES = [
   "admin",
   "sale",
@@ -274,6 +276,7 @@ export const SCOPES = [
   "user",
   "hotkey",
   "refund",
+  "refund_ticket",
   "cashio",
   "store",
   "shift",

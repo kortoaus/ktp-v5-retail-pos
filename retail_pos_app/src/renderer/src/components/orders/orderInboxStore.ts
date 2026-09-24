@@ -1,3 +1,5 @@
+import type { OrderBuckets } from "../../service/order.service";
+
 // 주문 수신함 소켓 상태의 모듈 레벨 공유 스토어.
 //
 // OrderNotification(Gateway 상주, 단일 소켓 소유자)이 쓰고,
@@ -12,15 +14,37 @@ export type OrderPendingCountPayload = {
   generatedAt: string;
 };
 
+// 트리아지 buckets (2026-09-24, 스펙 §5-2) — pos_server 30s 틱 `order:buckets`.
+// result null = crm 불통. receivedAt = 앱 수신 시각(ms) — 90초 무수신 폴백 판정용.
+// seq = 수신마다 +1 — 트리아지 화면이 이 값 변화로 현재 목록을 silent 재조회한다.
+export type OrderBucketsPayload = {
+  ok: boolean;
+  result: OrderBuckets | null;
+  chimeTerminalIds: number[];
+  generatedAt: string;
+};
+
 export type OrderInboxState = {
   connected: boolean;
   payload: OrderPendingCountPayload | null;
+  buckets: OrderBuckets | null; // 마지막 성공 값 (실패 틱은 덮지 않음)
+  bucketsOk: boolean | null; // 마지막 틱 성공 여부 (null = 아직 없음)
+  bucketsReceivedAt: number | null;
+  bucketsSeq: number;
 };
 
 export const ORDER_PENDING_COUNT_EVENT = "order:pending-count";
 export const ORDER_NEW_EVENT = "order:new";
+export const ORDER_BUCKETS_EVENT = "order:buckets";
 
-let state: OrderInboxState = { connected: false, payload: null };
+let state: OrderInboxState = {
+  connected: false,
+  payload: null,
+  buckets: null,
+  bucketsOk: null,
+  bucketsReceivedAt: null,
+  bucketsSeq: 0,
+};
 const listeners = new Set<() => void>();
 
 export function setOrderInboxState(partial: Partial<OrderInboxState>): void {
@@ -64,6 +88,45 @@ export function normalizeOrderPendingCountPayload(
     chimeTerminalIds: maybe.chimeTerminalIds.filter(
       (id): id is number => typeof id === "number" && Number.isFinite(id),
     ),
+    generatedAt:
+      typeof maybe.generatedAt === "string"
+        ? maybe.generatedAt
+        : new Date().toISOString(),
+  };
+}
+
+// 소켓 수신 또는 앱 폴백 폴링(GET /api/order/buckets) 결과를 반영한다.
+// 실패(result null)는 마지막 성공 값을 지우지 않는다 — 카운트가 깜빡이지 않게.
+export function applyOrderBuckets(
+  buckets: OrderBuckets | null,
+  receivedAt: number = Date.now(),
+): void {
+  setOrderInboxState({
+    buckets: buckets ?? state.buckets,
+    bucketsOk: buckets != null,
+    bucketsReceivedAt: receivedAt,
+    bucketsSeq: state.bucketsSeq + 1,
+  });
+}
+
+export function normalizeOrderBucketsPayload(
+  next: unknown,
+): OrderBucketsPayload | null {
+  if (!next || typeof next !== "object") return null;
+  const maybe = next as Partial<OrderBucketsPayload>;
+  const result = maybe.result;
+  const valid =
+    result != null &&
+    typeof result === "object" &&
+    typeof (result as OrderBuckets).counts?.new?.total === "number";
+  return {
+    ok: maybe.ok === true && valid,
+    result: valid ? (result as OrderBuckets) : null,
+    chimeTerminalIds: Array.isArray(maybe.chimeTerminalIds)
+      ? maybe.chimeTerminalIds.filter(
+          (id): id is number => typeof id === "number" && Number.isFinite(id),
+        )
+      : [],
     generatedAt:
       typeof maybe.generatedAt === "string"
         ? maybe.generatedAt

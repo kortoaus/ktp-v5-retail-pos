@@ -10,16 +10,19 @@ function stripLeadingInit(data: Uint8Array): Uint8Array {
   return data;
 }
 
-export async function printESCPOS(
+export type PrintEscposResult = { ok: true } | { ok: false; message: string };
+
+// 결과 반환판 — 알럿 없이 성공/실패만 돌려준다. 일괄 인쇄(packing slips)가
+// 실패 시 중단 + 화면 알림을 하려면 결과가 필요하다 (트리아지 스펙 §6.5).
+export async function printESCPOSResult(
   data: Uint8Array,
   options: PrintEscposOptions = {},
-): Promise<void> {
+): Promise<PrintEscposResult> {
   const config = await window.electronAPI.getConfig();
   const printer = config.devices.escposPrinter;
 
   if (!printer) {
-    window.alert("ESC/POS printer not configured");
-    return;
+    return { ok: false, message: "ESC/POS printer not configured" };
   }
 
   if (printer.type === "serial") {
@@ -28,15 +31,11 @@ export async function printESCPOS(
       printer,
       data: Array.from(serialData),
     });
-    if (!result.ok) {
-      window.alert(result.message);
-    }
-    return;
+    return result.ok ? { ok: true } : { ok: false, message: result.message };
   }
 
   if (!config.server) {
-    window.alert("Server not configured");
-    return;
+    return { ok: false, message: "Server not configured" };
   }
 
   const { host: serverHost, port: serverPort } = config.server;
@@ -56,9 +55,19 @@ export async function printESCPOS(
     });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
-      window.alert(body?.msg ?? `Print failed (${res.status})`);
+      return { ok: false, message: body?.msg ?? `Print failed (${res.status})` };
     }
+    return { ok: true };
   } catch {
-    window.alert("Print failed: cannot reach server");
+    return { ok: false, message: "Print failed: cannot reach server" };
   }
+}
+
+// 기존 호출부용 — 실패를 알럿으로 알리고 throw 하지 않는다 (인쇄가 판매를 막지 않게).
+export async function printESCPOS(
+  data: Uint8Array,
+  options: PrintEscposOptions = {},
+): Promise<void> {
+  const result = await printESCPOSResult(data, options);
+  if (!result.ok) window.alert(result.message);
 }
