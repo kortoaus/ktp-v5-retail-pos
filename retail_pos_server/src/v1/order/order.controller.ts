@@ -129,8 +129,27 @@ export async function getOrderBucketsController(_req: Request, res: Response) {
   res.status(200).json(await getOrderBucketsService());
 }
 
+// 매니페스트 쿼리 화이트리스트 — date·ids 는 그대로(검증 crm), include 는 드라이버 런시트의
+// "contactPhone" 만 통과(전체 전화 opt-in). 그 밖의 include 값은 로컬 400, 모르는 키는 버린다.
+export function buildDeliveryManifestQs(query: Record<string, unknown>): string {
+  const params = new URLSearchParams();
+  for (const key of ["date", "ids"] as const) {
+    const value = query[key];
+    if (typeof value === "string") params.set(key, value);
+  }
+  const include = query.include;
+  if (include !== undefined) {
+    if (include !== "contactPhone") {
+      throw new BadRequestException("include must be contactPhone");
+    }
+    params.set("include", "contactPhone");
+  }
+  return params.toString();
+}
+
 export async function getDeliveryManifestController(req: Request, res: Response) {
-  res.status(200).json(await getDeliveryManifestService(getCloudQs(req)));
+  const qs = buildDeliveryManifestQs(req.query as Record<string, unknown>);
+  res.status(200).json(await getDeliveryManifestService(qs));
 }
 
 export async function bulkPrintedOrdersController(req: Request, res: Response) {

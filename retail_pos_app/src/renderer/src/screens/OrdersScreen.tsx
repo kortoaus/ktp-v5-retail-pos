@@ -3,7 +3,8 @@
 //  1단 바(56px): ←Back │ [New][Pickup][Delivery][Issues] │ 검색 │ History │ ⟳ hh:mm
 //  2단 칩(44px): Pickup = Today·Ready·Upcoming / Delivery = Today·Out·Next: Ddd D Mmm·Upcoming
 //               / New = All·Pickup·Delivery / Issues = All + 종류별(카운트>0)
-//  (Delivery Next/Today/Upcoming) 작업 줄(40px): 일괄 Schedule·Dispatch + 인쇄
+//  (Delivery Next/Today/Out/Upcoming) 작업 줄(40px): 일괄 Schedule·Dispatch + 인쇄
+//  (Today·Out = Print driver sheet — 고객 전체 전화는 이 시트에만, 2026-09-24 오너 결정)
 //  전체폭 목록(행 56px) + 기존 모달 뷰어.
 //
 // 분류·카운트·이슈는 전부 crm (order:buckets 소켓 30s + 목록 triage 필드). 클라는 그리기만.
@@ -76,6 +77,8 @@ import { replaceTriageRows } from "../components/orders/triage-merge";
 import { buildPickSummaryModel } from "../components/orders/pick-list-render";
 import { buildOrderInvoiceModel } from "../components/orders/order-invoice-render";
 import { printOrderInvoice } from "../libs/printer/order-invoice-receipt";
+import { buildDriverSheetModel } from "../components/orders/driver-sheet-render";
+import { printDriverSheet } from "../libs/printer/driver-sheet-receipt";
 import { useStoreSetting } from "../hooks/useStoreSetting";
 import { printDeliveryPickSummary } from "../libs/printer/delivery-pick-summary-receipt";
 
@@ -219,14 +222,16 @@ export default function OrdersScreen() {
   const counts = level1Counts(buckets);
   const chips = chipsForLevel1(view.level1, buckets, view.chip);
   const bucketChip = mode === "triage" && !keyword && view.level1 === "delivery" ? view.chip : null;
-  const workBar: "tomorrow" | "today" | "upcoming" | null =
+  const workBar: "tomorrow" | "today" | "out" | "upcoming" | null =
     bucketChip === "delivery.tomorrow"
       ? "tomorrow"
       : bucketChip === "delivery.today"
         ? "today"
-        : bucketChip === "delivery.upcoming"
-          ? "upcoming"
-          : null;
+        : bucketChip === "delivery.out"
+          ? "out"
+          : bucketChip === "delivery.upcoming"
+            ? "upcoming"
+            : null;
   const liveOrders = list.rows.filter((r) => !r.gone).map((r) => r.order);
   const listOrders = list.rows.map((r) => r.order);
 
@@ -419,6 +424,55 @@ export default function OrdersScreen() {
     }
   }
 
+  // 드라이버 런시트 (오너 결정 2026-09-24) — 선택 행, 없으면 버킷의 살아있는 행 전부.
+  // 요청 수 = 매니페스트 1 (include=contactPhone: crm 이 멤버 현재 전화 복호화 + 리빌 로그)
+  // + printed 기록(50건 청크). 전화 평문은 이 함수 지역 변수에만 — state·로그 금지.
+  async function printDriverSheetNow() {
+    const chosen = selectedCount > 0 ? listOrders.filter((o) => selected.has(o.id)) : liveOrders;
+    if (chosen.length === 0) return;
+    setBusy("Printing driver sheet…");
+    try {
+      const res = await getDeliveryManifest({
+        ids: chosen.map((o) => o.id),
+        includeContactPhone: true,
+      });
+      if (!res.ok || !res.result) {
+        setNotice({ tone: "error", text: res.msg || "Failed to load the delivery manifest" });
+        return;
+      }
+      const stops = res.result.orders;
+      const skipped = chosen.length - stops.length;
+      const skippedText = skipped > 0 ? ` ${skipped} skipped (not an active delivery).` : "";
+      if (stops.length === 0) {
+        setNotice({ tone: "info", text: `No deliveries to print.${skippedText}` });
+        return;
+      }
+      const model = buildDriverSheetModel(stops, {
+        runDate: today,
+        deliveryWindow: buckets?.deliveryWindow ?? null,
+        printedAt: new Date(),
+      });
+      const printed = await printDriverSheet(model);
+      if (!printed.ok) {
+        setNotice({ tone: "error", text: `Driver sheet not printed: ${printed.message}` });
+        return;
+      }
+      const ids = stops.map((o) => o.id);
+      for (let i = 0; i < ids.length; i += 50) {
+        const rec = await recordOrdersPrintedBulk(
+          ids.slice(i, i + 50).map((id) => ({ id, kind: "driversheet" as const })),
+        );
+        if (!rec.ok) console.error("[driver-sheet] printed record failed:", rec.msg);
+      }
+      setNotice({
+        tone: "info",
+        text: `Driver sheet printed (${stops.length} stop${stops.length === 1 ? "" : "s"}).${skippedText}`,
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const scheduleTargets = bulkTargets(liveOrders, selected, "schedule");
   const dispatchTargets = bulkTargets(liveOrders, selected, "dispatch");
   const selectedCount = listOrders.filter((o) => selected.has(o.id)).length;
@@ -560,14 +614,16 @@ export default function OrdersScreen() {
           <span className="text-sm font-semibold text-gray-700 truncate min-w-0 flex-1">
             {workBar === "today"
               ? todaySummaryText(liveOrders)
-              : workBar === "tomorrow"
+              : workBar === "out"
+                ? `Out for delivery · ${liveOrders.length} orders`
+                : workBar === "tomorrow"
                 ? tomorrowSummaryText(
                     nextDeliveryChipLabel(buckets?.nextDeliveryDate ?? null).replace(/^Next: /, ""),
                     liveOrders,
                   )
                 : `Upcoming · ${liveOrders.length} orders`}
           </span>
-          {workBar === "today" ? (
+          {workBar === "out" ? null : workBar === "today" ? (
             <>
               <WorkButton onPress={() => selectAllFor("dispatch")} disabled={busy != null}>
                 Select to dispatch
@@ -594,7 +650,18 @@ export default function OrdersScreen() {
               </WorkButton>
             </>
           )}
-          {workBar !== "upcoming" && (
+          {(workBar === "today" || workBar === "out") && (
+            <>
+              <span className="w-px h-6 bg-gray-300" />
+              <WorkButton
+                onPress={() => void printDriverSheetNow()}
+                disabled={busy != null || (selectedCount === 0 && liveOrders.length === 0)}
+              >
+                Print driver sheet ({selectedCount > 0 ? selectedCount : liveOrders.length})
+              </WorkButton>
+            </>
+          )}
+          {workBar !== "upcoming" && workBar !== "out" && (
             <>
               <span className="w-px h-6 bg-gray-300" />
               {workBar === "tomorrow" && (

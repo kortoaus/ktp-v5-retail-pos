@@ -201,6 +201,9 @@ export interface DeliveryManifestOrder {
   requiresAgeCheck: boolean;
   total: number;
   lines: DeliveryManifestLine[];
+  // include=contactPhone(드라이버 런시트) 때만 존재 — 멤버 현재 전화, 탈퇴·익명화 null.
+  // 인쇄에만 쓰고 state·캐시·로그에 남기지 말 것.
+  contactPhone?: string | null;
 }
 
 export interface DeliveryManifest {
@@ -220,17 +223,20 @@ export interface DeliveryManifest {
 export const getDeliveryManifest = async (query: {
   date?: string;
   ids?: number[];
+  // 드라이버 런시트 전용 — 전체 전화 opt-in (crm: DISPATCHED 포함 + 멤버 리빌 로그).
+  includeContactPhone?: boolean;
 }): Promise<ApiResponse<DeliveryManifest>> => {
   const params = new URLSearchParams();
   if (query.date) params.set("date", query.date);
   if (query.ids && query.ids.length > 0) params.set("ids", query.ids.join(","));
+  if (query.includeContactPhone) params.set("include", "contactPhone");
   const qs = params.toString();
   return await apiService.get<DeliveryManifest>(
     `/api/order/delivery-manifest${qs ? `?${qs}` : ""}`,
   );
 };
 
-export type OrderPrintedBulkItem = { id: number; kind: "picklist" };
+export type OrderPrintedBulkItem = { id: number; kind: "picklist" | "driversheet" };
 
 export const recordOrdersPrintedBulk = async (
   items: OrderPrintedBulkItem[],

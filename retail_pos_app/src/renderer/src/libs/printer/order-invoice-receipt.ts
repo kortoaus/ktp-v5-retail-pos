@@ -262,7 +262,7 @@ async function encode(text: string, encoding: ReceiptTextEncoding): Promise<Uint
   return new Uint8Array(await window.electronAPI.encodeText({ text, encoding }));
 }
 
-function concat(parts: Uint8Array[]): Uint8Array {
+export function concat(parts: Uint8Array[]): Uint8Array {
   const out = new Uint8Array(parts.reduce((s, p) => s + p.length, 0));
   let offset = 0;
   for (const p of parts) {
@@ -272,7 +272,7 @@ function concat(parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
-async function escposBody(lines: EscposLine[], encoding: ReceiptTextEncoding): Promise<Uint8Array[]> {
+export async function escposBody(lines: EscposLine[], encoding: ReceiptTextEncoding): Promise<Uint8Array[]> {
   const parts: Uint8Array[] = [];
   for (const l of lines) {
     parts.push(new Uint8Array([ESC, 0x61, l.align === "center" ? 1 : 0]));
@@ -299,7 +299,7 @@ export async function buildOrderInvoiceEscpos(
   return concat(parts);
 }
 
-async function getReceiptPrintConfig(): Promise<{
+export async function getReceiptPrintConfig(): Promise<{
   mode: "raster" | "escpos";
   encoding: ReceiptTextEncoding;
 }> {
