@@ -127,6 +127,46 @@ export function fitSize(text: string, width: number, size: number, minSize: numb
 }
 
 /**
+ * Ascender as a fraction of the cell.
+ *
+ * Noto Sans KR sits its baseline about four fifths of the way down the em box,
+ * and `^FO` positions the *top* of the character cell — so this is what turns a
+ * baseline into a `^FO` top, and what keeps a baseline still when a field's size
+ * changes. One constant for every template, so a correction lands everywhere.
+ */
+export const ASCENT = 0.8;
+
+/**
+ * `fitSize` against a budget calibrated on hardware rather than on the block.
+ *
+ * ## Why the block width alone is the wrong budget (hardware, 2026-09-29)
+ *
+ * The scale labels' price cells were tuned by printing two-integer-digit
+ * amounts, and those print cleanly — but this file measures digits ~4% high, so
+ * the confirmed `28.16` at 44 measures 127 dots against its 114-dot block.
+ * Fitting against the block would shrink every price the owner already signed
+ * off. So the budget is the larger of the block and what `reference` — the
+ * widest confirmed string shape for the cell, e.g. `00.00` — measures at
+ * `size`. Digits are tabular, so every two-digit amount measures the same as its
+ * reference and keeps `size` exactly; only a wider amount (`180.00` — the EA
+ * label that came back overprinted) shrinks.
+ *
+ * Never below `minSize`, and never clipped: a price at the floor that runs a
+ * little wide is still a price, a cut one is a wrong one.
+ */
+export function fitCalibratedSize(
+  text: string,
+  width: number,
+  size: number,
+  reference: string,
+  minSize: number,
+): number {
+  const budget = Math.max(width, textWidth(reference, size));
+  if (textWidth(text, size) <= budget) return Math.round(size);
+  return fitSize(text, budget, size, minSize);
+}
+
+/**
  * How many lines `text` will wrap to inside `width` when set at `size`.
  *
  * The printer's own ^FB does the real breaking; this exists so a template can

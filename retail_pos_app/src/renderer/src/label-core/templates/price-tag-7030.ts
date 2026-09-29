@@ -50,6 +50,7 @@
  */
 
 import {
+  ASCENT,
   clamp,
   estimateDataMatrixSize,
   fitSize,
@@ -101,12 +102,10 @@ const LEFT_X = MARGIN_X + 10;
 const RIGHT_EDGE = PRINTABLE_W - MARGIN_X;
 
 /**
- * Ascender as a fraction of the cell — the same constant `price-tag-7090.ts`
- * uses, for the same reason: canvas-style baselines are how these layouts are
- * reasoned about, but `^FO` positions the *top* of the character cell.
+ * Baseline → `^FO` top, through the shared `ASCENT` (`../measure`): canvas-style
+ * baselines are how these layouts are reasoned about, but `^FO` positions the
+ * *top* of the character cell.
  */
-const ASCENT = 0.8;
-
 function topOf(baseline: number, size: number): number {
   return Math.round(baseline - size * ASCENT);
 }

@@ -54,9 +54,11 @@
  */
 
 import {
+  ASCENT,
   DEFAULT_MIN_TEXT_SIZE,
   FIT_SAFETY,
   clipToBlock,
+  fitCalibratedSize,
   fitSize,
   textWidth,
   qrMagForBox,
@@ -189,22 +191,30 @@ const WEIGHT_W = 76;
 const WEIGHT_SIZE = 24;
 
 // ── $/kg cell (x 248–343, y 102–207) ────────────────────────────────────────
+// Sizes are hardware-confirmed with two-digit amounts (`$55.00`, `was $62.00`);
+// a wider amount shrinks against that confirmed shape — see `priceTextEl`.
 const UNIT_PRICE_X = 250;
 const UNIT_PRICE_Y = 142;
 const UNIT_PRICE_W = 92;
 const UNIT_PRICE_SIZE = 30;
+const UNIT_PRICE_FIT = { reference: "$00.00", minSize: 18 };
 const WAS_X = 252;
 const WAS_Y = 180;
 const WAS_W = 88;
 const WAS_SIZE = 18;
+const WAS_FIT = { reference: "was $00.00", minSize: 12 };
 
 // ── PRICE cell (x 356–470, y 142–211) ───────────────────────────────────────
 // Right-aligned: the pre-printed `$` sits at x ≈ 347 and the amount grows left
-// from the cell's right edge, so a three-digit total still reads as `$123.45`.
+// from the cell's right edge. 44 is confirmed with a two-digit total (`28.16`);
+// a three-digit one does not fit at 44 and overprinted itself on a real label
+// (`180.00`, 2026-09-29), so it is shrunk — keeping its baseline — until it
+// measures inside the confirmed shape's width. See `priceTextEl`.
 const TOTAL_X = 356;
 const TOTAL_Y = 150;
 const TOTAL_W = 114;
 const TOTAL_SIZE = 44;
+const TOTAL_FIT = { reference: "00.00", minSize: 24 };
 
 // ── unit correction, over the pre-printed `$/kg` caption (x ≈ 299–336, y ≈ 207–225)
 // The replacement goes to the caption's **left**: the PRICE box starts at x 356
@@ -326,6 +336,57 @@ export function clippedTextEl(
     x,
     y,
     text: clipToBlock(text, fitted, extra.width, lines, FIT_SAFETY, extra.clipMarker),
+    size: fitted,
+    weight,
+    ...extra,
+  };
+}
+
+/** How a price cell is allowed to shrink — see `priceTextEl`. */
+export interface PriceFit {
+  /** Widest hardware-confirmed string shape for the cell (`00.00`, `$00.00`). */
+  reference: string;
+  /** Floor below which the amount is unreadable at arm's length. */
+  minSize: number;
+}
+
+/**
+ * `textEl` for a money amount in a pre-printed price cell.
+ *
+ * ## What it defends against (hardware, 2026-09-29)
+ *
+ * The scale labels' price cells were tuned with two-integer-digit amounts only.
+ * An EA item at $180.00 came back with both of its price cells garbled: `^FB`
+ * does not truncate, so the extra digit's worth of glyphs was drawn over the
+ * rest of the line.
+ *
+ * So an amount wider than the cell's confirmed reference shape is shrunk to fit
+ * the calibrated budget (`fitCalibratedSize`); one no wider — every two-digit
+ * amount — keeps `size` and `y` exactly and emits the same bytes as before. It
+ * is never clipped the way `clippedTextEl` clips a name: a cut price is a wrong
+ * price, so at the floor it just prints at the floor.
+ *
+ * The size is *baked*, with no `shrink` flag, for the reason `clippedTextEl`
+ * gives: `resolveTextSize` then leaves it alone. And `y` moves down by the
+ * ascender the smaller font gives up (`ASCENT`), because `^FO` anchors the top
+ * of the cell — without that a shrunk amount floats up off the baseline the
+ * pre-printed artwork was drawn around.
+ */
+export function priceTextEl(
+  x: number,
+  y: number,
+  text: string,
+  size: number,
+  weight: "M" | "B" | "BK",
+  extra: TextBlock & { width: number },
+  fit: PriceFit,
+): Text {
+  const fitted = fitCalibratedSize(text, extra.width, size, fit.reference, fit.minSize);
+  return {
+    kind: "text",
+    x,
+    y: y + Math.round((size - fitted) * ASCENT),
+    text,
     size: fitted,
     weight,
     ...extra,
@@ -462,11 +523,15 @@ export function amountOnly(text: string): string {
  * rule fixed at the mockup's hand-drawn width would fall short of a longer one.
  * Half a cell down is what puts it through the digits rather than under them —
  * the same convention the 58 × 100 template uses.
+ *
+ * Measured from the element as built, not from the constants: a three-digit
+ * was-price is shrunk and moved down by `priceTextEl`, and a rule drawn at the
+ * unshrunk size would run past the text and sit above its middle.
  */
-function wasRule(text: string): Line {
-  const w = Math.min(WAS_W, textWidth(text, WAS_SIZE));
+function wasRule(was: Text): Line {
+  const w = Math.min(WAS_W, textWidth(was.text, was.size));
   const x = WAS_X + Math.round((WAS_W - w) / 2);
-  return strike(x, WAS_Y + Math.round(WAS_SIZE / 2), w);
+  return strike(x, was.y + Math.round(was.size / 2), w);
 }
 
 /** The one symbol that fills the zone the pre-printed grid leaves empty. */
@@ -543,30 +608,40 @@ export function buildScaleLabel6040(
       lines: 1,
       align: "C",
     }),
-    textEl(UNIT_PRICE_X, UNIT_PRICE_Y, input.unitPriceText, UNIT_PRICE_SIZE, "B", {
-      width: UNIT_PRICE_W,
-      lines: 1,
-      align: "C",
-    }),
+    priceTextEl(
+      UNIT_PRICE_X,
+      UNIT_PRICE_Y,
+      input.unitPriceText,
+      UNIT_PRICE_SIZE,
+      "B",
+      { width: UNIT_PRICE_W, lines: 1, align: "C" },
+      UNIT_PRICE_FIT,
+    ),
   ];
 
   if (input.wasUnitPriceText) {
-    elements.push(
-      textEl(WAS_X, WAS_Y, `was ${input.wasUnitPriceText}`, WAS_SIZE, "M", {
-        width: WAS_W,
-        lines: 1,
-        align: "C",
-      }),
-      wasRule(`was ${input.wasUnitPriceText}`),
+    const was = priceTextEl(
+      WAS_X,
+      WAS_Y,
+      `was ${input.wasUnitPriceText}`,
+      WAS_SIZE,
+      "M",
+      { width: WAS_W, lines: 1, align: "C" },
+      WAS_FIT,
     );
+    elements.push(was, wasRule(was));
   }
 
   elements.push(
-    textEl(TOTAL_X, TOTAL_Y, amountOnly(input.totalText), TOTAL_SIZE, "BK", {
-      width: TOTAL_W,
-      lines: 1,
-      align: "R",
-    }),
+    priceTextEl(
+      TOTAL_X,
+      TOTAL_Y,
+      amountOnly(input.totalText),
+      TOTAL_SIZE,
+      "BK",
+      { width: TOTAL_W, lines: 1, align: "R" },
+      TOTAL_FIT,
+    ),
     ...uomOverride(input.unit, {
       captionRect: UOM_RULE,
       textPos: UOM_TEXT,

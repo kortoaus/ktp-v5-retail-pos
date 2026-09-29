@@ -24,7 +24,7 @@
  * and the promotion dates.
  */
 
-import { estimateLines, textWidth } from "../measure";
+import { ASCENT, estimateLines, textWidth } from "../measure";
 import { type Element, type Label, type Text } from "../model";
 import { clippedTextEl, textEl, type TemplateOptions } from "./scale-6040";
 import { formatMoney, type PriceTagInput } from "./price-tag-7030";
@@ -54,14 +54,10 @@ const MARGIN_X = 24;
 const CONTENT_W = MEDIA_W - MARGIN_X * 2;
 
 /**
- * Ascender as a fraction of the cell.
- *
- * Noto Sans KR sits its baseline about four fifths of the way down the em box,
- * so this is what turns a canvas baseline into a `^FO` top. One constant, one
- * place to correct it if the real print sits high or low.
+ * Baseline → `^FO` top, through the shared `ASCENT` (`../measure`) — one
+ * constant for every template, one place to correct it if the real print sits
+ * high or low.
  */
-const ASCENT = 0.8;
-
 function topOf(baseline: number, size: number): number {
   return Math.round(baseline - size * ASCENT);
 }

@@ -406,4 +406,143 @@ test("caller text is cut to fit rather than printed over itself", () => {
   // hardware prints correctly. See `clippedTextEl` in ./scale-6040.ts.
   const weight = label.elements.find((el) => el.kind === "text" && el.text === "0.512");
   assert.ok(weight, "the NET cell prints its value verbatim");
+
+  // The price cells are not clipped either — a cut price is worse than a small
+  // one — but they are no longer left to overprint: a wider amount shrinks
+  // against a calibrated budget. "Price cells" below owns those assertions;
+  // this only pins that the guard above never reaches them.
+  const wide = buildScaleLabel6040({
+    ...ONE_D,
+    unitPriceText: "$123.45",
+    wasUnitPriceText: "$150.00",
+    totalText: "$123.45",
+  });
+  for (const text of ["$123.45", "was $150.00", "123.45"]) {
+    const el = wide.elements.find((e) => e.kind === "text" && e.text === text);
+    assert.ok(el, `${text} prints verbatim, never cut`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Price cells — calibrated shrink
+// ---------------------------------------------------------------------------
+//
+// A $180.00 EA label came off the printer with both price cells overprinted:
+// the cells were tuned on two-integer-digit amounts only, and `^FB` does not
+// truncate. The fix shrinks only what is wider than the hardware-confirmed
+// two-digit shape, against a budget of max(block, that shape's measured width)
+// — `measure.ts` runs high on digits, so the block alone would shrink the
+// confirmed `28.16` too. Anything no wider than the reference prints exactly as
+// before; the mockup test at the top of this file is that lock, byte for byte.
+
+/** Same ascender convention as the price tags: `^FO` is the top of the cell. */
+const ASCENT = 0.8;
+
+const PRICE_CELLS = {
+  unit: { base: 30, y: 142, budget: Math.max(92, textWidth("$00.00", 30)), floor: 18 },
+  was: { base: 18, y: 180, budget: Math.max(88, textWidth("was $00.00", 18)), floor: 12 },
+  total: { base: 44, y: 150, budget: Math.max(114, textWidth("00.00", 44)), floor: 24 },
+};
+
+const textOf = (label, text) =>
+  label.elements.find((el) => el.kind === "text" && el.text === text);
+
+/** Shrunk, not below the floor, inside the budget, baseline held, size baked. */
+function assertShrunk(el, cell, what) {
+  assert.ok(el, `${what}: element built`);
+  assert.ok(el.size < cell.base, `${what}: ${el.size} should shrink from ${cell.base}`);
+  assert.ok(el.size >= cell.floor, `${what}: ${el.size} is below the ${cell.floor} floor`);
+  assert.ok(
+    textWidth(el.text, el.size) <= cell.budget,
+    `${what}: "${el.text}" measures ${textWidth(el.text, el.size)} > budget ${cell.budget}`,
+  );
+  assert.equal(el.y, cell.y + Math.round((cell.base - el.size) * ASCENT), `${what}: baseline`);
+  assert.ok(!el.shrink, `${what}: the size is baked, not left to the emitter`);
+  assert.equal(resolveTextSize(el), el.size, `${what}: the emitter prints the baked size`);
+}
+
+test("two-digit prices print exactly as the confirmed mockup — nothing shrinks", () => {
+  // `$55.00` / `was $62.00` / `28.16` are asserted byte for byte by the mockup
+  // test above. Tabular digits make every two-digit amount measure the same, so
+  // the edges of the range must come out identical too.
+  for (const [unit, was, total] of [
+    ["$10.00", "$11.00", "$10.00"],
+    ["$99.99", "$99.99", "$99.99"],
+    ["$5.00", "$6.00", "$1.30"],
+  ]) {
+    const label = buildScaleLabel6040({
+      ...ONE_D,
+      unitPriceText: unit,
+      wasUnitPriceText: was,
+      totalText: total,
+    });
+    const u = textOf(label, unit);
+    const w = textOf(label, `was ${was}`);
+    const t = textOf(label, total.replace("$", ""));
+    assert.deepEqual([u.size, u.y], [30, 142], unit);
+    assert.deepEqual([w.size, w.y], [18, 180], was);
+    assert.deepEqual([t.size, t.y], [44, 150], total);
+    const rule = label.elements.find((el) => el.kind === "line");
+    assert.equal(rule.y, 189, "the strike stays where the mockup put it");
+  }
+});
+
+test("a three-digit weighed price shrinks into its cell instead of overprinting", () => {
+  const label = buildScaleLabel6040({
+    ...ONE_D,
+    unitPriceText: "$123.45",
+    totalText: "$123.45",
+  });
+  const unit = textOf(label, "$123.45");
+  const total = textOf(label, "123.45");
+  assertShrunk(unit, PRICE_CELLS.unit, "unit");
+  assertShrunk(total, PRICE_CELLS.total, "total");
+  assert.deepEqual([unit.size, unit.y], [25, 146]);
+  assert.deepEqual([total.size, total.y], [36, 156]);
+  // Still right-aligned in the same block against the pre-printed `$`.
+  assert.deepEqual([total.x, total.width, total.align], [356, 114, "R"]);
+});
+
+test("the real failure: an EA item at $180.00", () => {
+  const label = buildScaleLabel6040({
+    ...ONE_D,
+    unit: "EA",
+    weightText: "1 EA",
+    unitPriceText: "$180.00",
+    wasUnitPriceText: null,
+    totalText: "$180.00",
+  });
+  const unit = textOf(label, "$180.00");
+  const total = textOf(label, "180.00");
+  assertShrunk(unit, PRICE_CELLS.unit, "unit");
+  assertShrunk(total, PRICE_CELLS.total, "total");
+  assert.deepEqual([unit.size, unit.y], [25, 146]);
+  assert.deepEqual([total.size, total.y], [36, 156]);
+});
+
+test("a three-digit was-price shrinks and its strike follows the smaller text", () => {
+  const label = buildScaleLabel6040({ ...ONE_D, wasUnitPriceText: "$123.45" });
+  const was = textOf(label, "was $123.45");
+  const rule = label.elements.find((el) => el.kind === "line");
+  assertShrunk(was, PRICE_CELLS.was, "was");
+  assert.deepEqual([was.size, was.y], [16, 182]);
+
+  // Measured at the fitted size, clamped to the 88-dot cell, centred in it.
+  const w = Math.min(88, textWidth("was $123.45", was.size));
+  assert.equal(rule.w, w);
+  assert.equal(rule.x, 252 + Math.round((88 - w) / 2));
+  assert.equal(rule.y, was.y + Math.round(was.size / 2), "through the fitted digits");
+  assert.ok(rule.x + rule.w <= GRID.unitPriceCell.x1, "rule ends inside the $/kg cell");
+});
+
+test("a four-digit unit price still fits, well above the floor", () => {
+  const label = buildScaleLabel6040({
+    ...ONE_D,
+    unitPriceText: "$1234.56",
+    totalText: "$123.45",
+  });
+  const unit = textOf(label, "$1234.56");
+  assertShrunk(unit, PRICE_CELLS.unit, "unit");
+  // 4.58 em into a 103-dot budget: 22, not the 18 floor.
+  assert.deepEqual([unit.size, unit.y], [22, 148]);
 });

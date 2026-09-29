@@ -400,3 +400,101 @@ test("caller text is cut to fit rather than printed over itself", () => {
   // rows the overflow used to land on the fifth. Now it is cut there.
   assertFits(head(label, "Salmon (Atlantic"), "ingredient statement");
 });
+
+// ---------------------------------------------------------------------------
+// Price cells — calibrated shrink
+// ---------------------------------------------------------------------------
+//
+// Same failure and same fix as the 60 × 40 (see its test file): a three-digit
+// amount overprinted its box, so a price wider than the hardware-confirmed
+// two-digit shape shrinks against max(block, that shape's measured width), and
+// anything no wider prints exactly as the mockup did. The `was` row has no block
+// width and room to spare, so it is left alone.
+
+/** Same ascender convention as the price tags: `^FO` is the top of the cell. */
+const ASCENT = 0.8;
+
+const PRICE_CELLS = {
+  unit: { base: 34, y: 562, budget: Math.max(103, textWidth("00.00", 34)), floor: 18 },
+  total: { base: 44, y: 556, budget: Math.max(132, textWidth("00.00", 44)), floor: 24 },
+};
+
+const valueRow = (label) =>
+  label.elements.filter((el) => el.kind === "text" && el.width && el.x >= 150 && el.y > 540);
+
+function assertShrunk(el, cell, what) {
+  assert.ok(el, `${what}: element built`);
+  assert.ok(el.size < cell.base, `${what}: ${el.size} should shrink from ${cell.base}`);
+  assert.ok(el.size >= cell.floor, `${what}: ${el.size} is below the ${cell.floor} floor`);
+  assert.ok(
+    textWidth(el.text, el.size) <= cell.budget,
+    `${what}: "${el.text}" measures ${textWidth(el.text, el.size)} > budget ${cell.budget}`,
+  );
+  assert.equal(el.y, cell.y + Math.round((cell.base - el.size) * ASCENT), `${what}: baseline`);
+  assert.ok(!el.shrink, `${what}: the size is baked, not left to the emitter`);
+  assert.equal(resolveTextSize(el), el.size, `${what}: the emitter prints the baked size`);
+}
+
+test("two-digit prices print exactly as the confirmed mockup — nothing shrinks", () => {
+  // `55.00` / `19.71` are pinned byte for byte by the MOCKUP test; the ONE_D
+  // sample's `28.16` total is pinned here, and the range edges must match.
+  const zpl = renderLabel(buildIngredientLabel58100(ONE_D));
+  assert.ok(
+    zpl.includes("^FO272,556^A@N,44,40,E:NOTOKRBK.TTF^FB132,1,0,C,0^FH^FD28.16^FS"),
+    zpl,
+  );
+  for (const [unit, total] of [
+    ["$10.00", "$10.00"],
+    ["$99.99", "$99.99"],
+    ["$1.30", "$1.30"],
+  ]) {
+    const [u, t] = valueRow(
+      buildIngredientLabel58100({ ...ONE_D, unitPriceText: unit, totalText: total }),
+    );
+    assert.deepEqual([u.size, u.y], [34, 562], unit);
+    assert.deepEqual([t.size, t.y], [44, 556], total);
+  }
+});
+
+test("a three-digit unit price and total shrink into their boxes", () => {
+  const [unit, total] = valueRow(
+    buildIngredientLabel58100({ ...ONE_D, unitPriceText: "$123.45", totalText: "$123.45" }),
+  );
+  assert.equal(unit.text, "123.45");
+  assert.equal(total.text, "123.45");
+  assertShrunk(unit, PRICE_CELLS.unit, "unit");
+  assertShrunk(total, PRICE_CELLS.total, "total");
+  assert.deepEqual([unit.size, unit.y], [29, 566]);
+  assert.deepEqual([total.size, total.y], [38, 561]);
+});
+
+test("the real failure: an EA item at $180.00", () => {
+  const [unit, total] = valueRow(
+    buildIngredientLabel58100({
+      ...ONE_D,
+      unit: "EA",
+      weightText: "1 EA",
+      unitPriceText: "$180.00",
+      wasUnitPriceText: null,
+      totalText: "$180.00",
+    }),
+  );
+  assertShrunk(unit, PRICE_CELLS.unit, "unit");
+  assertShrunk(total, PRICE_CELLS.total, "total");
+  assert.deepEqual([unit.size, total.size], [29, 38]);
+});
+
+test("a four-digit unit price still fits, well above the floor", () => {
+  const [unit] = valueRow(
+    buildIngredientLabel58100({ ...ONE_D, unitPriceText: "$1234.56", totalText: "$123.45" }),
+  );
+  assertShrunk(unit, PRICE_CELLS.unit, "unit");
+  // 4.03 em into a 103-dot budget: 25, not the 18 floor.
+  assert.deepEqual([unit.size, unit.y], [25, 569]);
+});
+
+test("the was row is untouched by the price fit", () => {
+  const label = buildIngredientLabel58100({ ...TWO_D, wasUnitPriceText: "$123.45" });
+  const was = label.elements.find((el) => el.kind === "text" && el.text === "was 123.45");
+  assert.deepEqual([was.size, was.y, was.width], [26, 450, undefined]);
+});

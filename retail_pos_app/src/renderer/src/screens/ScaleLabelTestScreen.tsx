@@ -174,6 +174,40 @@ const EA_SAMPLE = {
   storeAddress: STORE_ADDRESS,
 };
 
+/**
+ * Three-integer-digit prices — the case the price cells were never tuned for.
+ *
+ * A $180.00 EA label came back with both price cells overprinted (2026-09-29):
+ * `^FB` does not truncate. The templates now shrink any amount wider than the
+ * confirmed two-digit shape and hold its baseline; these two samples are what
+ * gets held against stock to check the smaller type still sits in its cell.
+ * Weighed: `$123.45`/kg with a was-price, so the strike follows the shrunk text
+ * too. EA: the exact amount of the label that failed.
+ */
+const SCALE_3DIGIT_WEIGHED = {
+  ...SCALE_SAMPLE,
+  weightText: "1.234",
+  unitPriceText: "$123.45",
+  wasUnitPriceText: "$150.00",
+  totalText: "$152.34",
+};
+
+/** The EA sample's item at $180.00, so the QR rings up what the label says. */
+const EA_3DIGIT_PP_QR = buildPPBarcodeString({
+  barcode: "00031146200139",
+  prices: [18000, 18000, 18000, 18000, 18000],
+  promoPrices: [18000, 18000, 18000, 18000, 18000],
+  weight: null,
+  packedOn: "2026-08-26",
+  usedBy: 180,
+});
+
+const SCALE_3DIGIT_EA = {
+  ...EA_SAMPLE,
+  unitPriceText: "$180.00",
+  totalText: "$180.00",
+};
+
 const PRICE_SAMPLE = {
   nameKo: NAME_KO,
   nameEn: NAME_EN,
@@ -296,6 +330,28 @@ const TEMPLATES: TemplateEntry[] = [
       ),
   },
   {
+    // Three-digit prices: every price cell shrinks from its confirmed size.
+    id: "6040-1d-3digit",
+    label: "6040 · 1D ($123.45/kg)",
+    media: "6040",
+    build: (dbg) =>
+      buildScaleLabel6040(
+        { ...SCALE_3DIGIT_WEIGHED, barcode: { kind: "ean13", data12: EAN13_12 } },
+        { dbg },
+      ),
+  },
+  {
+    // The label that came back overprinted, on the lane it was printed on.
+    id: "6040-2d-3digit-ea",
+    label: "6040 · 2D ($180.00 EA)",
+    media: "6040",
+    build: (dbg) =>
+      buildScaleLabel6040(
+        { ...SCALE_3DIGIT_EA, barcode: { kind: "pp", qrData: EA_3DIGIT_PP_QR } },
+        { dbg },
+      ),
+  },
+  {
     id: "58100-1d",
     label: "58100 · 1D",
     media: "58100",
@@ -324,6 +380,31 @@ const TEMPLATES: TemplateEntry[] = [
     build: (dbg) =>
       buildIngredientLabel58100(
         { ...EA_SAMPLE, barcode: { kind: "pp", qrData: EA_PP_QR } },
+        { dbg },
+      ),
+  },
+  {
+    // Three-digit prices: the unit price and total shrink; the `was` row does not.
+    id: "58100-1d-3digit",
+    label: "58100 · 1D ($123.45/kg)",
+    media: "58100",
+    build: (dbg) =>
+      buildIngredientLabel58100(
+        {
+          ...SCALE_3DIGIT_WEIGHED,
+          ingredients: INGREDIENTS,
+          barcode: { kind: "ean13", data12: EAN13_12 },
+        },
+        { dbg },
+      ),
+  },
+  {
+    id: "58100-2d-3digit-ea",
+    label: "58100 · 2D ($180.00 EA)",
+    media: "58100",
+    build: (dbg) =>
+      buildIngredientLabel58100(
+        { ...SCALE_3DIGIT_EA, barcode: { kind: "pp", qrData: EA_3DIGIT_PP_QR } },
         { dbg },
       ),
   },

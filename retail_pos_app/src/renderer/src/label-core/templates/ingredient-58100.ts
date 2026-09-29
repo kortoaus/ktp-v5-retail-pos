@@ -59,6 +59,7 @@ import {
   amountOnly,
   clippedTextEl,
   formatScaleDates,
+  priceTextEl,
   textEl,
   type ScaleBarcode,
   type ScaleLabelInput,
@@ -126,17 +127,23 @@ const WAS_RULE_INSET = 2;
 // Centred in each box: suppliers reprint the web slightly out of registration,
 // so values are centred with the mockup's margins rather than pushed against a
 // box edge. Do not tighten them to "use the space".
+//
+// The two money sizes are hardware-confirmed with two-digit amounts (`55.00`,
+// `28.16`); a three-digit amount overprinted its box on a real label, so a
+// wider amount shrinks against the confirmed shape — see `priceTextEl`.
 const VALUE_Y = 562;
 const VALUE_SIZE = 34;
 const WEIGHT_X = 37;
 const WEIGHT_W = 94;
 const UNIT_PRICE_X = 150;
 const UNIT_PRICE_W = 103;
+const UNIT_PRICE_FIT = { reference: "00.00", minSize: 18 };
 /** The total is bigger, so it starts higher to stay optically on the row. */
 const TOTAL_X = 272;
 const TOTAL_Y = 556;
 const TOTAL_W = 132;
 const TOTAL_SIZE = 44;
+const TOTAL_FIT = { reference: "00.00", minSize: 24 };
 
 // ── date row, under the rule at y ≈ 606 ─────────────────────────────────────
 // Left-aligned under their captions, and sized by `formatScaleDates` — the same
@@ -267,16 +274,24 @@ export function buildIngredientLabel58100(
       lines: 1,
       align: "C",
     }),
-    textEl(UNIT_PRICE_X, VALUE_Y, amountOnly(input.unitPriceText), VALUE_SIZE, "B", {
-      width: UNIT_PRICE_W,
-      lines: 1,
-      align: "C",
-    }),
-    textEl(TOTAL_X, TOTAL_Y, amountOnly(input.totalText), TOTAL_SIZE, "BK", {
-      width: TOTAL_W,
-      lines: 1,
-      align: "C",
-    }),
+    priceTextEl(
+      UNIT_PRICE_X,
+      VALUE_Y,
+      amountOnly(input.unitPriceText),
+      VALUE_SIZE,
+      "B",
+      { width: UNIT_PRICE_W, lines: 1, align: "C" },
+      UNIT_PRICE_FIT,
+    ),
+    priceTextEl(
+      TOTAL_X,
+      TOTAL_Y,
+      amountOnly(input.totalText),
+      TOTAL_SIZE,
+      "BK",
+      { width: TOTAL_W, lines: 1, align: "C" },
+      TOTAL_FIT,
+    ),
     ...uomOverride(input.unit, {
       captionRect: UOM_RULE,
       textPos: UOM_TEXT,
