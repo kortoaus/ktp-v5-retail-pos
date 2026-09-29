@@ -11,7 +11,7 @@ export default function LinePaging({
   setLineOffset: (offset: number) => void;
 }) {
   return (
-    <div className="w-10 h-full grid grid-rows-2 divide-y divide-gray-200">
+    <div className="w-14 shrink-0 h-full grid grid-rows-2 divide-y divide-gray-200">
       <div
         onPointerDown={() => {
           if (lineOffset > 0) setLineOffset(lineOffset - 1);
