@@ -190,26 +190,20 @@ But also check:
 
 ## GitHub Requirements
 
-For release publishing, GitHub must allow the workflow to write Releases.
-
-Check:
-
-```text
-Repo Settings
-  -> Actions
-  -> General
-  -> Workflow permissions
-  -> Read and write permissions
-```
-
-The current workflow publishes to:
+The workflow publishes to a separate, public, releases-only repo (split
+2026-09-30 so the source repo can be private):
 
 ```text
-kortoaus/ktp-v5-retail-pos
+kortoaus/ktp-v5-retail-pos-releases
 ```
 
-If the updater Release repo is separated later, update the `build.publish.repo`
-setting in `retail_pos_app/package.json` and use an appropriate GitHub token.
+The default `GITHUB_TOKEN` cannot write to another repo, so the workflow uses the
+`RELEASES_REPO_TOKEN` secret: a fine-grained personal access token limited to the
+releases repo with `Contents: Read and write`. If that token expires, the publish
+step fails and no Release is created.
+
+Terminals on 1.8.3 or older still read the feed from the source repo's own
+Releases. `docs/release-repo-split-runbook.md` covers the one-off bridge release.
 
 ## Release Assets
 

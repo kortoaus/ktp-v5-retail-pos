@@ -177,7 +177,11 @@ in `docker-compose.yml` is commented out — compose serves the dev Postgres onl
 `retail_pos_app/package.json`, commits `Release vX.Y.Z`, tags and pushes both. The tag fires
 `.github/workflows/build-windows.yml` (windows-2022, Node 22), which verifies tag == package
 version, runs `package:win:publish`, and uploads the NSIS installer + `latest.yml` to a GitHub
-Release (`kortoaus/ktp-v5-retail-pos`). **No tag push = no POS update.** No macOS workflow exists.
+Release in the **separate public releases-only repo `kortoaus/ktp-v5-retail-pos-releases`** (split
+2026-09-30 so this source repo can go private; CI publishes with the `RELEASES_REPO_TOKEN` secret,
+not the default `GITHUB_TOKEN`). Terminals still on ≤1.8.3 read the feed from this repo's own
+Releases — see `docs/release-repo-split-runbook.md` before the first release after the split.
+**No tag push = no POS update.** No macOS workflow exists.
 Terminals check **once at boot only**, auto-download, then restart-and-install with no prompt
 (`retail_pos_app/src/main/updater.ts`) — a till that never restarts never updates, and one that
 does may update mid-shift.

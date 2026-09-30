@@ -49,13 +49,16 @@ jobs:
       - name: Build and publish Windows installer
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Releases live in kortoaus/ktp-v5-retail-pos-releases, which the
+          # default GITHUB_TOKEN cannot write to.
+          GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
         run: npm run package:win:publish
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: retail-pos-windows-x64
+          retention-days: 3
           path: |
             retail_pos_app/dist/*.exe
             retail_pos_app/dist/*.blockmap
