@@ -36,9 +36,13 @@ export type OrderPaymentStateWire =
 // 목록형 결제 블록 (device 요약 — 배지용 최소 필드).
 export type OrderPaymentSummaryWire = {
   state: OrderPaymentStateWire;
-  refundDue: boolean;
+  refundDue: boolean; // = "OPEN 환불 요청 티켓 있음" 캐시 (환불 티켓 스펙 §4.4)
   lastError: string | null; // 캡처 실패 등 현장 표시용 코드 (예: AUTH_EXPIRED)
+  // OPEN 환불 요청 티켓 요약 (환불 티켓 스펙 §5.4) — 구 crm 은 필드 없음.
+  openRefundRequest?: OrderOpenRefundRequestWire | null;
 };
+
+export type OrderOpenRefundRequestWire = { count: number; amount: number }; // amount cents
 
 export type OrderRefundWire = {
   amount: number; // cents
@@ -62,6 +66,8 @@ export type OrderPaymentDetailWire = {
   receiptUrl?: string | null;
   stripePaymentIntentId: string | null;
   lastError: string | null;
+  openRefundRequest?: OrderOpenRefundRequestWire | null;
+  refundable?: number; // cents — 잔여 환불가능액 (crm 계산, 환불 티켓 스펙 §5.1)
 };
 
 export type OrderPaymentMethodWire = {
@@ -111,8 +117,9 @@ export type OrderSummaryWire = {
   shippingPostcode: string | null;
   placedAt: string; // ISO
   version: number;
-  // 서버(crm) 계산 마감 시각. POS 는 비교/표시만 한다 — 재계산 금지.
+  // 서버(crm) 계산 마감 시각. 하위호환 표시용 — 과기한 판정은 triage 만 (트리아지 스펙 §3.5).
   dueAt: string | null; // ISO
+  triage?: OrderTriageWire; // 구 crm 은 필드 없음
 } & OrderAutoVoidWire;
 
 // crm-server paging wire 형 — 로컬 표준({hasPrev,hasNext,currentPage,totalPages})
@@ -212,6 +219,87 @@ export type OrderDetailWire = {
   abandonedAt: string | null;
   createdAt: string; // ISO
   dueAt: string | null; // ISO — 서버 계산, 재계산 금지
+  triage?: OrderTriageWire;
+  refundRequests?: RefundRequestWire[]; // createdAt asc (환불 티켓 스펙 §5.2)
   lines: OrderLineWire[];
   events: OrderEventWire[];
 } & OrderAutoVoidWire;
+
+// --- 2026-09-24 매장 주문 트리아지 (crm order-triage.ts 정본) ---
+// POS 는 분류하지 않는다 — crm 이 준 bucket/issues/issueText 를 그대로 그린다.
+export type TriageBucketWire =
+  | "new"
+  | "pickup.today"
+  | "pickup.ready"
+  | "pickup.upcoming"
+  | "delivery.today"
+  | "delivery.out"
+  | "delivery.tomorrow"
+  | "delivery.upcoming";
+
+export type TriageIssueKindWire =
+  | "ACCEPT_OVERDUE"
+  | "NOT_SCHEDULED"
+  | "PAYMENT_FAILED"
+  | "AUTO_VOID_SOON"
+  | "PICKUP_NOT_READY"
+  | "NOT_COLLECTED"
+  | "DELIVERY_LATE";
+
+export type OrderTriageWire = {
+  bucket: TriageBucketWire | null; // 종결 = null
+  issues: TriageIssueKindWire[];
+  issueText: string[]; // issues 와 같은 순서·길이
+};
+
+// GET /device/order/buckets result (트리아지 스펙 §4.1).
+export type OrderBucketsWire = {
+  asOf: string;
+  today: string;
+  nextDeliveryDate: string | null;
+  deliveryWindow: { startMinutes: number | null; endMinutes: number | null };
+  counts: {
+    new: { total: number; pickup: number; delivery: number };
+    issues: { total: number; byKind: Record<TriageIssueKindWire, number> };
+    pickup: { today: number; ready: number; upcoming: number };
+    delivery: {
+      today: number;
+      out: number;
+      tomorrow: number;
+      upcoming: number;
+      tomorrowToSchedule: number;
+      tomorrowScheduled: number;
+    };
+  };
+};
+
+// --- 환불 요청 티켓 (환불 티켓 스펙 §5.2 RefundRequestDeviceDto) ---
+export type RefundRequestReasonWire =
+  | "REJECTED_AFTER_CAPTURE"
+  | "PICKING_SHORTFALL"
+  | "CUSTOMER_REQUEST"
+  | "OTHER";
+
+// POS 가 수동으로 올릴 수 있는 사유 — REJECTED_AFTER_CAPTURE 는 SYSTEM 전용(crm 400).
+export const MANUAL_REFUND_REQUEST_REASONS = [
+  "PICKING_SHORTFALL",
+  "CUSTOMER_REQUEST",
+  "OTHER",
+] as const;
+
+export type RefundRequestWire = {
+  id: number;
+  reason: RefundRequestReasonWire;
+  status: "OPEN" | "COMPLETED" | "DECLINED";
+  requestedAmount: number; // cents
+  processedAmount: number | null;
+  note: string;
+  source: "POS" | "RUNNER" | "SYSTEM";
+  sourceTerminal: string;
+  requestedByName: string;
+  lines: { orderLineId: number; name_en: string; qty: number; amount: number }[];
+  declineReason: string | null;
+  processedAt: string | null;
+  createdAt: string;
+  processing: boolean;
+};

@@ -6,8 +6,13 @@
 // 기본 구분선/배지/h-14 버튼까지만. 섹션은 파일 단위로 쪼개 교체 쉽게.
 // onPointerDown 만 사용(스캐너 Enter 트랩). 1366×768 전제.
 //
+// 2026-09-24 트리아지 스펙 §6.4: 상단 경고줄(triage.issueText + ID check 18+),
+// DELIVERY 블록(OrderViewerSummary), 라인 18+ 마커, 픽리스트 확장 모델(머리·주소·18+).
+// 환불 티켓 스펙 §10.1(R5): refund_ticket 스코프면 "Request refund" 모달, "Refund
+// requests" 블록(티켓별 한 줄). POS 는 환불하지 않는다.
+//
 // 전이: confirm 1회("Customer will be notified." 포함) → 서비스 호출 →
-// 성공 시 응답 DTO 로 상세 갱신 + onChanged()(목록 재조회) + PLACED 발이면
+// 성공 시 응답 DTO 로 상세 갱신 + onChanged(detail)(목록 제자리 갱신) + PLACED 발이면
 // orderInboxStore 카운트 낙관적 -1. 409(TRANSITION_CONFLICT)는 알림 후
 // 상세 재조회로 실상태 학습. Reject 사유는 trim 1~200자.
 
@@ -21,6 +26,9 @@ import { toOrderLabelInput } from "../../label-core/adapters/order-label";
 import { buildOrderLabel100100 } from "../../label-core/templates/order-100100";
 import { renderLabel } from "../../label-core/zpl";
 import { printOrderPickList } from "../../libs/printer/order-pick-list-receipt";
+import { printOrderInvoice } from "../../libs/printer/order-invoice-receipt";
+import { useStoreSetting } from "../../hooks/useStoreSetting";
+import { buildOrderInvoiceModel } from "./order-invoice-render";
 import {
   acceptOrder,
   deliverOrder,
@@ -43,6 +51,9 @@ import {
 import type { OrderStatusAction } from "./order-status-policy";
 import { isOrderCharged } from "./order-payment-alerts";
 import { buildPickListRenderModel } from "./pick-list-render";
+import { paymentFailureMessage } from "./delivery-bulk";
+import { canRequestRefund, refundRequestLine } from "./refund-request-policy";
+import RefundRequestModal from "./RefundRequestModal";
 import OrderViewerSummary from "./OrderViewerSummary";
 import OrderViewerMadeToOrderSection from "./OrderViewerMadeToOrderSection";
 import OrderViewerPickingSection from "./OrderViewerPickingSection";
@@ -65,44 +76,30 @@ const CONFIRM_TEXTS: Record<OrderStatusAction, (orderNo: string) => string> = {
     `Reject order ${orderNo}? Customer will be notified.`,
 };
 
-// crm 결제 사유 코드 → 현장 문구 (crm 스펙 §6.2, 영문). 전이 없음 — 상세
-// 재조회로 lastError 배지를 학습한다.
-function paymentFailureMessage(
-  msg: string,
-  result: unknown,
-): string | null {
-  if (msg === "PAYMENT_CAPTURE_FAILED") {
-    const reason = (result as { reason?: unknown } | null)?.reason;
-    if (reason === "AUTH_EXPIRED") {
-      return "Card hold expired — this order can't be charged. Reject it and ask the customer to re-order.";
-    }
-    return `Card charge failed${typeof reason === "string" ? ` (${reason})` : ""}. The order was not scheduled.`;
-  }
-  if (msg === "PAYMENT_PROVIDER_UNAVAILABLE") {
-    return "Payment service unavailable — try again.";
-  }
-  if (msg === "STRIPE_NOT_CONFIGURED") {
-    return "Online payment isn't configured.";
-  }
-  return null;
-}
-
 // Reject 모달 부제 — STRIPE 는 결제 효과를 알린다 (스펙 §5.5·§6.4).
 function rejectPaymentNotice(detail: OrderDetail): string | null {
   if (detail.paymentMethod !== "STRIPE") return null;
   if (isOrderCharged(detail)) {
-    return "This order was already charged. Refund it in the Stripe Dashboard after rejecting.";
+    return "This order was already charged. A refund request goes to the office automatically — the office refunds the customer.";
   }
   return "The customer's card hold will be released (not charged).";
 }
 
 interface Props {
   orderId: number | null;
+  // Delivery day 시간창 (buckets 응답) — null 이면 날짜만.
+  deliveryWindow?: { startMinutes: number | null; endMinutes: number | null } | null;
   onClose: () => void;
-  onChanged: () => void;
+  // 전이·인쇄·환불 요청 후 — 갱신된 상세를 넘긴다(목록 행 제자리 갱신·결과 태그용).
+  onChanged: (detail?: OrderDetail) => void;
 }
 
-export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
+export default function OrderViewer({
+  orderId,
+  deliveryWindow = null,
+  onClose,
+  onChanged,
+}: Props) {
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   // 공개된 전화번호는 이 로컬 state 에만 존재 — 뷰어를 닫거나 다른 주문을
   // 열면 즉시 소멸(캐시/스토리지 금지, web client MemberDetail 불변식).
@@ -117,8 +114,10 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
   const [printInFlight, setPrintInFlight] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [refundOpen, setRefundOpen] = useState(false);
 
   const { user } = useUser();
+  const { storeSetting } = useStoreSetting();
   const { printers, printLabel } = useZplPrinters();
   const navigate = useNavigate();
   const { loadOrder, orderLoading } = useOrderLoad();
@@ -131,6 +130,7 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
     setError("");
     setRejectOpen(false);
     setRejectReason("");
+    setRefundOpen(false);
     setLoading(true);
     getOrder(orderId).then((res) => {
       if (res.ok && res.result) setDetail(res.result);
@@ -139,11 +139,15 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
     });
   }, [orderId]);
 
-  async function refetchDetail() {
-    if (orderId == null) return;
+  async function refetchDetail(): Promise<OrderDetail | null> {
+    if (orderId == null) return null;
     const res = await getOrder(orderId);
-    if (res.ok && res.result) setDetail(res.result);
-    else setError(res.msg || "Failed to load order");
+    if (res.ok && res.result) {
+      setDetail(res.result);
+      return res.result;
+    }
+    setError(res.msg || "Failed to load order");
+    return null;
   }
 
   async function runTransition(action: OrderStatusAction, reason?: string) {
@@ -172,7 +176,7 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
         setDetail(res.result);
         setRejectOpen(false);
         setRejectReason("");
-        onChanged();
+        onChanged(res.result);
         // PLACED 발 전이 성공 → 미접수 카운트 낙관적 -1 (차임 갭 제거).
         // 다음 브로드캐스터 틱이 정본으로 덮는다.
         if (prevStatus === "PLACED") decrementPendingCount();
@@ -180,14 +184,15 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
         window.alert("Order was updated elsewhere — refreshing.");
         setRejectOpen(false);
         setRejectReason("");
-        await refetchDetail();
+        const fresh = await refetchDetail();
+        if (fresh) onChanged(fresh);
       } else {
         const paymentMsg = paymentFailureMessage(res.msg, res.result);
         if (paymentMsg) {
           window.alert(paymentMsg);
           // 캡처 실패는 crm 이 lastError/이벤트를 기록한다 — 배지 갱신.
-          await refetchDetail();
-          onChanged();
+          const fresh = await refetchDetail();
+          onChanged(fresh ?? undefined);
         } else {
           window.alert(res.msg || "Failed to update order");
         }
@@ -231,12 +236,41 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
     if (!detail || printInFlight) return;
     setPrintInFlight(true);
     try {
-      // 기존 ESC/POS raster 파이프라인 — printESCPOS 가 프린터 미설정/실패를
-      // 자체 알럿으로 처리하고 throw 하지 않는다(기존 인쇄 관례).
-      await printOrderPickList(buildPickListRenderModel(detail));
+      // ESC/POS raster — 단건 = "Order 1 of 1 · Printed …" 머리. 실패는 알리고 기록하지 않는다.
+      const result = await printOrderPickList(
+        buildPickListRenderModel(detail, { printedAt: new Date() }),
+      );
+      if (!result.ok) {
+        window.alert(result.message);
+        return;
+      }
       await recordPrinted(detail.id, { kind: "picklist" });
     } catch (err) {
       console.error("[order-pick-list] print failed:", err);
+    } finally {
+      setPrintInFlight(false);
+    }
+  }
+
+  // 주문 인보이스 (오너 결정 2026-09-24) — 모든 수령 방식. 일괄 "Print invoices" 와 같은
+  // 문서라 같은 printed 기록(kind "picklist")을 남긴다. 실패는 알리고 기록하지 않는다.
+  async function handlePrintInvoice() {
+    if (!detail || printInFlight) return;
+    setPrintInFlight(true);
+    try {
+      const result = await printOrderInvoice(
+        buildOrderInvoiceModel(detail, storeSetting, {
+          printedAt: new Date(),
+          deliveryWindow,
+        }),
+      );
+      if (!result.ok) {
+        window.alert(result.message);
+        return;
+      }
+      await recordPrinted(detail.id, { kind: "picklist" });
+    } catch (err) {
+      console.error("[order-invoice] print failed:", err);
     } finally {
       setPrintInFlight(false);
     }
@@ -343,7 +377,31 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
 
           {detail && (
             <>
+              {/* 상단 경고줄 — 서버 이슈 문구 + 연령확인 (트리아지 스펙 §6.4) */}
+              {((detail.triage?.issueText.length ?? 0) > 0 || detail.requiresAgeCheck) && (
+                <div className="px-4 py-2 border-b border-gray-300 flex flex-wrap gap-2">
+                  {detail.requiresAgeCheck && (
+                    <span className="px-3 py-1.5 rounded bg-red-600 text-white font-bold">
+                      ID check required (18+)
+                    </span>
+                  )}
+                  {(detail.triage?.issueText ?? []).map((text) => (
+                    <span
+                      key={text}
+                      className={
+                        "px-3 py-1.5 rounded font-bold " +
+                        (detail.triage?.issues.every((k) => k === "AUTO_VOID_SOON")
+                          ? "bg-amber-400 text-amber-950"
+                          : "bg-red-100 text-red-800")
+                      }
+                    >
+                      {text}
+                    </span>
+                  ))}
+                </div>
+              )}
               <OrderViewerSummary
+                deliveryWindow={deliveryWindow}
                 detail={detail}
                 revealedPhone={revealedPhone}
                 revealing={revealing}
@@ -360,6 +418,14 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
                   className="flex-1 h-12 rounded-lg bg-gray-200 font-bold active:bg-gray-300 disabled:opacity-40"
                 >
                   {`Print pick list${picklistCount > 0 ? ` (${picklistCount})` : ""}`}
+                </button>
+                <button
+                  type="button"
+                  disabled={printInFlight}
+                  onPointerDown={() => void handlePrintInvoice()}
+                  className="flex-1 h-12 rounded-lg bg-gray-200 font-bold active:bg-gray-300 disabled:opacity-40"
+                >
+                  Print invoice
                 </button>
                 {/* S3 — 활성 상태(PLACED|ACCEPTED|READY) + C&C 에서만
                     세일스크린 로드 (스캔 진입과 동일 훅). PLACED 는 S3-b 에서
@@ -381,7 +447,45 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
                     {orderLoading ? "..." : "Load to Sale"}
                   </button>
                 )}
+                {canRequestRefund(detail, user?.scope ?? []) && (
+                  <button
+                    type="button"
+                    disabled={inFlight}
+                    onPointerDown={() => setRefundOpen(true)}
+                    className="flex-1 h-12 rounded-lg border-2 border-slate-400 text-slate-800 font-bold active:bg-slate-100 disabled:opacity-40"
+                  >
+                    Request refund
+                  </button>
+                )}
               </div>
+              {(detail.refundRequests?.length ?? 0) > 0 && (
+                <div className="px-4 py-3 border-b border-gray-300">
+                  <div className="font-bold mb-1">Refund requests</div>
+                  <div className="space-y-1">
+                    {(detail.refundRequests ?? []).map((req) => {
+                      const line = refundRequestLine(req);
+                      return (
+                        <div
+                          key={req.id}
+                          className={
+                            "text-base " +
+                            (line.tone === "open"
+                              ? "text-slate-800"
+                              : line.tone === "done"
+                                ? "text-emerald-700"
+                                : "text-gray-500")
+                          }
+                        >
+                          {line.text}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    The office reviews and processes refunds. The customer is not refunded until then.
+                  </div>
+                </div>
+              )}
               <OrderViewerMadeToOrderSection
                 lines={madeToOrderLines}
                 labelCounts={labelCounts}
@@ -408,6 +512,16 @@ export default function OrderViewer({ orderId, onClose, onChanged }: Props) {
           )}
         </div>
       </div>
+
+      {refundOpen && detail && (
+        <RefundRequestModal
+          detail={detail}
+          onClose={() => setRefundOpen(false)}
+          onSent={() => {
+            void refetchDetail().then((fresh) => onChanged(fresh ?? undefined));
+          }}
+        />
+      )}
 
       {/* Reject 사유 모달 — 백드롭의 형제 렌더 (PaymentModalForRepay 관례:
           viewer backdrop 의 onPointerDown 버블링이 모달을 관통해 닫는 것을

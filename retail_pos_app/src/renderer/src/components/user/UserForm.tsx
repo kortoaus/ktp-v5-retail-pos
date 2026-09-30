@@ -138,9 +138,9 @@ export default function UserForm({ origin, onSave, onCancel }: UserFormProps) {
         </div>
 
         <div className="flex items-center gap-6">
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 min-w-0 flex-1">
             <label className="text-sm font-medium">Scope</label>
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
               {SCOPES.map((s) => (
                 <label key={s} className="flex items-center gap-2 text-sm">
                   <input

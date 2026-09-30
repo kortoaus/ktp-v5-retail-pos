@@ -3,10 +3,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildPackingSlipModel,
   buildPickListRenderModel,
+  buildPickSummaryModel,
+  formatAddressLines,
   formatOrderDueDisplay,
   formatOrderFulfillmentLabel,
 } from "./pick-list-render.ts";
+
+// 2026-09-24T05:42Z = 3:42pm AEST
+const PRINTED = new Date("2026-09-24T05:42:00.000Z");
 
 function makeLine(overrides = {}) {
   return {
@@ -116,11 +122,13 @@ test("all lines become checklist rows; made-to-order marked via options", () => 
     name: "Plain Item",
     qty: 3,
     isMadeToOrder: false,
+    isAgeRestricted: false,
   });
   assert.deepEqual(model.rows[1], {
     name: "Custom Cake",
     qty: 1,
     isMadeToOrder: true,
+    isAgeRestricted: false,
   });
   assert.equal(model.lineCountSummary, "Total 2 lines");
 });
@@ -149,4 +157,111 @@ test("formatOrderFulfillmentLabel covers delivery", () => {
 
 test("formatOrderDueDisplay handles null", () => {
   assert.equal(formatOrderDueDisplay(null), "—");
+});
+
+test("header line: Order i of n · Printed <Sydney time>, single print = 1 of 1", () => {
+  const single = buildPickListRenderModel(makeDetail(), { printedAt: PRINTED });
+  assert.equal(single.headerLine, "Order 1 of 1 · Printed 24/09/2026 3:42pm");
+  assert.equal(single.title, "PICK LIST");
+  const third = buildPickListRenderModel(makeDetail(), { printedAt: PRINTED, index: 3, count: 9 });
+  assert.equal(third.headerLine, "Order 3 of 9 · Printed 24/09/2026 3:42pm");
+});
+
+test("C&C slip has no address but carries the age check and 18+ line marks", () => {
+  const model = buildPickListRenderModel(
+    makeDetail({
+      requiresAgeCheck: true,
+      shippingAddress1: "should not print",
+      lines: [makeLine({ isAgeRestricted: true })],
+    }),
+    { printedAt: PRINTED },
+  );
+  assert.deepEqual(model.addressLines, []);
+  assert.equal(model.deliveryNote, null);
+  assert.equal(model.ageCheck, true);
+  assert.equal(model.rows[0].isAgeRestricted, true);
+});
+
+test("DELIVERY slip: packing slip title, 3 address lines, note, date-only due (no 00:00)", () => {
+  const model = buildPickListRenderModel(
+    makeDetail({
+      fulfillment: "DELIVERY",
+      pickupDate: null,
+      pickupSlotMinutes: null,
+      deliveryEtaDate: "2026-09-26",
+      dueAt: "2026-09-25T14:00:00.000Z",
+      shippingLabel: "Home",
+      shippingAddress1: "12 Smith St",
+      shippingAddress2: " ",
+      shippingSuburb: "Strathfield",
+      shippingState: "NSW",
+      shippingPostcode: "2135",
+      shippingNote: " Leave at door ",
+    }),
+    { printedAt: PRINTED },
+  );
+  assert.equal(model.title, "PACKING SLIP");
+  assert.deepEqual(model.addressLines, ["Home", "12 Smith St", "Strathfield NSW 2135"]);
+  assert.equal(model.deliveryNote, "Leave at door");
+  assert.equal(model.dueDisplay, "Delivery Sat 26 Sep");
+});
+
+test("formatAddressLines drops empty parts", () => {
+  assert.deepEqual(
+    formatAddressLines({
+      shippingLabel: null,
+      shippingAddress1: "1 A St",
+      shippingAddress2: null,
+      shippingSuburb: "Ryde",
+      shippingState: null,
+      shippingPostcode: "2112",
+    }),
+    ["1 A St", "Ryde 2112"],
+  );
+});
+
+const MANIFEST_ORDER = {
+  id: 77,
+  orderNo: "260924-100",
+  status: "SCHEDULED",
+  version: 4,
+  memberName: "Lee",
+  memberPhoneLast3: "321",
+  shippingLabel: null,
+  shippingAddress1: "5 King St",
+  shippingAddress2: "Unit 2",
+  shippingSuburb: "Burwood",
+  shippingState: "NSW",
+  shippingPostcode: "2134",
+  shippingNote: null,
+  requiresAgeCheck: false,
+  total: 4200,
+  lines: [
+    { id: 1, sourceItemId: 9, nameEn: "Beef Brisket", nameKo: "", qty: 2, isAgeRestricted: false, options: [] },
+  ],
+};
+
+test("packing slip from manifest: shared batch time, position, eta from the list row", () => {
+  const model = buildPackingSlipModel(MANIFEST_ORDER, "2026-09-25", { printedAt: PRINTED, index: 2, count: 5 });
+  assert.equal(model.headerLine, "Order 2 of 5 · Printed 24/09/2026 3:42pm");
+  assert.equal(model.dueDisplay, "Delivery Fri 25 Sep");
+  assert.deepEqual(model.addressLines, ["5 King St", "Unit 2", "Burwood NSW 2134"]);
+  assert.equal(model.qrContent, "order%%%77");
+  assert.equal(model.rows[0].name, "Beef Brisket");
+});
+
+test("pick summary: order count header + day + totals rows", () => {
+  const model = buildPickSummaryModel(
+    {
+      date: "2026-09-25",
+      orderCount: 3,
+      truncated: false,
+      orders: [MANIFEST_ORDER, { ...MANIFEST_ORDER, id: 78 }, { ...MANIFEST_ORDER, id: 79 }],
+      totals: [{ sourceItemId: 9, nameEn: "Beef Brisket", nameKo: "", qty: 6, orderCount: 3 }],
+    },
+    PRINTED,
+  );
+  assert.equal(model.headerLine, "3 orders · Printed 24/09/2026 3:42pm");
+  assert.equal(model.dayLine, "Delivery Fri 25 Sep");
+  assert.deepEqual(model.rows, [{ name: "Beef Brisket", qty: 6, orderCount: 3 }]);
 });

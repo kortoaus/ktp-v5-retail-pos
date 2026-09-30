@@ -6,10 +6,13 @@ import {
   UnauthorizedException,
 } from "../../libs/exceptions";
 import { PagingType } from "../../types/cloud";
-import type {
-  OrderBulkResultWire,
-  OrderDetailWire,
-  OrderSummaryWire,
+import {
+  MANUAL_REFUND_REQUEST_REASONS,
+  type OrderBucketsWire,
+  type OrderBulkResultWire,
+  type OrderDetailWire,
+  type OrderSummaryWire,
+  type RefundRequestWire,
 } from "./order.types";
 
 // NOTE: customer-voucher.service.ts 의 requireOk 판 복제 (스펙 지시 — 공용화는
@@ -64,18 +67,38 @@ export function requireTransitionOk<T>(res: {
 // crm paging({page,limit,total,totalPages}) → 로컬 표준 paging 변환.
 // cloud.api 는 paging 을 그대로 통과시키므로 여기서 형을 맞춰야
 // 앱의 ServerPagingList 가 동작한다.
-export function mapCrmPaging(paging: unknown): PagingType | null {
+// 트리아지 스펙 §4.2·§6.2: total(“Showing 100 of N”)·bucket 에코(구 crm 감지)·
+// asOf 는 있을 때만 가산 — 앱이 bucket 에코 부재로 "Server update required" 를 판별한다.
+export type OrderPagingWire = PagingType & {
+  total?: number;
+  bucket?: string;
+  asOf?: string;
+};
+
+export function mapCrmPaging(paging: unknown): OrderPagingWire | null {
   if (!paging || typeof paging !== "object") return null;
-  const maybe = paging as { page?: unknown; totalPages?: unknown };
+  const maybe = paging as {
+    page?: unknown;
+    totalPages?: unknown;
+    total?: unknown;
+    bucket?: unknown;
+    asOf?: unknown;
+  };
   const page = Number(maybe.page);
   const totalPages = Number(maybe.totalPages);
   if (!Number.isFinite(page) || !Number.isFinite(totalPages)) return null;
-  return {
+  const mapped: OrderPagingWire = {
     currentPage: page,
     totalPages,
     hasPrev: page > 1,
     hasNext: page < totalPages,
   };
+  if (typeof maybe.total === "number" && Number.isFinite(maybe.total)) {
+    mapped.total = maybe.total;
+  }
+  if (typeof maybe.bucket === "string") mapped.bucket = maybe.bucket;
+  if (typeof maybe.asOf === "string") mapped.asOf = maybe.asOf;
+  return mapped;
 }
 
 export async function getOrdersService(qs: string) {
@@ -114,10 +137,33 @@ export async function readyOrderService(id: number, body: unknown) {
   return { ok: true, result: requireTransitionOk(res) };
 }
 
-export async function rejectOrderService(id: number, body: unknown) {
+// reject — crm 이 캡처 후 거절이면 환불 요청 티켓을 자동 생성하고 그
+// requestedByName 에 staffName 을 쓴다 (환불 티켓 스펙 §4.2). 직원명은 앱 body 가
+// 아니라 로그인 유저에서 서버가 주입(피킹 pickerName 선례). version/reason 만 통과.
+export function buildRejectBody(
+  body: unknown,
+  staffName: string,
+): { version: unknown; reason: unknown; staffName?: string } {
+  const maybe = (body && typeof body === "object" ? body : {}) as {
+    version?: unknown;
+    reason?: unknown;
+  };
+  const name = staffName.trim().slice(0, 100);
+  return {
+    version: maybe.version,
+    reason: maybe.reason,
+    ...(name ? { staffName: name } : {}),
+  };
+}
+
+export async function rejectOrderService(
+  id: number,
+  body: unknown,
+  staffName = "",
+) {
   const res = await crmApiService.post<OrderDetailWire>(
     `/device/order/${id}/reject`,
-    body,
+    buildRejectBody(body, staffName),
   );
   return { ok: true, result: requireTransitionOk(res) };
 }
@@ -217,3 +263,114 @@ export async function revealOrderMemberPhoneService(id: number) {
   return { ok: true, result: requireOk(res) };
 }
 
+
+// --- 2026-09-24 매장 주문 트리아지 (트리아지 스펙 §5) ---
+// 전부 crm 실시간 프록시, 계산 없음. 목록의 bucket/issue 파라미터는 기존
+// GET /api/order 가 쿼리스트링을 그대로 통과시키므로 별도 라우트가 없다(F2).
+
+export async function getOrderBucketsService() {
+  const res = await crmApiService.get<OrderBucketsWire>("/device/order/buckets");
+  return { ok: true, result: requireOk(res) };
+}
+
+// ?date=YYYY-MM-DD 또는 ?ids=1,2,3 — 검증은 crm(400).
+export async function getDeliveryManifestService(qs: string) {
+  const res = await crmApiService.get<unknown>(
+    `/device/order/delivery-manifest${qs ? `?${qs}` : ""}`,
+  );
+  return { ok: true, result: requireOk(res) };
+}
+
+// 일괄 인쇄 기록 — body { items: [{ id, kind, lineId? }] } ≤50 패스스루 (검증 crm).
+export async function bulkPrintedOrdersService(body: unknown) {
+  const res = await crmApiService.post<unknown>("/device/order/printed", body);
+  return { ok: true, result: requireOk(res) };
+}
+
+// --- 환불 요청 티켓 (환불 티켓 스펙 §5.2·§10.1, R5) ---
+// POS 는 환불하지 않는다 — 요청만. source/sourceTerminal/requestedByName 은
+// 서버가 채운다(앱 body 의 같은 필드는 버림). REJECTED_AFTER_CAPTURE 는
+// SYSTEM 전용이라 로컬에서 먼저 거절한다(crm 도 400).
+export type RefundRequestBodyWire = {
+  requestKey: unknown;
+  reason: unknown;
+  lines?: unknown;
+  amount?: unknown;
+  note?: unknown;
+  source: "POS";
+  sourceTerminal: string;
+  requestedByName: string;
+};
+
+export function buildRefundRequestBody(
+  body: unknown,
+  ctx: { terminalName: string; staffName: string },
+): RefundRequestBodyWire {
+  const maybe = (body && typeof body === "object" ? body : {}) as {
+    requestKey?: unknown;
+    reason?: unknown;
+    lines?: unknown;
+    amount?: unknown;
+    note?: unknown;
+  };
+  if (
+    !(MANUAL_REFUND_REQUEST_REASONS as readonly unknown[]).includes(maybe.reason)
+  ) {
+    throw new BadRequestException(
+      "reason must be PICKING_SHORTFALL, CUSTOMER_REQUEST or OTHER",
+    );
+  }
+  const out: RefundRequestBodyWire = {
+    requestKey: maybe.requestKey,
+    reason: maybe.reason,
+    source: "POS",
+    sourceTerminal: ctx.terminalName.trim().slice(0, 100),
+    requestedByName: ctx.staffName.trim().slice(0, 100),
+  };
+  if (maybe.lines !== undefined && maybe.lines !== null) out.lines = maybe.lines;
+  if (maybe.amount !== undefined && maybe.amount !== null) out.amount = maybe.amount;
+  if (typeof maybe.note === "string") out.note = maybe.note;
+  return out;
+}
+
+// 티켓 오류는 코드와 상세를 앱에 그대로 — 409 AMOUNT_EXCEEDS_REFUNDABLE
+// { refundable } / NOT_REFUNDABLE / REQUEST_KEY_CONFLICT, 400 NOT_ONLINE_PAID.
+// 그 외(400 문구·401·5xx·네트워크)는 requireOk 매핑.
+export function requireRefundRequestOk<T>(res: {
+  ok: boolean;
+  msg?: string;
+  status?: number;
+  result?: T | null;
+}): T {
+  if (!res.ok && res.msg && CRM_ERROR_CODE.test(res.msg)) {
+    if (res.status === 409 || res.status === 400) {
+      throw new HttpException(res.status, res.msg, res.result ?? null);
+    }
+  }
+  return requireOk(res);
+}
+
+export type RefundRequestCreatedWire = RefundRequestWire & {
+  refundable: number;
+  otherOpenAmount: number;
+};
+
+export async function createRefundRequestService(
+  id: number,
+  body: unknown,
+  ctx: { terminalName: string; staffName: string },
+) {
+  const res = await crmApiService.post<RefundRequestCreatedWire>(
+    `/device/order/${id}/refund-requests`,
+    buildRefundRequestBody(body, ctx),
+  );
+  return { ok: true, result: requireRefundRequestOk(res) };
+}
+
+export async function listRefundRequestsService(id: number) {
+  const res = await crmApiService.get<{
+    requests: RefundRequestWire[];
+    refundable: number;
+  }>(`/device/order/${id}/refund-requests`);
+  return { ok: true, result: requireOk(res) };
+}

@@ -1,7 +1,7 @@
 // 주문 수신함 상주 컴포넌트 (Gateway 상주 — 고객 디스플레이는 Gateway 밖이라
 // 자동 제외). 소켓 1개를 소유하고 orderInboxStore 에 상태를 공급한다.
 //
-// - 배너: count > 0 → 상단 주황 슬림 스트립(터치 → /manager/orders).
+// - 배너: count > 0 → 상단 주황 슬림 스트립(터치 → /manager/orders?bucket=new, 트리아지 T1).
 //   소켓 끊김 → 회색 "reconnecting", crm 불통(ok:false) → 은은한 안내.
 // - 차임: 자기 터미널 id ∈ chimeTerminalIds 일 때만. `order:new` 즉시 1회 +
 //   count > 0 인 동안 120초 간격 반복. 벨 톤(WebAudio 딩–동) 직후 보이스
@@ -15,13 +15,17 @@ import apiService from "../../libs/api";
 import { cn } from "../../libs/cn";
 import { useTerminal } from "../../contexts/TerminalContext";
 import {
+  applyOrderBuckets,
   getOrderInboxState,
+  normalizeOrderBucketsPayload,
   normalizeOrderPendingCountPayload,
+  ORDER_BUCKETS_EVENT,
   ORDER_NEW_EVENT,
   ORDER_PENDING_COUNT_EVENT,
   setOrderInboxState,
   subscribeOrderInbox,
 } from "./orderInboxStore";
+import { ORDERS_NEW_PATH } from "./triage-format";
 import orderChimeVoiceUrl from "../../assets/order-chime-voice.mp3";
 
 const CHIME_REPEAT_MS = 120_000;
@@ -145,6 +149,11 @@ export default function OrderNotification() {
       const normalized = normalizeOrderPendingCountPayload(next);
       if (normalized) setOrderInboxState({ payload: normalized });
     });
+    // 트리아지 buckets (30s 틱) — 카운트 + 트리아지 화면 silent 재조회 트리거.
+    socket.on(ORDER_BUCKETS_EVENT, (next: unknown) => {
+      const normalized = normalizeOrderBucketsPayload(next);
+      if (normalized) applyOrderBuckets(normalized.result);
+    });
     socket.on(ORDER_NEW_EVENT, () => {
       if (chimeEnabledRef.current) playChime();
     });
@@ -187,7 +196,7 @@ export default function OrderNotification() {
   if (connected && hasPending) {
     return (
       <div
-        onPointerDown={() => navigate("/manager/orders")}
+        onPointerDown={() => navigate(ORDERS_NEW_PATH)}
         className={cn(
           "h-8 shrink-0 flex items-center justify-center gap-2 cursor-pointer",
           "bg-orange-500 text-white text-sm font-bold active:bg-orange-600",

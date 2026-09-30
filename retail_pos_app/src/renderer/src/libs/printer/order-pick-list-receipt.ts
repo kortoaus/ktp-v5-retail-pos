@@ -1,14 +1,13 @@
-// 주문 픽업리스트(피킹 체크리스트) — ESC/POS raster 출력 (슬라이스 C).
+// 주문 픽업리스트 / packing slip — ESC/POS raster 출력 (슬라이스 C → 2026-09-24
+// 트리아지 스펙 §6.5 확장: 머리 "Order i of n · Printed …", 주소·배송메모·ID 18+).
 // sale-invoice-receipt.ts 와 동일한 80mm/576px 캔버스 → GS v 0 파이프라인.
 // 데이터 매핑은 순수 모듈 components/orders/pick-list-render.ts 가 담당하고,
-// 이 파일은 캔버스/하드웨어만 만진다. 스펙상 항상 raster 로 렌더한다
-// (receiptPrintMode 무관 — 체크박스/QR 레이아웃은 raster 전용).
+// 이 파일은 캔버스/하드웨어만 만진다. 항상 raster (receiptPrintMode 무관).
 
 import QRCode from "qrcode";
-import dayjsAU from "../dayjsAU";
 import type { PickListRenderModel } from "../../components/orders/pick-list-render";
 import { buildPrintBuffer } from "./escpos";
-import { printESCPOS } from "./print.service";
+import { printESCPOSResult, type PrintEscposResult } from "./print.service";
 
 // 80mm thermal (576px). sale-invoice-receipt 와 동일 layout 규칙.
 const W = 576;
@@ -18,12 +17,12 @@ const FONT = 28;
 const FONT_SM = 24;
 const FONT_LG = 36;
 
-const NAME_MAX = 30; // 체크박스 + 수량 컬럼 공간을 뺀 행 이름 폭
+const NAME_MAX = 28; // 체크박스 + 수량 컬럼 공간을 뺀 행 이름 폭
+const TEXT_MAX = 38; // 주소·메모 한 줄 폭 (FONT_SM)
 const CHECKBOX = 24;
 const NAME_X = PAD + CHECKBOX + 14;
-const QTY_COL = 90; // 우측 수량 컬럼 폭
 
-function wrapText(text: string, max: number): string[] {
+export function wrapText(text: string, max: number): string[] {
   if (text.length <= max) return [text];
   const lines: string[] = [];
   let rest = text;
@@ -37,7 +36,7 @@ function wrapText(text: string, max: number): string[] {
   return lines;
 }
 
-function dashedLine(ctx: CanvasRenderingContext2D, y: number) {
+export function dashedLine(ctx: CanvasRenderingContext2D, y: number) {
   ctx.beginPath();
   ctx.setLineDash([4, 4]);
   ctx.moveTo(PAD, y);
@@ -46,12 +45,7 @@ function dashedLine(ctx: CanvasRenderingContext2D, y: number) {
   ctx.setLineDash([]);
 }
 
-function row(
-  ctx: CanvasRenderingContext2D,
-  label: string,
-  value: string,
-  y: number,
-) {
+function row(ctx: CanvasRenderingContext2D, label: string, value: string, y: number) {
   ctx.fillText(label, PAD, y);
   ctx.textAlign = "right";
   ctx.fillText(value, W - PAD, y);
@@ -59,20 +53,31 @@ function row(
 }
 
 function rowNameLines(model: PickListRenderModel): string[][] {
-  return model.rows.map((r) =>
-    wrapText(r.isMadeToOrder ? `${r.name} [LABEL]` : r.name, NAME_MAX),
-  );
+  return model.rows.map((r) => {
+    const marks = `${r.isAgeRestricted ? " [18+]" : ""}${r.isMadeToOrder ? " [LABEL]" : ""}`;
+    return wrapText(`${r.name}${marks}`, NAME_MAX);
+  });
+}
+
+function addressBlockLines(model: PickListRenderModel): string[] {
+  const lines = model.addressLines.flatMap((l) => wrapText(l, TEXT_MAX));
+  if (model.deliveryNote) {
+    lines.push(...wrapText(`Note: ${model.deliveryNote}`, TEXT_MAX));
+  }
+  return lines;
 }
 
 function estimateHeight(model: PickListRenderModel): number {
-  const headerLines = 3 /* 타이틀 + orderNo + 수령방식 */ + 2 /* Due/Member */;
+  const headerLines = 1 /* headerLine */ + 3 /* 타이틀 + orderNo + 수령방식 */ + 2 /* Due/Member */;
+  const addressLines = addressBlockLines(model).length + (model.addressLines.length ? 1 : 0);
+  const ageLines = model.ageCheck ? 2 : 0;
   const itemLines = rowNameLines(model).reduce((s, l) => s + l.length, 0);
-  const tail = 2; /* 합계 + printed at */
+  const tail = 2;
   return (
     60 +
-    (headerLines + itemLines + tail) * LH +
+    (headerLines + addressLines + ageLines + itemLines + tail) * LH +
     240 /* QR */ +
-    120 /* 구분선/여유 */
+    140 /* 구분선/여유 */
   );
 }
 
@@ -91,12 +96,17 @@ export async function renderOrderPickListReceipt(
   ctx.strokeStyle = "#000";
   ctx.textBaseline = "top";
 
-  let y = 40;
+  let y = 30;
+
+  /* ── 공통 머리: Order i of n · Printed … ── */
+  ctx.font = `${FONT_SM}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.fillText(model.headerLine, W / 2, y);
+  y += LH;
 
   /* ── Header ── */
   ctx.font = `bold ${FONT_LG}px sans-serif`;
-  ctx.textAlign = "center";
-  ctx.fillText("PICK LIST", W / 2, y);
+  ctx.fillText(model.title, W / 2, y);
   y += LH + 4;
   ctx.fillText(model.orderNo, W / 2, y);
   y += LH + 2;
@@ -114,10 +124,38 @@ export async function renderOrderPickListReceipt(
   row(ctx, "Member", model.memberLine, y);
   y += LH - 6;
 
+  /* ── 배송지 (DELIVERY) ── */
+  const addr = addressBlockLines(model);
+  if (addr.length > 0) {
+    dashedLine(ctx, y);
+    y += 14;
+    ctx.font = `bold ${FONT_SM}px sans-serif`;
+    ctx.fillText("Deliver to", PAD, y);
+    y += LH - 6;
+    ctx.font = `${FONT_SM}px sans-serif`;
+    for (const line of addr) {
+      ctx.fillText(line, PAD, y);
+      y += LH - 6;
+    }
+  }
+
+  /* ── 연령확인 ── */
+  if (model.ageCheck) {
+    y += 6;
+    ctx.fillRect(PAD, y, W - PAD * 2, LH + 8);
+    ctx.fillStyle = "#fff";
+    ctx.font = `bold ${FONT}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillText("ID CHECK REQUIRED (18+)", W / 2, y + 6);
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#000";
+    y += LH + 16;
+  }
+
   dashedLine(ctx, y);
   y += 14;
 
-  /* ── Checklist rows — □ 박스 + 이름(제작 라인 [LABEL] 마커) + ×qty ── */
+  /* ── Checklist rows — □ 박스 + 이름([18+]/[LABEL] 마커) + ×qty ── */
   const nameLines = rowNameLines(model);
   ctx.font = `${FONT}px sans-serif`;
   model.rows.forEach((r, i) => {
@@ -136,29 +174,24 @@ export async function renderOrderPickListReceipt(
   dashedLine(ctx, y);
   y += 14;
 
-  /* ── 합계 라인 수 ── */
   ctx.font = `bold ${FONT}px sans-serif`;
   ctx.fillText(model.lineCountSummary, PAD, y);
   y += LH + 6;
 
-  /* ── QR — order%%%<orderId> (스캔 핸들러는 슬라이스 E) ── */
+  /* ── QR — order%%%<orderId> ── */
   const qrSize = 200;
   const qrCanvas = document.createElement("canvas");
   await QRCode.toCanvas(qrCanvas, model.qrContent, { width: qrSize, margin: 0 });
   ctx.drawImage(qrCanvas, (W - qrSize) / 2, y);
-  y += qrSize + 10;
-
-  ctx.font = `${FONT_SM}px sans-serif`;
-  ctx.textAlign = "center";
-  ctx.fillText(`Printed: ${dayjsAU().format("DD/MM/YYYY hh:mm A")}`, W / 2, y);
 
   return canvas;
 }
 
+// 결과 반환 — 뷰어 단건은 실패 문구를 알리고, 일괄은 실패 시 중단한다.
 export async function printOrderPickList(
   model: PickListRenderModel,
-): Promise<void> {
+): Promise<PrintEscposResult> {
   const canvas = await renderOrderPickListReceipt(model);
   const buffer = buildPrintBuffer(canvas);
-  await printESCPOS(buffer);
+  return await printESCPOSResult(buffer);
 }

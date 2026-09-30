@@ -9,8 +9,11 @@ import {
 } from "../../libs/exceptions";
 import {
   buildPickingBody,
+  buildRefundRequestBody,
+  buildRejectBody,
   mapCrmPaging,
   requireOk,
+  requireRefundRequestOk,
   requireTransitionOk,
 } from "./order.service";
 
@@ -122,8 +125,9 @@ test("mapCrmPaging converts crm paging to the local shape", () => {
     totalPages: 3,
     hasPrev: false,
     hasNext: true,
+    total: 45,
   });
-  assert.deepEqual(mapCrmPaging({ page: 3, limit: 20, total: 45, totalPages: 3 }), {
+  assert.deepEqual(mapCrmPaging({ page: 3, limit: 20, totalPages: 3 }), {
     currentPage: 3,
     totalPages: 3,
     hasPrev: true,
@@ -184,4 +188,107 @@ test("requireTransitionOk falls back to requireOk for uncoded 5xx, network and 4
       e instanceof HttpException && e.statusCode === 409 && e.message === "TRANSITION_CONFLICT",
   );
   assert.deepEqual(requireTransitionOk({ ok: true, result: { id: 1 } }), { id: 1 });
+});
+
+test("mapCrmPaging echoes the triage bucket and asOf when crm sends them", () => {
+  assert.deepEqual(
+    mapCrmPaging({
+      page: 1,
+      limit: 100,
+      total: 3,
+      totalPages: 1,
+      bucket: "delivery.tomorrow",
+      asOf: "2026-09-24T05:00:00.000Z",
+    }),
+    {
+      currentPage: 1,
+      totalPages: 1,
+      hasPrev: false,
+      hasNext: false,
+      total: 3,
+      bucket: "delivery.tomorrow",
+      asOf: "2026-09-24T05:00:00.000Z",
+    },
+  );
+});
+
+test("buildRejectBody injects the server-side staffName and drops a client one", () => {
+  assert.deepEqual(
+    buildRejectBody({ version: 3, reason: "Out of stock", staffName: "spoof" }, "  Kim "),
+    { version: 3, reason: "Out of stock", staffName: "Kim" },
+  );
+  assert.deepEqual(buildRejectBody({ version: 3, reason: "x" }, "   "), {
+    version: 3,
+    reason: "x",
+  });
+});
+
+test("buildRefundRequestBody sets source/terminal/staff on the server and ignores app copies", () => {
+  const body = buildRefundRequestBody(
+    {
+      requestKey: "k-1",
+      reason: "PICKING_SHORTFALL",
+      lines: [{ lineId: 7, qty: 1 }],
+      note: "short 1",
+      source: "RUNNER",
+      sourceTerminal: "spoof",
+      requestedByName: "spoof",
+    },
+    { terminalName: "Till 2", staffName: "Kim" },
+  );
+  assert.deepEqual(body, {
+    requestKey: "k-1",
+    reason: "PICKING_SHORTFALL",
+    lines: [{ lineId: 7, qty: 1 }],
+    note: "short 1",
+    source: "POS",
+    sourceTerminal: "Till 2",
+    requestedByName: "Kim",
+  });
+});
+
+test("buildRefundRequestBody passes an amount-only request through", () => {
+  const body = buildRefundRequestBody(
+    { requestKey: "k-2", reason: "CUSTOMER_REQUEST", amount: 1250 },
+    { terminalName: "", staffName: "Lee" },
+  );
+  assert.equal(body.amount, 1250);
+  assert.equal("lines" in body, false);
+});
+
+test("buildRefundRequestBody rejects the SYSTEM-only reason and unknown reasons locally", () => {
+  assert.throws(
+    () =>
+      buildRefundRequestBody(
+        { requestKey: "k", reason: "REJECTED_AFTER_CAPTURE", amount: 100 },
+        { terminalName: "T", staffName: "S" },
+      ),
+    BadRequestException,
+  );
+  assert.throws(
+    () => buildRefundRequestBody({ requestKey: "k" }, { terminalName: "T", staffName: "S" }),
+    BadRequestException,
+  );
+});
+
+test("requireRefundRequestOk keeps crm 409 AMOUNT_EXCEEDS_REFUNDABLE with its refundable", () => {
+  assert.throws(
+    () =>
+      requireRefundRequestOk({
+        ok: false,
+        status: 409,
+        msg: "AMOUNT_EXCEEDS_REFUNDABLE",
+        result: { refundable: 1399 },
+      }),
+    (e: unknown) =>
+      e instanceof HttpException &&
+      e.statusCode === 409 &&
+      e.message === "AMOUNT_EXCEEDS_REFUNDABLE" &&
+      (e.result as { refundable: number }).refundable === 1399,
+  );
+  // 문구형 400 은 기존 requireOk 매핑 (BadRequestException)
+  assert.throws(
+    () => requireRefundRequestOk({ ok: false, status: 400, msg: "note is required for OTHER" }),
+    BadRequestException,
+  );
 });

@@ -57,7 +57,10 @@ docker compose up -d         # local dev Postgres only (host port 5555)
    `res.locals.{userId,user,placedBy}`. **It never verifies a signature or the timestamp** —
    the token is a plaintext user id. Treat the LAN as the security boundary.
 3. `scopeMiddleware(scope)` — passes if `user.scope` includes `"admin"` or the named scope.
-   Scopes: `admin sale interface user hotkey refund cashio store shift`.
+   Scopes: `admin sale interface user hotkey refund refund_ticket cashio store shift` — canonical
+   list `src/v1/user/user.scopes.ts` (validated on user upsert; app mirror `types/models.ts` SCOPES).
+   `refund_ticket` (2026-09-24) = raise an online-order refund *request* for the office
+   (`POST /api/order/:id/refund-requests`); unrelated to `refund` (in-store sale refunds).
 
 ## Route Map (`/api` prefix)
 
@@ -157,6 +160,8 @@ failure voids the already-redeemed vouchers before rethrowing.
 | Event | Emitted by |
 |---|---|
 | `cloud-sync-completed` | `cloud.migrate.controller.ts` after a full down-sync |
+| `order:buckets` | `order.pending-broadcaster.ts` every 30 s — crm `/device/order/buckets` result + `chimeTerminalIds` (skipped when crm is too old → 404 fallback to `/pending-count`) |
+| `order:pending-count` / `order:new` | same tick — `count = counts.new.total`; `order:new` when it rises (kept for deployed POS/runner) |
 
 ## Testing
 

@@ -1,4 +1,4 @@
-// 온라인 결제(Stripe) 현장 배지 규칙 — 목록(OrderSearchPanel)과 디테일
+// 온라인 결제(Stripe) 현장 배지 규칙 — 디테일
 // (OrderViewerSummary) 공용 순수 함수 (2026-09-24 crm 스펙 §4.5·§6.2·§7).
 // 모든 판정 값은 crm 서버 계산(payment.lastError/refundDue, autoVoidAt/
 // autoVoidSoon) — 여기서는 표시 문구만 만든다(재계산 금지). IN_STORE 주문은
@@ -12,8 +12,10 @@ import type {
 
 export type OrderPaymentAlertTone = "red" | "amber";
 
+// 2026-09-24 환불 티켓 스펙 §10.1: 빨간 "Refund due" 알림은 삭제 — OPEN 환불 요청은
+// 정보 배지 "Refund requested"(triage-format.hasOpenRefundRequest, 색 없음)로 대체.
 export interface OrderPaymentAlert {
-  key: "captureFailed" | "refundDue" | "autoVoidSoon";
+  key: "captureFailed" | "autoVoidSoon";
   label: string;
   tone: OrderPaymentAlertTone;
 }
@@ -41,9 +43,6 @@ export function getOrderPaymentAlerts(
           : `Payment failed (${lastError})`,
       tone: "red",
     });
-  }
-  if (order.payment.refundDue) {
-    alerts.push({ key: "refundDue", label: "Refund due", tone: "red" });
   }
   if (order.autoVoidSoon && order.autoVoidAt) {
     const hoursLeft = Math.max(

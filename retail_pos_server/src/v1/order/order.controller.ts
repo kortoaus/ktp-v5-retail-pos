@@ -8,7 +8,12 @@ import {
 import {
   acceptOrderService,
   bulkDeliveryTransitionOrdersService,
+  bulkPrintedOrdersService,
+  createRefundRequestService,
   deliveryTransitionOrderService,
+  getDeliveryManifestService,
+  getOrderBucketsService,
+  listRefundRequestsService,
   getOrderDetailService,
   getOrdersService,
   pickingOrderService,
@@ -51,9 +56,11 @@ export async function readyOrderController(req: Request, res: Response) {
   res.status(200).json(await readyOrderService(id, req.body));
 }
 
+// staffName = 로그인 유저 이름 (캡처 후 거절 자동 환불 티켓의 requestedByName).
 export async function rejectOrderController(req: Request, res: Response) {
   const id = parseOrderId(req.params.id);
-  res.status(200).json(await rejectOrderService(id, req.body));
+  const user = res.locals.user as UserModel;
+  res.status(200).json(await rejectOrderService(id, req.body, user.name));
 }
 
 // --- 2026-09-24 딜리버리 전이 (J6) — 단건 schedule/dispatch/deliver, 일괄
@@ -116,3 +123,54 @@ export async function revealOrderMemberPhoneController(
   res.status(200).json(await revealOrderMemberPhoneService(id));
 }
 
+
+// --- 2026-09-24 트리아지 (스펙 §5) ---
+export async function getOrderBucketsController(_req: Request, res: Response) {
+  res.status(200).json(await getOrderBucketsService());
+}
+
+// 매니페스트 쿼리 화이트리스트 — date·ids 는 그대로(검증 crm), include 는 드라이버 런시트의
+// "contactPhone" 만 통과(전체 전화 opt-in). 그 밖의 include 값은 로컬 400, 모르는 키는 버린다.
+export function buildDeliveryManifestQs(query: Record<string, unknown>): string {
+  const params = new URLSearchParams();
+  for (const key of ["date", "ids"] as const) {
+    const value = query[key];
+    if (typeof value === "string") params.set(key, value);
+  }
+  const include = query.include;
+  if (include !== undefined) {
+    if (include !== "contactPhone") {
+      throw new BadRequestException("include must be contactPhone");
+    }
+    params.set("include", "contactPhone");
+  }
+  return params.toString();
+}
+
+export async function getDeliveryManifestController(req: Request, res: Response) {
+  const qs = buildDeliveryManifestQs(req.query as Record<string, unknown>);
+  res.status(200).json(await getDeliveryManifestService(qs));
+}
+
+export async function bulkPrintedOrdersController(req: Request, res: Response) {
+  res.status(200).json(await bulkPrintedOrdersService(req.body));
+}
+
+// --- 환불 요청 티켓 (R5) — 요청만, 환불은 사무실. 스코프 refund_ticket (라우터).
+export async function createRefundRequestController(req: Request, res: Response) {
+  const id = parseOrderId(req.params.id);
+  const user = res.locals.user as UserModel;
+  const terminal = res.locals.terminal as { name?: unknown } | undefined;
+  const terminalName = typeof terminal?.name === "string" ? terminal.name : "";
+  res.status(201).json(
+    await createRefundRequestService(id, req.body, {
+      terminalName,
+      staffName: user.name,
+    }),
+  );
+}
+
+export async function listRefundRequestsController(req: Request, res: Response) {
+  const id = parseOrderId(req.params.id);
+  res.status(200).json(await listRefundRequestsService(id));
+}

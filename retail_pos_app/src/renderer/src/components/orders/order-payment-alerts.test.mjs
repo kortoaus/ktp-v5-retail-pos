@@ -51,7 +51,7 @@ test("AUTH_EXPIRED shows card hold expired; other codes show the code", () => {
   assert.equal(other[0].label, "Payment failed (card_declined)");
 });
 
-test("refundDue and auto-void-soon (hours rounded up from server autoVoidAt)", () => {
+test("refundDue no longer raises a red alert (info badge instead); auto-void-soon hours round up", () => {
   const alerts = getOrderPaymentAlerts(
     {
       ...base,
@@ -61,9 +61,9 @@ test("refundDue and auto-void-soon (hours rounded up from server autoVoidAt)", (
     },
     NOW,
   );
-  assert.deepEqual(alerts.map((a) => a.key), ["refundDue", "autoVoidSoon"]);
-  assert.equal(alerts[1].label, "Auto-cancels in 11h — schedule now");
-  assert.equal(alerts[1].tone, "amber");
+  assert.deepEqual(alerts.map((a) => a.key), ["autoVoidSoon"]);
+  assert.equal(alerts[0].label, "Auto-cancels in 11h — schedule now");
+  assert.equal(alerts[0].tone, "amber");
 });
 
 test("autoVoidSoon without autoVoidAt shows nothing; past due clamps to 0h", () => {

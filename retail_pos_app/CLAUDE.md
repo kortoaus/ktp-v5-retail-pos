@@ -192,6 +192,7 @@ to stub service imports) plus two colocated `*.test.mjs` run ad hoc:
 ```bash
 node --experimental-strip-types scripts/tests/invoice-search-scan.test.ts
 npm run test:label-core   # label-core + adapters, node:test
+npm run test:orders       # components/orders/*.test.mjs (triage, merge, bulk, refund ticket, pick list)
 ```
 
 ## Invariants & Footguns

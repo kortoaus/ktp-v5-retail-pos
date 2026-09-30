@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildOrderBucketsPayload,
   buildOrderPendingCountPayload,
+  classifyBucketsResponse,
+  ORDER_PENDING_COUNT_INTERVAL_MS,
+  pendingCountFromBuckets,
   computeOrderPendingTickOutcome,
   shouldEmitOrderNew,
 } from "./order.pending-broadcaster";
@@ -67,4 +71,76 @@ test("computeOrderPendingTickOutcome keeps the baseline across failed ticks", ()
   );
   assert.equal(recovered.emitOrderNew, true);
   assert.equal(recovered.nextSuccessfulCount, 3);
+});
+
+const BUCKETS = {
+  asOf: "2026-09-24T05:00:00.000Z",
+  today: "2026-09-24",
+  nextDeliveryDate: "2026-09-25",
+  deliveryWindow: { startMinutes: 540, endMinutes: 1260 },
+  counts: {
+    new: { total: 3, pickup: 2, delivery: 1 },
+    issues: {
+      total: 1,
+      byKind: {
+        ACCEPT_OVERDUE: 1,
+        NOT_SCHEDULED: 0,
+        PAYMENT_FAILED: 0,
+        AUTO_VOID_SOON: 0,
+        PICKUP_NOT_READY: 0,
+        NOT_COLLECTED: 0,
+        DELIVERY_LATE: 0,
+      },
+    },
+    pickup: { today: 1, ready: 1, upcoming: 0 },
+    delivery: {
+      today: 1,
+      out: 0,
+      tomorrow: 2,
+      upcoming: 0,
+      tomorrowToSchedule: 1,
+      tomorrowScheduled: 1,
+    },
+  },
+};
+
+test("tick interval is 30s (triage spec §5-3)", () => {
+  assert.equal(ORDER_PENDING_COUNT_INTERVAL_MS, 30_000);
+});
+
+test("pending count is derived from buckets counts.new.total", () => {
+  assert.equal(pendingCountFromBuckets(BUCKETS), 3);
+});
+
+test("classifyBucketsResponse: ok, old crm 404 fallback, and failure", () => {
+  assert.deepEqual(classifyBucketsResponse({ ok: true, status: 200, result: BUCKETS }), {
+    kind: "ok",
+    buckets: BUCKETS,
+  });
+  assert.deepEqual(classifyBucketsResponse({ ok: false, status: 404, result: null }), {
+    kind: "unsupported",
+  });
+  assert.deepEqual(classifyBucketsResponse({ ok: false, status: 500, result: null }), {
+    kind: "failed",
+  });
+  // ok 이지만 형이 깨진 result 도 실패로 본다
+  assert.deepEqual(
+    classifyBucketsResponse({ ok: true, status: 200, result: {} as typeof BUCKETS }),
+    { kind: "failed" },
+  );
+});
+
+test("buildOrderBucketsPayload carries the result and chime terminals", () => {
+  assert.deepEqual(buildOrderBucketsPayload(BUCKETS, [2], NOW), {
+    ok: true,
+    result: BUCKETS,
+    chimeTerminalIds: [2],
+    generatedAt: "2026-08-10T03:00:00.000Z",
+  });
+  assert.deepEqual(buildOrderBucketsPayload(null, [], NOW), {
+    ok: false,
+    result: null,
+    chimeTerminalIds: [],
+    generatedAt: "2026-08-10T03:00:00.000Z",
+  });
 });

@@ -1,4 +1,4 @@
-// 주문 상태/수령방식 배지 — 목록(OrderSearchPanel)과 디테일(OrderViewer)
+// 주문 상태/수령방식 배지 — 목록(TriageOrderRow)과 디테일(OrderViewer)
 // 공용. 슬라이스 A 의 Panel 내장 배지를 B 에서 파일로 분리한 것.
 
 import { cn } from "../../libs/cn";
