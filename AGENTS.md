@@ -127,6 +127,7 @@ Local surface with no known caller (app, Android, runner): `GET /clear`, `GET /a
 `AGENTS.md` files are the agent entry point; each `CLAUDE.md` is one line (`@AGENTS.md`). Old CLAUDE/AGENTS are under
 `docs/archive/` (history, not truth). `README.md`, `TEST_CHECKLIST.md` and `docs/` are unverified. Verify against code before
 citing any doc. Record findings in `/Users/dev-m1/ktpv5/ktpv5-api-docs/BACKLOG.md`; do not fix them as a side effect.
+- **Prisma schema changed?** After editing any `prisma/**/*.prisma` and migrating, refresh the hub schema tables: `cd /Users/dev-m1/ktpv5/ktpv5-rooms && bun run schema:sync` and commit the regenerated `schemas/<repo>.{json,md}` there. Agents read those files instead of the raw schema.
 
 ## Owner rules (carried over, not re-verified)
 
