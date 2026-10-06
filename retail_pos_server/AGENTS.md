@@ -36,3 +36,6 @@ scripts/safe-reset.sh         # backup → migrate reset → restore (checksum d
 - Every new route is behind `terminalMiddleware` automatically. Add `userMiddleware` + `scopeMiddleware` for anything that
   writes or reveals staff/member data.
 - New outbound cloud calls go through `apiService`/`crmApiService`. Add the endpoint to the root AGENTS.md consumers list.
+
+## Docs policy
+- **Prisma schema changed?** After editing any `prisma/**/*.prisma` and migrating, refresh the hub schema tables: `cd /Users/dev-m1/ktpv5/ktpv5-rooms && bun run schema:sync` and commit the regenerated `schemas/<repo>.{json,md}` there. Agents read those files instead of the raw schema.
