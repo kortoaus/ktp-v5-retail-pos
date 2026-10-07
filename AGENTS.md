@@ -13,8 +13,8 @@ KTP v5 retail point of sale, one install per store:
   (api-server + crm-server, via `src/libs/cloud.api.ts`).
 - **`retail_pos_app`** — Electron 40 till (electron-vite; main / preload / React 19 renderer, HashRouter). Owns serial
   and TCP hardware (scale, ZPL labels, serial ESC/POS) and a second "customer display" window.
-- Other LAN clients of the same server (separate repos, read-only from here): `ktpv5-pos-retail-android` (Fast Checkout
-  tablet) and `ktpv5-retail-runner` (scale/order runner).
+- Other LAN client of the same server (separate repo, read-only from here): `ktpv5-retail-runner` (checkout/order runner/scale).
+  `ktpv5-pos-retail-android` (Fast Checkout tablet) was deleted 2026-10-06/07; its work was absorbed into Runner.
 
 ## How the two processes talk
 
@@ -97,10 +97,10 @@ Single-tenant: `Company` and `StoreSetting` are always row `id: 1`.
 - **Upload is event-driven, not timed.** Invoices (`cloudId` null) and closed shifts go up only at boot, after
   sale/refund/repay, shift close, or the Sync button (`POST /api/cloud/migrate/item`). Failures are silent (row stays
   `cloudId = null`). Online orders: crm is polled every 30 s (`src/v1/order/order.pending-broadcaster.ts`).
-- **Android sale-core drift.** `ktpv5-pos-retail-android/scripts/sync-sale-core.mjs` copies 15 files from
-  `retail_pos_app/src/renderer/src` (sibling checkout). Today `--check` fails on 6: `store/SalesStore.helper.ts`,
+- **Sale-core drift.** (Historical: the deleted `ktpv5-pos-retail-android` repo's `scripts/sync-sale-core.mjs` copied 15 files from
+  `retail_pos_app/src/renderer/src` (sibling checkout); its `--check` failed on 6: `store/SalesStore.helper.ts`,
   `libs/sale/build-payload.ts`, `libs/sale/payload.types.ts`, `libs/sale/member-level-estimate.ts`, `libs/pp-barcode.ts`,
-  `types/models.ts`; that blocks Android `test`/`prebuild`/EAS. `ktpv5-retail-runner` has the same script; 2 mismatches
+  `types/models.ts` at the 2026-10-06 survey.) `ktpv5-retail-runner` has the same script; 2 mismatches
   (`types/models.ts`, `components/orders/pick-list-render.ts`). Editing those files here changes what both copy.
 - **Migrations** run against each store's own Postgres; there is no deploy script in the repo. After a schema change,
   regenerate and commit `src/generated/prisma`. Do not run server tests or ad-hoc scripts against a shared DB without
@@ -126,8 +126,17 @@ Local surface with no known caller (app, Android, runner): `GET /clear`, `GET /a
 
 `AGENTS.md` files are the agent entry point; each `CLAUDE.md` is one line (`@AGENTS.md`). Old CLAUDE/AGENTS are under
 `docs/archive/` (history, not truth). `README.md`, `TEST_CHECKLIST.md` and `docs/` are unverified. Verify against code before
-citing any doc. Record findings in `/Users/dev-m1/ktpv5/ktpv5-api-docs/BACKLOG.md`; do not fix them as a side effect.
+citing any doc. Record findings as hub records (`/Users/dev-m1/ktpv5/ktpv5-rooms`, a finding in the relevant room; api-docs BACKLOG is frozen, hub D-6); do not fix them as a side effect.
 - **Prisma schema changed?** After editing any `prisma/**/*.prisma` and migrating, refresh the hub schema tables: `cd /Users/dev-m1/ktpv5/ktpv5-rooms && bun run schema:sync` and commit the regenerated `schemas/<repo>.{json,md}` there. Agents read those files instead of the raw schema.
+
+## Working with the hub (owner operating model, 2026-10-07)
+
+- Start a job with `cd /Users/dev-m1/ktpv5/ktpv5-rooms && bun run room:brief <room>` and read your task record (`rooms/<room>/tasks/T-n.md`): its `done` / `verify` / `qa` fields are the contract. Do only what the task says; stop before anything destructive (delete, force-push, DB writes outside the task, production migrations or deploys — production is the owner's).
+- Take the repo lock before writing: `bun run room:lock acquire <repo-path> --as <session> --kind opus|codex --why "..."`, export the same `HUB_SESSION` before `git commit` (the pre-commit hook checks it). If the lock is held, file an ask ticket and do the rest; never two writers on one repo. Claude job sessions work in a git worktree on branch `job/<T-n>`; Codex works on the owned repo's main checkout. Jobs never push — the conductor merges and pushes.
+- Cross-repo changes (api-server, crm-server) are allowed when the task needs them, under that repo's lock, with visible contract changes: consumer-matrix check, a hub record naming affected consumers, `bun run schema:sync` after Prisma (hub D-12).
+- Notify the owner only through hub tickets: `bun run room:ticket done "<한국어 요약>" --room <room> --repo <repo> --detail "<한국어 설명>"` when the task is complete, `room:ticket ask "<한국어 질문>"` when the owner must decide. Ticket text is Korean (product names as on screen); records stay English. The owner's done-label printer is retired — never print status labels (store product-label printers are unaffected).
+- Hand back in ≤ 3 KB (`ktpv5-rooms/.claude/skills/handback/SKILL.md`): sha or "uncommitted", files, each done-criterion met/not met with evidence, each verify command with counts, skipped items. Long detail goes to `ktpv5-rooms/surveys/<date>-<T-n>-report.md`. Never claim device QA.
+- Diffs touching payment/refund/cash, auth/OTP/tokens/sessions, DB migrations, price calculation or central sync contracts get a cross-vendor review before merge (hub D-14); say so in the hand-back.
 
 ## Owner rules (carried over, not re-verified)
 
