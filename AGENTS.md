@@ -57,7 +57,7 @@ Global: `express.json(1mb)` → `cors(*)` → logger → `/health` `/clear` `/ok
 | Domain | Mounts (`/api/...`) | Auth beyond terminal |
 |---|---|---|
 | retail-pos | `sale`(8) `shift`(5) `cashio`(2) `voucher`(2) `hotkey`(4) `printer`(1) `terminal`(3) `user`(6) | sale/cashio/voucher: user+scope; shift open/close: `shift`; hotkey, printer: none |
-| members | `crm`(7) `customer-voucher`(2) | crm: none; customer-voucher: `sale` |
+| members | `crm`(7) `customer-voucher`(3: + `GET /operations`) | crm: none; customer-voucher: `sale` |
 | online-ordering | `order`(18) `stripe`(2) | `sale` (refund-requests POST: `refund_ticket`) |
 | catalog | `item`(5) `brand`(2) `cloud`(6) `free-text-template`(3) | none |
 | platform | `store`(3) + inline `/health` `/clear` `/ok` | store POST: `store` |
@@ -115,8 +115,8 @@ api-server (all `deviceAuthMiddleware`, 11): `GET /device/item-sheet/label-updat
 `POST /device/migrate/promo-price/retail`, `POST /device/migrate/hotkey/retail`, `POST /device/sync/retail/sale-invoice`,
 `POST /device/sync/retail/terminal-shift`.
 
-crm-server (33): `GET /api/post/`; `/device/customer-voucher`: `GET /valid`, `POST /issue`, `/redeem`, `/redeem/void`,
-`/refund-issue`; `/device/order`: `GET /`, `/:id`, `/:id/refund-requests`, `/buckets`, `/delivery-manifest`, `/pending-count`,
+crm-server (35): `GET /api/post/`; `/device/customer-voucher`: `GET /valid`, `GET /operation`, `POST /issue`, `/redeem`, `/redeem/void`,
+`/refund-issue`, `/refund-issue/void` (T-15, 2026-10-08); `/device/order`: `GET /`, `/:id`, `/:id/refund-requests`, `/buckets`, `/delivery-manifest`, `/pending-count`,
 `POST /:id/{accept,collect,deliver,dispatch,picking,printed,ready,refund-requests,reject,schedule}`, `POST /{dispatch,printed,schedule}`;
 `/device/member`: `POST /create`, `/phone`, `/search/id`, `/search/keyword`, `/search/phone`, `/signup/stage`,
 `/signup/request-otp`, `/signup/verify`.
@@ -154,6 +154,7 @@ From the archived CLAUDE files unless noted:
   and the server re-derives it. Never duplicate totals/tax/rounding in a component. No `discounts: []` array.
 - Surcharge lives only in `Invoice.creditSurchargeAmount`. Code that walks `invoice.refunds` filters `type === "REFUND"`.
 - User vouchers (staff allowance) and customer vouchers (crm) are separate systems. Do not conflate them.
+- **Operation id + customer-voucher ledger (T-15, 2026-10-08):** tills send `operationId` on sale/refund/repay (`libs/operation-id.ts`, one per cart attempt, kept until the server answers); `SaleInvoice.operationId` is unique and a same-id retry replays the original (`replayed: true`), another payload is 409. Customer-voucher CRM effects are rows in `CustomerVoucherOperation` (INTENT→CONFIRMED→LINKED / VOIDED / UNRESOLVED / FAILED / UNRESOLVED_MANUAL) written before CRM is called; `customer-voucher.reconcile.service.ts` settles open rows at boot and every 5 min. Rule: `ktpv5-rooms/rules/retail-pos/customer-voucher-redeem-idempotent.md`. Refunds of any original carrying a customer-voucher tender require CRM reachable (503 otherwise).
 - Item down-sync is field-allowlisted. Never pass cloud payloads straight into `db.item.upsert`.
 - In `sale.router.ts`, `/latest` and `/:id/children` stay before `/:id`; `cloud.router.ts` `/printed` stays before `/:id`.
 - PaymentModal and `CloudHotkeyViewerV2` use `div` tap targets on purpose (scanner Enter suffix). Do not change them to buttons.
