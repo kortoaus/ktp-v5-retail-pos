@@ -10,6 +10,7 @@ import {
   getValidCustomerVouchers,
   issueCustomerVoucher,
 } from "../../../service/customer-voucher.service";
+import { decideIssueAnswer } from "../../../libs/customer-voucher-issue";
 import dayjsAU from "../../../libs/dayjsAU";
 import TapTarget from "./TapTarget";
 
@@ -38,6 +39,8 @@ export default function SearchCustomerVoucherModal({
   const [rows, setRows] = useState<CustomerVoucher[]>([]);
   const [loading, setLoading] = useState(false);
   const [issuing, setIssuing] = useState(false);
+  // F-16: set when a press replayed an earlier exchange (not auto-selected).
+  const [notice, setNotice] = useState<string | null>(null);
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -51,6 +54,7 @@ export default function SearchCustomerVoucherModal({
 
   useEffect(() => {
     if (!open) return;
+    setNotice(null);
     refetch();
   }, [open, refetch]);
 
@@ -58,17 +62,24 @@ export default function SearchCustomerVoucherModal({
     if (memberPoints < CUSTOMER_VOUCHER_ISSUE_POINTS) return;
     setIssuing(true);
     try {
-      const res = await issueCustomerVoucher(memberId);
-      if (!res.ok || !res.result) {
-        window.alert(res.msg || "Failed to issue voucher");
+      const decision = decideIssueAnswer(await issueCustomerVoucher(memberId));
+      if (decision.action === "error") {
+        window.alert(decision.message);
         return;
       }
-      onSelect(res.result.voucher, res.result.memberPoints ?? undefined);
+      if (decision.action === "recovered") {
+        // F-16: the recovered voucher may be spent, expired or already in
+        // this sale — refresh the list and let the cashier pick.
+        setNotice(decision.notice);
+        await refetch();
+        return;
+      }
+      onSelect(decision.voucher, decision.memberPoints);
       onClose();
     } finally {
       setIssuing(false);
     }
-  }, [memberId, memberPoints, onClose, onSelect]);
+  }, [memberId, memberPoints, onClose, onSelect, refetch]);
 
   const handlePick = useCallback(
     (voucher: CustomerVoucher) => {
@@ -124,6 +135,12 @@ export default function SearchCustomerVoucherModal({
             </TapTarget>
           )}
         </div>
+
+        {notice && (
+          <div className="px-4 py-2 border-b border-amber-200 bg-amber-50 text-sm text-amber-800">
+            {notice}
+          </div>
+        )}
 
         <div className="max-h-96 overflow-y-auto">
           {rows.length === 0 && !loading && (
