@@ -58,12 +58,16 @@ function harness(orig: OrigInvoice) {
   const ops = new FakeOpsStore();
   const invoices: SaleInvoiceModel[] = [];
   let failNext = false;
+  let commitThenThrow = false; // F-8: COMMIT landed, its ack was lost
+  let lookupFails = false;
   const persisted: PersistRefundArgs[] = [];
   const deps: RefundCreateDeps = {
     crm,
     ops,
-    findInvoiceByOperationId: async (operationId) =>
-      invoices.find((inv) => inv.operationId === operationId) ?? null,
+    findInvoiceByOperationId: async (operationId) => {
+      if (lookupFails && persisted.length > 0) throw new Error("connection refused");
+      return invoices.find((inv) => inv.operationId === operationId) ?? null;
+    },
     loadOriginal: async () => orig,
     persistRefund: async (args) => {
       persisted.push(args);
@@ -92,11 +96,24 @@ function harness(orig: OrigInvoice) {
         payments: payments.map((p) => ({ type: p.type, amount: p.amount, entityType: p.entityType ?? null, entityId: p.entityId ?? null })),
       } as unknown as OrigInvoice["refunds"][number]);
       invoices.push(invoice);
+      if (commitThenThrow) {
+        commitThenThrow = false;
+        throw new Error("Connection terminated unexpectedly");
+      }
       return invoice;
     },
     afterCommit: () => {},
   };
-  return { crm, ops, invoices, deps, persisted, failOnce: () => (failNext = true) };
+  return {
+    crm,
+    ops,
+    invoices,
+    deps,
+    persisted,
+    failOnce: () => (failNext = true),
+    commitThenThrowOnce: () => (commitThenThrow = true),
+    failLookups: () => (lookupFails = true),
+  };
 }
 
 const CV_PAID = [{ type: "VOUCHER" as const, amount: 1000, entityType: "customer-voucher", entityId: 7, entityLabel: "CV-7" }];
@@ -294,4 +311,25 @@ test("F-6: lost refund-issue answer, then the voucher tender is swapped for cash
   });
   assert.equal(summary.voided, 1);
   assert.equal(h.crm.issues.get(KEY)!.voided, true);
+});
+
+test("F-8: the refund committed but its ack was lost (non-unique error) → voucher NOT voided, the Refund is returned", async () => {
+  const h = harness(original(CV_PAID));
+  h.commitThenThrowOnce();
+  const res = await createRefundService(halfRefund("op-refund-a1"), CONTEXT, h.deps);
+  assert.equal(res.ok, true);
+  assert.equal(res.result.id, h.invoices[0].id);
+  assert.equal(h.invoices.length, 1);
+  assert.equal(h.crm.issues.get("op-refund-a1:cv-refund:0")!.voided, false, "refund voucher kept");
+  assert.equal(h.ops.byKey("op-refund-a1:cv-refund:0")!.status, "LINKED");
+  assert.equal(h.crm.calls.filter((c) => c.startsWith("voidRefundIssue")).length, 0);
+});
+
+test("F-8: persistence error and the lookup fails too → refund voucher left UNRESOLVED, not voided", async () => {
+  const h = harness(original(CV_PAID));
+  h.failOnce();
+  h.failLookups();
+  await assert.rejects(createRefundService(halfRefund("op-refund-a1"), CONTEXT, h.deps));
+  assert.equal(h.ops.byKey("op-refund-a1:cv-refund:0")!.status, "UNRESOLVED");
+  assert.equal(h.crm.issues.get("op-refund-a1:cv-refund:0")!.voided, false);
 });

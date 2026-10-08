@@ -55,16 +55,28 @@ export interface CvOperationPatch {
 // Primary kinds carry the money effect; VOID_* rows are the audit trail of
 // the voids sent for them.
 export const PRIMARY_KINDS: CvOperationKind[] = ["REDEEM", "REFUND_ISSUE"];
-// "Open" = needs the reconciler: INTENT, UNRESOLVED, or CONFIRMED without an invoice.
-export const OPEN_STATUSES: CvOperationStatus[] = ["INTENT", "CONFIRMED", "UNRESOLVED"];
+// "Reconcilable" = the sweep works it: INTENT, UNRESOLVED, or CONFIRMED
+// without an invoice. "Open" (operations endpoint default, Close Shift
+// warning) additionally counts UNRESOLVED_MANUAL — given up on by the sweep
+// after MAX_RECONCILE_ATTEMPTS, left for a person (F-10).
+export const OPEN_STATUSES: CvOperationStatus[] = [
+  "INTENT",
+  "CONFIRMED",
+  "UNRESOLVED",
+  "UNRESOLVED_MANUAL",
+];
 
-export function isOpenRow(row: Pick<CvOperationRow, "kind" | "status" | "invoiceId">) {
+export function isReconcilableRow(row: Pick<CvOperationRow, "kind" | "status" | "invoiceId">) {
   return (
     PRIMARY_KINDS.includes(row.kind) &&
     (row.status === "INTENT" ||
       row.status === "UNRESOLVED" ||
       (row.status === "CONFIRMED" && row.invoiceId == null))
   );
+}
+
+export function isOpenRow(row: Pick<CvOperationRow, "kind" | "status" | "invoiceId">) {
+  return isReconcilableRow(row) || (PRIMARY_KINDS.includes(row.kind) && row.status === "UNRESOLVED_MANUAL");
 }
 
 export interface CustomerVoucherOperationStore {
@@ -74,8 +86,10 @@ export interface CustomerVoucherOperationStore {
   // returned as is, except FAILED (CRM did nothing) which goes back to INTENT.
   ensureIntent(intent: CvOperationIntent): Promise<CvOperationRow>;
   update(id: number, patch: CvOperationPatch): Promise<CvOperationRow>;
-  // Open primary rows last touched before `olderThan`.
-  listForReconcile(olderThan: Date): Promise<CvOperationRow[]>;
+  // Reconcilable primary rows last touched before `olderThan`, least recently
+  // touched first (every attempt touches updatedAt, so stuck rows rotate to
+  // the back — F-10), at most `limit`.
+  listForReconcile(olderThan: Date, limit: number): Promise<CvOperationRow[]>;
   list(statuses: CvOperationStatus[], limit: number): Promise<CvOperationRow[]>;
   countOpen(): Promise<number>;
 }
@@ -88,10 +102,18 @@ function toData(patch: CvOperationPatch) {
   };
 }
 
-const openWhere = {
+const reconcilableWhere = {
   kind: { in: PRIMARY_KINDS },
   OR: [
     { status: { in: ["INTENT", "UNRESOLVED"] as CvOperationStatus[] } },
+    { status: "CONFIRMED" as CvOperationStatus, invoiceId: null },
+  ],
+};
+
+const openWhere = {
+  kind: { in: PRIMARY_KINDS },
+  OR: [
+    { status: { in: ["INTENT", "UNRESOLVED", "UNRESOLVED_MANUAL"] as CvOperationStatus[] } },
     { status: "CONFIRMED" as CvOperationStatus, invoiceId: null },
   ],
 };
@@ -136,11 +158,11 @@ export const prismaCvOperationStore: CustomerVoucherOperationStore = {
       data: toData(patch),
     });
   },
-  listForReconcile(olderThan) {
+  listForReconcile(olderThan, limit) {
     return db.customerVoucherOperation.findMany({
-      where: { ...openWhere, updatedAt: { lt: olderThan } },
-      orderBy: { id: "asc" },
-      take: 200,
+      where: { ...reconcilableWhere, updatedAt: { lt: olderThan } },
+      orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
+      take: limit,
     });
   },
   list(statuses, limit) {

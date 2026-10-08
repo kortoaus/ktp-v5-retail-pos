@@ -97,7 +97,12 @@ export function unresolvedError(what: string): HttpException {
 // never becomes FAILED here — it stays UNRESOLVED until the reconciler's
 // operation lookup says not_found / voided / redeemed. Only a definitive
 // rejection of a key with no ambiguous history marks FAILED.
-const AMBIGUOUS_STATUSES: CvOperationStatus[] = ["INTENT", "UNRESOLVED", "CONFIRMED"];
+const AMBIGUOUS_STATUSES: CvOperationStatus[] = [
+  "INTENT",
+  "UNRESOLVED",
+  "CONFIRMED",
+  "UNRESOLVED_MANUAL",
+];
 
 function ambiguousKeysOf(prior: CvOperationRow[]): Set<string> {
   return new Set(
@@ -121,7 +126,12 @@ function errorText(outcome: CrmOutcome<unknown>): string | null {
 // id (put the same voucher tender back) or the cashier clears the cart, after
 // which the reconciler voids the effect (no matching Invoice). Runs for every
 // sale/refund request, with or without a customer-voucher tender.
-const PENDING_STATUSES: CvOperationStatus[] = ["INTENT", "CONFIRMED", "UNRESOLVED"];
+const PENDING_STATUSES: CvOperationStatus[] = [
+  "INTENT",
+  "CONFIRMED",
+  "UNRESOLVED",
+  "UNRESOLVED_MANUAL",
+];
 
 export function saleRedeemExpectations(
   operationId: string,
@@ -180,6 +190,45 @@ export async function assertNoPendingVoucherEffects(
       })),
     },
   );
+}
+
+// ── F-8: what did a failed local transaction leave? ─────────────────────────
+// A persistence error does not prove nothing committed (the COMMIT ack can be
+// lost). Before compensating, ask the DB for the invoice under the id:
+//   committed → it exists (its ledger rows were LINKED in the same tx)
+//   absent    → nothing committed; the caller voids its CRM effects
+//   unknown   → the lookup failed too; leave the effects UNRESOLVED for the
+//               reconciler, which links or voids by the invoice's tenders.
+export type PersistOutcome<T> =
+  | { state: "committed"; invoice: T }
+  | { state: "absent" }
+  | { state: "unknown" };
+
+export async function lookupAfterPersistError<T>(
+  find: () => Promise<T | null>,
+): Promise<PersistOutcome<T>> {
+  try {
+    const invoice = await find();
+    return invoice ? { state: "committed", invoice } : { state: "absent" };
+  } catch (e) {
+    console.error("[customer-voucher] invoice lookup after a persistence error failed", e);
+    return { state: "unknown" };
+  }
+}
+
+export async function markRowsUnresolved(rows: CvOperationRow[], reason: string, deps: CvDeps) {
+  for (const row of rows) {
+    try {
+      await deps.ops.update(row.id, { status: "UNRESOLVED", lastError: reason });
+    } catch (e) {
+      // DB unreachable: the row stays CONFIRMED without invoice — still swept.
+      console.error("[customer-voucher] could not mark row UNRESOLVED", {
+        operationId: row.operationId,
+        crmRequestId: row.crmRequestId,
+        error: e,
+      });
+    }
+  }
 }
 
 // ── Sale redeem ─────────────────────────────────────────────────────────────

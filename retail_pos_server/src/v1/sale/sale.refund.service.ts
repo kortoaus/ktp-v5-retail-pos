@@ -26,6 +26,8 @@ import {
   assertCrmReachableForOriginal,
   assertNoPendingVoucherEffects,
   defaultCvDeps,
+  lookupAfterPersistError,
+  markRowsUnresolved,
   refundIssueExpectations,
   issueRefundVoucherForOperation,
   voidRefundIssueRow,
@@ -799,9 +801,26 @@ export async function createRefundService(
           customerVoucherIssue,
         });
       } catch (persistenceError) {
-        if (isUniqueViolation(persistenceError)) {
-          const raced = await deps.findInvoiceByOperationId(operationId);
-          if (raced && raced.operationPayloadHash === payloadHash) return replay(raced);
+        // F-8 — the error is not proof that nothing committed.
+        const after = await lookupAfterPersistError(() =>
+          deps.findInvoiceByOperationId(operationId),
+        );
+        if (after.state === "committed") {
+          if (after.invoice.operationPayloadHash === payloadHash) {
+            if (isUniqueViolation(persistenceError)) return replay(after.invoice);
+            deps.afterCommit(after.invoice);
+            return { ok: true, replayed: false, result: { ...after.invoice, replayed: false } };
+          }
+          throw persistenceError;
+        }
+        if (after.state === "unknown") {
+          if (customerVoucherIssue)
+            await markRowsUnresolved(
+              [customerVoucherIssue.issued.row],
+              "refund persistence outcome unknown",
+              deps,
+            );
+          throw persistenceError;
         }
         if (customerVoucherIssue) {
           console.error("[customer-voucher] refund persistence failed — voiding the issued refund voucher", {

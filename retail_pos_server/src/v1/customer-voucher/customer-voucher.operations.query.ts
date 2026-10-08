@@ -16,8 +16,14 @@ const ALL_STATUSES: CvOperationStatus[] = [
   "VOIDED",
   "UNRESOLVED",
   "FAILED",
+  "UNRESOLVED_MANUAL",
 ];
-const DEFAULT_STATUSES: CvOperationStatus[] = ["INTENT", "CONFIRMED", "UNRESOLVED"];
+const DEFAULT_STATUSES: CvOperationStatus[] = [
+  "INTENT",
+  "CONFIRMED",
+  "UNRESOLVED",
+  "UNRESOLVED_MANUAL",
+];
 
 export function parseOperationStatuses(raw: string | undefined): CvOperationStatus[] {
   if (raw == null || raw.trim() === "") return DEFAULT_STATUSES;

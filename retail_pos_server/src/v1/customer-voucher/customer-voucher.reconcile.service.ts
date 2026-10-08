@@ -35,6 +35,12 @@ import type { CvOperationRow } from "./customer-voucher.operation.store";
 
 export const RECONCILE_MIN_AGE_MS = 2 * 60 * 1000;
 export const RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
+export const RECONCILE_BATCH = 200;
+// F-10 — a row CRM keeps answering about but that still cannot be settled
+// (e.g. a refund voucher already spent) leaves the sweep after this many
+// attempts as UNRESOLVED_MANUAL (still counted open). CRM being unreachable
+// never moves a row there.
+export const MAX_RECONCILE_ATTEMPTS = 50;
 
 export interface ReconcileInvoice {
   id: number;
@@ -50,6 +56,7 @@ export interface ReconcileInvoice {
 export interface ReconcileDeps extends CvDeps {
   findInvoiceByOperationId(operationId: string): Promise<ReconcileInvoice | null>;
   now(): Date;
+  batchSize?: number;
 }
 
 // F-6 — an Invoice under the same operationId proves nothing by itself; it
@@ -223,7 +230,10 @@ export async function reconcileCustomerVoucherOperations(
     skipped: 0,
   };
   const olderThan = new Date(deps.now().valueOf() - RECONCILE_MIN_AGE_MS);
-  const rows = await deps.ops.listForReconcile(olderThan);
+  const rows = await deps.ops.listForReconcile(
+    olderThan,
+    deps.batchSize ?? RECONCILE_BATCH,
+  );
 
   const byOperation = new Map<string, CvOperationRow[]>();
   for (const row of rows) {
@@ -243,6 +253,14 @@ export async function reconcileCustomerVoucherOperations(
         try {
           const result = await reconcileRow(row, deps);
           summary[result] += 1;
+          // row.attempts is the count before this pass (+1 made in reconcileRow).
+          if (result === "unresolved" && row.attempts + 1 >= MAX_RECONCILE_ATTEMPTS) {
+            await deps.ops.update(row.id, { status: "UNRESOLVED_MANUAL" });
+            console.error("[customer-voucher] reconcile gave up — UNRESOLVED_MANUAL, needs a person", {
+              operationId,
+              crmRequestId: row.crmRequestId,
+            });
+          }
         } catch (e) {
           summary.unresolved += 1;
           console.error("[customer-voucher] reconcile row failed", {

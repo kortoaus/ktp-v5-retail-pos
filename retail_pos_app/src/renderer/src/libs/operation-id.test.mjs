@@ -61,11 +61,20 @@ test("refund and repay attempts are keyed by original invoice", () => {
   assert.notEqual(m.operationIdFor(m.repayAttemptKey(50)), m.operationIdFor(m.refundAttemptKey(50)));
 });
 
-test("F-7: a cart that becomes empty by any path ends its attempt; non-empty carts keep theirs", () => {
+test("F-7: a cart the cashier empties by any path ends its attempt; non-empty carts keep theirs", () => {
   const a = m.operationIdFor(m.saleAttemptKey(0));
   const b = m.operationIdFor(m.saleAttemptKey(1));
-  // slot 0 emptied (last line removed / qty 0 / Clear), slot 1 still has lines
-  m.endAttemptsOfEmptyCarts([0, 3, 0, 0]);
+  // slot 0 had lines and was emptied (Clear / last line removed / qty 0); slot 1 still has lines
+  m.endAttemptsOfEmptiedCarts([2, 3, 0, 0], [0, 3, 0, 0]);
   assert.notEqual(m.operationIdFor(m.saleAttemptKey(0)), a, "identical new sale in slot 0 is a new attempt");
   assert.equal(m.operationIdFor(m.saleAttemptKey(1)), b);
+});
+
+test("F-9: carts that start empty (till start) keep persisted attempts", () => {
+  const a = m.operationIdFor(m.saleAttemptKey(0)); // persisted before the restart
+  // store init: every cart empty before and after — no abandonment
+  m.endAttemptsOfEmptiedCarts([0, 0, 0, 0], [0, 0, 0, 0]);
+  // cashier rings the sale again in that slot: lines added, then retried
+  m.endAttemptsOfEmptiedCarts([0, 0, 0, 0], [1, 0, 0, 0]);
+  assert.equal(m.operationIdFor(m.saleAttemptKey(0)), a, "retry after restart replays the same attempt");
 });

@@ -24,6 +24,8 @@ import { calculateInvoicePoints } from "./sale.points";
 import {
   assertNoPendingVoucherEffects,
   defaultCvDeps,
+  lookupAfterPersistError,
+  markRowsUnresolved,
   redeemCustomerVouchersForOperation,
   saleRedeemExpectations,
   voidRedeemRows,
@@ -653,10 +655,20 @@ export async function createSaleService(
           linkOperationRowIds: confirmed.map((row) => row.id),
         });
       } catch (persistenceError) {
-        if (isUniqueViolation(persistenceError)) {
-          const raced = await deps.findInvoiceByOperationId(operationId);
-          if (raced && raced.operationPayloadHash === payloadHash)
-            return respond(raced, true);
+        // F-8 — the error is not proof that nothing committed.
+        const after = await lookupAfterPersistError(() =>
+          deps.findInvoiceByOperationId(operationId),
+        );
+        if (after.state === "committed") {
+          if (after.invoice.operationPayloadHash === payloadHash)
+            return respond(after.invoice, isUniqueViolation(persistenceError));
+          // Another request's invoice under this id: the reconciler links or
+          // voids our rows by that invoice's tenders.
+          throw persistenceError;
+        }
+        if (after.state === "unknown") {
+          await markRowsUnresolved(confirmed, "sale persistence outcome unknown", deps);
+          throw persistenceError;
         }
         if (confirmed.length > 0) {
           console.error("[customer-voucher] local sale persistence failed — voiding redeems", {

@@ -10,7 +10,8 @@
 //   - the server answers ok (the attempt is recorded), or
 //   - the server answers 409 OPERATION_CANCELLED / OPERATION_PAYLOAD_MISMATCH
 //     (the server has settled this id; the next press starts a new attempt), or
-//   - that cart becomes empty by any path (endAttemptsOfEmptyCarts, F-7).
+//   - the cashier empties that cart by any path (endAttemptsOfEmptiedCarts,
+//     F-7); a cart that starts empty (till start) keeps its attempt (F-9).
 // There is no time-based expiry: an elapsed time never proves the earlier
 // submit failed (F-5). Network errors, timeouts, 5xx, 503 "CRM did not answer"
 // and 409 OPERATION_IN_PROGRESS keep the id so the retry replays the same
@@ -68,12 +69,16 @@ export function clearOperation(attemptKey: string): void {
   }
 }
 
-// F-7 — an empty cart is a transaction boundary, whatever emptied it (Clear,
-// removing the last line, qty → 0, a fresh till start). Called by the cart
-// store on every carts change with each slot's line count.
-export function endAttemptsOfEmptyCarts(lineCounts: number[]): void {
+// F-7 / F-9 — a cart the cashier EMPTIES (Clear, last line removed, qty → 0)
+// is a transaction boundary: its attempt ends. A cart that was already empty
+// — e.g. every cart right after a till start — is not an abandonment, so a
+// persisted attempt survives a restart; the next submit from that slot reuses
+// its id and the server answers with the recorded Invoice (replayed) or a 409
+// naming it. Called by the cart store with each slot's line count before and
+// after every carts change.
+export function endAttemptsOfEmptiedCarts(prevLineCounts: number[], lineCounts: number[]): void {
   lineCounts.forEach((count, index) => {
-    if (count === 0) clearOperation(saleAttemptKey(index));
+    if (count === 0 && (prevLineCounts[index] ?? 0) > 0) clearOperation(saleAttemptKey(index));
   });
 }
 

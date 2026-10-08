@@ -870,6 +870,9 @@ model FreeTextTemplate {
 //   UNRESOLVED  CRM outcome unknown (timeout / 5xx / failed void) — the
 //               reconciler asks CRM for the effective state
 //   FAILED      CRM definitively did nothing
+//   UNRESOLVED_MANUAL  CRM answered but the row could not be settled after
+//               50 reconcile attempts (e.g. a refund voucher already spent) —
+//               no longer swept, still counted as open for a person to check
 // Reconciler: src/v1/customer-voucher/customer-voucher.reconcile.service.ts.
 enum CustomerVoucherOperationKind {
   REDEEM
@@ -885,6 +888,7 @@ enum CustomerVoucherOperationStatus {
   VOIDED
   UNRESOLVED
   FAILED
+  UNRESOLVED_MANUAL
 }
 
 model CustomerVoucherOperation {

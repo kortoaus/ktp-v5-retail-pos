@@ -11,7 +11,7 @@ import type {
   CvOperationRow,
   CvOperationStatus,
 } from "./customer-voucher.operation.store";
-import { isOpenRow } from "./customer-voucher.operation.store";
+import { isOpenRow, isReconcilableRow } from "./customer-voucher.operation.store";
 import type { CustomerVoucherWire } from "./customer-voucher.types";
 
 export class FakeOpsStore implements CustomerVoucherOperationStore {
@@ -19,7 +19,9 @@ export class FakeOpsStore implements CustomerVoucherOperationStore {
   // status history per crmRequestId, for state-machine assertions
   history = new Map<string, CvOperationStatus[]>();
   private nextId = 1;
-  clock = () => new Date();
+  // Monotonic: every write gets a later updatedAt (ties broken by id).
+  private tick = 0;
+  clock = () => new Date(Date.now() + this.tick++);
 
   private record(row: CvOperationRow) {
     const list = this.history.get(row.crmRequestId) ?? [];
@@ -84,8 +86,12 @@ export class FakeOpsStore implements CustomerVoucherOperationStore {
       this.record(row);
     }
   }
-  async listForReconcile(olderThan: Date) {
-    return this.rows.filter((r) => isOpenRow(r) && r.updatedAt < olderThan).map((r) => ({ ...r }));
+  async listForReconcile(olderThan: Date, limit: number) {
+    return this.rows
+      .filter((r) => isReconcilableRow(r) && r.updatedAt < olderThan)
+      .sort((a, b) => a.updatedAt.valueOf() - b.updatedAt.valueOf() || a.id - b.id)
+      .slice(0, limit)
+      .map((r) => ({ ...r }));
   }
   async list(statuses: CvOperationStatus[]) {
     return this.rows.filter((r) => statuses.includes(r.status)).map((r) => ({ ...r }));

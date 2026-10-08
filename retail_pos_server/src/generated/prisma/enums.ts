@@ -101,7 +101,8 @@ export const CustomerVoucherOperationStatus = {
   LINKED: 'LINKED',
   VOIDED: 'VOIDED',
   UNRESOLVED: 'UNRESOLVED',
-  FAILED: 'FAILED'
+  FAILED: 'FAILED',
+  UNRESOLVED_MANUAL: 'UNRESOLVED_MANUAL'
 } as const
 
 export type CustomerVoucherOperationStatus = (typeof CustomerVoucherOperationStatus)[keyof typeof CustomerVoucherOperationStatus]

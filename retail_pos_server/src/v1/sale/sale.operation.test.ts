@@ -78,7 +78,7 @@ function harness() {
   const ops = new FakeOpsStore();
   const invoices: SaleInvoiceModel[] = [];
   const invoicePayments = new Map<number, SaleCreatePayload["payments"]>();
-  let persistMode: "ok" | "fail" | "hang" = "ok";
+  let persistMode: "ok" | "fail" | "hang" | "commit-then-throw" = "ok";
   let persistCalled: () => void = () => {};
   const persistReached = new Promise<void>((resolve) => (persistCalled = resolve));
 
@@ -104,6 +104,10 @@ function harness() {
       ops.link(args.linkOperationRowIds, invoice.id); // same tx as the invoice
       invoices.push(invoice);
       invoicePayments.set(invoice.id, args.payload.payments);
+      if (persistMode === "commit-then-throw") {
+        persistMode = "ok";
+        throw new Error("Connection terminated unexpectedly"); // COMMIT landed, ack lost
+      }
       return invoice;
     },
     afterCommit: async () => ({}),
@@ -131,7 +135,7 @@ function harness() {
     deps,
     reconcileDeps,
     persistReached,
-    setPersist: (mode: "ok" | "fail" | "hang") => (persistMode = mode),
+    setPersist: (mode: "ok" | "fail" | "hang" | "commit-then-throw") => (persistMode = mode),
   };
 }
 
@@ -396,4 +400,15 @@ test("F-6: putting the same voucher tender back after a lost answer replays the 
   assert.equal(retry.ok, true);
   assert.equal(h.crm.balances.get(7), 600);
   assert.equal(h.ops.byKey(KEY7)!.status, "LINKED");
+});
+
+test("F-8: the sale committed but its ack was lost (non-unique error) → redeem NOT voided, the Invoice is returned", async () => {
+  const h = harness();
+  h.setPersist("commit-then-throw");
+  const res = await createSaleService(salePayload({ operationId: OP }), CONTEXT, h.deps);
+  assert.equal(res.ok, true);
+  assert.equal(res.result.id, h.invoices[0].id);
+  assert.equal(h.ops.byKey(KEY7)!.status, "LINKED");
+  assert.equal(h.crm.balances.get(7), 600, "charged once, not given back");
+  assert.equal(h.crm.calls.filter((c) => c.startsWith("voidRedeem")).length, 0);
 });

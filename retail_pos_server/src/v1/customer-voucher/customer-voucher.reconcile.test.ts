@@ -5,6 +5,7 @@ import { HttpException } from "../../libs/exceptions";
 import { claimOperation, releaseOperation } from "../sale/sale.operation";
 import { FakeCrm, FakeOpsStore } from "./customer-voucher.test-fakes";
 import {
+  MAX_RECONCILE_ATTEMPTS,
   reconcileCustomerVoucherOperations,
   triggerCustomerVoucherReconcile,
   type ReconcileDeps,
@@ -219,7 +220,7 @@ test("scheduler: one run in flight, triggers during a run coalesce into exactly 
 
 test("operations listing: status filter parsing and open count", async () => {
   assert.deepEqual(parseOperationStatuses("unresolved, CONFIRMED"), ["UNRESOLVED", "CONFIRMED"]);
-  assert.deepEqual(parseOperationStatuses(undefined), ["INTENT", "CONFIRMED", "UNRESOLVED"]);
+  assert.deepEqual(parseOperationStatuses(undefined), ["INTENT", "CONFIRMED", "UNRESOLVED", "UNRESOLVED_MANUAL"]);
   assert.throws(() => parseOperationStatuses("BOGUS"), HttpException);
   const h = setup();
   await redeemRow(h, "op-ls-00001", "UNRESOLVED", "redeemed");
@@ -249,4 +250,44 @@ test("F-6: a REFUND Invoice without the issued voucher tender → the refund iss
   const s = await reconcileCustomerVoucherOperations(h.deps);
   assert.equal(s.voided, 1);
   assert.equal(h.crm.issues.get(key)!.voided, true);
+});
+
+test("F-10: a stuck row rotates to the back — a newer orphaned debit is reconciled in the next sweep", async () => {
+  const h = setup();
+  const stuck = await refundIssueRow(h, "op-st-00001", "issued");
+  h.crm.issues.get(stuck)!.spent = true; // its void keeps answering 409
+  const orphan = await redeemRow(h, "op-or-00001", "CONFIRMED", "redeemed");
+  const deps = { ...h.deps, batchSize: 1 };
+
+  const first = await reconcileCustomerVoucherOperations(deps);
+  assert.equal(first.checked, 1);
+  assert.equal(h.ops.byKey(stuck)!.status, "UNRESOLVED");
+  const second = await reconcileCustomerVoucherOperations(deps);
+  assert.equal(second.voided, 1);
+  assert.equal(h.ops.byKey(orphan)!.status, "VOIDED", "the newer debit got its turn");
+  assert.equal(h.crm.balances.get(7), 1000);
+});
+
+test("F-10: after MAX attempts a row CRM cannot settle becomes UNRESOLVED_MANUAL — out of the sweep, still counted open", async () => {
+  const h = setup();
+  const key = await refundIssueRow(h, "op-mx-00001", "issued");
+  h.crm.issues.get(key)!.spent = true;
+  const row = h.ops.byKey(key)!;
+  row.attempts = MAX_RECONCILE_ATTEMPTS - 1;
+  await reconcileCustomerVoucherOperations(h.deps);
+  assert.equal(h.ops.byKey(key)!.status, "UNRESOLVED_MANUAL");
+  assert.equal(await h.ops.countOpen(), 1);
+  const again = await reconcileCustomerVoucherOperations(h.deps);
+  assert.equal(again.checked, 0);
+  const listed = await listCustomerVoucherOperationsService(undefined, h.ops);
+  assert.equal(listed.result.length, 1);
+});
+
+test("F-10: CRM unreachable never moves a row to UNRESOLVED_MANUAL", async () => {
+  const h = setup();
+  const key = await redeemRow(h, "op-ux-00001", "UNRESOLVED", "redeemed");
+  h.ops.byKey(key)!.attempts = MAX_RECONCILE_ATTEMPTS + 5;
+  h.crm.mode.getOperation = ["unknown"];
+  await reconcileCustomerVoucherOperations(h.deps);
+  assert.equal(h.ops.byKey(key)!.status, "UNRESOLVED");
 });
