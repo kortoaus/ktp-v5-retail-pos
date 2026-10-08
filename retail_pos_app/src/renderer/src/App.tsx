@@ -28,6 +28,7 @@ import SaleRefundDetailScreen from "./screens/SaleRefundDetailScreen";
 import SaleRefundPickerScreen from "./screens/SaleRefundPickerScreen";
 import ScaleLabelTestScreen from "./screens/ScaleLabelTestScreen";
 import ScaleStationScreen from "./screens/ScaleStationScreen";
+import UpdateReadyHint from "./components/UpdateReadyHint";
 
 function App(): React.JSX.Element {
   return (
@@ -47,6 +48,7 @@ function MainApp() {
       <ShiftProvider>
         <Gateway>
           <CustomerDisplayBroadcast />
+          <UpdateReadyHint />
           <Routes>
             <Route path="/" element={<HomeScreen />} />
 

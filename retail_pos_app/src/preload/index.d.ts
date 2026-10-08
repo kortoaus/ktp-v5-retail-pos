@@ -268,6 +268,8 @@ export interface ElectronAPI {
     request: ZplFontTestPrintRequest,
   ) => Promise<ZplFontResult<null>>
   onZplFontProgress: (callback: (event: ZplFontProgressEvent) => void) => () => void
+  // T-24 (R-10): answer main's "may a downloaded update install now?" query.
+  onUpdateCanInstall: (isIdle: () => boolean) => () => void
 }
 
 declare global {

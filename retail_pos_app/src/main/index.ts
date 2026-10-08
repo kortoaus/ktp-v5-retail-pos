@@ -95,7 +95,7 @@ app.whenReady().then(() => {
   createCustomerWindow();
   autoConnectScale();
   autoConnectEscposPrinter();
-  checkForBootUpdate();
+  checkForBootUpdate(() => mainWindow);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

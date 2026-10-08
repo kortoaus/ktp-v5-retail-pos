@@ -72,5 +72,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
       callback(payload)
     ipcRenderer.on('zpl-font:progress', handler)
     return () => { ipcRenderer.removeListener('zpl-font:progress', handler) }
+  },
+
+  // T-24 (R-10) — main asks before installing a downloaded update; the
+  // callback answers "is the till idle right now?".
+  onUpdateCanInstall: (isIdle: () => boolean): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, requestId: number) => {
+      let idle = false
+      try {
+        idle = isIdle() === true
+      } catch {
+        idle = false
+      }
+      ipcRenderer.send('update:can-install:reply', requestId, idle)
+    }
+    ipcRenderer.on('update:can-install', handler)
+    return () => { ipcRenderer.removeListener('update:can-install', handler) }
   }
 })

@@ -1,4 +1,5 @@
 import apiService, { ApiResponse } from "../libs/api";
+import { trackCheckout } from "../libs/checkout-inflight";
 import type {
   LineAdjustmentWire,
   PaymentTypeWire,
@@ -88,10 +89,13 @@ export async function createSale(
 ): Promise<ApiResponse<SaleInvoiceCreated>> {
   const attemptKey = saleAttemptKey(cartIndex);
   const operationId = operationIdFor(attemptKey);
-  const res = await apiService.post<SaleInvoiceCreated>("/api/sale", {
-    ...payload,
-    operationId,
-  });
+  // T-24 (R-10): an update never installs while this is in flight.
+  const res = await trackCheckout(
+    apiService.post<SaleInvoiceCreated>("/api/sale", {
+      ...payload,
+      operationId,
+    }),
+  );
   settleOperation(attemptKey, res);
   return res;
 }
@@ -100,7 +104,9 @@ export async function createSale(
 export async function createSpend(
   payload: SaleCreatePayload,
 ): Promise<ApiResponse<SaleInvoiceCreated>> {
-  return apiService.post<SaleInvoiceCreated>("/api/sale/spend", payload);
+  return trackCheckout(
+    apiService.post<SaleInvoiceCreated>("/api/sale/spend", payload),
+  );
 }
 
 // REFUND invoice 생성. 서버가 D-26 drift-absorbing 수식으로 canonical 재계산
@@ -110,10 +116,12 @@ export async function createRefundInvoice(
 ): Promise<ApiResponse<SaleInvoiceCreated>> {
   const attemptKey = refundAttemptKey(payload.originalInvoiceId);
   const operationId = operationIdFor(attemptKey);
-  const res = await apiService.post<SaleInvoiceCreated>("/api/sale/refund", {
-    ...payload,
-    operationId,
-  });
+  const res = await trackCheckout(
+    apiService.post<SaleInvoiceCreated>("/api/sale/refund", {
+      ...payload,
+      operationId,
+    }),
+  );
   settleOperation(attemptKey, res);
   return res;
 }
@@ -146,10 +154,12 @@ export async function repayInvoice(
 ): Promise<ApiResponse<RepayResponse>> {
   const attemptKey = repayAttemptKey(payload.originalInvoiceId);
   const operationId = operationIdFor(attemptKey);
-  const res = await apiService.post<RepayResponse>("/api/sale/repay", {
-    ...payload,
-    operationId,
-  });
+  const res = await trackCheckout(
+    apiService.post<RepayResponse>("/api/sale/repay", {
+      ...payload,
+      operationId,
+    }),
+  );
   settleOperation(attemptKey, res);
   return res;
 }
