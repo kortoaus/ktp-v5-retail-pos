@@ -1,6 +1,7 @@
 import { PromoPrice } from "../../generated/prisma/browser";
 import { Item, Price } from "../../generated/prisma/client";
 import db from "../../libs/db";
+import { enrichItemsWithPrices } from "./item.enrich";
 
 type ItemWithPrice = Item & {
   price: Price | null;
@@ -36,16 +37,8 @@ export async function patchItemPriceService(
     },
   });
 
-  const result = items.map((item) => {
-    const price = prices.find((price) => price.itemId === item.id) || null;
-    const promoPrice =
-      promoPrices.find((promoPrice) => promoPrice.itemId === item.id) || null;
-    return {
-      ...item,
-      price,
-      promoPrice,
-    };
-  });
+  // T-24 (R-13) — Map join, first match per item (as Array.find did).
+  const result = enrichItemsWithPrices(items, prices, promoPrices);
 
   return result;
 }

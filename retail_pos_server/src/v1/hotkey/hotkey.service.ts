@@ -5,6 +5,10 @@ import {
   NotFoundException,
 } from "../../libs/exceptions";
 import { ItemInclude } from "../item/item.query.option";
+import {
+  attachItemsToHotkeyKeys,
+  enrichItemsWithPrices,
+} from "../item/item.enrich";
 
 type UpsertHotkeyDTO = {
   id?: number;
@@ -136,13 +140,8 @@ export async function getHotkeysService() {
       },
     });
 
-    const result = hotkeys.map((hotkey) => ({
-      ...hotkey,
-      keys: hotkey.keys.map((key) => ({
-        ...key,
-        item: items.find((item) => item.id === key.itemId),
-      })),
-    }));
+    // T-24 (R-13) — Map join (first match per itemId, as Array.find did).
+    const result = attachItemsToHotkeyKeys(hotkeys, items);
 
     return {
       ok: true,
@@ -153,6 +152,21 @@ export async function getHotkeysService() {
     console.error("Error getting hotkeys:", e);
     throw new InternalServerException("Internal server error");
   }
+}
+
+// T-24 (R-13) — Map joins; hotkeys keep only the first price level.
+export function buildCloudHotkeysResult<
+  K extends { itemId: number },
+  H extends { keys: K[] },
+  I extends { id: number },
+  P extends { itemId: number; prices: number[] },
+  Q extends { itemId: number; prices: number[] },
+>(hotkeys: readonly H[], items: readonly I[], prices: readonly P[], promoPrices: readonly Q[]) {
+  const itemsWithPrices = enrichItemsWithPrices(items, prices, promoPrices, {
+    price: (price) => ({ ...price, prices: price.prices.slice(0, 1) }),
+    promoPrice: (promo) => ({ ...promo, prices: promo.prices.slice(0, 1) }),
+  });
+  return attachItemsToHotkeyKeys(hotkeys, itemsWithPrices);
 }
 
 export async function getCloudHotkeysService() {
@@ -205,27 +219,12 @@ export async function getCloudHotkeysService() {
       }),
     ]);
 
-    const itemsWithPrices = items.map((item) => {
-      const price = prices.find((price) => price.itemId === item.id) || null;
-      const promoPrice =
-        promoPrices.find((promoPrice) => promoPrice.itemId === item.id) || null;
-
-      return {
-        ...item,
-        price: price ? { ...price, prices: price.prices.slice(0, 1) } : null,
-        promoPrice: promoPrice
-          ? { ...promoPrice, prices: promoPrice.prices.slice(0, 1) }
-          : null,
-      };
-    });
-
-    const resultWithItems = result.map((hotkey) => ({
-      ...hotkey,
-      keys: hotkey.keys.map((key) => ({
-        ...key,
-        item: itemsWithPrices.find((item) => item.id === key.itemId),
-      })),
-    }));
+    const resultWithItems = buildCloudHotkeysResult(
+      result,
+      items,
+      prices,
+      promoPrices,
+    );
 
     return { ok: true, result: resultWithItems };
   } catch (e) {
