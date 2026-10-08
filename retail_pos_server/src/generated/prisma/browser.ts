@@ -133,6 +133,11 @@ export type DocCounter = Prisma.DocCounterModel
  */
 export type SyncCursor = Prisma.SyncCursorModel
 /**
+ * Model CloudSyncCursor
+ * 
+ */
+export type CloudSyncCursor = Prisma.CloudSyncCursorModel
+/**
  * Model FreeTextTemplate
  * 
  */

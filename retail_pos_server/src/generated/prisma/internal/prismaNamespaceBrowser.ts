@@ -74,6 +74,7 @@ export const ModelName = {
   VoucherEvent: 'VoucherEvent',
   DocCounter: 'DocCounter',
   SyncCursor: 'SyncCursor',
+  CloudSyncCursor: 'CloudSyncCursor',
   FreeTextTemplate: 'FreeTextTemplate',
   CustomerVoucherOperation: 'CustomerVoucherOperation'
 } as const
@@ -530,6 +531,15 @@ export const SyncCursorScalarFieldEnum = {
 } as const
 
 export type SyncCursorScalarFieldEnum = (typeof SyncCursorScalarFieldEnum)[keyof typeof SyncCursorScalarFieldEnum]
+
+
+export const CloudSyncCursorScalarFieldEnum = {
+  kind: 'kind',
+  cursorAt: 'cursorAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type CloudSyncCursorScalarFieldEnum = (typeof CloudSyncCursorScalarFieldEnum)[keyof typeof CloudSyncCursorScalarFieldEnum]
 
 
 export const FreeTextTemplateScalarFieldEnum = {
