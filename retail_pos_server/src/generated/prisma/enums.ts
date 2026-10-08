@@ -83,3 +83,25 @@ export const VoucherEventType = {
 } as const
 
 export type VoucherEventType = (typeof VoucherEventType)[keyof typeof VoucherEventType]
+
+
+export const CustomerVoucherOperationKind = {
+  REDEEM: 'REDEEM',
+  VOID_REDEEM: 'VOID_REDEEM',
+  REFUND_ISSUE: 'REFUND_ISSUE',
+  VOID_REFUND_ISSUE: 'VOID_REFUND_ISSUE'
+} as const
+
+export type CustomerVoucherOperationKind = (typeof CustomerVoucherOperationKind)[keyof typeof CustomerVoucherOperationKind]
+
+
+export const CustomerVoucherOperationStatus = {
+  INTENT: 'INTENT',
+  CONFIRMED: 'CONFIRMED',
+  LINKED: 'LINKED',
+  VOIDED: 'VOIDED',
+  UNRESOLVED: 'UNRESOLVED',
+  FAILED: 'FAILED'
+} as const
+
+export type CustomerVoucherOperationStatus = (typeof CustomerVoucherOperationStatus)[keyof typeof CustomerVoucherOperationStatus]

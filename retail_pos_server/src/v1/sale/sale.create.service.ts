@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import db from "../../libs/db";
 import {
   BadRequestException,
@@ -7,6 +6,7 @@ import {
   NotFoundException,
 } from "../../libs/exceptions";
 import {
+  SaleInvoiceModel,
   StoreSettingModel,
   TerminalModel,
   TerminalShiftModel,
@@ -22,9 +22,20 @@ import {
 } from "../order/order.collect.service";
 import { calculateInvoicePoints } from "./sale.points";
 import {
-  redeemCustomerVouchersForSale,
-  voidRedeemedCustomerVouchersForSale,
-} from "../customer-voucher/customer-voucher.service";
+  defaultCvDeps,
+  redeemCustomerVouchersForOperation,
+  voidRedeemRows,
+  type CvDeps,
+} from "../customer-voucher/customer-voucher.operation";
+import { linkOperationRowsInTx } from "../customer-voucher/customer-voucher.operation.store";
+import { isUniqueViolation } from "../../libs/prisma-errors";
+import {
+  assertSameOperationPayload,
+  operationConflict,
+  operationPayloadHash,
+  resolveOperationId,
+  withOperationClaim,
+} from "./sale.operation";
 import { nextDocCounter } from "./sale.doc-counter";
 import {
   redeemUserVoucherInTx,
@@ -313,6 +324,9 @@ export interface BuildSaleInTxOpts {
   dayStart: Date;
   originalInvoiceId?: number | null;
   externalOrderId?: string | null;
+  // T-15 — client operation identity (Repay passes "<id>:sale").
+  operationId?: string | null;
+  operationPayloadHash?: string | null;
 }
 
 export async function buildSaleInTx(
@@ -327,6 +341,8 @@ export async function buildSaleInTx(
     dayStart,
     originalInvoiceId,
     externalOrderId,
+    operationId,
+    operationPayloadHash: payloadHash,
   } = opts;
   const { terminal, storeSetting, user, shift } = context;
 
@@ -376,6 +392,8 @@ export async function buildSaleInTx(
       originalInvoiceId: originalInvoiceId ?? null,
       // S3: C&C 주문 연계 — createSaleService 경로의 원본 SALE 만.
       externalOrderId: externalOrderId ?? null,
+      operationId: operationId ?? null,
+      operationPayloadHash: payloadHash ?? null,
       shiftId: shift.id,
       terminalId: terminal.id,
       userId: user.id,
@@ -465,9 +483,86 @@ export async function buildSaleInTx(
 }
 
 // ── 3. Main service ─────────────────────────────────────────
+//
+// T-15 (platform/D-10) — R-3/V-1 + R-4/V-2:
+//   1. operationId from the till (or server-minted for old tills / Runner);
+//      an invoice already carrying it → replay (same payload hash) or 409.
+//   2. customer-voucher redeems through the durable ledger
+//      (customer-voucher.operation.ts) — INTENT before CRM, CONFIRMED after.
+//   3. local transaction: invoice (+ operationId/hash) and ledger rows LINKED.
+//   4. local failure → CONFIRMED redeems voided (VOIDED, or UNRESOLVED for
+//      the reconciler) — never only logged.
+export interface PersistSaleArgs {
+  payload: SaleCreatePayload;
+  context: SaleContext;
+  dayStr: string;
+  yyyymmdd: string;
+  dayStart: Date;
+  externalOrderId: string | null;
+  operationId: string;
+  payloadHash: string;
+  linkOperationRowIds: number[];
+}
+
+export interface SaleCreateDeps extends CvDeps {
+  findInvoiceByOperationId(operationId: string): Promise<SaleInvoiceModel | null>;
+  findInvoiceByExternalOrderId(
+    externalOrderId: string,
+  ): Promise<{ id: number; serial: string | null } | null>;
+  persistSale(args: PersistSaleArgs): Promise<SaleInvoiceModel>;
+  // Post-commit hooks (cloud upload trigger, C&C collect). Returns fields
+  // merged into the response result.
+  afterCommit(invoice: SaleInvoiceModel): Promise<Record<string, unknown>>;
+}
+
+export const defaultSaleCreateDeps: SaleCreateDeps = {
+  ...defaultCvDeps,
+  findInvoiceByOperationId: (operationId) =>
+    db.saleInvoice.findUnique({ where: { operationId } }),
+  findInvoiceByExternalOrderId: (externalOrderId) =>
+    db.saleInvoice.findFirst({
+      where: { externalOrderId },
+      select: { id: true, serial: true },
+    }),
+  persistSale: (args) =>
+    db.$transaction(async (tx) => {
+      const invoice = await buildSaleInTx(tx, {
+        payload: args.payload,
+        context: args.context,
+        dayStr: args.dayStr,
+        yyyymmdd: args.yyyymmdd,
+        dayStart: args.dayStart,
+        externalOrderId: args.externalOrderId,
+        operationId: args.operationId,
+        operationPayloadHash: args.payloadHash,
+      });
+      await linkOperationRowsInTx(tx, args.linkOperationRowIds, invoice.id);
+      return invoice;
+    }),
+  afterCommit: async (invoice) => {
+    triggerSyncAllSaleInvoices();
+    // S3 — 커밋 후 crm collect 훅 (best-effort). 응답 DTO 에 트라이스테이트
+    // collectResult(collected/pending/conflict) — pending 은 스윕이 재시도,
+    // conflict 는 영구 실패(사람 확인). 판매는 어느 경우든 성립 유지.
+    // collectSynced 는 구형 앱(부팅 시에만 자동업데이트) 하위호환용 boolean.
+    // A replay re-runs it too (crm collect is idempotent).
+    if (invoice.externalOrderId != null) {
+      const collectResult = await collectInvoiceOrderWithDeadline(invoice);
+      // 직접 시도 후에야 스윕 트리거 — 새 인보이스를 두 경로가 동시에 치는
+      // 것을 줄인다 (겹쳐도 crm 멱등이라 안전).
+      triggerSyncPendingOrderCollects();
+      return { collectResult, collectSynced: collectResult === "collected" };
+    }
+    // 주문 연계 없는 판매도 밀린 collect 를 스윕 (업싱크 트리거 관례).
+    triggerSyncPendingOrderCollects();
+    return {};
+  },
+};
+
 export async function createSaleService(
   payload: SaleCreatePayload,
   context: SaleContext,
+  deps: SaleCreateDeps = defaultSaleCreateDeps,
 ) {
   try {
     if (payload.type !== "SALE")
@@ -476,121 +571,98 @@ export async function createSaleService(
     // 금액 검증은 순수 함수 — tx 밖에서 fail-fast.
     validateAmounts(payload);
 
-    // S3 — C&C 주문 연계. 정규화 후 이중 결제 가드: 같은 주문의 인보이스가
-    // 이미 있으면 400 (DB @unique 제약이 레이스 최종 방어선이지만, 여기서
-    // 먼저 걸러 명확한 메시지를 준다).
-    const externalOrderId = normalizeExternalOrderId(payload.externalOrderId);
-    if (externalOrderId != null) {
-      const existing = await db.saleInvoice.findFirst({
-        where: { externalOrderId },
-        select: { id: true, serial: true },
-      });
-      if (existing) {
-        throw new BadRequestException(
-          `Order already paid on invoice ${existing.serial ?? existing.id} — duplicate order payment blocked`,
-        );
+    const { operationId } = resolveOperationId(payload.operationId, "sale");
+    const payloadHash = operationPayloadHash(payload);
+
+    const respond = async (invoice: SaleInvoiceModel, replayed: boolean) => {
+      const extra = await deps.afterCommit(invoice);
+      return {
+        ok: true,
+        replayed,
+        ...(replayed ? { msg: "Sale already recorded — returning the original invoice" } : {}),
+        result: { ...invoice, ...extra, replayed },
+      };
+    };
+
+    return await withOperationClaim(operationId, async () => {
+      const recorded = await deps.findInvoiceByOperationId(operationId);
+      if (recorded) {
+        if (recorded.type !== "SALE")
+          throw operationConflict("This operationId belongs to another kind of invoice (409).");
+        assertSameOperationPayload(recorded, payloadHash);
+        return respond(recorded, true);
       }
-    }
 
-    const hasCustomerVoucherPayment = payload.payments.some(
-      (payment) =>
-        payment.type === "VOUCHER" &&
-        payment.entityType === "customer-voucher",
-    );
-    if (hasCustomerVoucherPayment && !payload.member?.id) {
-      throw new BadRequestException("customer voucher requires member");
-    }
+      // S3 — C&C 주문 연계. 정규화 후 이중 결제 가드: 같은 주문의 인보이스가
+      // 이미 있으면 400 (DB @unique 제약이 레이스 최종 방어선이지만, 여기서
+      // 먼저 걸러 명확한 메시지를 준다).
+      const externalOrderId = normalizeExternalOrderId(payload.externalOrderId);
+      if (externalOrderId != null) {
+        const existing = await deps.findInvoiceByExternalOrderId(externalOrderId);
+        if (existing) {
+          throw new BadRequestException(
+            `Order already paid on invoice ${existing.serial ?? existing.id} — duplicate order payment blocked`,
+          );
+        }
+      }
 
-    const invoiceRequestId = randomUUID();
-    const redeemedCustomerVouchers = hasCustomerVoucherPayment
-      ? await redeemCustomerVouchersForSale({
-          invoiceRequestId,
-          memberId: payload.member!.id,
-          payments: payload.payments,
-        })
-      : [];
+      const hasCustomerVoucherPayment = payload.payments.some(
+        (payment) =>
+          payment.type === "VOUCHER" &&
+          payment.entityType === "customer-voucher",
+      );
+      if (hasCustomerVoucherPayment && !payload.member?.id) {
+        throw new BadRequestException("customer voucher requires member");
+      }
 
-    const { dayStr, yyyymmdd, dayStart } = nowAnchor();
+      const confirmed = hasCustomerVoucherPayment
+        ? await redeemCustomerVouchersForOperation(
+            {
+              operationId,
+              memberId: payload.member!.id,
+              payments: payload.payments,
+            },
+            deps,
+          )
+        : [];
 
-    const invoice = await (async () => {
+      const { dayStr, yyyymmdd, dayStart } = nowAnchor();
+
+      let invoice: SaleInvoiceModel;
       try {
-        return await db.$transaction(async (tx) => {
-          return buildSaleInTx(tx, {
-            payload,
-            context,
-            dayStr,
-            yyyymmdd,
-            dayStart,
-            externalOrderId,
-          });
+        invoice = await deps.persistSale({
+          payload,
+          context,
+          dayStr,
+          yyyymmdd,
+          dayStart,
+          externalOrderId,
+          operationId,
+          payloadHash,
+          linkOperationRowIds: confirmed.map((row) => row.id),
         });
       } catch (persistenceError) {
-        if (redeemedCustomerVouchers.length > 0) {
-          try {
-            await voidRedeemedCustomerVouchersForSale({
-              redeemed: redeemedCustomerVouchers,
-              reason: "local sale persistence failed",
-            });
-          } catch (voidError) {
-            console.error("[customer-voucher] redeem void failed", {
-              voidError,
-              persistenceError,
-              redeemed: redeemedCustomerVouchers,
-              invoiceRequestId,
-              memberId: payload.member?.id,
-              terminalId: context.terminal.id,
-              terminalName: context.terminal.name,
-              userId: context.user.id,
-              userName: context.user.name,
-              shiftId: context.shift.id,
-              total: payload.total,
-              payloadSummary: {
-                type: payload.type,
-                rowCount: payload.rows.length,
-                paymentCount: payload.payments.length,
-                customerVoucherPayments: payload.payments
-                  .filter(
-                    (payment) =>
-                      payment.type === "VOUCHER" &&
-                      payment.entityType === "customer-voucher",
-                  )
-                  .map((payment) => ({
-                    amount: payment.amount,
-                    entityId: payment.entityId,
-                    entityLabel: payment.entityLabel,
-                  })),
-              },
-            });
-          }
+        if (isUniqueViolation(persistenceError)) {
+          const raced = await deps.findInvoiceByOperationId(operationId);
+          if (raced && raced.operationPayloadHash === payloadHash)
+            return respond(raced, true);
+        }
+        if (confirmed.length > 0) {
+          console.error("[customer-voucher] local sale persistence failed — voiding redeems", {
+            operationId,
+            terminalId: context.terminal.id,
+            userId: context.user.id,
+            shiftId: context.shift.id,
+            total: payload.total,
+            persistenceError,
+          });
+          await voidRedeemRows(confirmed, "local sale persistence failed", deps);
         }
         throw persistenceError;
       }
-    })();
 
-    triggerSyncAllSaleInvoices();
-
-    // S3 — 커밋 후 crm collect 훅 (best-effort). 응답 DTO 에 트라이스테이트
-    // collectResult(collected/pending/conflict) — pending 은 스윕이 재시도,
-    // conflict 는 영구 실패(사람 확인). 판매는 어느 경우든 성립 유지.
-    // collectSynced 는 구형 앱(부팅 시에만 자동업데이트) 하위호환용 boolean.
-    if (invoice.externalOrderId != null) {
-      const collectResult = await collectInvoiceOrderWithDeadline(invoice);
-      // 직접 시도 후에야 스윕 트리거 — 새 인보이스를 두 경로가 동시에 치는
-      // 것을 줄인다 (겹쳐도 crm 멱등이라 안전).
-      triggerSyncPendingOrderCollects();
-      return {
-        ok: true,
-        result: {
-          ...invoice,
-          collectResult,
-          collectSynced: collectResult === "collected",
-        },
-      };
-    }
-
-    // 주문 연계 없는 판매도 밀린 collect 를 스윕 (업싱크 트리거 관례).
-    triggerSyncPendingOrderCollects();
-    return { ok: true, result: invoice };
+      return respond(invoice, false);
+    });
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("createSaleService error:", e);

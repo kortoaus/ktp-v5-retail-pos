@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { scopeMiddleware, userMiddleware } from "../user/user.middleware";
 import {
+  getCustomerVoucherOperationsController,
   getValidCustomerVouchersController,
   issueCustomerVoucherController,
 } from "./customer-voucher.controller";
@@ -19,6 +20,15 @@ customerVoucherRouter.post(
   userMiddleware,
   scopeMiddleware("sale"),
   issueCustomerVoucherController,
+);
+
+// T-15 — local customer-voucher operation ledger, e.g.
+// ?status=UNRESOLVED,CONFIRMED (default INTENT,CONFIRMED,UNRESOLVED).
+customerVoucherRouter.get(
+  "/operations",
+  userMiddleware,
+  scopeMiddleware("sale"),
+  getCustomerVoucherOperationsController,
 );
 
 export default customerVoucherRouter;

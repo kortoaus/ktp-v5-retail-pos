@@ -14,6 +14,7 @@ import {
 } from "./v1/order/order.pending-broadcaster";
 import dotenv from "dotenv";
 import { initStaffSession } from "./v1/user/staff-session";
+import { startCustomerVoucherReconciler } from "./v1/customer-voucher/customer-voucher.reconcile.service";
 
 dotenv.config();
 
@@ -55,4 +56,7 @@ httpServer.listen(port, () => {
   // D3 — 멤버 익명화 이벤트 따라잡기 (매장이 migrate 를 자주 안 돌려도
   // 재기동마다 pull — cloud.member-anonymize.service.ts).
   triggerSyncMemberAnonymizeEvents();
+  // T-15 — settle customer-voucher operations left open by a crash, a lost
+  // CRM answer or a failed void: now, then every 5 minutes.
+  startCustomerVoucherReconciler();
 });

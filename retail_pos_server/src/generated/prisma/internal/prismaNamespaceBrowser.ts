@@ -74,7 +74,8 @@ export const ModelName = {
   VoucherEvent: 'VoucherEvent',
   DocCounter: 'DocCounter',
   SyncCursor: 'SyncCursor',
-  FreeTextTemplate: 'FreeTextTemplate'
+  FreeTextTemplate: 'FreeTextTemplate',
+  CustomerVoucherOperation: 'CustomerVoucherOperation'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -424,6 +425,8 @@ export const SaleInvoiceScalarFieldEnum = {
   cloudId: 'cloudId',
   externalOrderId: 'externalOrderId',
   externalOrderCollectSyncedAt: 'externalOrderCollectSyncedAt',
+  operationId: 'operationId',
+  operationPayloadHash: 'operationPayloadHash',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -538,6 +541,27 @@ export const FreeTextTemplateScalarFieldEnum = {
 } as const
 
 export type FreeTextTemplateScalarFieldEnum = (typeof FreeTextTemplateScalarFieldEnum)[keyof typeof FreeTextTemplateScalarFieldEnum]
+
+
+export const CustomerVoucherOperationScalarFieldEnum = {
+  id: 'id',
+  operationId: 'operationId',
+  kind: 'kind',
+  voucherId: 'voucherId',
+  memberId: 'memberId',
+  amount: 'amount',
+  crmRequestId: 'crmRequestId',
+  status: 'status',
+  invoiceId: 'invoiceId',
+  crmEventId: 'crmEventId',
+  crmVoucherId: 'crmVoucherId',
+  attempts: 'attempts',
+  lastError: 'lastError',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type CustomerVoucherOperationScalarFieldEnum = (typeof CustomerVoucherOperationScalarFieldEnum)[keyof typeof CustomerVoucherOperationScalarFieldEnum]
 
 
 export const SortOrder = {

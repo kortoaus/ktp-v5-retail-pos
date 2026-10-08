@@ -30,9 +30,3 @@ export interface CustomerVoucherRefundIssueRequest {
   entitySerial?: string | null;
   note?: string | null;
 }
-
-export interface CustomerVoucherRedeemResult {
-  requestId: string;
-  voucherId: number;
-  amount: number;
-}

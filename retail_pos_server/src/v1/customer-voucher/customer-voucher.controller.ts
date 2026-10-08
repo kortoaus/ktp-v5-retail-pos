@@ -3,6 +3,7 @@ import {
   getValidCustomerVouchersService,
   issueCustomerVoucherService,
 } from "./customer-voucher.service";
+import { listCustomerVoucherOperationsService } from "./customer-voucher.operations.query";
 
 export async function getValidCustomerVouchersController(
   req: Request,
@@ -27,4 +28,15 @@ export async function issueCustomerVoucherController(req: Request, res: Response
     return;
   }
   res.json(await issueCustomerVoucherService(memberId));
+}
+
+export async function getCustomerVoucherOperationsController(
+  req: Request,
+  res: Response,
+) {
+  res.json(
+    await listCustomerVoucherOperationsService(
+      typeof req.query.status === "string" ? req.query.status : undefined,
+    ),
+  );
 }

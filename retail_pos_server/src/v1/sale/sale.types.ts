@@ -70,6 +70,10 @@ export interface SaleCreatePayload {
   // 원본 SALE 전용: repay 가 합성하는 자식 SALE payload 에는 절대 넣지
   // 않는다 (sale.repay.service.synthesizeNewSalePayload). SPEND 무시.
   externalOrderId?: string;
+  // T-15 (platform/D-10) — till-minted attempt id, kept until the server
+  // answers ok. Optional: old tills / Runner omit it (server mints one, no
+  // retry idempotency). See sale.operation.ts.
+  operationId?: string;
 }
 
 // ── REFUND payload ─────────────────────────────────────────────
@@ -86,6 +90,9 @@ export interface RefundCreatePayload {
   rows: RefundRowPayload[];
   payments: PaymentPayload[];
   note?: string;
+  // T-15 — see SaleCreatePayload.operationId. Also the CRM refund-issue
+  // identity: entityId "<operationId>:cv-refund:<tender index>".
+  operationId?: string;
 }
 
 // ── REPAY payload ─────────────────────────────────────────────
@@ -107,4 +114,6 @@ export interface RepayPayload {
   payments: PaymentPayload[]; // 새 tender mix. CASH.amount = cashApplied.
   cashChange: number; // 새 결제의 cash 거스름돈 (cashIntent - cashApplied)
   note?: string;
+  // T-15 — stored as "<operationId>:refund" / "<operationId>:sale".
+  operationId?: string;
 }

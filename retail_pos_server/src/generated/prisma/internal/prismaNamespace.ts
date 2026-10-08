@@ -407,7 +407,8 @@ export const ModelName = {
   VoucherEvent: 'VoucherEvent',
   DocCounter: 'DocCounter',
   SyncCursor: 'SyncCursor',
-  FreeTextTemplate: 'FreeTextTemplate'
+  FreeTextTemplate: 'FreeTextTemplate',
+  CustomerVoucherOperation: 'CustomerVoucherOperation'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -423,7 +424,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "company" | "brand" | "item" | "itemScaleData" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter" | "syncCursor" | "freeTextTemplate"
+    modelProps: "company" | "brand" | "item" | "itemScaleData" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter" | "syncCursor" | "freeTextTemplate" | "customerVoucherOperation"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2203,6 +2204,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    CustomerVoucherOperation: {
+      payload: Prisma.$CustomerVoucherOperationPayload<ExtArgs>
+      fields: Prisma.CustomerVoucherOperationFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.CustomerVoucherOperationFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CustomerVoucherOperationPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.CustomerVoucherOperationFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CustomerVoucherOperationPayload>
+        }
+        findFirst: {
+          args: Prisma.CustomerVoucherOperationFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CustomerVoucherOperationPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.CustomerVoucherOperationFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CustomerVoucherOperationPayload>
+        }
+        findMany: {
+          args: Prisma.CustomerVoucherOperationFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CustomerVoucherOperationPayload>[]
+        }
+        create: {
+          args: Prisma.CustomerVoucherOperationCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CustomerVoucherOperationPayload>
+        }
+        createMany: {
+          args: Prisma.CustomerVoucherOperationCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.CustomerVoucherOperationCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CustomerVoucherOperationPayload>[]
+        }
+        delete: {
+          args: Prisma.CustomerVoucherOperationDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CustomerVoucherOperationPayload>
+        }
+        update: {
+          args: Prisma.CustomerVoucherOperationUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CustomerVoucherOperationPayload>
+        }
+        deleteMany: {
+          args: Prisma.CustomerVoucherOperationDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.CustomerVoucherOperationUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.CustomerVoucherOperationUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CustomerVoucherOperationPayload>[]
+        }
+        upsert: {
+          args: Prisma.CustomerVoucherOperationUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CustomerVoucherOperationPayload>
+        }
+        aggregate: {
+          args: Prisma.CustomerVoucherOperationAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateCustomerVoucherOperation>
+        }
+        groupBy: {
+          args: Prisma.CustomerVoucherOperationGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.CustomerVoucherOperationGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.CustomerVoucherOperationCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.CustomerVoucherOperationCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -2573,6 +2648,8 @@ export const SaleInvoiceScalarFieldEnum = {
   cloudId: 'cloudId',
   externalOrderId: 'externalOrderId',
   externalOrderCollectSyncedAt: 'externalOrderCollectSyncedAt',
+  operationId: 'operationId',
+  operationPayloadHash: 'operationPayloadHash',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -2687,6 +2764,27 @@ export const FreeTextTemplateScalarFieldEnum = {
 } as const
 
 export type FreeTextTemplateScalarFieldEnum = (typeof FreeTextTemplateScalarFieldEnum)[keyof typeof FreeTextTemplateScalarFieldEnum]
+
+
+export const CustomerVoucherOperationScalarFieldEnum = {
+  id: 'id',
+  operationId: 'operationId',
+  kind: 'kind',
+  voucherId: 'voucherId',
+  memberId: 'memberId',
+  amount: 'amount',
+  crmRequestId: 'crmRequestId',
+  status: 'status',
+  invoiceId: 'invoiceId',
+  crmEventId: 'crmEventId',
+  crmVoucherId: 'crmVoucherId',
+  attempts: 'attempts',
+  lastError: 'lastError',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type CustomerVoucherOperationScalarFieldEnum = (typeof CustomerVoucherOperationScalarFieldEnum)[keyof typeof CustomerVoucherOperationScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -2917,6 +3015,34 @@ export type EnumVoucherEventTypeFieldRefInput<$PrismaModel> = FieldRefInputType<
 export type ListEnumVoucherEventTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'VoucherEventType[]'>
     
 
+
+/**
+ * Reference to a field of type 'CustomerVoucherOperationKind'
+ */
+export type EnumCustomerVoucherOperationKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'CustomerVoucherOperationKind'>
+    
+
+
+/**
+ * Reference to a field of type 'CustomerVoucherOperationKind[]'
+ */
+export type ListEnumCustomerVoucherOperationKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'CustomerVoucherOperationKind[]'>
+    
+
+
+/**
+ * Reference to a field of type 'CustomerVoucherOperationStatus'
+ */
+export type EnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'CustomerVoucherOperationStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'CustomerVoucherOperationStatus[]'
+ */
+export type ListEnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'CustomerVoucherOperationStatus[]'>
+    
+
 /**
  * Batch Payload for updateMany & deleteMany & createMany
  */
@@ -3036,6 +3162,7 @@ export type GlobalOmitConfig = {
   docCounter?: Prisma.DocCounterOmit
   syncCursor?: Prisma.SyncCursorOmit
   freeTextTemplate?: Prisma.FreeTextTemplateOmit
+  customerVoucherOperation?: Prisma.CustomerVoucherOperationOmit
 }
 
 /* Types for Logging */

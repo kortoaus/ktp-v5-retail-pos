@@ -521,6 +521,16 @@ model SaleInvoice {
   externalOrderId              String?   @unique
   externalOrderCollectSyncedAt DateTime?
 
+  // ── Client operation identity (T-15, platform/D-10) ─────
+  // operationId: the till's checkout/refund attempt id (UUID kept until the
+  //   server answers ok). One column for SALE, REFUND and Repay's pair — Repay
+  //   stores "<id>:refund" / "<id>:sale". Server-minted when an old till /
+  //   Runner sends none. NULL on rows written before T-15.
+  // operationPayloadHash: sha256 of the request payload (minus operationId);
+  //   a retry with the same id and hash replays this invoice, another hash 409.
+  operationId          String? @unique
+  operationPayloadHash String?
+
   // ── Relations ───────────────────────────────────────────
   rows     SaleInvoiceRow[]
   payments SaleInvoicePayment[]
@@ -848,3 +858,52 @@ model FreeTextTemplate {
 }
 
 // Local Data End
+
+// ── Customer-voucher operation ledger (T-15, platform/D-10) ───────────────
+// One row per CRM money effect the store server asks for (REDEEM for a sale,
+// REFUND_ISSUE for a refund) plus audit rows for the voids it sends
+// (VOID_REDEEM / VOID_REFUND_ISSUE). The primary row's status is the truth:
+//   INTENT      committed before the CRM call
+//   CONFIRMED   CRM answered ok, local invoice not written yet
+//   LINKED      local invoice committed (same tx sets invoiceId)
+//   VOIDED      CRM effect reversed (or CRM reports it voided)
+//   UNRESOLVED  CRM outcome unknown (timeout / 5xx / failed void) — the
+//               reconciler asks CRM for the effective state
+//   FAILED      CRM definitively did nothing
+// Reconciler: src/v1/customer-voucher/customer-voucher.reconcile.service.ts.
+enum CustomerVoucherOperationKind {
+  REDEEM
+  VOID_REDEEM
+  REFUND_ISSUE
+  VOID_REFUND_ISSUE
+}
+
+enum CustomerVoucherOperationStatus {
+  INTENT
+  CONFIRMED
+  LINKED
+  VOIDED
+  UNRESOLVED
+  FAILED
+}
+
+model CustomerVoucherOperation {
+  id           Int                            @id @default(autoincrement())
+  operationId  String
+  kind         CustomerVoucherOperationKind
+  voucherId    Int? // CRM voucher redeemed; for REFUND_ISSUE the issued voucher once known
+  memberId     String?
+  amount       Int // cents, positive
+  crmRequestId String                         @unique // redeem requestId / refund-issue entityId / void requestId
+  status       CustomerVoucherOperationStatus @default(INTENT)
+  invoiceId    Int? // FK-by-convention to SaleInvoice.id (set with LINKED)
+  crmEventId   Int?
+  crmVoucherId Int?
+  attempts     Int                            @default(0)
+  lastError    String?
+  createdAt    DateTime                       @default(now())
+  updatedAt    DateTime                       @updatedAt
+
+  @@index([operationId])
+  @@index([status, updatedAt])
+}

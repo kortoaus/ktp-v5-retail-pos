@@ -32,6 +32,14 @@ import {
   validateAmounts,
 } from "./sale.create.service";
 import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
+import { isUniqueViolation } from "../../libs/prisma-errors";
+import {
+  assertSameOperationPayload,
+  operationConflict,
+  operationPayloadHash,
+  resolveOperationId,
+  withOperationClaim,
+} from "./sale.operation";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Sale repay — "같은 거래의 tender 만 바꾼다" 한 방 서비스
@@ -48,6 +56,14 @@ import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
 //   - orig.shiftId === current shift
 //   - now - orig.createdAt < 10분
 //   - orig.payments 에 customer-voucher 없음
+//   - 새 payments 에도 customer-voucher 없음 (T-15 / V-4 — buildSaleInTx 는
+//     CRM redeem 을 하지 않으므로 서버에서 거부)
+//
+// T-15 operation identity: the till's operationId is stored as
+// "<id>:refund" on the REFUND and "<id>:sale" on the new SALE. A retry with
+// the same id + payload replays { refund, newSale }, another payload → 409.
+// No CRM call happens here (customer-voucher originals are refused), so the
+// V-6 reachability rule never applies to Repay.
 //
 // 추적: new SALE.originalInvoiceId = 원본 SALE.id. `refunds` 관계는 이제 SALE
 // 자식도 포함할 수 있게 되어, 서버/클라 모두 `type === 'REFUND'` 로 source
@@ -64,7 +80,7 @@ export interface RepayContext {
 }
 
 // ── Shape validation ────────────────────────────────────────────────────────
-function validatePayloadShape(p: RepayPayload) {
+export function validateRepayPayloadShape(p: RepayPayload) {
   if (!Number.isFinite(p.originalInvoiceId))
     throw new BadRequestException("originalInvoiceId required");
   if (!Array.isArray(p.payments) || p.payments.length === 0)
@@ -72,13 +88,19 @@ function validatePayloadShape(p: RepayPayload) {
   for (const pm of p.payments) {
     if (!Number.isFinite(pm.amount) || pm.amount <= 0)
       throw new BadRequestException("payment amount must be > 0");
+    // V-4 — the replacement tenders are recorded by buildSaleInTx, which does
+    // no CRM validation/debit: a Customer Voucher here would be unpaid value.
+    if (pm.entityType === "customer-voucher")
+      throw new BadRequestException(
+        "Repay cannot take a Customer Voucher as a new tender — use a normal sale instead",
+      );
   }
   if (!Number.isFinite(p.cashChange) || p.cashChange < 0)
     throw new BadRequestException("cashChange must be >= 0");
 }
 
 // ── Eligibility ─────────────────────────────────────────────────────────────
-function validateEligibility(
+export function validateEligibility(
   orig: OrigInvoice,
   context: RepayContext,
   now: Date,
@@ -249,76 +271,118 @@ export async function createRepayService(
   context: RepayContext,
 ) {
   try {
-    validatePayloadShape(payload);
+    validateRepayPayloadShape(payload);
 
-    // ── Time anchor + Transaction ──
-    const { dayStr, yyyymmdd, dayStart } = nowAnchor();
+    const { operationId } = resolveOperationId(payload.operationId, "repay");
+    const payloadHash = operationPayloadHash(payload);
+    const refundOperationId = `${operationId}:refund`;
+    const saleOperationId = `${operationId}:sale`;
 
-    const result = await db.$transaction(async (tx) => {
-      await lockOriginalInvoiceInTx(tx, payload.originalInvoiceId);
-
-      const orig = await loadOriginalOrThrow(payload.originalInvoiceId, tx);
-
-      const now = new Date();
-      validateEligibility(orig, context, now);
-
-      // ── (a) Refund 준비 ──
-      const refundPayload = buildFullRefundPayload(orig);
-      const computedRefund = computeRefundRows(orig, refundPayload.rows);
-      const refundAggregates = aggregateRefund(
-        computedRefund,
-        refundPayload.payments,
-      );
-      // Refund 합 == orig 총액 검증 (drift 없으므로 정확히 일치해야 함)
-      const refundPaySum = refundPayload.payments.reduce(
-        (s, p) => s + p.amount,
-        0,
-      );
-      if (refundPaySum !== refundAggregates.total)
-        throw new InternalServerException(
-          `repay refund mirror sum ${refundPaySum} !== aggregated total ${refundAggregates.total}`,
-        );
-      validateTenderCaps(orig, refundPayload.payments);
-
-      // ── (b) New SALE 준비 ──
-      const newSalePayload = synthesizeNewSalePayload(
-        orig,
-        payload.payments,
-        payload.cashChange,
-        payload.note,
-        surchargeRateOf(context.storeSetting),
-      );
-      // validateAmounts — rows invariants, payments sum == total 등 self-check
-      validateAmounts(newSalePayload);
-
-      const refund = await buildRefundInTx(tx, {
-        orig,
-        computed: computedRefund,
-        aggregates: refundAggregates,
-        payments: refundPayload.payments,
-        pointsReversed: 0,
-        note: refundPayload.note ?? null,
-        context,
-        dayStr,
-        yyyymmdd,
-        dayStart,
+    const findRecorded = async () => {
+      const refund = await db.saleInvoice.findUnique({
+        where: { operationId: refundOperationId },
       });
-
-      const newSale = await buildSaleInTx(tx, {
-        payload: newSalePayload,
-        context,
-        dayStr,
-        yyyymmdd,
-        dayStart,
-        originalInvoiceId: orig.id,
+      if (!refund) return null;
+      assertSameOperationPayload(refund, payloadHash);
+      const newSale = await db.saleInvoice.findUnique({
+        where: { operationId: saleOperationId },
       });
+      if (!newSale)
+        throw operationConflict("Repay operation is incomplete (409) — check the invoices.");
+      return {
+        ok: true,
+        replayed: true,
+        msg: "Repay already recorded — returning the original invoices",
+        result: { refund, newSale, replayed: true },
+      };
+    };
 
-      return { refund, newSale };
+    return await withOperationClaim(operationId, async () => {
+      const recorded = await findRecorded();
+      if (recorded) return recorded;
+
+      // ── Time anchor + Transaction ──
+      const { dayStr, yyyymmdd, dayStart } = nowAnchor();
+
+      let result;
+      try {
+        result = await db.$transaction(async (tx) => {
+          await lockOriginalInvoiceInTx(tx, payload.originalInvoiceId);
+
+          const orig = await loadOriginalOrThrow(payload.originalInvoiceId, tx);
+
+          const now = new Date();
+          validateEligibility(orig, context, now);
+
+          // ── (a) Refund 준비 ──
+          const refundPayload = buildFullRefundPayload(orig);
+          const computedRefund = computeRefundRows(orig, refundPayload.rows);
+          const refundAggregates = aggregateRefund(
+            computedRefund,
+            refundPayload.payments,
+          );
+          // Refund 합 == orig 총액 검증 (drift 없으므로 정확히 일치해야 함)
+          const refundPaySum = refundPayload.payments.reduce(
+            (s, p) => s + p.amount,
+            0,
+          );
+          if (refundPaySum !== refundAggregates.total)
+            throw new InternalServerException(
+              `repay refund mirror sum ${refundPaySum} !== aggregated total ${refundAggregates.total}`,
+            );
+          validateTenderCaps(orig, refundPayload.payments);
+
+          // ── (b) New SALE 준비 ──
+          const newSalePayload = synthesizeNewSalePayload(
+            orig,
+            payload.payments,
+            payload.cashChange,
+            payload.note,
+            surchargeRateOf(context.storeSetting),
+          );
+          // validateAmounts — rows invariants, payments sum == total 등 self-check
+          validateAmounts(newSalePayload);
+
+          const refund = await buildRefundInTx(tx, {
+            orig,
+            computed: computedRefund,
+            aggregates: refundAggregates,
+            payments: refundPayload.payments,
+            pointsReversed: 0,
+            note: refundPayload.note ?? null,
+            context,
+            dayStr,
+            yyyymmdd,
+            dayStart,
+            operationId: refundOperationId,
+            operationPayloadHash: payloadHash,
+          });
+
+          const newSale = await buildSaleInTx(tx, {
+            payload: newSalePayload,
+            context,
+            dayStr,
+            yyyymmdd,
+            dayStart,
+            originalInvoiceId: orig.id,
+            operationId: saleOperationId,
+            operationPayloadHash: payloadHash,
+          });
+
+          return { refund, newSale };
+        });
+      } catch (e) {
+        if (isUniqueViolation(e)) {
+          const raced = await findRecorded();
+          if (raced) return raced;
+        }
+        throw e;
+      }
+
+      triggerSyncAllSaleInvoices();
+
+      return { ok: true, replayed: false, result: { ...result, replayed: false } };
     });
-
-    triggerSyncAllSaleInvoices();
-
-    return { ok: true, result };
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("createRepayService error:", e);

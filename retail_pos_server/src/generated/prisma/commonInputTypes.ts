@@ -433,6 +433,40 @@ export type JsonWithAggregatesFilterBase<$PrismaModel = never> = {
   _max?: Prisma.NestedJsonFilter<$PrismaModel>
 }
 
+export type EnumCustomerVoucherOperationKindFilter<$PrismaModel = never> = {
+  equals?: $Enums.CustomerVoucherOperationKind | Prisma.EnumCustomerVoucherOperationKindFieldRefInput<$PrismaModel>
+  in?: $Enums.CustomerVoucherOperationKind[] | Prisma.ListEnumCustomerVoucherOperationKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.CustomerVoucherOperationKind[] | Prisma.ListEnumCustomerVoucherOperationKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumCustomerVoucherOperationKindFilter<$PrismaModel> | $Enums.CustomerVoucherOperationKind
+}
+
+export type EnumCustomerVoucherOperationStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.CustomerVoucherOperationStatus | Prisma.EnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.CustomerVoucherOperationStatus[] | Prisma.ListEnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.CustomerVoucherOperationStatus[] | Prisma.ListEnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumCustomerVoucherOperationStatusFilter<$PrismaModel> | $Enums.CustomerVoucherOperationStatus
+}
+
+export type EnumCustomerVoucherOperationKindWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.CustomerVoucherOperationKind | Prisma.EnumCustomerVoucherOperationKindFieldRefInput<$PrismaModel>
+  in?: $Enums.CustomerVoucherOperationKind[] | Prisma.ListEnumCustomerVoucherOperationKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.CustomerVoucherOperationKind[] | Prisma.ListEnumCustomerVoucherOperationKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumCustomerVoucherOperationKindWithAggregatesFilter<$PrismaModel> | $Enums.CustomerVoucherOperationKind
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumCustomerVoucherOperationKindFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumCustomerVoucherOperationKindFilter<$PrismaModel>
+}
+
+export type EnumCustomerVoucherOperationStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.CustomerVoucherOperationStatus | Prisma.EnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.CustomerVoucherOperationStatus[] | Prisma.ListEnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.CustomerVoucherOperationStatus[] | Prisma.ListEnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumCustomerVoucherOperationStatusWithAggregatesFilter<$PrismaModel> | $Enums.CustomerVoucherOperationStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumCustomerVoucherOperationStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumCustomerVoucherOperationStatusFilter<$PrismaModel>
+}
+
 export type NestedIntFilter<$PrismaModel = never> = {
   equals?: number | Prisma.IntFieldRefInput<$PrismaModel>
   in?: number[] | Prisma.ListIntFieldRefInput<$PrismaModel>
@@ -798,6 +832,40 @@ export type NestedJsonFilterBase<$PrismaModel = never> = {
   gt?: runtime.InputJsonValue | Prisma.JsonFieldRefInput<$PrismaModel>
   gte?: runtime.InputJsonValue | Prisma.JsonFieldRefInput<$PrismaModel>
   not?: runtime.InputJsonValue | Prisma.JsonFieldRefInput<$PrismaModel> | Prisma.JsonNullValueFilter
+}
+
+export type NestedEnumCustomerVoucherOperationKindFilter<$PrismaModel = never> = {
+  equals?: $Enums.CustomerVoucherOperationKind | Prisma.EnumCustomerVoucherOperationKindFieldRefInput<$PrismaModel>
+  in?: $Enums.CustomerVoucherOperationKind[] | Prisma.ListEnumCustomerVoucherOperationKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.CustomerVoucherOperationKind[] | Prisma.ListEnumCustomerVoucherOperationKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumCustomerVoucherOperationKindFilter<$PrismaModel> | $Enums.CustomerVoucherOperationKind
+}
+
+export type NestedEnumCustomerVoucherOperationStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.CustomerVoucherOperationStatus | Prisma.EnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.CustomerVoucherOperationStatus[] | Prisma.ListEnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.CustomerVoucherOperationStatus[] | Prisma.ListEnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumCustomerVoucherOperationStatusFilter<$PrismaModel> | $Enums.CustomerVoucherOperationStatus
+}
+
+export type NestedEnumCustomerVoucherOperationKindWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.CustomerVoucherOperationKind | Prisma.EnumCustomerVoucherOperationKindFieldRefInput<$PrismaModel>
+  in?: $Enums.CustomerVoucherOperationKind[] | Prisma.ListEnumCustomerVoucherOperationKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.CustomerVoucherOperationKind[] | Prisma.ListEnumCustomerVoucherOperationKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumCustomerVoucherOperationKindWithAggregatesFilter<$PrismaModel> | $Enums.CustomerVoucherOperationKind
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumCustomerVoucherOperationKindFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumCustomerVoucherOperationKindFilter<$PrismaModel>
+}
+
+export type NestedEnumCustomerVoucherOperationStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.CustomerVoucherOperationStatus | Prisma.EnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.CustomerVoucherOperationStatus[] | Prisma.ListEnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.CustomerVoucherOperationStatus[] | Prisma.ListEnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumCustomerVoucherOperationStatusWithAggregatesFilter<$PrismaModel> | $Enums.CustomerVoucherOperationStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumCustomerVoucherOperationStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumCustomerVoucherOperationStatusFilter<$PrismaModel>
 }
 
 

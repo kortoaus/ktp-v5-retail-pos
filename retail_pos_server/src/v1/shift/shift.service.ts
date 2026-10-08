@@ -1,4 +1,5 @@
 import { Company, Terminal, User } from "../../generated/prisma/client";
+import { prismaCvOperationStore } from "../customer-voucher/customer-voucher.operation.store";
 import momentAU from "../../libs/date-utils";
 import db from "../../libs/db";
 import {
@@ -323,18 +324,33 @@ export interface ShiftClosePreviewResult {
   shift: TerminalShiftModel;
   aggregate: ShiftAggregate;
   endedCashExpected: number;
+  // T-15 — store-wide customer-voucher ledger rows the reconciler has not
+  // settled yet (INTENT / UNRESOLVED / CONFIRMED without invoice).
+  customerVoucherOpenOperations: number;
+}
+
+// Shift close never fails on this count: an unreadable ledger reads as -1.
+async function countOpenCustomerVoucherOperations(): Promise<number> {
+  try {
+    return await prismaCvOperationStore.countOpen();
+  } catch (e) {
+    console.error("[customer-voucher] open operation count failed", e);
+    return -1;
+  }
 }
 
 export async function previewCloseShiftService(shift: TerminalShiftModel) {
   try {
     const aggregate = await aggregateShift(shift.id);
     const endedCashExpected = computeExpectedCash(shift.startedCash, aggregate);
+    const customerVoucherOpenOperations = await countOpenCustomerVoucherOperations();
     return {
       ok: true,
       result: {
         shift,
         aggregate,
         endedCashExpected,
+        customerVoucherOpenOperations,
       } satisfies ShiftClosePreviewResult,
     };
   } catch (e) {
@@ -397,9 +413,11 @@ export async function closeTerminalShiftService(
     // S3 — 미확인 주문 collect 도 같은 트리거에서 스윕.
     triggerSyncPendingOrderCollects();
 
+    const customerVoucherOpenOperations = await countOpenCustomerVoucherOperations();
+
     return {
       ok: true,
-      result: updated,
+      result: { ...updated, customerVoucherOpenOperations },
       msg: "Terminal shift closed successfully",
     };
   } catch (e) {

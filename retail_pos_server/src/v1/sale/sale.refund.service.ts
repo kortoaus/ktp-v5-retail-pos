@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from "../../libs/exceptions";
 import {
+  SaleInvoiceModel,
   StoreSettingModel,
   TerminalModel,
   TerminalShiftModel,
@@ -21,7 +22,23 @@ import { PaymentType } from "../../generated/prisma/enums";
 import type { Prisma } from "../../generated/prisma/client";
 import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
 import { calculateRefundPointsReversed } from "./sale.refund.points";
-import { issueRefundCustomerVoucherService } from "../customer-voucher/customer-voucher.service";
+import {
+  assertCrmReachableForOriginal,
+  defaultCvDeps,
+  issueRefundVoucherForOperation,
+  voidRefundIssueRow,
+  type CvDeps,
+  type IssuedRefundVoucher,
+} from "../customer-voucher/customer-voucher.operation";
+import { linkOperationRowsInTx } from "../customer-voucher/customer-voucher.operation.store";
+import { isUniqueViolation } from "../../libs/prisma-errors";
+import {
+  assertSameOperationPayload,
+  operationConflict,
+  operationPayloadHash,
+  resolveOperationId,
+  withOperationClaim,
+} from "./sale.operation";
 import { nextDocCounter } from "./sale.doc-counter";
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -89,6 +106,12 @@ import { nextDocCounter } from "./sale.doc-counter";
 //  - 원본 type === 'SALE' 만 환불 대상.
 //  - Customer-voucher refund: CRM refund voucher 를 새로 issue 한 뒤 refund
 //    payment snapshot 을 새 voucher id/label 로 저장.
+//    T-15: issued BEFORE the local transaction (not under the invoice lock),
+//    identity "<operationId>:cv-refund:<tender index>" (never a content hash,
+//    V-3), through the durable ledger; at most one customer-voucher refund
+//    tender per request; local failure → CRM refund-issue/void.
+//  - V-6 (owner #31): an original with any customer-voucher tender is not
+//    refundable while CRM is unreachable, even for cash/credit-only tenders.
 //  - user-voucher payment: VoucherEvent.REFUND +amount, Voucher.balance += amount.
 //                          Voucher.validTo / status 는 변경 안 함.
 //  - Shift 집계 increment 안 함 — close 시점에 SUM() 재집계 (D-34).
@@ -131,6 +154,16 @@ export function validatePayloadShape(p: RefundCreatePayload) {
     if (pm.amount <= 0)
       throw new BadRequestException("payment amount must be > 0");
   }
+
+  // T-15 / V-3 — one refund request issues at most one refund voucher, so
+  // its CRM identity (<operationId>:cv-refund:<tender index>) is unambiguous.
+  const customerVoucherTenders = p.payments.filter(
+    (pm) => pm.type === "VOUCHER" && pm.entityType === "customer-voucher",
+  ).length;
+  if (customerVoucherTenders > 1)
+    throw new BadRequestException(
+      "Only one Customer Voucher refund line is allowed per refund — put the whole customer-voucher amount on one line",
+    );
 }
 
 // ── Load + eligibility ───────────────────────────────────────────────────────
@@ -165,26 +198,6 @@ export async function loadOriginalOrThrow(
 
 export type OrigInvoice = Awaited<ReturnType<typeof loadOriginalOrThrow>>;
 type OrigRow = OrigInvoice["rows"][number];
-
-function refundIssueEntityId(
-  originalInvoiceId: number,
-  rows: RefundRowPayload[],
-  payment: PaymentPayload,
-): string {
-  const rowKey = rows
-    .slice()
-    .sort((a, b) => a.originalInvoiceRowId - b.originalInvoiceRowId)
-    .map((row) => `${row.originalInvoiceRowId}:${row.refund_qty}`)
-    .join(",");
-  const voucherKey = payment.entityId == null ? "none" : payment.entityId;
-  return [
-    originalInvoiceId,
-    "customer-voucher-refund",
-    voucherKey,
-    payment.amount,
-    rowKey,
-  ].join(":");
-}
 
 export async function lockOriginalInvoiceInTx(
   tx: Prisma.TransactionClient,
@@ -425,6 +438,9 @@ export interface BuildRefundInTxOpts {
   dayStr: string;
   yyyymmdd: string;
   dayStart: Date;
+  // T-15 — client operation identity (Repay passes "<id>:refund").
+  operationId?: string | null;
+  operationPayloadHash?: string | null;
 }
 
 export async function buildRefundInTx(
@@ -442,6 +458,8 @@ export async function buildRefundInTx(
     dayStr,
     yyyymmdd,
     dayStart,
+    operationId,
+    operationPayloadHash: payloadHash,
   } = opts;
   const { terminal, storeSetting, user, shift } = context;
 
@@ -456,6 +474,8 @@ export async function buildRefundInTx(
       dayStr,
       type: "REFUND",
       originalInvoiceId: orig.id,
+      operationId: operationId ?? null,
+      operationPayloadHash: payloadHash ?? null,
       // Actor — refund 는 current shift/terminal/user (원본 아님)
       shiftId: shift.id,
       terminalId: terminal.id,
@@ -575,147 +595,226 @@ export function nowAnchor(): {
   };
 }
 
+// ── Shared validation + computation (pre-check and in-tx) ───────────────────
+export function prepareRefund(orig: OrigInvoice, payload: RefundCreatePayload) {
+  const computed = computeRefundRows(orig, payload.rows);
+  const priorRefundRows = orig.refunds.flatMap((child) =>
+    child.rows.map((row) => ({
+      originalInvoiceRowId: row.originalInvoiceRowId,
+      total: row.total,
+    })),
+  );
+  const currentRefundRows = computed.map((row) => ({
+    originalInvoiceRowId: row.origRow.id,
+    total: row.total,
+  }));
+  const pointsReversed = calculateRefundPointsReversed({
+    originalPointsEarned: orig.pointsEarned,
+    originalRows: orig.rows.map((row) => ({
+      id: row.id,
+      total: row.total,
+      isPointExcluded: row.isPointExcluded,
+    })),
+    priorRefundRows,
+    currentRefundRows,
+  });
+  const aggregates = aggregateRefund(computed, payload.payments);
+
+  // 결제 합 == total 검증
+  const paySum = payload.payments.reduce((s, p) => s + p.amount, 0);
+  if (paySum !== aggregates.total)
+    throw new BadRequestException(
+      `payments sum ${paySum} !== refund total ${aggregates.total}`,
+    );
+
+  validateTenderCaps(orig, payload.payments);
+
+  if (
+    payload.payments.some(
+      (p) => p.type === "VOUCHER" && p.entityType === "customer-voucher",
+    ) &&
+    !orig.memberId
+  )
+    throw new BadRequestException("customer voucher refund requires member");
+
+  return { computed, pointsReversed, aggregates };
+}
+
 // ── Main service ────────────────────────────────────────────────────────────
-export async function createRefundService(
-  payload: RefundCreatePayload,
-  context: RefundContext,
-) {
-  const issuedCustomerVoucherRefunds: Array<{
-    requestEntityId: string;
-    voucherId: number;
-    voucherLabel: string;
-    amount: number;
-    originalEntityId?: number;
-  }> = [];
+// T-15 order: replay check → pre-validate (no lock) → V-6 CRM reachability →
+// refund voucher issue (ledger) → local tx (lock, re-validate, invoice, LINKED)
+// → local failure voids the issued voucher.
+export interface PersistRefundArgs {
+  payload: RefundCreatePayload;
+  context: RefundContext;
+  dayStr: string;
+  yyyymmdd: string;
+  dayStart: Date;
+  operationId: string;
+  payloadHash: string;
+  customerVoucherIssue: { tenderIndex: number; issued: IssuedRefundVoucher } | null;
+}
 
-  try {
-    validatePayloadShape(payload);
+export interface RefundCreateDeps extends CvDeps {
+  findInvoiceByOperationId(operationId: string): Promise<SaleInvoiceModel | null>;
+  loadOriginal(originalInvoiceId: number): Promise<OrigInvoice>;
+  persistRefund(args: PersistRefundArgs): Promise<SaleInvoiceModel>;
+  afterCommit(invoice: SaleInvoiceModel): void;
+}
 
-    const { dayStr, yyyymmdd, dayStart } = nowAnchor();
-
-    const invoice = await db.$transaction(async (tx) => {
-      await lockOriginalInvoiceInTx(tx, payload.originalInvoiceId);
-
-      const orig = await loadOriginalOrThrow(payload.originalInvoiceId, tx);
-
-      const computed = computeRefundRows(orig, payload.rows);
-      const priorRefundRows = orig.refunds.flatMap((child) =>
-        child.rows.map((row) => ({
-          originalInvoiceRowId: row.originalInvoiceRowId,
-          total: row.total,
-        })),
-      );
-      const currentRefundRows = computed.map((row) => ({
-        originalInvoiceRowId: row.origRow.id,
-        total: row.total,
-      }));
-      const pointsReversed = calculateRefundPointsReversed({
-        originalPointsEarned: orig.pointsEarned,
-        originalRows: orig.rows.map((row) => ({
-          id: row.id,
-          total: row.total,
-          isPointExcluded: row.isPointExcluded,
-        })),
-        priorRefundRows,
-        currentRefundRows,
-      });
-      const aggregates = aggregateRefund(computed, payload.payments);
-
-      // 결제 합 == total 검증
-      const paySum = payload.payments.reduce((s, p) => s + p.amount, 0);
-      if (paySum !== aggregates.total)
-        throw new BadRequestException(
-          `payments sum ${paySum} !== refund total ${aggregates.total}`,
-        );
-
-      validateTenderCaps(orig, payload.payments);
-
-      const payments: PaymentPayload[] = [];
-      for (const payment of payload.payments) {
-        if (
-          payment.type === "VOUCHER" &&
-          payment.entityType === "customer-voucher"
-        ) {
-          if (!orig.memberId) {
-            throw new BadRequestException(
-              "customer voucher refund requires member",
-            );
-          }
-          const requestEntityId = refundIssueEntityId(
-            payload.originalInvoiceId,
-            payload.rows,
-            payment,
-          );
-          const refundVoucher = await issueRefundCustomerVoucherService({
-            memberId: orig.memberId,
-            amount: payment.amount,
-            entityType: "pos-refund-request",
-            entityId: requestEntityId,
-            entitySerial: orig.serial,
-            note: "Customer voucher refund",
-          });
-          issuedCustomerVoucherRefunds.push({
-            requestEntityId,
-            voucherId: refundVoucher.result.id,
-            voucherLabel: refundVoucher.result.label,
-            amount: payment.amount,
-            originalEntityId: payment.entityId,
-          });
-          payments.push({
-            ...payment,
-            entityId: refundVoucher.result.id,
-            entityLabel: refundVoucher.result.label,
-          });
-          continue;
+export function substituteIssuedVoucher(
+  payments: PaymentPayload[],
+  issue: PersistRefundArgs["customerVoucherIssue"],
+): PaymentPayload[] {
+  if (!issue) return payments;
+  return payments.map((payment, index) =>
+    index === issue.tenderIndex
+      ? {
+          ...payment,
+          entityId: issue.issued.voucher.id,
+          entityLabel: issue.issued.voucher.label,
         }
-        payments.push(payment);
-      }
+      : payment,
+  );
+}
 
-      return buildRefundInTx(tx, {
+export const defaultRefundCreateDeps: RefundCreateDeps = {
+  ...defaultCvDeps,
+  findInvoiceByOperationId: (operationId) =>
+    db.saleInvoice.findUnique({ where: { operationId } }),
+  loadOriginal: (originalInvoiceId) => loadOriginalOrThrow(originalInvoiceId),
+  persistRefund: (args) =>
+    db.$transaction(async (tx) => {
+      await lockOriginalInvoiceInTx(tx, args.payload.originalInvoiceId);
+      const orig = await loadOriginalOrThrow(args.payload.originalInvoiceId, tx);
+      // Re-validate under the lock — a concurrent refund may have used the cap.
+      const { computed, pointsReversed, aggregates } = prepareRefund(
+        orig,
+        args.payload,
+      );
+      const invoice = await buildRefundInTx(tx, {
         orig,
         computed,
         aggregates,
-        payments,
+        payments: substituteIssuedVoucher(
+          args.payload.payments,
+          args.customerVoucherIssue,
+        ),
         pointsReversed,
-        note: payload.note ?? null,
-        context,
-        dayStr,
-        yyyymmdd,
-        dayStart,
+        note: args.payload.note ?? null,
+        context: args.context,
+        dayStr: args.dayStr,
+        yyyymmdd: args.yyyymmdd,
+        dayStart: args.dayStart,
+        operationId: args.operationId,
+        operationPayloadHash: args.payloadHash,
       });
+      await linkOperationRowsInTx(
+        tx,
+        args.customerVoucherIssue ? [args.customerVoucherIssue.issued.row.id] : [],
+        invoice.id,
+      );
+      return invoice;
+    }),
+  afterCommit: () => triggerSyncAllSaleInvoices(),
+};
+
+export async function createRefundService(
+  payload: RefundCreatePayload,
+  context: RefundContext,
+  deps: RefundCreateDeps = defaultRefundCreateDeps,
+) {
+  try {
+    validatePayloadShape(payload);
+
+    const { operationId } = resolveOperationId(payload.operationId, "refund");
+    const payloadHash = operationPayloadHash(payload);
+
+    const replay = (invoice: SaleInvoiceModel) => ({
+      ok: true,
+      replayed: true,
+      msg: "Refund already recorded — returning the original refund",
+      result: { ...invoice, replayed: true },
     });
 
-    triggerSyncAllSaleInvoices();
+    return await withOperationClaim(operationId, async () => {
+      const recorded = await deps.findInvoiceByOperationId(operationId);
+      if (recorded) {
+        if (recorded.type !== "REFUND")
+          throw operationConflict("This operationId belongs to another kind of invoice (409).");
+        assertSameOperationPayload(recorded, payloadHash);
+        return replay(recorded);
+      }
 
-    return { ok: true, result: invoice };
+      // Pre-validate without the lock: nothing reaches CRM for a refund the
+      // local rules would reject.
+      const orig = await deps.loadOriginal(payload.originalInvoiceId);
+      prepareRefund(orig, payload);
+
+      // V-6 — whole original Invoice, before anything is written.
+      await assertCrmReachableForOriginal(orig, deps);
+
+      const tenderIndex = payload.payments.findIndex(
+        (p) => p.type === "VOUCHER" && p.entityType === "customer-voucher",
+      );
+      const customerVoucherIssue =
+        tenderIndex >= 0
+          ? {
+              tenderIndex,
+              issued: await issueRefundVoucherForOperation(
+                {
+                  operationId,
+                  tenderIndex,
+                  memberId: orig.memberId!,
+                  amount: payload.payments[tenderIndex].amount,
+                  entitySerial: orig.serial,
+                },
+                deps,
+              ),
+            }
+          : null;
+
+      const { dayStr, yyyymmdd, dayStart } = nowAnchor();
+      let invoice: SaleInvoiceModel;
+      try {
+        invoice = await deps.persistRefund({
+          payload,
+          context,
+          dayStr,
+          yyyymmdd,
+          dayStart,
+          operationId,
+          payloadHash,
+          customerVoucherIssue,
+        });
+      } catch (persistenceError) {
+        if (isUniqueViolation(persistenceError)) {
+          const raced = await deps.findInvoiceByOperationId(operationId);
+          if (raced && raced.operationPayloadHash === payloadHash) return replay(raced);
+        }
+        if (customerVoucherIssue) {
+          console.error("[customer-voucher] refund persistence failed — voiding the issued refund voucher", {
+            operationId,
+            originalInvoiceId: payload.originalInvoiceId,
+            voucherId: customerVoucherIssue.issued.voucher.id,
+            terminalId: context.terminal.id,
+            userId: context.user.id,
+            shiftId: context.shift.id,
+            persistenceError,
+          });
+          await voidRefundIssueRow(
+            customerVoucherIssue.issued.row,
+            "local refund persistence failed",
+            deps,
+          );
+        }
+        throw persistenceError;
+      }
+
+      deps.afterCommit(invoice);
+      return { ok: true, replayed: false, result: { ...invoice, replayed: false } };
+    });
   } catch (e) {
-    if (issuedCustomerVoucherRefunds.length > 0) {
-      console.error("[customer-voucher] refund issue local persistence failed", {
-        error: e,
-        issuedCustomerVoucherRefunds,
-        originalInvoiceId: payload.originalInvoiceId,
-        terminalId: context.terminal.id,
-        terminalName: context.terminal.name,
-        userId: context.user.id,
-        userName: context.user.name,
-        shiftId: context.shift.id,
-        payloadSummary: {
-          rowCount: payload.rows.length,
-          paymentCount: payload.payments.length,
-          customerVoucherPayments: payload.payments
-            .filter(
-              (payment) =>
-                payment.type === "VOUCHER" &&
-                payment.entityType === "customer-voucher",
-            )
-            .map((payment) => ({
-              amount: payment.amount,
-              entityId: payment.entityId,
-              entityLabel: payment.entityLabel,
-            })),
-        },
-      });
-    }
     if (e instanceof HttpException) throw e;
     console.error("createRefundService error:", e);
     throw new InternalServerException("Internal server error");

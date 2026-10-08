@@ -157,3 +157,8 @@ export type SyncCursor = Prisma.SyncCursorModel
  * 
  */
 export type FreeTextTemplate = Prisma.FreeTextTemplateModel
+/**
+ * Model CustomerVoucherOperation
+ * 
+ */
+export type CustomerVoucherOperation = Prisma.CustomerVoucherOperationModel
