@@ -20,8 +20,21 @@ import {
   readyOrderController,
   rejectOrderController,
 } from "./order.controller";
+import { noteLocalOrderWrite } from "./order.pending-broadcaster";
 
 const orderRouter = Router();
+
+// T-24 (R-15) — every successful order write through this server moves the
+// buckets revision, so other tills refetch their list on the next heartbeat
+// even when the counts did not change.
+orderRouter.use((req, res, next) => {
+  if (req.method !== "GET") {
+    res.on("finish", () => {
+      if (res.statusCode < 400) noteLocalOrderWrite();
+    });
+  }
+  next();
+});
 
 orderRouter.get(
   "/",

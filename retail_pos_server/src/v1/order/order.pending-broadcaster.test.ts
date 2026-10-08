@@ -8,7 +8,10 @@ import {
   ORDER_PENDING_COUNT_INTERVAL_MS,
   pendingCountFromBuckets,
   computeOrderPendingTickOutcome,
+  computeBucketsRevision,
+  noteLocalOrderWrite,
   shouldEmitOrderNew,
+  stopOrderPendingBroadcasterForTest,
 } from "./order.pending-broadcaster";
 
 const NOW = new Date("2026-08-10T03:00:00.000Z");
@@ -131,16 +134,56 @@ test("classifyBucketsResponse: ok, old crm 404 fallback, and failure", () => {
 });
 
 test("buildOrderBucketsPayload carries the result and chime terminals", () => {
-  assert.deepEqual(buildOrderBucketsPayload(BUCKETS, [2], NOW), {
+  assert.deepEqual(buildOrderBucketsPayload(BUCKETS, [2], NOW, "rev-1"), {
     ok: true,
     result: BUCKETS,
     chimeTerminalIds: [2],
     generatedAt: "2026-08-10T03:00:00.000Z",
+    revision: "rev-1",
   });
   assert.deepEqual(buildOrderBucketsPayload(null, [], NOW), {
     ok: false,
     result: null,
     chimeTerminalIds: [],
     generatedAt: "2026-08-10T03:00:00.000Z",
+    revision: null,
   });
+});
+
+// ── T-24 (R-15) — revision moves only on content change ──
+
+test("revision is unchanged for identical bucket content on a later tick", () => {
+  const later = { ...BUCKETS, asOf: "2026-08-10T03:00:30.000Z" };
+  const a = buildOrderBucketsPayload(BUCKETS, [2], NOW);
+  const b = buildOrderBucketsPayload(later, [2], new Date("2026-08-10T03:00:30.000Z"));
+  assert.ok(a.revision);
+  assert.equal(b.revision, a.revision, "asOf / generatedAt do not move it");
+  // key order of the crm JSON does not matter either
+  const reordered = JSON.parse(
+    JSON.stringify({ counts: BUCKETS.counts, deliveryWindow: BUCKETS.deliveryWindow, nextDeliveryDate: BUCKETS.nextDeliveryDate, today: BUCKETS.today, asOf: "x" }),
+  ) as typeof BUCKETS;
+  assert.equal(computeBucketsRevision(reordered, 0), computeBucketsRevision(BUCKETS, 0));
+});
+
+test("revision changes when a count, the day, or a proxied order write changes", () => {
+  const base = computeBucketsRevision(BUCKETS, 0);
+  const moreNew = {
+    ...BUCKETS,
+    counts: { ...BUCKETS.counts, new: { ...BUCKETS.counts.new, total: BUCKETS.counts.new.total + 1 } },
+  };
+  assert.notEqual(computeBucketsRevision(moreNew, 0), base);
+  assert.notEqual(computeBucketsRevision({ ...BUCKETS, today: "2026-08-11" }, 0), base);
+  assert.notEqual(computeBucketsRevision(BUCKETS, 1), base);
+  assert.equal(computeBucketsRevision(null, 0), null);
+});
+
+test("noteLocalOrderWrite moves the next payload's revision once", () => {
+  stopOrderPendingBroadcasterForTest(); // resets module state
+  const before = buildOrderBucketsPayload(BUCKETS, [], NOW).revision;
+  assert.equal(buildOrderBucketsPayload(BUCKETS, [], NOW).revision, before);
+  noteLocalOrderWrite();
+  const after = buildOrderBucketsPayload(BUCKETS, [], NOW).revision;
+  assert.notEqual(after, before);
+  assert.equal(buildOrderBucketsPayload(BUCKETS, [], NOW).revision, after);
+  stopOrderPendingBroadcasterForTest();
 });

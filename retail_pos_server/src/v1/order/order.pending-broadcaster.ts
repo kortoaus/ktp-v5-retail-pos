@@ -14,6 +14,7 @@
 // - 픽업 1차 브로드캐스터의 CRON_INSTANCE env 게이트는 의도적으로 없음 —
 //   src/index.ts 에서 무조건 시작한다 (스펙 2026-08-10).
 
+import { createHash } from "node:crypto";
 import type { Socket } from "socket.io";
 import db from "../../libs/db";
 import { getIO } from "../../libs/socket";
@@ -31,6 +32,11 @@ export type OrderBucketsPayload = {
   result: OrderBucketsWire | null; // null = crm 불통
   chimeTerminalIds: number[];
   generatedAt: string;
+  // T-24 (R-15) — changes only when the bucket content changes (counts, the
+  // Sydney day, delivery date/window) or this server proxied an order write;
+  // never just because a tick happened (`asOf` is excluded). null = crm 불통.
+  // Tills refetch their triage list only when it changes.
+  revision: string | null;
 };
 
 // buckets 호출 결과 — unsupported = crm 구버전(404) → pending-count 폴백.
@@ -92,16 +98,53 @@ export function computeOrderPendingTickOutcome(
   };
 }
 
+// Canonical JSON (sorted keys) so the revision does not depend on key order.
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  const obj = value as Record<string, unknown>;
+  return `{${Object.keys(obj)
+    .sort()
+    .filter((k) => obj[k] !== undefined)
+    .map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`)
+    .join(",")}}`;
+}
+
+// T-24 (R-15). The crm buckets wire carries counts, not order ids/statuses, so
+// the revision is the bucket content minus the clock (`asOf`) plus a counter of
+// order writes this server proxied (accept/ready/reject/… from any till) — a
+// write that leaves the counts unchanged still moves the revision.
+export function computeBucketsRevision(
+  buckets: OrderBucketsWire | null,
+  localOrderWriteSeq: number,
+): string | null {
+  if (!buckets) return null;
+  const { asOf: _asOf, ...content } = buckets;
+  return createHash("sha1")
+    .update(`${canonicalJson(content)}|${localOrderWriteSeq}`)
+    .digest("hex")
+    .slice(0, 16);
+}
+
+let localOrderWriteSeq = 0;
+
+// Called after a successful order write proxied by this server.
+export function noteLocalOrderWrite(): void {
+  localOrderWriteSeq++;
+}
+
 export function buildOrderBucketsPayload(
   buckets: OrderBucketsWire | null,
   chimeTerminalIds: number[],
   now: Date = new Date(),
+  revision: string | null = computeBucketsRevision(buckets, localOrderWriteSeq),
 ): OrderBucketsPayload {
   return {
     ok: buckets != null,
     result: buckets,
     chimeTerminalIds,
     generatedAt: now.toISOString(),
+    revision,
   };
 }
 
@@ -255,4 +298,5 @@ export function stopOrderPendingBroadcasterForTest(): void {
   lastPayload = null;
   lastBucketsPayload = null;
   lastSuccessfulCount = null;
+  localOrderWriteSeq = 0;
 }
