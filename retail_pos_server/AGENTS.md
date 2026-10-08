@@ -16,7 +16,7 @@ npx prisma migrate deploy     # apply on a store DB
 scripts/safe-reset.sh         # backup → migrate reset → restore (checksum drift)
 ```
 
-`npm test` is a placeholder that exits 1. The 13 `src/v1/**/*.test.ts` (node:test) have no runner script.
+`npm test` runs every `src/**/*.test.ts` with node:test (ts-node transpile-only, `scripts/test-offline.cjs` preload points DB/cloud URLs at unroutable hosts); 18 files / 129 pass on 2026-10-08. Keep tests offline.
 
 ## Layout
 

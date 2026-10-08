@@ -22,7 +22,7 @@ KTP v5 retail point of sale, one install per store:
   called only from `src/renderer/src/service/*.service.ts` (exception: raw `fetch` in `libs/printer/print.service.ts`).
   `host/port` come from `userData/app-config.json` (`src/main/store.ts`), set on `/server-setup`.
 - Every request carries header `ip-address` = the till's NIC IPv4 (IPC `app:get-network-ip`, set in
-  `contexts/TerminalContext.tsx`). Staff calls add `Authorization: Bearer <userId>%%%<Date.now()>`.
+  `contexts/TerminalContext.tsx`). Staff calls add `Authorization: Bearer <staff session JWT>` issued by `GET /api/user/code` (T-12, 2026-10-08); the legacy `<userId>%%%<ts>` shape is still accepted while `STAFF_AUTH_ACCEPT` is unset/`both`.
 - Server → clients: Socket.IO on the same port (`retail_pos_server/src/index.ts`), events `order:buckets`,
   `order:pending-count`, `order:new`, `cloud-sync-completed`. App listeners: `components/SyncButton.tsx`,
   `components/orders/OrderNotification.tsx`.
@@ -37,7 +37,7 @@ KTP v5 retail point of sale, one install per store:
 | server | `docker compose up -d` | dev Postgres `retail_pos_local_postgres` on host **:5555** |
 | server | `npx prisma migrate dev` · `migrate deploy` · `generate` | no npm scripts for these; generated client is **committed** (`src/generated/prisma`) |
 | server | `scripts/safe-reset.sh` | backup → `prisma migrate reset` → restore, for checksum drift |
-| server | `npm test` | placeholder that exits 1 — there is **no test runner** for the 13 `src/v1/**/*.test.ts` |
+| server | `npm test` | node:test over `src/**/*.test.ts` via ts-node transpile-only + offline preload (`scripts/test-offline.cjs`); 129 pass (2026-10-08) |
 | app | `npm run dev` / `npm run build` | electron-vite |
 | app | `npx tsc --noEmit -p tsconfig.node.json --composite false --incremental false` (and `tsconfig.web.json`) | typecheck main+preload / renderer |
 | app | `npm run test:zpl-font` · `test:label-core` · `test:scale-core` · `test:orders` | node:test; 85 · 298 · 36 · 97 pass (2026-10-06) |
@@ -87,8 +87,9 @@ Single-tenant: `Company` and `StoreSetting` are always row `id: 1`.
   `POST /api/printer/print`. Any LAN host that sends a registered terminal IP passes.
 - **Printer route = TCP relay.** `POST /api/printer/print` opens a socket to whatever `ip`/`port` (default 9100) the query
   names and writes the body (≤20 MB). Do not widen it; do not expose port 2200 beyond the store LAN.
-- **User token = user id.** `<userId>%%%<anything>`; the second half is parsed but never checked and `User` has no such
-  column. `GET /api/user/code?code=` (terminal-only) returns the full `User` row including `code` and `scope`.
+- **Staff session (T-12, 2026-10-08).** `GET /api/user/code?code=` (terminal-only) returns the `User` row plus a signed HS256 `token`
+  (`typ: staff`, exp ≤ 14 h; secret `STAFF_SESSION_SECRET`, random per boot when unset). `userMiddleware` verifies it and rejects
+  archived users; `STAFF_AUTH_ACCEPT=both` (default) also accepts the legacy `<userId>%%%<ts>` token with one INFO line, `session` rejects it.
 - **Socket.IO** has `cors origin *` and no auth middleware.
 - **`src/libs/db.ts:6`** — `DATABASE_URL + "&uselibpqcompat=true" || ""`: the fallback is dead, an unset var becomes
   `"undefined&…"`, and the URL must already contain `?`. `.env.example` points at :5438 but compose serves :5555.
