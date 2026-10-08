@@ -48,6 +48,15 @@ export function UserProvider({ children }: UserProviderProps) {
     checkAuth();
   }, []);
 
+  // A 401 staff-session rejection on any request (e.g. the staff was archived
+  // while the till stayed open) drops the user → AuthGateway shows the code
+  // login again.
+  useEffect(() => {
+    return apiService.onSessionLost(() => {
+      setUser(null);
+    });
+  }, []);
+
   const login = useCallback(async (code: string): Promise<User | null> => {
     setLoading(true);
     setError(null);

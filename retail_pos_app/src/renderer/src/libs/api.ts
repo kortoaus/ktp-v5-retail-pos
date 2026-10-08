@@ -17,6 +17,22 @@ export interface ApiResponse<T = unknown> {
   msg: string;
   result: T | null;
   paging: PagingType | null;
+  // Staff session token — only `GET /api/user/code` sends it (server R-1).
+  token?: string;
+}
+
+// Server marker on a 401 from its staff-auth middleware (expired / revoked /
+// archived staff session). Other 401s (missing scope, crm proxy) keep the
+// session.
+const STAFF_SESSION_INVALID = "STAFF_SESSION_INVALID";
+
+function isStaffSessionInvalid(status: number, result: unknown): boolean {
+  return (
+    status === 401 &&
+    typeof result === "object" &&
+    result !== null &&
+    (result as { code?: unknown }).code === STAFF_SESSION_INVALID
+  );
 }
 
 export type ApiSearchParams = {
@@ -34,7 +50,7 @@ export type ApiSearchParams = {
 class ApiService {
   private instance: AxiosInstance;
   private accessToken: string | null = null;
-  private refreshToken: string | null = null;
+  private sessionLostListeners = new Set<() => void>();
 
   constructor() {
     this.instance = axios.create({
@@ -51,25 +67,22 @@ class ApiService {
   private loadTokens(): void {
     if (typeof window !== "undefined") {
       this.accessToken = localStorage.getItem("accessToken");
-      this.refreshToken = localStorage.getItem("refreshToken");
+      // R-19: the refresh half never refreshed anything — drop its leftover.
+      localStorage.removeItem("refreshToken");
     }
   }
 
-  private saveTokens(accessToken: string, refreshToken: string): void {
+  private saveToken(accessToken: string): void {
     this.accessToken = accessToken;
-    this.refreshToken = refreshToken;
     if (typeof window !== "undefined") {
       localStorage.setItem("accessToken", accessToken);
-      localStorage.setItem("refreshToken", refreshToken);
     }
   }
 
   private clearTokens(): void {
     this.accessToken = null;
-    this.refreshToken = null;
     if (typeof window !== "undefined") {
       localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
     }
   }
 
@@ -97,12 +110,28 @@ class ApiService {
     this.instance.defaults.headers.common[key] = value;
   }
 
-  setTokens(accessToken: string, refreshToken: string): void {
-    this.saveTokens(accessToken, refreshToken);
+  // Store the staff session issued by `GET /api/user/code`.
+  setToken(accessToken: string): void {
+    this.saveToken(accessToken);
   }
 
   logout(): void {
     this.clearTokens();
+  }
+
+  // Called when the server rejects the staff session (expired, revoked,
+  // archived user). The token is already cleared; listeners send the till
+  // back to the staff login screen. Returns an unsubscribe function.
+  onSessionLost(listener: () => void): () => void {
+    this.sessionLostListeners.add(listener);
+    return () => {
+      this.sessionLostListeners.delete(listener);
+    };
+  }
+
+  private handleSessionLost(): void {
+    this.clearTokens();
+    for (const listener of this.sessionLostListeners) listener();
   }
 
   private async request<T = unknown>(
@@ -110,6 +139,7 @@ class ApiService {
     method: "GET" | "POST" | "PATCH" | "DELETE" | "PUT",
     data?: unknown,
   ): Promise<ApiResponse<T>> {
+    const sentToken = this.accessToken;
     try {
       const response = await this.instance.request({
         url: endpoint,
@@ -127,6 +157,7 @@ class ApiService {
         msg,
         result: body.result ?? null,
         paging: body.paging ?? null,
+        ...(typeof body.token === "string" ? { token: body.token } : {}),
       };
     } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
@@ -140,6 +171,15 @@ class ApiService {
         const status = axiosError.response?.status ?? 0;
         const body = axiosError.response?.data;
         const msg = body?.msg || body?.message || "Server Error";
+
+        // Only if the rejected token is still the current one — a late 401
+        // from before a fresh login must not log the new staff out.
+        if (
+          isStaffSessionInvalid(status, body?.result) &&
+          this.accessToken === sentToken
+        ) {
+          this.handleSessionLost();
+        }
 
         return {
           ok: false,

@@ -7,10 +7,14 @@ export const getUserByCode = async (
   const response = await apiService.get<User | null>(
     `/api/user/code?code=${code}`,
   );
+  // R-1: the server proves the code and issues the staff session; the till
+  // stores it as-is. Fallback only for a store server that predates T-12 (no
+  // `token` in the response) so a till that updates before its server still
+  // works; that server accepts the legacy shape, and an updated server always
+  // sends `token`.
   if (response.ok && response.result) {
-    apiService.setTokens(
-      `${response.result.id}%%%${Date.now()}`,
-      `${response.result.id}%%%${Date.now()}`,
+    apiService.setToken(
+      response.token ?? `${response.result.id}%%%${Date.now()}`,
     );
   }
 
