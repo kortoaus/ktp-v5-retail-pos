@@ -357,7 +357,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
 
     setProcessing(true);
     try {
-      const res = await createSale(payload);
+      const res = await createSale(payload, activeCartIndex);
       if (!res.ok || !res.result) {
         window.alert(res.msg || "Failed to complete sale");
         return;

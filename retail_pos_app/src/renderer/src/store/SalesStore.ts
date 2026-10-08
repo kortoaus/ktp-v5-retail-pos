@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { SaleLineItem } from "../types/sales";
 import { QTY_SCALE } from "../libs/constants";
 import { removeLineFromCart } from "./cart-line-remove";
+import { clearOperation, saleAttemptKey } from "../libs/operation-id";
 import {
   type AddLineOptions,
   type Cart,
@@ -186,6 +187,9 @@ export const useSalesStore = create<SalesStoreState>()((set, get) => ({
 
   clearActiveCart: () => {
     const { activeCartIndex, carts } = get();
+    // T-15 (F-4/F-5) — clearing the cart ends its checkout attempt; the next
+    // Complete on this slot gets a new operationId.
+    clearOperation(saleAttemptKey(activeCartIndex));
     const updatedCarts = [...carts];
     updatedCarts[activeCartIndex] = createEmptyCart();
     set({ carts: updatedCarts });

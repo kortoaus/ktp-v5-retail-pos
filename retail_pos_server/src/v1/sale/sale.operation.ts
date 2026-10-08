@@ -89,12 +89,12 @@ export function operationCancelled(): HttpException {
 }
 
 export function assertSameOperationPayload(
-  stored: { operationPayloadHash: string | null },
+  stored: { operationPayloadHash: string | null; serial?: string | null; id?: number },
   payloadHash: string,
 ) {
   if (stored.operationPayloadHash !== payloadHash)
     throw operationConflict(
-      "This operationId was already used for a different request (409). Start a new attempt.",
+      `This checkout attempt was already recorded as invoice ${stored.serial ?? `#${stored.id ?? "?"}`} with different contents (409). Check that invoice before charging again; pressing again starts a new attempt.`,
     );
 }
 

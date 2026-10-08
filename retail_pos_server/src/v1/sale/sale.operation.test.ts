@@ -296,3 +296,36 @@ test("CRM replays a voided redeem (V-12) → never read as payment: VOIDED, 409,
   assert.equal(h.ops.byKey(KEY7)!.status, "VOIDED");
   assert.equal(h.invoices.length, 0);
 });
+
+test("F-3: UNRESOLVED redeem whose retry gets 404 stays UNRESOLVED (503), and the reconciler later voids it", async () => {
+  const h = harness();
+  h.crm.mode.redeem = ["unknown-after-effect", "reject404"];
+  await assert.rejects(
+    createSaleService(salePayload({ operationId: OP }), CONTEXT, h.deps),
+    (e: unknown) => e instanceof HttpException && e.statusCode === 503,
+  );
+  assert.equal(h.ops.byKey(KEY7)!.status, "UNRESOLVED");
+  assert.equal(h.crm.balances.get(7), 600, "CRM did debit");
+
+  await assert.rejects(
+    createSaleService(salePayload({ operationId: OP }), CONTEXT, h.deps),
+    (e: unknown) => e instanceof HttpException && e.statusCode === 503,
+  );
+  assert.equal(h.ops.byKey(KEY7)!.status, "UNRESOLVED", "a rejected retry never marks FAILED");
+  assert.equal(h.invoices.length, 0);
+
+  const summary = await reconcileCustomerVoucherOperations(h.reconcileDeps(3));
+  assert.equal(summary.voided, 1);
+  assert.equal(h.ops.byKey(KEY7)!.status, "VOIDED");
+  assert.equal(h.crm.balances.get(7), 1000, "member balance is back");
+});
+
+test("F-3: a definitive rejection on the first call (no earlier attempt) still marks FAILED (400)", async () => {
+  const h = harness();
+  h.crm.mode.redeem = ["reject404"];
+  await assert.rejects(
+    createSaleService(salePayload({ operationId: OP }), CONTEXT, h.deps),
+    (e: unknown) => e instanceof HttpException && e.statusCode === 400,
+  );
+  assert.equal(h.ops.byKey(KEY7)!.status, "FAILED");
+});

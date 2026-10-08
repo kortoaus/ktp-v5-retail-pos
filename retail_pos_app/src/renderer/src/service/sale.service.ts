@@ -6,7 +6,13 @@ import type {
   SaleCreatePayload,
 } from "../libs/sale/payload.types";
 import type { RefundCreatePayload } from "../libs/refund/payload.types";
-import { operationIdFor, settleOperation } from "../libs/operation-id";
+import {
+  operationIdFor,
+  refundAttemptKey,
+  repayAttemptKey,
+  saleAttemptKey,
+  settleOperation,
+} from "../libs/operation-id";
 
 export type InvoiceTypeWire = "SALE" | "REFUND" | "SPEND";
 
@@ -73,17 +79,20 @@ export interface SaleSearchParams {
   type?: InvoiceTypeWire;
 }
 
-// T-15 — every submit carries the attempt's operationId (libs/operation-id.ts):
-// a retry of the same cart after a lost response replays the original invoice.
+// T-15 — every submit carries its attempt's operationId (libs/operation-id.ts),
+// one attempt per cart slot: a retry from the same cart after a lost response
+// replays the original invoice; another cart is always its own attempt.
 export async function createSale(
   payload: SaleCreatePayload,
+  cartIndex: number,
 ): Promise<ApiResponse<SaleInvoiceCreated>> {
-  const operationId = operationIdFor("sale", payload);
+  const attemptKey = saleAttemptKey(cartIndex);
+  const operationId = operationIdFor(attemptKey);
   const res = await apiService.post<SaleInvoiceCreated>("/api/sale", {
     ...payload,
     operationId,
   });
-  settleOperation("sale", res);
+  settleOperation(attemptKey, res);
   return res;
 }
 
@@ -99,12 +108,13 @@ export async function createSpend(
 export async function createRefundInvoice(
   payload: RefundCreatePayload,
 ): Promise<ApiResponse<SaleInvoiceCreated>> {
-  const operationId = operationIdFor("refund", payload);
+  const attemptKey = refundAttemptKey(payload.originalInvoiceId);
+  const operationId = operationIdFor(attemptKey);
   const res = await apiService.post<SaleInvoiceCreated>("/api/sale/refund", {
     ...payload,
     operationId,
   });
-  settleOperation("refund", res);
+  settleOperation(attemptKey, res);
   return res;
 }
 
@@ -134,12 +144,13 @@ export interface RepayResponse {
 export async function repayInvoice(
   payload: RepayPayload,
 ): Promise<ApiResponse<RepayResponse>> {
-  const operationId = operationIdFor("repay", payload);
+  const attemptKey = repayAttemptKey(payload.originalInvoiceId);
+  const operationId = operationIdFor(attemptKey);
   const res = await apiService.post<RepayResponse>("/api/sale/repay", {
     ...payload,
     operationId,
   });
-  settleOperation("repay", res);
+  settleOperation(attemptKey, res);
   return res;
 }
 

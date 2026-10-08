@@ -90,6 +90,22 @@ export function unresolvedError(what: string): HttpException {
   );
 }
 
+// F-3 (T-15 review): a key whose earlier call may have reached CRM (row left
+// INTENT / UNRESOLVED / CONFIRMED by a previous request) is ambiguous. A CRM
+// rejection of a *retry* proves nothing about that earlier call, so such a row
+// never becomes FAILED here — it stays UNRESOLVED until the reconciler's
+// operation lookup says not_found / voided / redeemed. Only a definitive
+// rejection of a key with no ambiguous history marks FAILED.
+const AMBIGUOUS_STATUSES: CvOperationStatus[] = ["INTENT", "UNRESOLVED", "CONFIRMED"];
+
+function ambiguousKeysOf(prior: CvOperationRow[]): Set<string> {
+  return new Set(
+    prior
+      .filter((row) => AMBIGUOUS_STATUSES.includes(row.status))
+      .map((row) => row.crmRequestId),
+  );
+}
+
 function errorText(outcome: CrmOutcome<unknown>): string | null {
   if (outcome.kind === "ok") return null;
   return `${outcome.kind} ${outcome.status}: ${outcome.msg}`.slice(0, 500);
@@ -144,6 +160,8 @@ export async function redeemCustomerVouchersForOperation(
         "This operationId already belongs to a recorded invoice (409).",
       );
   }
+
+  const ambiguous = ambiguousKeysOf(prior);
 
   // INTENT rows are committed before any CRM call.
   const rows: CvOperationRow[] = [];
@@ -201,9 +219,12 @@ export async function redeemCustomerVouchersForOperation(
     }
 
     if (outcome.kind === "rejected") {
+      const wasAmbiguous = ambiguous.has(intent.crmRequestId);
       await deps.ops.update(row.id, {
-        status: "FAILED",
-        lastError: errorText(outcome),
+        status: wasAmbiguous ? "UNRESOLVED" : "FAILED",
+        lastError: wasAmbiguous
+          ? `retry ${errorText(outcome)} (earlier call unresolved)`
+          : errorText(outcome),
         attempted: true,
       });
       await voidRedeemRows(
@@ -211,6 +232,7 @@ export async function redeemCustomerVouchersForOperation(
         "POS customer voucher sale redeem failed after partial success",
         deps,
       );
+      if (wasAmbiguous) throw unresolvedError("voucher redeem");
       throw rejectionError(outcome);
     }
 
@@ -340,6 +362,8 @@ export async function issueRefundVoucherForOperation(
       throw operationConflict("This operationId already belongs to a recorded refund (409).");
   }
 
+  const wasAmbiguous = ambiguousKeysOf(prior).has(entityId);
+
   const row = await deps.ops.ensureIntent({
     operationId: args.operationId,
     kind: "REFUND_ISSUE",
@@ -380,10 +404,13 @@ export async function issueRefundVoucherForOperation(
   }
   if (outcome.kind === "rejected") {
     await deps.ops.update(row.id, {
-      status: "FAILED",
-      lastError: errorText(outcome),
+      status: wasAmbiguous ? "UNRESOLVED" : "FAILED",
+      lastError: wasAmbiguous
+        ? `retry ${errorText(outcome)} (earlier call unresolved)`
+        : errorText(outcome),
       attempted: true,
     });
+    if (wasAmbiguous) throw unresolvedError("refund voucher issue");
     throw rejectionError(outcome);
   }
   await deps.ops.update(row.id, {

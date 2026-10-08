@@ -112,7 +112,7 @@ interface FakeIssue {
   spent: boolean;
 }
 
-type Mode = "ok" | "unknown" | "unknown-after-effect" | "reject" | "throw";
+type Mode = "ok" | "unknown" | "unknown-after-effect" | "reject" | "reject404" | "throw";
 
 // In-memory CRM with the real CRM's idempotency semantics: a redeem key is
 // processed once and replays (with `voided`), a refund-issue entityId issues
@@ -140,6 +140,7 @@ export class FakeCrm implements CustomerVoucherCrm {
     if (mode === "throw") throw new Error("socket hang up");
     if (mode === "unknown") return this.unknown<never>();
     if (mode === "reject") return { kind: "rejected" as const, status: 400, msg: "Customer voucher balance is insufficient" };
+    if (mode === "reject404") return { kind: "rejected" as const, status: 404, msg: "Not Found" };
     const existing = this.redeems.get(input.requestId);
     if (existing) {
       return {
@@ -176,6 +177,7 @@ export class FakeCrm implements CustomerVoucherCrm {
     const mode = this.take("issueRefund");
     if (mode === "throw") throw new Error("socket hang up");
     if (mode === "unknown") return this.unknown<never>();
+    if (mode === "reject404") return { kind: "rejected" as const, status: 404, msg: "Not Found" };
     const existing = this.issues.get(input.entityId);
     if (existing)
       return { kind: "ok" as const, result: { voucher: existing.voucher, eventId: existing.eventId, replayed: true, voided: existing.voided } };

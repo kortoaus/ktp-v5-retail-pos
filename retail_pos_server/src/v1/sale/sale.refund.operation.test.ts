@@ -15,6 +15,7 @@ import {
 import { validateEligibility, validateRepayPayloadShape } from "./sale.repay.service";
 import type { PaymentPayload, RefundCreatePayload } from "./sale.types";
 import { FakeCrm, FakeOpsStore } from "../customer-voucher/customer-voucher.test-fakes";
+import { reconcileCustomerVoucherOperations } from "../customer-voucher/customer-voucher.reconcile.service";
 
 // T-15 (platform/D-10) — refund operation identity (R-3), refund voucher issue
 // outside the lock with ledger + void (R-4/V-2, V-3), whole-Invoice CRM
@@ -236,4 +237,30 @@ test("V-4: Repay rejects a Customer Voucher replacement tender and a Customer Vo
     () => validateEligibility(original(CV_PAID), { shift: { id: 3 } } as unknown as Parameters<typeof validateEligibility>[1], new Date()),
     (e: unknown) => e instanceof HttpException && e.statusCode === 400,
   );
+});
+
+test("F-3: UNRESOLVED refund issue whose retry gets 404 stays UNRESOLVED; the reconciler voids the issued voucher", async () => {
+  const h = harness(original(CV_PAID));
+  h.crm.mode.issueRefund = ["unknown-after-effect", "reject404"];
+  const KEY = "op-refund-a1:cv-refund:0";
+  await assert.rejects(
+    createRefundService(halfRefund("op-refund-a1"), CONTEXT, h.deps),
+    (e: unknown) => e instanceof HttpException && e.statusCode === 503,
+  );
+  await assert.rejects(
+    createRefundService(halfRefund("op-refund-a1"), CONTEXT, h.deps),
+    (e: unknown) => e instanceof HttpException && e.statusCode === 503,
+  );
+  assert.equal(h.ops.byKey(KEY)!.status, "UNRESOLVED", "a rejected retry never marks FAILED");
+  assert.equal(h.persisted.length, 0);
+
+  const summary = await reconcileCustomerVoucherOperations({
+    crm: h.crm,
+    ops: h.ops,
+    findInvoiceByOperationId: async () => null,
+    now: () => new Date(Date.now() + 3 * 60_000),
+  });
+  assert.equal(summary.voided, 1);
+  assert.equal(h.ops.byKey(KEY)!.status, "VOIDED");
+  assert.equal(h.crm.issues.get(KEY)!.voided, true);
 });
