@@ -60,7 +60,13 @@ export class FakeCatalogDb implements MigrateDb {
   };
   writes: WriteLog[] = [];
   transactions: { maxWait?: number; timeout?: number }[] = [];
-  inTx = false;
+  private txDepth = 0;
+  get inTx() {
+    return this.txDepth > 0;
+  }
+  // FOR UPDATE row locks per cursor kind: tail of a promise chain.
+  private lockTails = new Map<string, Promise<void>>();
+  lockLog: string[] = [];
   localNow = () => new Date("2030-01-01T00:00:00.000Z");
   failOn: ((model: string, op: string, args: unknown) => boolean) | null = null;
   private nextHotkeyItemId = 1;
@@ -161,20 +167,74 @@ export class FakeCatalogDb implements MigrateDb {
     upsert: async (args: unknown) => this.delegate("cloudSyncCursor").upsert(args),
   };
 
+  // The sync only issues raw SQL inside a transaction.
+  async $executeRaw(): Promise<number> {
+    throw new Error("raw SQL outside a transaction");
+  }
+  async $queryRaw<T>(): Promise<T> {
+    throw new Error("raw SQL outside a transaction");
+  }
+
+  private async acquire(kind: string): Promise<() => void> {
+    const prev = this.lockTails.get(kind) ?? Promise.resolve();
+    let release!: () => void;
+    const mine = new Promise<void>((r) => (release = r));
+    this.lockTails.set(kind, prev.then(() => mine));
+    await prev;
+    return release;
+  }
+
+  /**
+   * Each call gets its own tx view: raw SQL is interpreted for the two cursor
+   * statements (insert-if-missing, SELECT … FOR UPDATE). The row lock is held
+   * until the transaction ends; the rollback snapshot is (re)taken when the
+   * lock is acquired, so a waiting tx never restores state from before the
+   * holder committed.
+   */
   async $transaction<R>(
     fn: (tx: MigrateTx) => Promise<R>,
     options?: { maxWait?: number; timeout?: number },
   ): Promise<R> {
     this.transactions.push({ ...options });
-    const snapshot = clone(this.tables);
-    this.inTx = true;
+    let snapshot = clone(this.tables);
+    const releases: (() => void)[] = [];
+    const tx: MigrateTx = {
+      item: this.item,
+      itemScaleData: this.itemScaleData,
+      brand: this.brand,
+      price: this.price,
+      promoPrice: this.promoPrice,
+      cloudHotkey: this.cloudHotkey,
+      cloudHotkeyItem: this.cloudHotkeyItem,
+      cloudSyncCursor: this.cloudSyncCursor,
+      $executeRaw: async (query: TemplateStringsArray, ...values: unknown[]) => {
+        const sql = query.join("?");
+        if (!sql.startsWith("INSERT INTO \"CloudSyncCursor\"")) throw new Error(`unexpected SQL: ${sql}`);
+        const kind = String(values[0]);
+        if (this.tables.cloudSyncCursor.some((r) => r.kind === kind)) return 0;
+        this.tables.cloudSyncCursor.push({ kind, cursorAt: new Date(0), updatedAt: new Date(0) });
+        return 1;
+      },
+      $queryRaw: async <T>(query: TemplateStringsArray, ...values: unknown[]) => {
+        const sql = query.join("?");
+        if (!/FOR UPDATE$/.test(sql)) throw new Error(`unexpected SQL: ${sql}`);
+        const kind = String(values[0]);
+        this.lockLog.push(`wait ${kind}`);
+        releases.push(await this.acquire(kind));
+        this.lockLog.push(`lock ${kind}`);
+        snapshot = clone(this.tables);
+        return [{ kind }] as T;
+      },
+    };
+    this.txDepth++;
     try {
-      return await fn(this);
+      return await fn(tx);
     } catch (e) {
       this.tables = snapshot;
       throw e;
     } finally {
-      this.inTx = false;
+      this.txDepth--;
+      for (const release of releases) release();
     }
   }
 
@@ -198,6 +258,9 @@ export class FakeCloud implements MigrateApi {
   feeds = new Map<string, Row[]>();
   calls: { endpoint: string; lastUpdatedAt: number }[] = [];
   failWith: string | null = null;
+  // per-call response delay in ms (consumed in order); the response is
+  // computed when the call arrives, so a delayed answer can be stale.
+  delays: number[] = [];
 
   put(endpoint: string, row: Row) {
     const rows = (this.feeds.get(endpoint) ?? []).filter((r) => r.id !== row.id);
@@ -212,7 +275,10 @@ export class FakeCloud implements MigrateApi {
     const rows = (this.feeds.get(endpoint) ?? []).filter(
       (r) => new Date(r.updatedAt as string).getTime() > lastUpdatedAt,
     );
-    return { ok: true, result: JSON.parse(JSON.stringify(rows)) as T };
+    const body = JSON.parse(JSON.stringify(rows)) as T;
+    const delay = this.delays.shift() ?? 0;
+    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+    return { ok: true, result: body };
   }
 
   lastCall(endpoint: string) {

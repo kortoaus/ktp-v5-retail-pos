@@ -16,69 +16,24 @@ import {
 } from "./cloud.sync.service";
 import { triggerSyncPendingOrderCollects } from "../order/order.collect.service";
 import { triggerSyncMemberAnonymizeEvents } from "./cloud.member-anonymize.service";
+import { createCoalescedRunner } from "./cloud.migrate.runner";
 
-export async function cloudItemMigrateController(req: Request, res: Response) {
-  const companyResult = await cloudCompanyMigrateService();
-  if (!companyResult) {
-    res.status(500).json({
-      ok: false,
-      msg: "Failed to migrate company data",
-    });
-    return;
-  }
+type SyncOutcome = { ok: true } | { ok: false; msg: string };
 
-  const brandResult = await cloudBrandMigrateService();
-  if (!brandResult) {
-    res.status(500).json({
-      ok: false,
-      msg: "Failed to migrate brands",
-    });
-    return;
-  }
+// Order matters: brands before items (FK), items before prices/promos/hotkeys.
+const STEPS: [() => Promise<boolean>, string][] = [
+  [cloudCompanyMigrateService, "Failed to migrate company data"],
+  [cloudBrandMigrateService, "Failed to migrate brands"],
+  [cloudItemMigrateService, "Failed to migrate items"],
+  [cloudPriceMigrateService, "Failed to migrate prices"],
+  [cloudPromoPriceMigrateService, "Failed to migrate promo prices"],
+  [normalizeBarcodesService, "Failed to normalize barcodes"],
+  [cloudHotkeyMigrateService, "Failed to migrate hotkeys"],
+];
 
-  const itemResult = await cloudItemMigrateService();
-  if (!itemResult) {
-    res.status(500).json({
-      ok: false,
-      msg: "Failed to migrate items",
-    });
-    return;
-  }
-
-  const priceResult = await cloudPriceMigrateService();
-  if (!priceResult) {
-    res.status(500).json({
-      ok: false,
-      msg: "Failed to migrate prices",
-    });
-    return;
-  }
-
-  const promoPriceResult = await cloudPromoPriceMigrateService();
-  if (!promoPriceResult) {
-    res.status(500).json({
-      ok: false,
-      msg: "Failed to migrate promo prices",
-    });
-    return;
-  }
-
-  const normalizeBarcodesResult = await normalizeBarcodesService();
-  if (!normalizeBarcodesResult) {
-    res.status(500).json({
-      ok: false,
-      msg: "Failed to normalize barcodes",
-    });
-    return;
-  }
-
-  const cloudHotkeyResult = await cloudHotkeyMigrateService();
-  if (!cloudHotkeyResult) {
-    res.status(500).json({
-      ok: false,
-      msg: "Failed to migrate hotkeys",
-    });
-    return;
+async function runCatalogSync(): Promise<SyncOutcome> {
+  for (const [step, msg] of STEPS) {
+    if (!(await step())) return { ok: false, msg };
   }
 
   triggerSyncAllSaleInvoices();
@@ -88,10 +43,23 @@ export async function cloudItemMigrateController(req: Request, res: Response) {
   // D3 — 멤버 익명화 이벤트 pull 도 카탈로그 싱크에 편승 (member-deletion §5).
   triggerSyncMemberAnonymizeEvents();
 
+  getIO().emit("cloud-sync-completed");
+  return { ok: true };
+}
+
+// One pipeline at a time; a request made during a run waits for it and shares
+// one coalesced follow-up run (F-15, see cloud.migrate.runner.ts). An
+// HttpException from a step rejects every request waiting on that run.
+const runCatalogSyncExclusive = createCoalescedRunner(runCatalogSync);
+
+export async function cloudItemMigrateController(req: Request, res: Response) {
+  const outcome = await runCatalogSyncExclusive();
+  if (!outcome.ok) {
+    res.status(500).json({ ok: false, msg: outcome.msg });
+    return;
+  }
   res.status(200).json({
     ok: true,
     msg: "Migrated all data from cloud",
   });
-
-  getIO().emit("cloud-sync-completed");
 }

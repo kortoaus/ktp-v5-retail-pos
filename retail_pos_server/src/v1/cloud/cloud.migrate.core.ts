@@ -1,14 +1,20 @@
-// Catalog down-sync core (T-16 / D-12, audit R-6 + R-14).
+// Catalog down-sync core (T-16 / D-12, audit R-6 + R-14; review F-15).
 //
-// Each feed (brand, item, price, promoPrice, hotkey):
-//   1. reads its cursor from CloudSyncCursor (never from a local @updatedAt
-//      column — the sync itself advances those to local time);
+// Each feed (brand, item, price, promoPrice, hotkey) runs ONE interactive
+// transaction that:
+//   1. locks its CloudSyncCursor row (`SELECT … FOR UPDATE`, row created at
+//      epoch if missing) and reads the cursor under that lock — never from a
+//      local @updatedAt column, which the sync itself advances to local time;
 //   2. asks the cloud for rows with cloud updatedAt > cursor;
-//   3. writes the whole batch in ONE interactive transaction (a throw rolls the
-//      batch back);
-//   4. only after that transaction commits, moves the cursor to
-//      max(response.updatedAt) - CURSOR_OVERLAP_MS (never backwards; unchanged
-//      when the response is empty).
+//   3. writes the whole batch;
+//   4. moves the cursor to max(response.updatedAt) - CURSOR_OVERLAP_MS (never
+//      backwards; unchanged when the response is empty) as its last statement.
+// The cursor change becomes visible only when the batch commits; a throw rolls
+// back both. Holding the row lock from read to commit serialises the whole
+// read → fetch → write → advance sequence per feed, so two runs (even from
+// different processes) cannot interleave an older response over a newer one
+// (F-15). In-process the controller also serialises the pipeline
+// (cloud.migrate.runner.ts).
 // Company is pulled whole on every sync and has no cursor.
 //
 // Dependencies are injected so the logic runs offline in node:test with fakes
@@ -38,7 +44,8 @@ export const CURSOR_OVERLAP_MS = 2_000;
 // full catalog: a fresh store (cursor at epoch) or a long-offline store pulls
 // every item, and each item costs ~4-5 statements (upsert, scaleData
 // delete+create, parentId update) — roughly 1 ms each on the store PC, so a
-// 20k-item catalog is ~100 s. 5 min gives ~3x headroom. Smaller feeds get 2 min.
+// 20k-item catalog is ~100 s. The cloud fetch (axios timeout 30 s) now runs
+// inside the transaction too. 5 min gives ~2.5x headroom. Smaller feeds: 2 min.
 export const ITEM_TX_TIMEOUT_MS = 300_000;
 export const FEED_TX_TIMEOUT_MS = 120_000;
 export const TX_MAX_WAIT_MS = 10_000;
@@ -67,13 +74,15 @@ export interface MigrateTx {
     deleteMany(args: unknown): Promise<unknown>;
     createMany(args: unknown): Promise<unknown>;
   };
-}
-
-export interface MigrateDb extends MigrateTx {
   cloudSyncCursor: {
     findUnique(args: unknown): Promise<{ cursorAt: Date } | null>;
     upsert(args: unknown): Promise<unknown>;
   };
+  $executeRaw(query: TemplateStringsArray, ...values: unknown[]): Promise<number>;
+  $queryRaw<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
+}
+
+export interface MigrateDb extends MigrateTx {
   $transaction<R>(
     fn: (tx: MigrateTx) => Promise<R>,
     options?: { maxWait?: number; timeout?: number },
@@ -96,8 +105,14 @@ export interface MigrateDeps {
 
 const EPOCH = new Date(0);
 
-export async function readCursor(db: MigrateDb, kind: CursorKind) {
-  const row = await db.cloudSyncCursor.findUnique({ where: { kind } });
+/**
+ * Inside a transaction: make sure the feed's cursor row exists (epoch if it was
+ * missing), take its row lock until commit/rollback, then read its value.
+ */
+export async function lockAndReadCursor(tx: MigrateTx, kind: CursorKind) {
+  await tx.$executeRaw`INSERT INTO "CloudSyncCursor" ("kind", "cursorAt", "updatedAt") VALUES (${kind}, TIMESTAMP '1970-01-01 00:00:00', CURRENT_TIMESTAMP) ON CONFLICT ("kind") DO NOTHING`;
+  await tx.$queryRaw`SELECT "kind" FROM "CloudSyncCursor" WHERE "kind" = ${kind} FOR UPDATE`;
+  const row = await tx.cloudSyncCursor.findUnique({ where: { kind } });
   return row?.cursorAt ?? EPOCH;
 }
 
@@ -118,8 +133,9 @@ export function nextCursorAt(
 type FeedRow = { updatedAt: Date | string };
 
 /**
- * Generic feed runner. Throws BadRequestException when the cloud says !ok;
- * any other throw (including from `write`) propagates with the cursor untouched.
+ * Generic feed runner — one transaction from cursor lock to cursor advance.
+ * Throws BadRequestException when the cloud says !ok; any throw (including
+ * from `write`) rolls back the batch and leaves the cursor unchanged.
  */
 async function runFeed<T extends FeedRow>(
   deps: MigrateDeps,
@@ -133,41 +149,43 @@ async function runFeed<T extends FeedRow>(
   },
 ): Promise<number> {
   const { db, api } = deps;
-  const cursor = await readCursor(db, opts.kind);
 
-  const { ok, msg, result } = await api.post<T[]>(opts.endpoint, {
-    lastUpdatedAt: cursor.getTime(),
-  });
-  if (!ok || !result) {
-    throw new BadRequestException(msg || opts.errorMsg);
-  }
+  const { received, cursorAt } = await db.$transaction(
+    async (tx) => {
+      const cursor = await lockAndReadCursor(tx, opts.kind);
 
-  if (result.length === 0) {
-    console.log(`${tag} ${opts.label}: 0 received (cursor ${cursor.toISOString()})`);
-    return 0;
-  }
+      const { ok, msg, result } = await api.post<T[]>(opts.endpoint, {
+        lastUpdatedAt: cursor.getTime(),
+      });
+      if (!ok || !result) {
+        throw new BadRequestException(msg || opts.errorMsg);
+      }
+      if (result.length === 0) return { received: 0, cursorAt: cursor };
 
-  await db.$transaction((tx) => opts.write(tx, result), {
-    maxWait: TX_MAX_WAIT_MS,
-    timeout: opts.timeoutMs,
-  });
+      await opts.write(tx, result);
 
-  // Batch is committed — only now move the cursor.
-  const next = nextCursorAt(result, cursor);
-  if (next) {
-    await db.cloudSyncCursor.upsert({
-      where: { kind: opts.kind },
-      create: { kind: opts.kind, cursorAt: next },
-      update: { cursorAt: next },
-    });
-  } else {
-    console.warn(`${tag} ${opts.label}: no usable updatedAt in response; cursor kept`);
-  }
+      // Last statement of the batch: visible only if the batch commits.
+      const next = nextCursorAt(result, cursor);
+      if (!next) {
+        console.warn(`${tag} ${opts.label}: no usable updatedAt in response; cursor kept`);
+        return { received: result.length, cursorAt: cursor };
+      }
+      if (next.getTime() !== cursor.getTime()) {
+        await tx.cloudSyncCursor.upsert({
+          where: { kind: opts.kind },
+          create: { kind: opts.kind, cursorAt: next },
+          update: { cursorAt: next },
+        });
+      }
+      return { received: result.length, cursorAt: next };
+    },
+    { maxWait: TX_MAX_WAIT_MS, timeout: opts.timeoutMs },
+  );
 
   console.log(
-    `${tag} ${opts.label}: ${result.length} synced (cursor ${(next ?? cursor).toISOString()})`,
+    `${tag} ${opts.label}: ${received} synced (cursor ${cursorAt.toISOString()})`,
   );
-  return result.length;
+  return received;
 }
 
 // ---- barcode normalisation

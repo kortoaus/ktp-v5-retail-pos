@@ -15,6 +15,7 @@ import {
   normalizeBarcodes,
   type MigrateDeps,
 } from "./cloud.migrate.core";
+import { createCoalescedRunner } from "./cloud.migrate.runner";
 import { FakeCatalogDb, FakeCloud, cloudItem } from "./cloud.migrate.test-fakes";
 
 // T-16 (platform/D-12, audit R-6 + R-14) — catalog down-sync cursor and
@@ -59,6 +60,7 @@ test("cursor is read from CloudSyncCursor, never from the local table's max upda
     restore();
   }
   assert.equal(cloud.lastCall(ITEM)?.lastUpdatedAt, at(-60_000).getTime());
+  assert.deepEqual(db.lockLog, ["wait item", "lock item"]);
 });
 
 test("missing cursor row pulls from epoch 0", async () => {
@@ -154,10 +156,10 @@ test("cloud !ok throws an HttpException and leaves the cursor unchanged", async 
   cloud.failWith = "nope";
   await assert.rejects(cloudPriceMigrate(deps), (e) => e instanceof HttpException);
   assert.equal(db.cursor("price")?.getTime(), at(0).getTime());
-  assert.equal(db.transactions.length, 0);
+  assert.equal(db.writes.length, 0);
 });
 
-test("an empty response keeps the cursor and opens no transaction", async () => {
+test("an empty response keeps the cursor and writes nothing", async () => {
   const { db, cloud, deps } = setup();
   db.setCursor("price", at(5_000));
   cloud.put(PRICE, { id: 1, companyId: 1, itemId: 1, priceType: "RETAIL", prices: [100], archived: false, markup: 1, createdAt: at(0), updatedAt: at(0) });
@@ -169,8 +171,7 @@ test("an empty response keeps the cursor and opens no transaction", async () => 
   }
   assert.equal(cloud.lastCall(PRICE)?.lastUpdatedAt, at(5_000).getTime());
   assert.equal(db.cursor("price")?.getTime(), at(5_000).getTime());
-  assert.equal(db.transactions.length, 0);
-  assert.equal(db.writes.filter((w) => w.model === "cloudSyncCursor").length, 0);
+  assert.equal(db.writes.length, 0);
 });
 
 test("parentId is written inside the same transaction, keeping the cloud updatedAt", async () => {
@@ -188,8 +189,8 @@ test("parentId is written inside the same transaction, keeping the cloud updated
   assert.ok(link, "parent link written");
   assert.equal(link.inTx, true);
   const cursorWrite = db.writes.findIndex((w) => w.model === "cloudSyncCursor");
-  assert.ok(db.writes.indexOf(link) < cursorWrite, "cursor written after the batch");
-  assert.equal(db.writes[cursorWrite].inTx, false, "cursor written after commit");
+  assert.equal(cursorWrite, db.writes.length - 1, "cursor is the batch's last write");
+  assert.equal(db.writes[cursorWrite].inTx, true, "cursor commits with the batch");
 
   const child = db.tables.item.find((r) => r.id === 10)!;
   assert.equal(child.parentId, 11);
@@ -254,4 +255,84 @@ test("nextCursorAt: max - overlap, never backwards, null without a usable update
   assert.equal(nextCursorAt([{ updatedAt: at(10_000).toISOString() }, { updatedAt: at(5_000) }], cur)?.getTime(), at(10_000 - CURSOR_OVERLAP_MS).getTime());
   assert.equal(nextCursorAt([{ updatedAt: at(1_000) }], cur)?.getTime(), cur.getTime());
   assert.equal(nextCursorAt([{ updatedAt: "garbage" }], cur), null);
+});
+
+// ---- F-15: concurrent Syncs
+
+const price = (id: number, prices: number[], updatedAt: Date) => ({
+  id, companyId: 1, itemId: id, priceType: "RETAIL", prices, archived: false, markup: 1, createdAt: at(0), updatedAt,
+});
+
+test("two overlapping runs (slow first answer) serialise: newest row stored, cursor matches the stored rows", async () => {
+  const { db, cloud, deps } = setup();
+  db.setCursor("price", at(-60_000));
+  cloud.put(PRICE, price(1, [100], at(0)));
+  cloud.delays = [30, 0]; // run A's answer is slow; run B's would be instant
+
+  const restore = quiet();
+  try {
+    const runA = cloudPriceMigrate(deps);
+    while (cloud.calls.length < 1) await new Promise((r) => setImmediate(r));
+    // cloud changes after A's response snapshot was taken
+    cloud.put(PRICE, price(1, [200], at(5_000)));
+    const runB = cloudPriceMigrate(deps);
+    await Promise.all([runA, runB]);
+  } finally {
+    restore();
+  }
+
+  // B fetched only after A committed, from A's cursor.
+  assert.equal(cloud.calls.length, 2);
+  assert.equal(cloud.calls[1].lastUpdatedAt, at(-CURSOR_OVERLAP_MS).getTime());
+  assert.deepEqual(db.lockLog, ["wait price", "lock price", "wait price", "lock price"]);
+
+  const stored = db.tables.price.find((r) => r.id === 1)!;
+  assert.deepEqual(stored.prices, [200]);
+  const storedMax = new Date(stored.updatedAt as string).getTime();
+  assert.equal(db.cursor("price")?.getTime(), storedMax - CURSOR_OVERLAP_MS);
+});
+
+test("pipeline runner: a request during a run waits and shares one coalesced follow-up run", async () => {
+  let calls = 0;
+  const gates: (() => void)[] = [];
+  const runner = createCoalescedRunner(async () => {
+    const n = ++calls;
+    await new Promise<void>((r) => gates.push(r));
+    return n;
+  });
+
+  const first = runner();
+  const second = runner();
+  const third = runner();
+  assert.equal(second, third, "callers during a run share one follow-up");
+  assert.equal(calls, 1, "no second run while the first is in flight");
+
+  gates[0]();
+  assert.equal(await first, 1);
+  while (calls < 2) await new Promise((r) => setImmediate(r));
+  gates[1]();
+  assert.equal(await second, 2);
+  assert.equal(await third, 2);
+  assert.equal(calls, 2);
+
+  // idle again: the next request starts a fresh run
+  const fourth = runner();
+  while (calls < 3) await new Promise((r) => setImmediate(r));
+  gates[2]();
+  assert.equal(await fourth, 3);
+});
+
+test("pipeline runner: a failed run rejects its callers and the follow-up still runs", async () => {
+  let calls = 0;
+  const runner = createCoalescedRunner(async () => {
+    calls++;
+    await new Promise((r) => setImmediate(r));
+    if (calls === 1) throw new Error("boom");
+    return "ok";
+  });
+  const first = runner();
+  const second = runner();
+  await assert.rejects(first, /boom/);
+  assert.equal(await second, "ok");
+  assert.equal(calls, 2);
 });
