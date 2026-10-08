@@ -391,7 +391,8 @@ export async function redeemCustomerVouchersForOperation(
 // F-11 — a compensation is recorded BEFORE it is sent: the VOID_* row is
 // committed as INTENT, then the CRM void, then
 //   ok        → void row CONFIRMED, primary VOIDED            → "VOIDED"
-//   rejected  → void row FAILED (CRM refused; nothing reversed),
+//   rejected  → void row FAILED (CRM refused; nothing reversed) — or
+//               UNRESOLVED when an earlier send of it was ambiguous (F-13),
 //               primary UNRESOLVED                            → "REJECTED"
 //   unknown   → void row UNRESOLVED, primary UNRESOLVED       → "UNKNOWN"
 // While the void row is INTENT/UNRESOLVED the primary can never become
@@ -409,7 +410,15 @@ async function sendVoid(
   const requestId = voidRequestIdFor(primary.crmRequestId);
   const log = { operationId: primary.operationId, crmRequestId: primary.crmRequestId };
   let voidRow: CvOperationRow;
+  // F-13 — same rule as F-3: a void sent before whose outcome is unknown
+  // (row left INTENT / UNRESOLVED / UNRESOLVED_MANUAL) is ambiguous; a
+  // rejection of the re-send proves nothing about the earlier one, so the
+  // row stays UNRESOLVED (still blocking checkout) until the reconciler's
+  // operation lookup settles it. FAILED only when the first send is refused.
+  let wasAmbiguous = false;
   try {
+    const existing = await deps.ops.findByCrmRequestId(requestId);
+    wasAmbiguous = existing != null && AMBIGUOUS_STATUSES.includes(existing.status) && existing.status !== "CONFIRMED";
     voidRow = await deps.ops.ensureIntent({
       operationId: primary.operationId,
       kind,
@@ -439,7 +448,12 @@ async function sendVoid(
     outcome.kind === "ok" ? "VOIDED" : outcome.kind === "rejected" ? "REJECTED" : "UNKNOWN";
   try {
     await deps.ops.update(voidRow.id, {
-      status: result === "VOIDED" ? "CONFIRMED" : result === "REJECTED" ? "FAILED" : "UNRESOLVED",
+      status:
+        result === "VOIDED"
+          ? "CONFIRMED"
+          : result === "REJECTED" && !wasAmbiguous
+            ? "FAILED"
+            : "UNRESOLVED",
       crmEventId: outcome.kind === "ok" ? outcome.result.eventId : voidRow.crmEventId,
       lastError: errorText(outcome),
       ...(result === "UNKNOWN" ? { transient: true } : { attempted: true }),

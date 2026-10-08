@@ -436,3 +436,42 @@ test("F-11: local failure + void answer lost → retry with the same payload is 
   assert.equal(h.ops.byKey(KEY7)!.status, "VOIDED");
   assert.equal(h.crm.balances.get(7), 1000);
 });
+
+test("F-13: void timed out, the re-sent void gets 404 → void row stays UNRESOLVED and checkout stays 409; lookup 'voided' settles it", async () => {
+  const h = harness();
+  h.setPersist("fail");
+  h.crm.mode.voidRedeem = ["unknown", "reject404"];
+  await assert.rejects(createSaleService(salePayload({ operationId: OP }), CONTEXT, h.deps));
+  assert.equal(h.ops.byKey(`${KEY7}:void`)!.status, "UNRESOLVED");
+
+  // Reconciler: CRM still shows the redeem → re-sends the same void → 404.
+  await reconcileCustomerVoucherOperations(h.reconcileDeps(3));
+  assert.equal(h.ops.byKey(`${KEY7}:void`)!.status, "UNRESOLVED", "a rejected re-send never marks the void FAILED");
+  assert.equal(h.ops.byKey(KEY7)!.status, "UNRESOLVED");
+
+  h.setPersist("ok");
+  await assert.rejects(
+    createSaleService(salePayload({ operationId: OP }), CONTEXT, h.deps),
+    (e: unknown) =>
+      e instanceof HttpException &&
+      e.statusCode === 409 &&
+      (e.result as { code?: string }).code === "CUSTOMER_VOUCHER_EFFECT_PENDING",
+  );
+  assert.equal(h.invoices.length, 0);
+
+  // The first void lands late at CRM; the next sweep's lookup says voided.
+  await h.crm.voidRedeem({ redeemRequestId: KEY7, requestId: `${KEY7}:void` });
+  await reconcileCustomerVoucherOperations(h.reconcileDeps(6));
+  assert.equal(h.ops.byKey(`${KEY7}:void`)!.status, "CONFIRMED");
+  assert.equal(h.ops.byKey(KEY7)!.status, "VOIDED");
+  assert.equal(h.crm.balances.get(7), 1000);
+});
+
+test("F-13: a void refused on its FIRST send is FAILED (CRM did nothing); the primary stays UNRESOLVED", async () => {
+  const h = harness();
+  h.setPersist("fail");
+  h.crm.mode.voidRedeem = ["reject404"];
+  await assert.rejects(createSaleService(salePayload({ operationId: OP }), CONTEXT, h.deps));
+  assert.equal(h.ops.byKey(`${KEY7}:void`)!.status, "FAILED");
+  assert.equal(h.ops.byKey(KEY7)!.status, "UNRESOLVED");
+});

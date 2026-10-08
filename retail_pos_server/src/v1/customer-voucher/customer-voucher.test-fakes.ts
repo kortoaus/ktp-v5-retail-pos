@@ -171,6 +171,7 @@ export class FakeCrm implements CustomerVoucherCrm {
     const mode = this.take("voidRedeem");
     if (mode === "throw") throw new Error("socket hang up");
     if (mode === "unknown") return this.unknown<never>();
+    if (mode === "reject404") return { kind: "rejected" as const, status: 404, msg: "Not Found" };
     const redeem = this.redeems.get(input.redeemRequestId);
     if (!redeem) return { kind: "rejected" as const, status: 404, msg: "Original redeem event not found" };
     if (!redeem.voided) {
