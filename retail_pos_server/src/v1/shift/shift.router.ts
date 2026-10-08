@@ -7,6 +7,7 @@ import {
   previewCloseShiftController,
 } from "./shift.controller";
 import { scopeMiddleware, userMiddleware } from "../user/user.middleware";
+import { withContext } from "../request-context";
 
 const router = Router();
 
@@ -16,6 +17,7 @@ router.post(
   "/open",
   userMiddleware,
   scopeMiddleware("shift"),
+  withContext(["company"]),
   openTerminalShiftController,
 );
 
@@ -24,6 +26,7 @@ router.post(
   "/close/data",
   userMiddleware,
   scopeMiddleware("shift"),
+  withContext(["shift"]),
   previewCloseShiftController,
 );
 

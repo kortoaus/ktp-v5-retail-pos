@@ -17,6 +17,7 @@ import {
 import { triggerSyncPendingOrderCollects } from "../order/order.collect.service";
 import { triggerSyncMemberAnonymizeEvents } from "./cloud.member-anonymize.service";
 import { createCoalescedRunner } from "./cloud.migrate.runner";
+import { invalidateStoreContextCache } from "../request-context";
 
 type SyncOutcome = { ok: true } | { ok: false; msg: string };
 
@@ -32,8 +33,14 @@ const STEPS: [() => Promise<boolean>, string][] = [
 ];
 
 async function runCatalogSync(): Promise<SyncOutcome> {
-  for (const [step, msg] of STEPS) {
-    if (!(await step())) return { ok: false, msg };
+  try {
+    for (const [step, msg] of STEPS) {
+      if (!(await step())) return { ok: false, msg };
+    }
+  } finally {
+    // T-24 (R-11) — company migrate upserts Company + StoreSetting (even when
+    // a later step fails): drop the in-process cache either way.
+    invalidateStoreContextCache();
   }
 
   triggerSyncAllSaleInvoices();

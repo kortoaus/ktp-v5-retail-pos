@@ -5,11 +5,12 @@ import {
   listTerminals,
   setTerminalOrderChime,
 } from "./terminal.controller";
+import { withContext } from "../request-context";
 
 const terminalRouter = Router();
 
 // 리터럴 라우트를 param 라우트보다 먼저 선언한다.
-terminalRouter.get("/me", getMyTerminal);
+terminalRouter.get("/me", withContext(["company"]), getMyTerminal);
 terminalRouter.get("/", listTerminals);
 terminalRouter.patch(
   "/:id/order-chime",

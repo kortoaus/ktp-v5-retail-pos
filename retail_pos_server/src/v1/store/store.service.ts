@@ -4,6 +4,10 @@ import {
   InternalServerException,
   NotFoundException,
 } from "../../libs/exceptions";
+import {
+  invalidateStoreContextCache,
+  storeSettingCache,
+} from "../request-context";
 
 type StoreSettingDTO = {
   name: string;
@@ -111,31 +115,22 @@ export function createGetStoreLabelSettingService(
 export const getStoreLabelSettingService =
   createGetStoreLabelSettingService();
 
-export const updateStoreSettingService = async (dto: StoreSettingDTO) => {
-  try {
-    const {
-      name,
-      phone,
-      address1,
-      address2,
-      suburb,
-      state,
-      postcode,
-      country,
-      abn,
-      website,
-      email,
-      credit_surcharge_rate,
-      receipt_below_text,
-      receipt_extra_footer_text,
-      user_daily_voucher_default,
-      cash_point_rate,
-      other_point_rate,
-    } = dto;
+type StoreSettingUpdateClient = {
+  storeSetting: {
+    update(args: {
+      where: { id: number };
+      data: Partial<StoreSettingDTO>;
+    }): Promise<unknown>;
+  };
+};
 
-    const storeSetting = await db.storeSetting.update({
-      where: { id: 1 },
-      data: {
+export function createUpdateStoreSettingService(
+  client: StoreSettingUpdateClient = db,
+  onSaved: () => void = invalidateStoreContextCache,
+) {
+  return async (dto: StoreSettingDTO) => {
+    try {
+      const {
         name,
         phone,
         address1,
@@ -153,26 +148,53 @@ export const updateStoreSettingService = async (dto: StoreSettingDTO) => {
         user_daily_voucher_default,
         cash_point_rate,
         other_point_rate,
-      },
-    });
+      } = dto;
 
-    return {
-      ok: true,
-      result: storeSetting,
-      msg: "Store setting updated successfully",
-    };
-  } catch (e) {
-    if (e instanceof HttpException) throw e;
-    console.error("updateStoreSettingService error:", e);
-    throw new InternalServerException();
-  }
-};
+      const storeSetting = await client.storeSetting.update({
+        where: { id: 1 },
+        data: {
+          name,
+          phone,
+          address1,
+          address2,
+          suburb,
+          state,
+          postcode,
+          country,
+          abn,
+          website,
+          email,
+          credit_surcharge_rate,
+          receipt_below_text,
+          receipt_extra_footer_text,
+          user_daily_voucher_default,
+          cash_point_rate,
+          other_point_rate,
+        },
+      });
+
+      // T-24 (R-11) — the in-process store setting cache reloads on next use.
+      onSaved();
+
+      return {
+        ok: true,
+        result: storeSetting,
+        msg: "Store setting updated successfully",
+      };
+    } catch (e) {
+      if (e instanceof HttpException) throw e;
+      console.error("updateStoreSettingService error:", e);
+      throw new InternalServerException();
+    }
+  };
+}
+
+export const updateStoreSettingService = createUpdateStoreSettingService();
 
 export const getStoreSettingService = async () => {
   try {
-    const storeSetting = await db.storeSetting.findUnique({
-      where: { id: 1 },
-    });
+    // T-24 (R-11) — same in-process cache the request context uses.
+    const storeSetting = await storeSettingCache.get();
     if (!storeSetting) {
       throw new NotFoundException("Store setting not found");
     }

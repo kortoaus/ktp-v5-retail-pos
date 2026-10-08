@@ -19,7 +19,8 @@ import {
 import { InvoiceType } from "../../generated/prisma/enums";
 
 export async function createSaleController(req: Request, res: Response) {
-  // Context — terminalMiddleware + userMiddleware 가 세팅한 res.locals 에서 추출.
+  // Context — terminalMiddleware + userMiddleware + withContext(storeSetting, shift)
+  // (sale.router.ts) 가 세팅한 res.locals 에서 추출.
   // Open shift 없으면 sale 생성 불가.
   const { terminal, storeSetting, shift, user } = res.locals;
   if (!shift) {

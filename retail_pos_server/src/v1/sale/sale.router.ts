@@ -10,8 +10,12 @@ import {
   getSaleInvoicesController,
 } from "./sale.controller";
 import { scopeMiddleware, userMiddleware } from "../user/user.middleware";
+import { withContext } from "../request-context";
 
 const saleRouter = Router();
+
+// T-24 (R-11) — invoice writers need the store snapshot and the open shift.
+const saleContext = withContext(["storeSetting", "shift"]);
 
 // POST /api/sale — 새 SALE invoice 생성.
 //   1. voucher 검증 → 2. 금액 검증 → 3. 저장 → 4. TODO: cloud sync push
@@ -19,6 +23,7 @@ saleRouter.post(
   "/",
   userMiddleware,
   scopeMiddleware("sale"),
+  saleContext,
   createSaleController,
 );
 
@@ -28,6 +33,7 @@ saleRouter.post(
   "/spend",
   userMiddleware,
   scopeMiddleware("sale"),
+  saleContext,
   createSpendController,
 );
 
@@ -38,6 +44,7 @@ saleRouter.post(
   "/refund",
   userMiddleware,
   scopeMiddleware("refund"),
+  saleContext,
   createRefundController,
 );
 
@@ -50,6 +57,7 @@ saleRouter.post(
   "/repay",
   userMiddleware,
   scopeMiddleware("refund"),
+  saleContext,
   createRepayController,
 );
 

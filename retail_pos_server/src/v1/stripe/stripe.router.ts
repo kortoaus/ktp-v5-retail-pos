@@ -8,7 +8,8 @@ import { scopeMiddleware, userMiddleware } from "../user/user.middleware";
 const stripeRouter = Router();
 
 // Same middleware shape as `sale.router.ts`: app-level `terminalMiddleware`
-// has already resolved terminal/company/storeSetting, then `userMiddleware`
+// has already resolved the terminal (T-24: company/storeSetting are loaded
+// per route by withContext, not needed here), then `userMiddleware`
 // (Bearer staff session, or the legacy `<userId>%%%<ts>` while
 // STAFF_AUTH_ACCEPT=both) + `scopeMiddleware("sale")`. Minting a
 // connection token or a PaymentIntent is exactly as privileged as writing the

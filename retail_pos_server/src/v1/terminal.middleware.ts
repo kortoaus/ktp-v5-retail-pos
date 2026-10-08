@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import type { TerminalModel } from "../generated/prisma/models";
 import db from "../libs/db";
 import {
   BadRequestException,
@@ -7,57 +8,45 @@ import {
   NotFoundException,
 } from "../libs/exceptions";
 
-export default async function terminalMiddleware(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const ipAddress = req.headers["ip-address"] as string;
-    console.log("ipAddress", ipAddress);
+// Terminal identification only — one read per request (T-24, audit R-11).
+// Company / store setting / open shift are loaded by the routes that use
+// them: see withContext() in ./request-context.ts.
+export type FindTerminalByIp = (ipAddress: string) => Promise<TerminalModel | null>;
 
-    if (!ipAddress) throw new BadRequestException("IP address is required");
+export const findActiveTerminalByIp: FindTerminalByIp = (ipAddress) =>
+  db.terminal.findFirst({
+    where: {
+      ipAddress,
+      archived: false,
+    },
+  });
 
-    const terminal = await db.terminal.findFirst({
-      where: {
-        ipAddress,
-        archived: false,
-      },
-    });
-    if (!terminal) throw new NotFoundException("Terminal not found");
+export function createTerminalMiddleware(findTerminal: FindTerminalByIp) {
+  return async function terminalMiddleware(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const ipAddress = req.headers["ip-address"] as string;
+      console.log("ipAddress", ipAddress);
 
-    const company = await db.company.findUnique({
-      where: {
-        id: 1,
-      },
-    });
+      if (!ipAddress) throw new BadRequestException("IP address is required");
 
-    if (!company) throw new NotFoundException("Company not configured!");
+      const terminal = await findTerminal(ipAddress);
+      if (!terminal) throw new NotFoundException("Terminal not found");
 
-    const storeSetting = await db.storeSetting.findUnique({
-      where: {
-        id: 1,
-      },
-    });
+      res.locals.terminal = terminal;
 
-    if (!storeSetting) throw new NotFoundException("Store setting not found");
-
-    const shift = await db.terminalShift.findFirst({
-      where: {
-        terminalId: terminal.id,
-        closedAt: null,
-      },
-    });
-
-    res.locals.terminal = terminal;
-    res.locals.company = company;
-    res.locals.storeSetting = storeSetting;
-    res.locals.shift = shift;
-
-    next();
-  } catch (e) {
-    if (e instanceof HttpException) throw e;
-    console.error("Terminal middleware error:", e);
-    throw new InternalServerException("Internal server error");
-  }
+      next();
+    } catch (e) {
+      if (e instanceof HttpException) throw e;
+      console.error("Terminal middleware error:", e);
+      throw new InternalServerException("Internal server error");
+    }
+  };
 }
+
+const terminalMiddleware = createTerminalMiddleware(findActiveTerminalByIp);
+
+export default terminalMiddleware;
