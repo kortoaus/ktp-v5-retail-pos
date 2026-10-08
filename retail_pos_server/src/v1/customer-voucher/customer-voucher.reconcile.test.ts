@@ -19,14 +19,23 @@ import type { CvOperationStatus } from "./customer-voucher.operation.store";
 
 const LATER = 3 * 60_000;
 
-function setup(invoices: Array<{ operationId: string; id: number; type: string }> = []) {
+type TestInvoice = {
+  operationId: string;
+  id: number;
+  type: string;
+  payments?: Array<{ type: string; amount: number; entityType: string | null; entityId: number | null }>;
+};
+
+function setup(invoices: TestInvoice[] = []) {
   const crm = new FakeCrm();
   const ops = new FakeOpsStore();
   const deps: ReconcileDeps = {
     crm,
     ops,
-    findInvoiceByOperationId: async (operationId) =>
-      invoices.find((i) => i.operationId === operationId) ?? null,
+    findInvoiceByOperationId: async (operationId) => {
+      const inv = invoices.find((i) => i.operationId === operationId);
+      return inv ? { id: inv.id, type: inv.type, payments: inv.payments ?? [] } : null;
+    },
     now: () => new Date(Date.now() + LATER),
   };
   return { crm, ops, deps };
@@ -87,7 +96,14 @@ test("REDEEM redeemed and no local invoice → void → VOIDED, balance restored
 });
 
 test("REDEEM redeemed and the local invoice exists → LINKED (no void)", async () => {
-  const h = setup([{ operationId: "op-ln-00001", id: 42, type: "SALE" }]);
+  const h = setup([
+    {
+      operationId: "op-ln-00001",
+      id: 42,
+      type: "SALE",
+      payments: [{ type: "VOUCHER", amount: 400, entityType: "customer-voucher", entityId: 7 }],
+    },
+  ]);
   const key = await redeemRow(h, "op-ln-00001", "UNRESOLVED", "redeemed");
   const s = await reconcileCustomerVoucherOperations(h.deps);
   assert.equal(s.linked, 1);
@@ -116,7 +132,15 @@ test("REFUND_ISSUE issued with no local REFUND invoice → refund-issue void →
 });
 
 test("REFUND_ISSUE issued with the local REFUND invoice → LINKED", async () => {
-  const h = setup([{ operationId: "op-rl-00001", id: 77, type: "REFUND" }]);
+  // FakeCrm issues refund voucher ids from 500.
+  const h = setup([
+    {
+      operationId: "op-rl-00001",
+      id: 77,
+      type: "REFUND",
+      payments: [{ type: "VOUCHER", amount: 500, entityType: "customer-voucher", entityId: 500 }],
+    },
+  ]);
   const key = await refundIssueRow(h, "op-rl-00001", "issued");
   const s = await reconcileCustomerVoucherOperations(h.deps);
   assert.equal(s.linked, 1);
@@ -203,4 +227,26 @@ test("operations listing: status filter parsing and open count", async () => {
   const res = await listCustomerVoucherOperationsService("UNRESOLVED,CONFIRMED", h.ops);
   assert.equal(res.result.length, 1);
   assert.equal(res.openCount, 1);
+});
+
+test("F-6: an Invoice under the id that does NOT carry the voucher tender → the redeem is voided, not linked", async () => {
+  const h = setup([
+    { operationId: "op-cs-00001", id: 43, type: "SALE", payments: [{ type: "CASH", amount: 1000, entityType: null, entityId: null }] },
+  ]);
+  const key = await redeemRow(h, "op-cs-00001", "UNRESOLVED", "redeemed");
+  const s = await reconcileCustomerVoucherOperations(h.deps);
+  assert.equal(s.voided, 1);
+  assert.equal(s.linked, 0);
+  assert.equal(h.ops.byKey(key)!.status, "VOIDED");
+  assert.equal(h.crm.balances.get(7), 1000);
+});
+
+test("F-6: a REFUND Invoice without the issued voucher tender → the refund issue is voided, not linked", async () => {
+  const h = setup([
+    { operationId: "op-rc-00001", id: 78, type: "REFUND", payments: [{ type: "CASH", amount: 500, entityType: null, entityId: null }] },
+  ]);
+  const key = await refundIssueRow(h, "op-rc-00001", "issued");
+  const s = await reconcileCustomerVoucherOperations(h.deps);
+  assert.equal(s.voided, 1);
+  assert.equal(h.crm.issues.get(key)!.voided, true);
 });

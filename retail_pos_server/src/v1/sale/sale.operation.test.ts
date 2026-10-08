@@ -77,6 +77,7 @@ function harness() {
   const crm = new FakeCrm();
   const ops = new FakeOpsStore();
   const invoices: SaleInvoiceModel[] = [];
+  const invoicePayments = new Map<number, SaleCreatePayload["payments"]>();
   let persistMode: "ok" | "fail" | "hang" = "ok";
   let persistCalled: () => void = () => {};
   const persistReached = new Promise<void>((resolve) => (persistCalled = resolve));
@@ -102,6 +103,7 @@ function harness() {
       } as unknown as SaleInvoiceModel;
       ops.link(args.linkOperationRowIds, invoice.id); // same tx as the invoice
       invoices.push(invoice);
+      invoicePayments.set(invoice.id, args.payload.payments);
       return invoice;
     },
     afterCommit: async () => ({}),
@@ -111,7 +113,14 @@ function harness() {
     ops,
     findInvoiceByOperationId: async (operationId) => {
       const inv = invoices.find((i) => i.operationId === operationId);
-      return inv ? { id: inv.id, type: inv.type } : null;
+      if (!inv) return null;
+      const payments = (invoicePayments.get(inv.id) ?? []).map((p) => ({
+        type: p.type,
+        amount: p.amount,
+        entityType: p.entityType ?? null,
+        entityId: p.entityId ?? null,
+      }));
+      return { id: inv.id, type: inv.type, payments };
     },
     now: () => new Date(Date.now() + minutesLater * 60_000),
   });
@@ -328,4 +337,63 @@ test("F-3: a definitive rejection on the first call (no earlier attempt) still m
     (e: unknown) => e instanceof HttpException && e.statusCode === 400,
   );
   assert.equal(h.ops.byKey(KEY7)!.status, "FAILED");
+});
+
+test("F-6: lost redeem answer, then the cashier swaps the voucher for cash → 409 EFFECT_PENDING, never two charges; reconciler gives it back", async () => {
+  const h = harness();
+  h.crm.mode.redeem = ["unknown-after-effect"];
+  await assert.rejects(
+    createSaleService(salePayload({ operationId: OP }), CONTEXT, h.deps),
+    (e: unknown) => e instanceof HttpException && e.statusCode === 503,
+  );
+  assert.equal(h.crm.balances.get(7), 600, "CRM did debit");
+
+  const cashOnly = salePayload({ operationId: OP, payments: [{ type: "CASH", amount: 1000 }] });
+  await assert.rejects(
+    createSaleService(cashOnly, CONTEXT, h.deps),
+    (e: unknown) =>
+      e instanceof HttpException &&
+      e.statusCode === 409 &&
+      (e.result as { code?: string }).code === "CUSTOMER_VOUCHER_EFFECT_PENDING",
+  );
+  assert.equal(h.invoices.length, 0, "no cash-only invoice under the pending id");
+
+  // A different voucher amount is not the same effect either.
+  await assert.rejects(
+    createSaleService(
+      salePayload({
+        operationId: OP,
+        payments: [
+          { type: "VOUCHER", amount: 300, entityType: "customer-voucher", entityId: 7 },
+          { type: "CASH", amount: 700 },
+        ],
+      }),
+      CONTEXT,
+      h.deps,
+    ),
+    (e: unknown) => e instanceof HttpException && e.statusCode === 409,
+  );
+  assert.equal(h.crm.balances.get(7), 600);
+
+  // Cashier clears the cart (new attempt, new id): the reconciler voids the old debit.
+  const summary = await reconcileCustomerVoucherOperations(h.reconcileDeps(3));
+  assert.equal(summary.voided, 1);
+  assert.equal(h.crm.balances.get(7), 1000);
+  const fresh = await createSaleService(
+    salePayload({ operationId: "op-cccccccc", payments: [{ type: "CASH", amount: 1000 }] }),
+    CONTEXT,
+    h.deps,
+  );
+  assert.equal(fresh.ok, true);
+  assert.equal(h.crm.balances.get(7), 1000, "charged once: cash only");
+});
+
+test("F-6: putting the same voucher tender back after a lost answer replays the key and records one sale", async () => {
+  const h = harness();
+  h.crm.mode.redeem = ["unknown-after-effect"];
+  await assert.rejects(createSaleService(salePayload({ operationId: OP }), CONTEXT, h.deps));
+  const retry = await createSaleService(salePayload({ operationId: OP, note: "same tender" }), CONTEXT, h.deps);
+  assert.equal(retry.ok, true);
+  assert.equal(h.crm.balances.get(7), 600);
+  assert.equal(h.ops.byKey(KEY7)!.status, "LINKED");
 });

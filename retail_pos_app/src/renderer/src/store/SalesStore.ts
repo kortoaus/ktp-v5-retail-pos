@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { SaleLineItem } from "../types/sales";
 import { QTY_SCALE } from "../libs/constants";
 import { removeLineFromCart } from "./cart-line-remove";
-import { clearOperation, saleAttemptKey } from "../libs/operation-id";
+import { endAttemptsOfEmptyCarts } from "../libs/operation-id";
 import {
   type AddLineOptions,
   type Cart,
@@ -187,11 +187,19 @@ export const useSalesStore = create<SalesStoreState>()((set, get) => ({
 
   clearActiveCart: () => {
     const { activeCartIndex, carts } = get();
-    // T-15 (F-4/F-5) — clearing the cart ends its checkout attempt; the next
-    // Complete on this slot gets a new operationId.
-    clearOperation(saleAttemptKey(activeCartIndex));
     const updatedCarts = [...carts];
     updatedCarts[activeCartIndex] = createEmptyCart();
     set({ carts: updatedCarts });
   },
 }));
+
+// T-15 (F-4/F-5/F-7) — one hook for every mutation: whenever a cart is empty
+// (Clear, last line removed, qty → 0, till start) its checkout attempt ends,
+// so the next Complete on that slot gets a new operationId.
+function syncEmptyCartAttempts(carts: Cart[]) {
+  endAttemptsOfEmptyCarts(carts.map((cart) => cart.lines.length));
+}
+syncEmptyCartAttempts(useSalesStore.getState().carts);
+useSalesStore.subscribe((state, prev) => {
+  if (state.carts !== prev.carts) syncEmptyCartAttempts(state.carts);
+});

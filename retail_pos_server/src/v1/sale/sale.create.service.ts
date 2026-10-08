@@ -22,8 +22,10 @@ import {
 } from "../order/order.collect.service";
 import { calculateInvoicePoints } from "./sale.points";
 import {
+  assertNoPendingVoucherEffects,
   defaultCvDeps,
   redeemCustomerVouchersForOperation,
+  saleRedeemExpectations,
   voidRedeemRows,
   type CvDeps,
 } from "../customer-voucher/customer-voucher.operation";
@@ -592,6 +594,15 @@ export async function createSaleService(
         assertSameOperationPayload(recorded, payloadHash);
         return respond(recorded, true);
       }
+
+      // F-6 — whatever this payload carries, voucher effects already asked
+      // for under this id must match it before anything commits.
+      await assertNoPendingVoucherEffects(
+        operationId,
+        "REDEEM",
+        saleRedeemExpectations(operationId, payload.payments),
+        deps,
+      );
 
       // S3 — C&C 주문 연계. 정규화 후 이중 결제 가드: 같은 주문의 인보이스가
       // 이미 있으면 400 (DB @unique 제약이 레이스 최종 방어선이지만, 여기서

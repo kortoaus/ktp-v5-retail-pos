@@ -19,10 +19,12 @@ import type { CvOperationRow } from "./customer-voucher.operation.store";
 // operation) — never trusting a redeem replay — and settles it:
 //   REDEEM        not_found → FAILED (nothing happened)
 //                 voided    → VOIDED
-//                 redeemed  → local invoice with this operationId ? LINKED
+//                 redeemed  → local invoice with this operationId that carries
+//                             this voucher + amount ? LINKED
 //                             : void the redeem → VOIDED (UNRESOLVED if the void fails)
 //   REFUND_ISSUE  not_found → FAILED; issue_voided → VOIDED
-//                 issued    → local REFUND invoice ? LINKED : void → VOIDED
+//                 issued    → local REFUND invoice carrying the issued voucher +
+//                             amount ? LINKED : void → VOIDED
 //   CRM unreachable → attempts+1, lastError, row stays as it is.
 // Each operation is claimed (sale.operation.ts) while it is worked, so a till
 // retrying the same operationId cannot race the reconciler.
@@ -34,11 +36,42 @@ import type { CvOperationRow } from "./customer-voucher.operation.store";
 export const RECONCILE_MIN_AGE_MS = 2 * 60 * 1000;
 export const RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
 
+export interface ReconcileInvoice {
+  id: number;
+  type: string;
+  payments: Array<{
+    type: string;
+    amount: number;
+    entityType: string | null;
+    entityId: number | null;
+  }>;
+}
+
 export interface ReconcileDeps extends CvDeps {
-  findInvoiceByOperationId(
-    operationId: string,
-  ): Promise<{ id: number; type: string } | null>;
+  findInvoiceByOperationId(operationId: string): Promise<ReconcileInvoice | null>;
   now(): Date;
+}
+
+// F-6 — an Invoice under the same operationId proves nothing by itself; it
+// must carry this effect's customer-voucher tender (same voucher, same amount).
+export function invoiceCarriesVoucher(
+  invoice: ReconcileInvoice | null,
+  type: "SALE" | "REFUND",
+  voucherId: number | null,
+  amount: number,
+): invoice is ReconcileInvoice {
+  return (
+    invoice != null &&
+    invoice.type === type &&
+    voucherId != null &&
+    invoice.payments.some(
+      (p) =>
+        p.type === "VOUCHER" &&
+        p.entityType === "customer-voucher" &&
+        p.entityId === voucherId &&
+        p.amount === amount,
+    )
+  );
 }
 
 export const defaultReconcileDeps: ReconcileDeps = {
@@ -46,7 +79,13 @@ export const defaultReconcileDeps: ReconcileDeps = {
   findInvoiceByOperationId: (operationId) =>
     db.saleInvoice.findUnique({
       where: { operationId },
-      select: { id: true, type: true },
+      select: {
+        id: true,
+        type: true,
+        payments: {
+          select: { type: true, amount: true, entityType: true, entityId: true },
+        },
+      },
     }),
   now: () => new Date(),
 };
@@ -108,7 +147,7 @@ async function reconcileRow(
       return "voided";
     }
     if (state === "redeemed") {
-      if (invoice && invoice.type === "SALE") {
+      if (invoiceCarriesVoucher(invoice, "SALE", voucherId ?? row.voucherId, row.amount)) {
         await deps.ops.update(row.id, {
           status: "LINKED",
           invoiceId: invoice.id,
@@ -120,7 +159,7 @@ async function reconcileRow(
       }
       const result = await voidRedeemRow(
         row,
-        "reconcile: CRM redeem without a local invoice",
+        "reconcile: CRM redeem without a local invoice carrying it",
         deps,
       );
       await deps.ops.update(row.id, { attempted: true });
@@ -134,7 +173,14 @@ async function reconcileRow(
       return "voided";
     }
     if (state === "issued") {
-      if (invoice && invoice.type === "REFUND") {
+      if (
+        invoiceCarriesVoucher(
+          invoice,
+          "REFUND",
+          voucherId ?? row.crmVoucherId,
+          row.amount,
+        )
+      ) {
         await deps.ops.update(row.id, {
           status: "LINKED",
           invoiceId: invoice.id,
@@ -148,7 +194,7 @@ async function reconcileRow(
       }
       const result = await voidRefundIssueRow(
         row,
-        "reconcile: CRM refund issue without a local refund invoice",
+        "reconcile: CRM refund issue without a local refund invoice carrying it",
         deps,
       );
       await deps.ops.update(row.id, { attempted: true });

@@ -60,3 +60,12 @@ test("refund and repay attempts are keyed by original invoice", () => {
   assert.equal(m.operationIdFor(m.refundAttemptKey(50)), m.operationIdFor(m.refundAttemptKey(50)));
   assert.notEqual(m.operationIdFor(m.repayAttemptKey(50)), m.operationIdFor(m.refundAttemptKey(50)));
 });
+
+test("F-7: a cart that becomes empty by any path ends its attempt; non-empty carts keep theirs", () => {
+  const a = m.operationIdFor(m.saleAttemptKey(0));
+  const b = m.operationIdFor(m.saleAttemptKey(1));
+  // slot 0 emptied (last line removed / qty 0 / Clear), slot 1 still has lines
+  m.endAttemptsOfEmptyCarts([0, 3, 0, 0]);
+  assert.notEqual(m.operationIdFor(m.saleAttemptKey(0)), a, "identical new sale in slot 0 is a new attempt");
+  assert.equal(m.operationIdFor(m.saleAttemptKey(1)), b);
+});

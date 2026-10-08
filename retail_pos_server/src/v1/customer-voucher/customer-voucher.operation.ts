@@ -51,6 +51,7 @@ export const SALE_REDEEM_ENTITY_TYPE = "pos-sale-request";
 export const REFUND_ISSUE_ENTITY_TYPE = "pos-refund-request";
 
 export const CUSTOMER_VOUCHER_UNRESOLVED = "CUSTOMER_VOUCHER_UNRESOLVED";
+export const CUSTOMER_VOUCHER_EFFECT_PENDING = "CUSTOMER_VOUCHER_EFFECT_PENDING";
 
 export function redeemRequestIdFor(operationId: string, voucherId: number, amount: number) {
   return `${operationId}:cv:${voucherId}:${amount}`;
@@ -111,6 +112,76 @@ function errorText(outcome: CrmOutcome<unknown>): string | null {
   return `${outcome.kind} ${outcome.status}: ${outcome.msg}`.slice(0, 500);
 }
 
+// ── F-6: pending effects bind the operation ─────────────────────────────────
+// A CRM effect already asked for under this operationId (row INTENT /
+// CONFIRMED / UNRESOLVED) must be carried by the payload being retried: same
+// key and same amount. Otherwise nothing is committed — e.g. a lost redeem
+// answer followed by "swap the voucher for cash" would charge twice. Answer
+// 409 CUSTOMER_VOUCHER_EFFECT_PENDING naming the effect; the till keeps the
+// id (put the same voucher tender back) or the cashier clears the cart, after
+// which the reconciler voids the effect (no matching Invoice). Runs for every
+// sale/refund request, with or without a customer-voucher tender.
+const PENDING_STATUSES: CvOperationStatus[] = ["INTENT", "CONFIRMED", "UNRESOLVED"];
+
+export function saleRedeemExpectations(
+  operationId: string,
+  payments: PaymentLike[],
+): Map<string, number> {
+  const expected = new Map<string, number>();
+  for (const p of payments) {
+    if (!isCustomerVoucher(p) || p.entityId == null) continue;
+    expected.set(redeemRequestIdFor(operationId, p.entityId, p.amount), p.amount);
+  }
+  return expected;
+}
+
+export function refundIssueExpectations(
+  operationId: string,
+  payments: PaymentLike[],
+): Map<string, number> {
+  const expected = new Map<string, number>();
+  payments.forEach((p, index) => {
+    if (isCustomerVoucher(p))
+      expected.set(refundIssueEntityIdFor(operationId, index), p.amount);
+  });
+  return expected;
+}
+
+export async function assertNoPendingVoucherEffects(
+  operationId: string,
+  kind: "REDEEM" | "REFUND_ISSUE",
+  expected: Map<string, number>,
+  deps: CvDeps,
+) {
+  const pending = (await deps.ops.findByOperationId(operationId)).filter(
+    (row) =>
+      row.kind === kind &&
+      PENDING_STATUSES.includes(row.status) &&
+      expected.get(row.crmRequestId) !== row.amount,
+  );
+  if (pending.length === 0) return;
+  const what = pending
+    .map((row) =>
+      kind === "REDEEM"
+        ? `$${(row.amount / 100).toFixed(2)} on customer voucher #${row.voucherId}`
+        : `a $${(row.amount / 100).toFixed(2)} refund voucher`,
+    )
+    .join(", ");
+  throw new HttpException(
+    409,
+    `This checkout already asked CRM for ${what}, and that is not settled yet. Put the same customer voucher payment back and press again, or clear the cart — the voucher is then given back automatically within a few minutes.`,
+    {
+      code: CUSTOMER_VOUCHER_EFFECT_PENDING,
+      effects: pending.map((row) => ({
+        kind: row.kind,
+        voucherId: row.voucherId,
+        amount: row.amount,
+        status: row.status,
+      })),
+    },
+  );
+}
+
 // ── Sale redeem ─────────────────────────────────────────────────────────────
 
 export async function redeemCustomerVouchersForOperation(
@@ -143,13 +214,16 @@ export async function redeemCustomerVouchersForOperation(
     (row) => row.kind === "REDEEM",
   );
   const keys = new Set(intents.map((i) => i.crmRequestId));
+  await assertNoPendingVoucherEffects(
+    operationId,
+    "REDEEM",
+    saleRedeemExpectations(operationId, args.payments),
+    deps,
+  );
   for (const row of prior) {
-    if (!keys.has(row.crmRequestId)) {
-      if (row.status === "FAILED") continue; // nothing happened under it
-      throw operationConflict(
-        "This operationId was already used with other customer voucher tenders (409). Start a new attempt.",
-      );
-    }
+    // Other keys: pending ones were refused just above; FAILED / VOIDED ones
+    // left nothing at CRM.
+    if (!keys.has(row.crmRequestId)) continue;
     if (row.memberId && row.memberId !== memberId)
       throw operationConflict(
         "This operationId was already used for another member (409). Start a new attempt.",
@@ -347,12 +421,9 @@ export async function issueRefundVoucherForOperation(
     (row) => row.kind === "REFUND_ISSUE",
   );
   for (const row of prior) {
-    if (row.crmRequestId !== entityId) {
-      if (row.status === "FAILED") continue;
-      throw operationConflict(
-        "This operationId was already used with another customer voucher refund tender (409). Start a new attempt.",
-      );
-    }
+    // Pending effects under other keys / amounts are refused by
+    // assertNoPendingVoucherEffects in createRefundService.
+    if (row.crmRequestId !== entityId) continue;
     if (row.amount !== args.amount || (row.memberId && row.memberId !== args.memberId))
       throw operationConflict(
         "This operationId was already used for a different refund (409). Start a new attempt.",

@@ -10,7 +10,7 @@
 //   - the server answers ok (the attempt is recorded), or
 //   - the server answers 409 OPERATION_CANCELLED / OPERATION_PAYLOAD_MISMATCH
 //     (the server has settled this id; the next press starts a new attempt), or
-//   - the cashier explicitly ends the transaction (clears that cart).
+//   - that cart becomes empty by any path (endAttemptsOfEmptyCarts, F-7).
 // There is no time-based expiry: an elapsed time never proves the earlier
 // submit failed (F-5). Network errors, timeouts, 5xx, 503 "CRM did not answer"
 // and 409 OPERATION_IN_PROGRESS keep the id so the retry replays the same
@@ -66,6 +66,15 @@ export function clearOperation(attemptKey: string): void {
   } catch {
     // storage unavailable — nothing to clear
   }
+}
+
+// F-7 — an empty cart is a transaction boundary, whatever emptied it (Clear,
+// removing the last line, qty → 0, a fresh till start). Called by the cart
+// store on every carts change with each slot's line count.
+export function endAttemptsOfEmptyCarts(lineCounts: number[]): void {
+  lineCounts.forEach((count, index) => {
+    if (count === 0) clearOperation(saleAttemptKey(index));
+  });
 }
 
 // The attempt's operationId: the stored one, or a new one stored before the

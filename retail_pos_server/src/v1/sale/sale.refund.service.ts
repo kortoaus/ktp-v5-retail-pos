@@ -24,7 +24,9 @@ import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
 import { calculateRefundPointsReversed } from "./sale.refund.points";
 import {
   assertCrmReachableForOriginal,
+  assertNoPendingVoucherEffects,
   defaultCvDeps,
+  refundIssueExpectations,
   issueRefundVoucherForOperation,
   voidRefundIssueRow,
   type CvDeps,
@@ -745,6 +747,15 @@ export async function createRefundService(
         assertSameOperationPayload(recorded, payloadHash);
         return replay(recorded);
       }
+
+      // F-6 — a refund voucher already asked for under this id must still be
+      // in this payload (same tender index, same amount) before anything commits.
+      await assertNoPendingVoucherEffects(
+        operationId,
+        "REFUND_ISSUE",
+        refundIssueExpectations(operationId, payload.payments),
+        deps,
+      );
 
       // Pre-validate without the lock: nothing reaches CRM for a refund the
       // local rules would reject.

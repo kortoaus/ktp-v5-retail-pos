@@ -264,3 +264,34 @@ test("F-3: UNRESOLVED refund issue whose retry gets 404 stays UNRESOLVED; the re
   assert.equal(h.ops.byKey(KEY)!.status, "VOIDED");
   assert.equal(h.crm.issues.get(KEY)!.voided, true);
 });
+
+test("F-6: lost refund-issue answer, then the voucher tender is swapped for cash → 409 EFFECT_PENDING, no Refund; reconciler voids the voucher", async () => {
+  const h = harness(original(CV_PAID));
+  h.crm.mode.issueRefund = ["unknown-after-effect"];
+  const KEY = "op-refund-a1:cv-refund:0";
+  await assert.rejects(
+    createRefundService(halfRefund("op-refund-a1"), CONTEXT, h.deps),
+    (e: unknown) => e instanceof HttpException && e.statusCode === 503,
+  );
+  const cashInstead: RefundCreatePayload = {
+    ...halfRefund("op-refund-a1"),
+    payments: [{ type: "CASH", amount: 500 }],
+  };
+  await assert.rejects(
+    createRefundService(cashInstead, CONTEXT, h.deps),
+    (e: unknown) =>
+      e instanceof HttpException &&
+      e.statusCode === 409 &&
+      (e.result as { code?: string }).code === "CUSTOMER_VOUCHER_EFFECT_PENDING",
+  );
+  assert.equal(h.persisted.length, 0, "no cash Refund while the refund voucher may exist");
+
+  const summary = await reconcileCustomerVoucherOperations({
+    crm: h.crm,
+    ops: h.ops,
+    findInvoiceByOperationId: async () => null,
+    now: () => new Date(Date.now() + 3 * 60_000),
+  });
+  assert.equal(summary.voided, 1);
+  assert.equal(h.crm.issues.get(KEY)!.voided, true);
+});
