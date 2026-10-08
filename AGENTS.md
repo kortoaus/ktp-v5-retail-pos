@@ -37,7 +37,7 @@ KTP v5 retail point of sale, one install per store:
 | server | `docker compose up -d` | dev Postgres `retail_pos_local_postgres` on host **:5555** |
 | server | `npx prisma migrate dev` · `migrate deploy` · `generate` | no npm scripts for these; generated client is **committed** (`src/generated/prisma`) |
 | server | `scripts/safe-reset.sh` | backup → `prisma migrate reset` → restore, for checksum drift |
-| server | `npm test` | node:test over `src/**/*.test.ts` via ts-node transpile-only + offline preload (`scripts/test-offline.cjs`); 129 pass (2026-10-08) |
+| server | `npm test` | node:test over `src/**/*.test.ts` via ts-node transpile-only + offline preload (`scripts/test-offline.cjs`); 200 pass (2026-10-08 night) |
 | app | `npm run dev` / `npm run build` | electron-vite |
 | app | `npx tsc --noEmit -p tsconfig.node.json --composite false --incremental false` (and `tsconfig.web.json`) | typecheck main+preload / renderer |
 | app | `npm run test:zpl-font` · `test:label-core` · `test:scale-core` · `test:orders` | node:test; 85 · 298 · 36 · 97 pass (2026-10-06) |
@@ -154,6 +154,7 @@ From the archived CLAUDE files unless noted:
   and the server re-derives it. Never duplicate totals/tax/rounding in a component. No `discounts: []` array.
 - Surcharge lives only in `Invoice.creditSurchargeAmount`. Code that walks `invoice.refunds` filters `type === "REFUND"`.
 - User vouchers (staff allowance) and customer vouchers (crm) are separate systems. Do not conflate them.
+- **Catalog sync cursor (T-16, 2026-10-08):** each cloud feed (brand, item, price, promo, hotkey) keeps its own `CloudSyncCursor` row (cloud `updatedAt` − 2 s), read under `FOR UPDATE` and advanced in the same transaction as the batch (`src/v1/cloud/cloud.migrate.core.ts`); the Sync pipeline is serialised in-process with coalescing (`cloud.migrate.runner.ts`); barcodes are normalised only when they change. Company is pulled whole (no cursor).
 - **Operation id + customer-voucher ledger (T-15, 2026-10-08):** tills send `operationId` on sale/refund/repay (`libs/operation-id.ts`, one per cart attempt, kept until the server answers); `SaleInvoice.operationId` is unique and a same-id retry replays the original (`replayed: true`), another payload is 409. Customer-voucher CRM effects are rows in `CustomerVoucherOperation` (INTENT→CONFIRMED→LINKED / VOIDED / UNRESOLVED / FAILED / UNRESOLVED_MANUAL) written before CRM is called; `customer-voucher.reconcile.service.ts` settles open rows at boot and every 5 min. Rule: `ktpv5-rooms/rules/retail-pos/customer-voucher-redeem-idempotent.md`. Refunds of any original carrying a customer-voucher tender require CRM reachable (503 otherwise).
 - Item down-sync is field-allowlisted. Never pass cloud payloads straight into `db.item.upsert`.
 - In `sale.router.ts`, `/latest` and `/:id/children` stay before `/:id`; `cloud.router.ts` `/printed` stays before `/:id`.
