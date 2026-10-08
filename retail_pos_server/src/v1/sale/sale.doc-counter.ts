@@ -28,6 +28,9 @@ export function randomInitialDocCounter(
   return counter;
 }
 
+// Lock order (T-24, R-7 — see shift/shift.lock.ts): a write transaction takes
+// the TerminalShift row (FOR SHARE) first, then the original SaleInvoice row
+// (refund / repay), then this DocCounter row — DocCounter always last.
 export async function nextDocCounter(
   tx: Prisma.TransactionClient,
   dayStart: Date,

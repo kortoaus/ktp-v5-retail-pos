@@ -41,6 +41,7 @@ import {
   withOperationClaim,
 } from "./sale.operation";
 import { nextDocCounter } from "./sale.doc-counter";
+import { assertShiftOpenInTx } from "../shift/shift.lock";
 import {
   redeemUserVoucherInTx,
   voucherIneligibility,
@@ -530,6 +531,8 @@ export const defaultSaleCreateDeps: SaleCreateDeps = {
     }),
   persistSale: (args) =>
     db.$transaction(async (tx) => {
+      // T-24 (R-7) — shift row FOR SHARE first; a closed shift → 400.
+      await assertShiftOpenInTx(tx, args.context.shift.id, "sale");
       const invoice = await buildSaleInTx(tx, {
         payload: args.payload,
         context: args.context,

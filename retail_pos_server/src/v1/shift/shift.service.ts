@@ -1,4 +1,6 @@
 import { Company, Terminal, User } from "../../generated/prisma/client";
+import type { Prisma } from "../../generated/prisma/client";
+import { lockShiftRowInTx } from "./shift.lock";
 import { prismaCvOperationStore } from "../customer-voucher/customer-voucher.operation.store";
 import momentAU from "../../libs/date-utils";
 import db from "../../libs/db";
@@ -159,9 +161,14 @@ export interface ShiftAggregate {
 
 const QTY_SCALE = 1000;
 
-export async function aggregateShift(shiftId: number): Promise<ShiftAggregate> {
+// T-24 (R-7): `client` is the close transaction (reads after the shift row
+// lock); preview passes nothing and reads outside a transaction.
+export async function aggregateShift(
+  shiftId: number,
+  client: Prisma.TransactionClient = db,
+): Promise<ShiftAggregate> {
   // 1. Invoices groupBy type — linesTotal / rounding / surcharge / tax / count
-  const invoiceGroups = await db.saleInvoice.groupBy({
+  const invoiceGroups = await client.saleInvoice.groupBy({
     by: ["type"],
     where: { shiftId },
     _sum: {
@@ -198,7 +205,7 @@ export async function aggregateShift(shiftId: number): Promise<ShiftAggregate> {
   const spendCount = spendInv?._count._all ?? 0;
 
   // 2. Repay count — SALE with originalInvoiceId (repay 로 생성된 새 SALE).
-  const repayCount = await db.saleInvoice.count({
+  const repayCount = await client.saleInvoice.count({
     where: {
       shiftId,
       type: "SALE",
@@ -207,12 +214,12 @@ export async function aggregateShift(shiftId: number): Promise<ShiftAggregate> {
   });
 
   // 3. Payments — SALE / REFUND 각각 tender (+ voucher entityType) 별 SUM.
-  const salePayments = await db.saleInvoicePayment.groupBy({
+  const salePayments = await client.saleInvoicePayment.groupBy({
     by: ["type", "entityType"],
     where: { invoice: { shiftId, type: "SALE" } },
     _sum: { amount: true },
   });
-  const refundPayments = await db.saleInvoicePayment.groupBy({
+  const refundPayments = await client.saleInvoicePayment.groupBy({
     by: ["type", "entityType"],
     where: { invoice: { shiftId, type: "REFUND" } },
     _sum: { amount: true },
@@ -246,7 +253,7 @@ export async function aggregateShift(shiftId: number): Promise<ShiftAggregate> {
   const refundTender = splitTender(refundPayments);
 
   // 4. CashInOut groupBy type
-  const cashIoGroups = await db.cashInOut.groupBy({
+  const cashIoGroups = await client.cashInOut.groupBy({
     by: ["type"],
     where: { shiftId },
     _sum: { amount: true },
@@ -261,7 +268,7 @@ export async function aggregateShift(shiftId: number): Promise<ShiftAggregate> {
   //    SPEND 이 있을 때만 수행 (대개 shift 당 0~few 개).
   let spendRetailValue = 0;
   if (spendCount > 0) {
-    const spendRows = await db.saleInvoiceRow.findMany({
+    const spendRows = await client.saleInvoiceRow.findMany({
       where: { invoice: { shiftId, type: "SPEND" } },
       select: { unit_price_original: true, qty: true },
     });
@@ -369,10 +376,42 @@ export interface CloseShiftDTO {
   endedCashActual: number;
 }
 
+// T-24 (R-7) — the close is one transaction under the shift row lock
+// (`SELECT … FOR UPDATE`, shift.lock.ts): every sale / refund / repay / spend /
+// cash in-out holds the same row FOR SHARE while it writes, so the aggregate
+// below sees each of them either committed (counted) or not yet started (that
+// writer then sees closedAt and is rejected).
+export const SHIFT_CLOSE_TX_TIMEOUT_MS = 30_000;
+
+export interface ShiftCloseDeps {
+  transaction<R>(fn: (tx: Prisma.TransactionClient) => Promise<R>): Promise<R>;
+  aggregate(tx: Prisma.TransactionClient, shiftId: number): Promise<ShiftAggregate>;
+  now(): Date;
+  afterClose(): void;
+  countOpenCustomerVoucherOperations(): Promise<number>;
+}
+
+export const defaultShiftCloseDeps: ShiftCloseDeps = {
+  transaction: (fn) =>
+    db.$transaction(fn, { timeout: SHIFT_CLOSE_TX_TIMEOUT_MS }),
+  aggregate: (tx, shiftId) => aggregateShift(shiftId, tx),
+  now: () => momentAU(new Date()).toDate(),
+  afterClose: () => {
+    // Push any outstanding invoices first (so shift push reflects a consistent
+    // cloud view), then push the shift itself.
+    triggerSyncAllSaleInvoices();
+    triggerSyncAllShifts();
+    // S3 — 미확인 주문 collect 도 같은 트리거에서 스윕.
+    triggerSyncPendingOrderCollects();
+  },
+  countOpenCustomerVoucherOperations,
+};
+
 export async function closeTerminalShiftService(
   terminal: Terminal,
   user: User,
   dto: CloseShiftDTO,
+  deps: ShiftCloseDeps = defaultShiftCloseDeps,
 ) {
   try {
     if (!terminal) throw new NotFoundException("Terminal not found");
@@ -380,40 +419,47 @@ export async function closeTerminalShiftService(
     if (!Number.isFinite(dto.endedCashActual) || dto.endedCashActual < 0)
       throw new BadRequestException("endedCashActual must be >= 0");
 
-    const shift = await db.terminalShift.findFirst({
-      where: {
-        terminalId: terminal.id,
-        closedAt: null,
-      },
+    const updated = await deps.transaction(async (tx) => {
+      const open = await tx.terminalShift.findFirst({
+        where: {
+          terminalId: terminal.id,
+          closedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!open) throw new NotFoundException("No open shift found");
+
+      // Waits for in-flight writers (FOR SHARE) to commit; blocks new ones.
+      const locked = await lockShiftRowInTx(tx, open.id, "update");
+      // A concurrent close of the same shift committed first.
+      if (!locked || locked.closedAt != null)
+        throw new NotFoundException("No open shift found");
+
+      const shift = await tx.terminalShift.findUniqueOrThrow({
+        where: { id: open.id },
+        select: { startedCash: true },
+      });
+      const aggregate = await deps.aggregate(tx, open.id);
+      const endedCashExpected = computeExpectedCash(shift.startedCash, aggregate);
+
+      return tx.terminalShift.update({
+        where: { id: open.id },
+        data: {
+          closedUserId: user.id,
+          closedUser: user.name,
+          closedAt: deps.now(),
+          closedNote: dto.closedNote?.trim() || null,
+          endedCashExpected,
+          endedCashActual: dto.endedCashActual,
+          ...aggregate,
+        },
+      });
     });
-    if (!shift) throw new NotFoundException("No open shift found");
 
-    const aggregate = await aggregateShift(shift.id);
-    const endedCashExpected = computeExpectedCash(shift.startedCash, aggregate);
+    deps.afterClose();
 
-    const now = momentAU(new Date());
-
-    const updated = await db.terminalShift.update({
-      where: { id: shift.id },
-      data: {
-        closedUserId: user.id,
-        closedUser: user.name,
-        closedAt: now.toDate(),
-        closedNote: dto.closedNote?.trim() || null,
-        endedCashExpected,
-        endedCashActual: dto.endedCashActual,
-        ...aggregate,
-      },
-    });
-
-    // Push any outstanding invoices first (so shift push reflects a consistent
-    // cloud view), then push the shift itself.
-    triggerSyncAllSaleInvoices();
-    triggerSyncAllShifts();
-    // S3 — 미확인 주문 collect 도 같은 트리거에서 스윕.
-    triggerSyncPendingOrderCollects();
-
-    const customerVoucherOpenOperations = await countOpenCustomerVoucherOperations();
+    const customerVoucherOpenOperations =
+      await deps.countOpenCustomerVoucherOperations();
 
     return {
       ok: true,

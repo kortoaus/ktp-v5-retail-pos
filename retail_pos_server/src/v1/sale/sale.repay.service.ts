@@ -1,3 +1,4 @@
+import { assertShiftOpenInTx } from "../shift/shift.lock";
 import db from "../../libs/db";
 import {
   BadRequestException,
@@ -307,6 +308,9 @@ export async function createRepayService(
       let result;
       try {
         result = await db.$transaction(async (tx) => {
+          // T-24 (R-7) — shift row FOR SHARE first (lock order: shift →
+          // original invoice → DocCounter); a closed shift → 400.
+          await assertShiftOpenInTx(tx, context.shift.id, "repay");
           await lockOriginalInvoiceInTx(tx, payload.originalInvoiceId);
 
           const orig = await loadOriginalOrThrow(payload.originalInvoiceId, tx);

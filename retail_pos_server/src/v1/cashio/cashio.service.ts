@@ -8,6 +8,7 @@ import {
   NotFoundException,
 } from "../../libs/exceptions";
 import { FindManyQuery } from "../../libs/query";
+import { assertShiftOpenInTx } from "../shift/shift.lock";
 
 // R-9 — CashInOut.type is a free string column whose only readers expect
 // "in" | "out" (shift.service close totals). The amount is unsigned cents; the
@@ -41,19 +42,23 @@ export async function createCashIOService(
     if (!terminal) throw new NotFoundException("Terminal not found");
     if (!user) throw new NotFoundException("User not found");
 
-    const cashInOut = await db.cashInOut.create({
-      data: {
-        shiftId: shift.id,
-        terminalId: terminal.id,
-        userId: user.id,
-        userName: user.name,
-        type: dto.type,
-        amount: dto.amount,
-        note: dto.note,
-      },
-      select: {
-        id: true,
-      },
+    // T-24 (R-7) — under the shift row lock so a close cannot miss it.
+    const cashInOut = await db.$transaction(async (tx) => {
+      await assertShiftOpenInTx(tx, shift.id, "cash in/out");
+      return tx.cashInOut.create({
+        data: {
+          shiftId: shift.id,
+          terminalId: terminal.id,
+          userId: user.id,
+          userName: user.name,
+          type: dto.type,
+          amount: dto.amount,
+          note: dto.note,
+        },
+        select: {
+          id: true,
+        },
+      });
     });
 
     return { ok: true, msg: "Cash in out created", result: cashInOut.id };

@@ -44,6 +44,7 @@ import {
   withOperationClaim,
 } from "./sale.operation";
 import { nextDocCounter } from "./sale.doc-counter";
+import { assertShiftOpenInTx } from "../shift/shift.lock";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Sale refund — REFUND invoice 생성 서비스
@@ -689,6 +690,9 @@ export const defaultRefundCreateDeps: RefundCreateDeps = {
   loadOriginal: (originalInvoiceId) => loadOriginalOrThrow(originalInvoiceId),
   persistRefund: (args) =>
     db.$transaction(async (tx) => {
+      // T-24 (R-7) — shift row FOR SHARE first (lock order: shift → original
+      // invoice → DocCounter); a closed shift → 400.
+      await assertShiftOpenInTx(tx, args.context.shift.id, "refund");
       await lockOriginalInvoiceInTx(tx, args.payload.originalInvoiceId);
       const orig = await loadOriginalOrThrow(args.payload.originalInvoiceId, tx);
       // Re-validate under the lock — a concurrent refund may have used the cap.

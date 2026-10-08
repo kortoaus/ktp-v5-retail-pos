@@ -13,6 +13,7 @@ import {
 } from "../../generated/prisma/models";
 import { SaleCreatePayload } from "./sale.types";
 import { nextDocCounter } from "./sale.doc-counter";
+import { assertShiftOpenInTx } from "../shift/shift.lock";
 
 // ──────────────────────────────────────────────────────────────
 // Spend create — 매장 내부 소비 (kitchen / cafe / office, D-14~16).
@@ -58,6 +59,8 @@ export async function createSpendService(
     const dayStart = nowM.clone().startOf("day").toDate();
 
     const invoice = await db.$transaction(async (tx) => {
+      // T-24 (R-7) — shift row FOR SHARE first; a closed shift → 400.
+      await assertShiftOpenInTx(tx, shift.id, "spend");
       // Serial — SALE 과 동일 DocCounter, prefix 만 "P".
       const counter = await nextDocCounter(tx, dayStart);
       const seq = String(counter).padStart(6, "0");
