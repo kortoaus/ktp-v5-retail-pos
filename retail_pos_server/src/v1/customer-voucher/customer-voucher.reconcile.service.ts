@@ -314,10 +314,13 @@ export async function reconcileCustomerVoucherOperations(
     skipped: 0,
   };
   const olderThan = new Date(deps.now().valueOf() - RECONCILE_MIN_AGE_MS);
-  const rows = await deps.ops.listForReconcile(
-    olderThan,
-    deps.batchSize ?? RECONCILE_BATCH,
-  );
+  // F-14 — two selections with separate capacity: pending voids, then
+  // primaries with no pending void (a blocked primary never fills the batch).
+  const batch = deps.batchSize ?? RECONCILE_BATCH;
+  const rows = [
+    ...(await deps.ops.listPendingVoids(olderThan, batch)),
+    ...(await deps.ops.listReconcilablePrimaries(olderThan, batch)),
+  ];
 
   const byOperation = new Map<string, CvOperationRow[]>();
   for (const row of rows) {

@@ -11,7 +11,7 @@ import type {
   CvOperationRow,
   CvOperationStatus,
 } from "./customer-voucher.operation.store";
-import { isOpenRow, isReconcilableRow } from "./customer-voucher.operation.store";
+import { isOpenRow, isPendingVoidRow, isReconcilableRow } from "./customer-voucher.operation.store";
 import type { CustomerVoucherWire } from "./customer-voucher.types";
 
 export class FakeOpsStore implements CustomerVoucherOperationStore {
@@ -88,12 +88,30 @@ export class FakeOpsStore implements CustomerVoucherOperationStore {
       this.record(row);
     }
   }
-  async listForReconcile(olderThan: Date, limit: number) {
-    return this.rows
-      .filter((r) => isReconcilableRow(r) && r.updatedAt < olderThan)
+  private oldestFirst(rows: CvOperationRow[], limit: number) {
+    return rows
       .sort((a, b) => a.updatedAt.valueOf() - b.updatedAt.valueOf() || a.id - b.id)
       .slice(0, limit)
       .map((r) => ({ ...r }));
+  }
+  async listPendingVoids(olderThan: Date, limit: number) {
+    return this.oldestFirst(
+      this.rows.filter((r) => isPendingVoidRow(r) && r.updatedAt < olderThan),
+      limit,
+    );
+  }
+  async listReconcilablePrimaries(olderThan: Date, limit: number) {
+    const blocked = new Set(this.rows.filter(isPendingVoidRow).map((r) => r.operationId));
+    return this.oldestFirst(
+      this.rows.filter(
+        (r) =>
+          !isPendingVoidRow(r) &&
+          isReconcilableRow(r) &&
+          r.updatedAt < olderThan &&
+          !blocked.has(r.operationId),
+      ),
+      limit,
+    );
   }
   async list(statuses: CvOperationStatus[]) {
     return this.rows.filter((r) => statuses.includes(r.status)).map((r) => ({ ...r }));

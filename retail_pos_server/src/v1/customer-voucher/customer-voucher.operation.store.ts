@@ -103,10 +103,14 @@ export interface CustomerVoucherOperationStore {
   // returned as is, except FAILED (CRM did nothing) which goes back to INTENT.
   ensureIntent(intent: CvOperationIntent): Promise<CvOperationRow>;
   update(id: number, patch: CvOperationPatch): Promise<CvOperationRow>;
-  // Reconcilable primary rows last touched before `olderThan`, least recently
-  // touched first (every attempt touches updatedAt, so stuck rows rotate to
-  // the back — F-10), at most `limit`.
-  listForReconcile(olderThan: Date, limit: number): Promise<CvOperationRow[]>;
+  // The sweep's two selections (F-10 / F-14), each least recently touched
+  // first (updatedAt, id — every attempt touches updatedAt, so stuck rows
+  // rotate to the back), each with its own `limit`:
+  //   pending void rows (VOID_* in INTENT / UNRESOLVED);
+  //   reconcilable primaries of operations with NO pending void, so a primary
+  //   blocked behind its void never takes batch capacity.
+  listPendingVoids(olderThan: Date, limit: number): Promise<CvOperationRow[]>;
+  listReconcilablePrimaries(olderThan: Date, limit: number): Promise<CvOperationRow[]>;
   list(statuses: CvOperationStatus[], limit: number): Promise<CvOperationRow[]>;
   countOpen(): Promise<number>;
 }
@@ -119,17 +123,6 @@ function toData(patch: CvOperationPatch) {
     ...(transient ? { transientFailures: { increment: 1 } } : {}),
   };
 }
-
-const reconcilableWhere = {
-  OR: [
-    { status: { in: ["INTENT", "UNRESOLVED"] as CvOperationStatus[] } }, // primary or void
-    {
-      kind: { in: PRIMARY_KINDS },
-      status: "CONFIRMED" as CvOperationStatus,
-      invoiceId: null,
-    },
-  ],
-};
 
 const openWhere = {
   kind: { in: PRIMARY_KINDS },
@@ -179,12 +172,33 @@ export const prismaCvOperationStore: CustomerVoucherOperationStore = {
       data: toData(patch),
     });
   },
-  listForReconcile(olderThan, limit) {
+  listPendingVoids(olderThan, limit) {
     return db.customerVoucherOperation.findMany({
-      where: { ...reconcilableWhere, updatedAt: { lt: olderThan } },
+      where: {
+        kind: { in: VOID_KINDS },
+        status: { in: ["INTENT", "UNRESOLVED"] },
+        updatedAt: { lt: olderThan },
+      },
       orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
       take: limit,
     });
+  },
+  listReconcilablePrimaries(olderThan, limit) {
+    return db.$queryRaw<CvOperationRow[]>`
+      SELECT p.*
+      FROM "CustomerVoucherOperation" p
+      WHERE p."kind" IN ('REDEEM', 'REFUND_ISSUE')
+        AND (p."status" IN ('INTENT', 'UNRESOLVED')
+             OR (p."status" = 'CONFIRMED' AND p."invoiceId" IS NULL))
+        AND p."updatedAt" < ${olderThan}
+        AND NOT EXISTS (
+          SELECT 1 FROM "CustomerVoucherOperation" v
+          WHERE v."operationId" = p."operationId"
+            AND v."kind" IN ('VOID_REDEEM', 'VOID_REFUND_ISSUE')
+            AND v."status" IN ('INTENT', 'UNRESOLVED'))
+      ORDER BY p."updatedAt" ASC, p."id" ASC
+      LIMIT ${limit}
+    `;
   },
   list(statuses, limit) {
     return db.customerVoucherOperation.findMany({

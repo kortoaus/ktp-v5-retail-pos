@@ -205,7 +205,7 @@ test("scheduler: one run in flight, triggers during a run coalesce into exactly 
   const deps: ReconcileDeps = {
     ...h.deps,
     ops: Object.assign(Object.create(h.ops), {
-      listForReconcile: async () => {
+      listReconcilablePrimaries: async () => {
         runs += 1;
         if (runs === 1) await gate;
         return [];
@@ -351,4 +351,40 @@ test("F-12: 50 lookup failures in an outage, then recovery + one void timeout â†
   assert.equal(next.voided, 1);
   assert.equal(h.ops.byKey(key)!.status, "VOIDED");
   assert.equal(h.crm.balances.get(7), 1000);
+});
+
+test("F-14: 250 primaries blocked behind pending voids never starve the sweep â€” voids advance, an unblocked orphan still gets its turn", async () => {
+  const h = setup();
+  let crmDown = true;
+  const crm = Object.assign(Object.create(h.crm), {
+    getOperation: (requestId: string, entityType?: string) =>
+      crmDown
+        ? Promise.resolve({ kind: "unknown", status: 0, msg: "Network Error" })
+        : h.crm.getOperation(requestId),
+  });
+  const deps = { ...h.deps, crm };
+
+  h.crm.balances.set(7, 1_000_000);
+  const keys: string[] = [];
+  for (let i = 0; i < 250; i++) {
+    const op = `op-bk-${String(i).padStart(5, "0")}`;
+    const key = await redeemRow(h, op, "UNRESOLVED", "redeemed");
+    const v = await h.ops.ensureIntent({ operationId: op, kind: "VOID_REDEEM", voucherId: 7, memberId: "m-1", amount: 400, crmRequestId: `${key}:void` });
+    await h.ops.update(v.id, { status: "UNRESOLVED" });
+    keys.push(key);
+  }
+
+  // Outage: lookups fail and touch the void rows (they rotate to the back).
+  const outage = await reconcileCustomerVoucherOperations(deps);
+  assert.equal(outage.checked, 200, "one batch of voids, no blocked primary took capacity");
+  assert.equal(outage.unreachable, 200);
+
+  const orphan = await redeemRow(h, "op-orphan-01", "CONFIRMED", "redeemed");
+  crmDown = false;
+  const sweep2 = await reconcileCustomerVoucherOperations(deps);
+  assert.ok(sweep2.voided >= 200, "voids advance after recovery");
+  assert.equal(h.ops.byKey(orphan)!.status, "VOIDED", "the unblocked orphan is not starved");
+  const sweep3 = await reconcileCustomerVoucherOperations(deps);
+  assert.ok(sweep3.checked > 0);
+  assert.equal(keys.filter((k) => h.ops.byKey(k)!.status === "VOIDED").length, 250, "every blocked primary advanced");
 });
