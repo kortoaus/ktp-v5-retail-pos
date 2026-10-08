@@ -34,6 +34,7 @@ export type CustomerVoucherOperationAvgAggregateOutputType = {
   crmEventId: number | null
   crmVoucherId: number | null
   attempts: number | null
+  transientFailures: number | null
 }
 
 export type CustomerVoucherOperationSumAggregateOutputType = {
@@ -44,6 +45,7 @@ export type CustomerVoucherOperationSumAggregateOutputType = {
   crmEventId: number | null
   crmVoucherId: number | null
   attempts: number | null
+  transientFailures: number | null
 }
 
 export type CustomerVoucherOperationMinAggregateOutputType = {
@@ -59,6 +61,7 @@ export type CustomerVoucherOperationMinAggregateOutputType = {
   crmEventId: number | null
   crmVoucherId: number | null
   attempts: number | null
+  transientFailures: number | null
   lastError: string | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -77,6 +80,7 @@ export type CustomerVoucherOperationMaxAggregateOutputType = {
   crmEventId: number | null
   crmVoucherId: number | null
   attempts: number | null
+  transientFailures: number | null
   lastError: string | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -95,6 +99,7 @@ export type CustomerVoucherOperationCountAggregateOutputType = {
   crmEventId: number
   crmVoucherId: number
   attempts: number
+  transientFailures: number
   lastError: number
   createdAt: number
   updatedAt: number
@@ -110,6 +115,7 @@ export type CustomerVoucherOperationAvgAggregateInputType = {
   crmEventId?: true
   crmVoucherId?: true
   attempts?: true
+  transientFailures?: true
 }
 
 export type CustomerVoucherOperationSumAggregateInputType = {
@@ -120,6 +126,7 @@ export type CustomerVoucherOperationSumAggregateInputType = {
   crmEventId?: true
   crmVoucherId?: true
   attempts?: true
+  transientFailures?: true
 }
 
 export type CustomerVoucherOperationMinAggregateInputType = {
@@ -135,6 +142,7 @@ export type CustomerVoucherOperationMinAggregateInputType = {
   crmEventId?: true
   crmVoucherId?: true
   attempts?: true
+  transientFailures?: true
   lastError?: true
   createdAt?: true
   updatedAt?: true
@@ -153,6 +161,7 @@ export type CustomerVoucherOperationMaxAggregateInputType = {
   crmEventId?: true
   crmVoucherId?: true
   attempts?: true
+  transientFailures?: true
   lastError?: true
   createdAt?: true
   updatedAt?: true
@@ -171,6 +180,7 @@ export type CustomerVoucherOperationCountAggregateInputType = {
   crmEventId?: true
   crmVoucherId?: true
   attempts?: true
+  transientFailures?: true
   lastError?: true
   createdAt?: true
   updatedAt?: true
@@ -276,6 +286,7 @@ export type CustomerVoucherOperationGroupByOutputType = {
   crmEventId: number | null
   crmVoucherId: number | null
   attempts: number
+  transientFailures: number
   lastError: string | null
   createdAt: Date
   updatedAt: Date
@@ -317,6 +328,7 @@ export type CustomerVoucherOperationWhereInput = {
   crmEventId?: Prisma.IntNullableFilter<"CustomerVoucherOperation"> | number | null
   crmVoucherId?: Prisma.IntNullableFilter<"CustomerVoucherOperation"> | number | null
   attempts?: Prisma.IntFilter<"CustomerVoucherOperation"> | number
+  transientFailures?: Prisma.IntFilter<"CustomerVoucherOperation"> | number
   lastError?: Prisma.StringNullableFilter<"CustomerVoucherOperation"> | string | null
   createdAt?: Prisma.DateTimeFilter<"CustomerVoucherOperation"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"CustomerVoucherOperation"> | Date | string
@@ -335,6 +347,7 @@ export type CustomerVoucherOperationOrderByWithRelationInput = {
   crmEventId?: Prisma.SortOrderInput | Prisma.SortOrder
   crmVoucherId?: Prisma.SortOrderInput | Prisma.SortOrder
   attempts?: Prisma.SortOrder
+  transientFailures?: Prisma.SortOrder
   lastError?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -356,6 +369,7 @@ export type CustomerVoucherOperationWhereUniqueInput = Prisma.AtLeast<{
   crmEventId?: Prisma.IntNullableFilter<"CustomerVoucherOperation"> | number | null
   crmVoucherId?: Prisma.IntNullableFilter<"CustomerVoucherOperation"> | number | null
   attempts?: Prisma.IntFilter<"CustomerVoucherOperation"> | number
+  transientFailures?: Prisma.IntFilter<"CustomerVoucherOperation"> | number
   lastError?: Prisma.StringNullableFilter<"CustomerVoucherOperation"> | string | null
   createdAt?: Prisma.DateTimeFilter<"CustomerVoucherOperation"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"CustomerVoucherOperation"> | Date | string
@@ -374,6 +388,7 @@ export type CustomerVoucherOperationOrderByWithAggregationInput = {
   crmEventId?: Prisma.SortOrderInput | Prisma.SortOrder
   crmVoucherId?: Prisma.SortOrderInput | Prisma.SortOrder
   attempts?: Prisma.SortOrder
+  transientFailures?: Prisma.SortOrder
   lastError?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -400,6 +415,7 @@ export type CustomerVoucherOperationScalarWhereWithAggregatesInput = {
   crmEventId?: Prisma.IntNullableWithAggregatesFilter<"CustomerVoucherOperation"> | number | null
   crmVoucherId?: Prisma.IntNullableWithAggregatesFilter<"CustomerVoucherOperation"> | number | null
   attempts?: Prisma.IntWithAggregatesFilter<"CustomerVoucherOperation"> | number
+  transientFailures?: Prisma.IntWithAggregatesFilter<"CustomerVoucherOperation"> | number
   lastError?: Prisma.StringNullableWithAggregatesFilter<"CustomerVoucherOperation"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"CustomerVoucherOperation"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"CustomerVoucherOperation"> | Date | string
@@ -417,6 +433,7 @@ export type CustomerVoucherOperationCreateInput = {
   crmEventId?: number | null
   crmVoucherId?: number | null
   attempts?: number
+  transientFailures?: number
   lastError?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -435,6 +452,7 @@ export type CustomerVoucherOperationUncheckedCreateInput = {
   crmEventId?: number | null
   crmVoucherId?: number | null
   attempts?: number
+  transientFailures?: number
   lastError?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -452,6 +470,7 @@ export type CustomerVoucherOperationUpdateInput = {
   crmEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   crmVoucherId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   attempts?: Prisma.IntFieldUpdateOperationsInput | number
+  transientFailures?: Prisma.IntFieldUpdateOperationsInput | number
   lastError?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -470,6 +489,7 @@ export type CustomerVoucherOperationUncheckedUpdateInput = {
   crmEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   crmVoucherId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   attempts?: Prisma.IntFieldUpdateOperationsInput | number
+  transientFailures?: Prisma.IntFieldUpdateOperationsInput | number
   lastError?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -488,6 +508,7 @@ export type CustomerVoucherOperationCreateManyInput = {
   crmEventId?: number | null
   crmVoucherId?: number | null
   attempts?: number
+  transientFailures?: number
   lastError?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -505,6 +526,7 @@ export type CustomerVoucherOperationUpdateManyMutationInput = {
   crmEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   crmVoucherId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   attempts?: Prisma.IntFieldUpdateOperationsInput | number
+  transientFailures?: Prisma.IntFieldUpdateOperationsInput | number
   lastError?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -523,6 +545,7 @@ export type CustomerVoucherOperationUncheckedUpdateManyInput = {
   crmEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   crmVoucherId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   attempts?: Prisma.IntFieldUpdateOperationsInput | number
+  transientFailures?: Prisma.IntFieldUpdateOperationsInput | number
   lastError?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -541,6 +564,7 @@ export type CustomerVoucherOperationCountOrderByAggregateInput = {
   crmEventId?: Prisma.SortOrder
   crmVoucherId?: Prisma.SortOrder
   attempts?: Prisma.SortOrder
+  transientFailures?: Prisma.SortOrder
   lastError?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -554,6 +578,7 @@ export type CustomerVoucherOperationAvgOrderByAggregateInput = {
   crmEventId?: Prisma.SortOrder
   crmVoucherId?: Prisma.SortOrder
   attempts?: Prisma.SortOrder
+  transientFailures?: Prisma.SortOrder
 }
 
 export type CustomerVoucherOperationMaxOrderByAggregateInput = {
@@ -569,6 +594,7 @@ export type CustomerVoucherOperationMaxOrderByAggregateInput = {
   crmEventId?: Prisma.SortOrder
   crmVoucherId?: Prisma.SortOrder
   attempts?: Prisma.SortOrder
+  transientFailures?: Prisma.SortOrder
   lastError?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -587,6 +613,7 @@ export type CustomerVoucherOperationMinOrderByAggregateInput = {
   crmEventId?: Prisma.SortOrder
   crmVoucherId?: Prisma.SortOrder
   attempts?: Prisma.SortOrder
+  transientFailures?: Prisma.SortOrder
   lastError?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -600,6 +627,7 @@ export type CustomerVoucherOperationSumOrderByAggregateInput = {
   crmEventId?: Prisma.SortOrder
   crmVoucherId?: Prisma.SortOrder
   attempts?: Prisma.SortOrder
+  transientFailures?: Prisma.SortOrder
 }
 
 export type EnumCustomerVoucherOperationKindFieldUpdateOperationsInput = {
@@ -625,6 +653,7 @@ export type CustomerVoucherOperationSelect<ExtArgs extends runtime.Types.Extensi
   crmEventId?: boolean
   crmVoucherId?: boolean
   attempts?: boolean
+  transientFailures?: boolean
   lastError?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -643,6 +672,7 @@ export type CustomerVoucherOperationSelectCreateManyAndReturn<ExtArgs extends ru
   crmEventId?: boolean
   crmVoucherId?: boolean
   attempts?: boolean
+  transientFailures?: boolean
   lastError?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -661,6 +691,7 @@ export type CustomerVoucherOperationSelectUpdateManyAndReturn<ExtArgs extends ru
   crmEventId?: boolean
   crmVoucherId?: boolean
   attempts?: boolean
+  transientFailures?: boolean
   lastError?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -679,12 +710,13 @@ export type CustomerVoucherOperationSelectScalar = {
   crmEventId?: boolean
   crmVoucherId?: boolean
   attempts?: boolean
+  transientFailures?: boolean
   lastError?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type CustomerVoucherOperationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "operationId" | "kind" | "voucherId" | "memberId" | "amount" | "crmRequestId" | "status" | "invoiceId" | "crmEventId" | "crmVoucherId" | "attempts" | "lastError" | "createdAt" | "updatedAt", ExtArgs["result"]["customerVoucherOperation"]>
+export type CustomerVoucherOperationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "operationId" | "kind" | "voucherId" | "memberId" | "amount" | "crmRequestId" | "status" | "invoiceId" | "crmEventId" | "crmVoucherId" | "attempts" | "transientFailures" | "lastError" | "createdAt" | "updatedAt", ExtArgs["result"]["customerVoucherOperation"]>
 
 export type $CustomerVoucherOperationPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "CustomerVoucherOperation"
@@ -702,6 +734,7 @@ export type $CustomerVoucherOperationPayload<ExtArgs extends runtime.Types.Exten
     crmEventId: number | null
     crmVoucherId: number | null
     attempts: number
+    transientFailures: number
     lastError: string | null
     createdAt: Date
     updatedAt: Date
@@ -1140,6 +1173,7 @@ export interface CustomerVoucherOperationFieldRefs {
   readonly crmEventId: Prisma.FieldRef<"CustomerVoucherOperation", 'Int'>
   readonly crmVoucherId: Prisma.FieldRef<"CustomerVoucherOperation", 'Int'>
   readonly attempts: Prisma.FieldRef<"CustomerVoucherOperation", 'Int'>
+  readonly transientFailures: Prisma.FieldRef<"CustomerVoucherOperation", 'Int'>
   readonly lastError: Prisma.FieldRef<"CustomerVoucherOperation", 'String'>
   readonly createdAt: Prisma.FieldRef<"CustomerVoucherOperation", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"CustomerVoucherOperation", 'DateTime'>

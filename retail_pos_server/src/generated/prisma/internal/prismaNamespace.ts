@@ -2779,6 +2779,7 @@ export const CustomerVoucherOperationScalarFieldEnum = {
   crmEventId: 'crmEventId',
   crmVoucherId: 'crmVoucherId',
   attempts: 'attempts',
+  transientFailures: 'transientFailures',
   lastError: 'lastError',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'

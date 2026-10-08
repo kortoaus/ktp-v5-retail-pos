@@ -27,6 +27,7 @@ export interface CvOperationRow {
   crmEventId: number | null;
   crmVoucherId: number | null;
   attempts: number;
+  transientFailures: number;
   lastError: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -48,8 +49,12 @@ export interface CvOperationPatch {
   crmEventId?: number | null;
   crmVoucherId?: number | null;
   lastError?: string | null;
-  // +1 per CRM call made for this row.
+  // +1 attempts: CRM answered (ok or a definitive refusal). This is the
+  // UNRESOLVED_MANUAL budget (F-12).
   attempted?: boolean;
+  // +1 transientFailures: no answer (timeout / transport / 5xx). Visibility
+  // only — never counts toward the budget, never terminal (F-12).
+  transient?: boolean;
 }
 
 // Primary kinds carry the money effect; VOID_* rows are the audit trail of
@@ -66,12 +71,24 @@ export const OPEN_STATUSES: CvOperationStatus[] = [
   "UNRESOLVED_MANUAL",
 ];
 
+export const VOID_KINDS: CvOperationKind[] = ["VOID_REDEEM", "VOID_REFUND_ISSUE"];
+
+// F-11 — a void whose outcome is not known yet (INTENT before / UNRESOLVED
+// after the CRM call). While one exists its primary can never become payment.
+export function isPendingVoidRow(row: Pick<CvOperationRow, "kind" | "status">) {
+  return (
+    VOID_KINDS.includes(row.kind) &&
+    (row.status === "INTENT" || row.status === "UNRESOLVED")
+  );
+}
+
 export function isReconcilableRow(row: Pick<CvOperationRow, "kind" | "status" | "invoiceId">) {
   return (
-    PRIMARY_KINDS.includes(row.kind) &&
-    (row.status === "INTENT" ||
-      row.status === "UNRESOLVED" ||
-      (row.status === "CONFIRMED" && row.invoiceId == null))
+    isPendingVoidRow(row) ||
+    (PRIMARY_KINDS.includes(row.kind) &&
+      (row.status === "INTENT" ||
+        row.status === "UNRESOLVED" ||
+        (row.status === "CONFIRMED" && row.invoiceId == null)))
   );
 }
 
@@ -95,18 +112,22 @@ export interface CustomerVoucherOperationStore {
 }
 
 function toData(patch: CvOperationPatch) {
-  const { attempted, ...rest } = patch;
+  const { attempted, transient, ...rest } = patch;
   return {
     ...rest,
     ...(attempted ? { attempts: { increment: 1 } } : {}),
+    ...(transient ? { transientFailures: { increment: 1 } } : {}),
   };
 }
 
 const reconcilableWhere = {
-  kind: { in: PRIMARY_KINDS },
   OR: [
-    { status: { in: ["INTENT", "UNRESOLVED"] as CvOperationStatus[] } },
-    { status: "CONFIRMED" as CvOperationStatus, invoiceId: null },
+    { status: { in: ["INTENT", "UNRESOLVED"] as CvOperationStatus[] } }, // primary or void
+    {
+      kind: { in: PRIMARY_KINDS },
+      status: "CONFIRMED" as CvOperationStatus,
+      invoiceId: null,
+    },
   ],
 };
 

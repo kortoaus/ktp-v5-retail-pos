@@ -56,6 +56,7 @@ export class FakeOpsStore implements CustomerVoucherOperationStore {
       crmEventId: null,
       crmVoucherId: null,
       attempts: 0,
+      transientFailures: 0,
       lastError: null,
       createdAt: now,
       updatedAt: now,
@@ -67,9 +68,10 @@ export class FakeOpsStore implements CustomerVoucherOperationStore {
   async update(id: number, patch: CvOperationPatch) {
     const row = this.rows.find((r) => r.id === id);
     if (!row) throw new Error(`no row ${id}`);
-    const { attempted, ...rest } = patch;
+    const { attempted, transient, ...rest } = patch;
     Object.assign(row, rest);
     if (attempted) row.attempts += 1;
+    if (transient) row.transientFailures += 1;
     row.updatedAt = this.clock();
     this.record(row);
     return { ...row };

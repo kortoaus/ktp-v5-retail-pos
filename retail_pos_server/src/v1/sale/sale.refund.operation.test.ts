@@ -333,3 +333,31 @@ test("F-8: persistence error and the lookup fails too → refund voucher left UN
   assert.equal(h.ops.byKey("op-refund-a1:cv-refund:0")!.status, "UNRESOLVED");
   assert.equal(h.crm.issues.get("op-refund-a1:cv-refund:0")!.voided, false);
 });
+
+test("F-11: refund persistence fails + refund-void answer lost → same-payload retry is 409 EFFECT_PENDING, no Refund; reconciler completes the void", async () => {
+  const h = harness(original(CV_PAID));
+  const KEY = "op-refund-a1:cv-refund:0";
+  h.failOnce();
+  h.crm.mode.voidRefundIssue = ["unknown"];
+  await assert.rejects(createRefundService(halfRefund("op-refund-a1"), CONTEXT, h.deps));
+  assert.equal(h.ops.byKey(`${KEY}:void`)!.status, "UNRESOLVED");
+
+  await assert.rejects(
+    createRefundService(halfRefund("op-refund-a1"), CONTEXT, h.deps),
+    (e: unknown) =>
+      e instanceof HttpException &&
+      e.statusCode === 409 &&
+      (e.result as { code?: string }).code === "CUSTOMER_VOUCHER_EFFECT_PENDING",
+  );
+  assert.equal(h.invoices.length, 0);
+
+  const summary = await reconcileCustomerVoucherOperations({
+    crm: h.crm,
+    ops: h.ops,
+    findInvoiceByOperationId: async () => null,
+    now: () => new Date(Date.now() + 3 * 60_000),
+  });
+  assert.equal(summary.voided, 1);
+  assert.equal(h.ops.byKey(KEY)!.status, "VOIDED");
+  assert.equal(h.crm.issues.get(KEY)!.voided, true);
+});

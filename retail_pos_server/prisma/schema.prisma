@@ -903,7 +903,8 @@ model CustomerVoucherOperation {
   invoiceId    Int? // FK-by-convention to SaleInvoice.id (set with LINKED)
   crmEventId   Int?
   crmVoucherId Int?
-  attempts     Int                            @default(0)
+  attempts     Int                            @default(0) // CRM answers that left the row unsettled (UNRESOLVED_MANUAL budget)
+  transientFailures Int                       @default(0) // timeouts / transport failures — visibility only, never terminal (F-12)
   lastError    String?
   createdAt    DateTime                       @default(now())
   updatedAt    DateTime                       @updatedAt

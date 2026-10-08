@@ -113,14 +113,16 @@ test("REDEEM redeemed and the local invoice exists → LINKED (no void)", async 
   assert.equal(h.crm.balances.get(7), 600);
 });
 
-test("REDEEM redeemed, void fails → UNRESOLVED, attempts counted", async () => {
+test("REDEEM redeemed, void gets no answer → UNRESOLVED, counted as transient (F-12), void row pending (F-11)", async () => {
   const h = setup();
   const key = await redeemRow(h, "op-vf-00001", "CONFIRMED", "redeemed");
   h.crm.mode.voidRedeem = ["unknown"];
   const s = await reconcileCustomerVoucherOperations(h.deps);
-  assert.equal(s.unresolved, 1);
+  assert.equal(s.unreachable, 1, "a void with no answer is transient");
   assert.equal(h.ops.byKey(key)!.status, "UNRESOLVED");
-  assert.ok(h.ops.byKey(key)!.attempts >= 1);
+  assert.equal(h.ops.byKey(key)!.attempts, 0);
+  assert.ok(h.ops.byKey(key)!.transientFailures >= 1);
+  assert.equal(h.ops.byKey(`${key}:void`)!.status, "UNRESOLVED");
 });
 
 test("REFUND_ISSUE issued with no local REFUND invoice → refund-issue void → VOIDED", async () => {
@@ -167,7 +169,7 @@ test("REFUND_ISSUE voucher already spent → void 409 → stays UNRESOLVED for a
   assert.match(h.ops.byKey(key)!.lastError ?? "", /already spent/);
 });
 
-test("CRM unreachable → attempts+1, lastError, status unchanged", async () => {
+test("CRM unreachable → transientFailures+1 (not attempts), lastError, status unchanged", async () => {
   const h = setup();
   const key = await redeemRow(h, "op-un-00001", "CONFIRMED", "redeemed");
   h.crm.mode.getOperation = ["unknown"];
@@ -175,7 +177,8 @@ test("CRM unreachable → attempts+1, lastError, status unchanged", async () => 
   assert.equal(s.unreachable, 1);
   const row = h.ops.byKey(key)!;
   assert.equal(row.status, "CONFIRMED");
-  assert.equal(row.attempts, 1);
+  assert.equal(row.attempts, 0);
+  assert.equal(row.transientFailures, 1);
   assert.match(row.lastError ?? "", /reconcile: CRM unknown/);
 });
 
@@ -290,4 +293,62 @@ test("F-10: CRM unreachable never moves a row to UNRESOLVED_MANUAL", async () =>
   h.crm.mode.getOperation = ["unknown"];
   await reconcileCustomerVoucherOperations(h.deps);
   assert.equal(h.ops.byKey(key)!.status, "UNRESOLVED");
+});
+
+test("F-11: a void whose answer was lost is settled first — CRM shows it voided → void row CONFIRMED, primary VOIDED", async () => {
+  const h = setup();
+  const key = await redeemRow(h, "op-vl-00001", "CONFIRMED", "redeemed");
+  // The void landed at CRM but its answer was lost: the local void row is UNRESOLVED.
+  await h.crm.voidRedeem({ redeemRequestId: key, requestId: `${key}:void` });
+  const voidRow = await h.ops.ensureIntent({ operationId: "op-vl-00001", kind: "VOID_REDEEM", voucherId: 7, memberId: "m-1", amount: 400, crmRequestId: `${key}:void` });
+  await h.ops.update(voidRow.id, { status: "UNRESOLVED" });
+  await h.ops.update(h.ops.byKey(key)!.id, { status: "UNRESOLVED" });
+
+  const s = await reconcileCustomerVoucherOperations(h.deps);
+  assert.equal(s.voided, 1);
+  assert.equal(h.ops.byKey(`${key}:void`)!.status, "CONFIRMED");
+  assert.equal(h.ops.byKey(key)!.status, "VOIDED");
+  assert.equal(h.crm.balances.get(7), 1000);
+});
+
+test("F-11: pending void and CRM still shows the redeem → the same void is re-sent; the primary is never linked meanwhile", async () => {
+  const h = setup([
+    {
+      operationId: "op-vr-00001",
+      id: 44,
+      type: "SALE",
+      payments: [{ type: "VOUCHER", amount: 400, entityType: "customer-voucher", entityId: 7 }],
+    },
+  ]);
+  const key = await redeemRow(h, "op-vr-00001", "UNRESOLVED", "redeemed");
+  const voidRow = await h.ops.ensureIntent({ operationId: "op-vr-00001", kind: "VOID_REDEEM", voucherId: 7, memberId: "m-1", amount: 400, crmRequestId: `${key}:void` });
+  await h.ops.update(voidRow.id, { status: "UNRESOLVED" });
+  const s = await reconcileCustomerVoucherOperations(h.deps);
+  assert.equal(s.linked, 0, "never linked while its void was pending");
+  assert.equal(h.ops.byKey(key)!.status, "VOIDED");
+  assert.deepEqual(
+    h.crm.calls.filter((c) => c.startsWith("voidRedeem")),
+    [`voidRedeem ${key}`],
+  );
+});
+
+test("F-12: 50 lookup failures in an outage, then recovery + one void timeout → still UNRESOLVED, retried next sweep", async () => {
+  const h = setup();
+  const key = await redeemRow(h, "op-ot-00001", "UNRESOLVED", "redeemed");
+  for (let i = 0; i < 50; i++) {
+    h.crm.mode.getOperation = ["unknown"];
+    await reconcileCustomerVoucherOperations(h.deps);
+  }
+  assert.equal(h.ops.byKey(key)!.status, "UNRESOLVED");
+  assert.equal(h.ops.byKey(key)!.transientFailures, 50);
+  assert.equal(h.ops.byKey(key)!.attempts, 0);
+
+  h.crm.mode.voidRedeem = ["unknown"]; // CRM back, the void times out once
+  await reconcileCustomerVoucherOperations(h.deps);
+  assert.equal(h.ops.byKey(key)!.status, "UNRESOLVED", "never UNRESOLVED_MANUAL for timeouts");
+
+  const next = await reconcileCustomerVoucherOperations(h.deps);
+  assert.equal(next.voided, 1);
+  assert.equal(h.ops.byKey(key)!.status, "VOIDED");
+  assert.equal(h.crm.balances.get(7), 1000);
 });

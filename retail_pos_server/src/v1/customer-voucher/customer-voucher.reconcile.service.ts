@@ -6,9 +6,15 @@ import {
   REFUND_ISSUE_ENTITY_TYPE,
   voidRedeemRow,
   voidRefundIssueRow,
+  voidRequestIdFor,
   type CvDeps,
+  type VoidResult,
 } from "./customer-voucher.operation";
-import type { CvOperationRow } from "./customer-voucher.operation.store";
+import {
+  isPendingVoidRow,
+  isReconcilableRow,
+  type CvOperationRow,
+} from "./customer-voucher.operation.store";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Customer-voucher reconciler (T-15, platform/D-10 — R-4/V-2, V-12)
@@ -115,6 +121,84 @@ export interface ReconcileSummary {
   skipped: number;
 }
 
+// F-12 — only a CRM answer that leaves the primary unsettled (void refused)
+// counts toward the UNRESOLVED_MANUAL budget; a void that got no answer is
+// transient ("unreachable"), retried next sweep forever.
+async function voidResultOf(
+  row: CvOperationRow,
+  result: VoidResult,
+  deps: ReconcileDeps,
+): Promise<ReconcileResult> {
+  if (result === "VOIDED") return "voided";
+  await deps.ops.update(
+    row.id,
+    result === "REJECTED" ? { attempted: true } : { transient: true },
+  );
+  return result === "REJECTED" ? "unresolved" : "unreachable";
+}
+
+// F-11 — settle a void whose outcome is unknown BEFORE its primary may be
+// linked or voided: ask CRM for the primary's state; voided → done;
+// not_found → nothing ever happened; still effective → re-send the same void
+// (same requestId, idempotent at CRM).
+async function reconcileVoidRow(
+  voidRow: CvOperationRow,
+  primary: CvOperationRow | undefined,
+  deps: ReconcileDeps,
+): Promise<ReconcileResult> {
+  if (!primary) {
+    await deps.ops.update(voidRow.id, {
+      status: "UNRESOLVED",
+      attempted: true,
+      lastError: "reconcile: primary ledger row missing",
+    });
+    return "unresolved";
+  }
+  const isRefund = voidRow.kind === "VOID_REFUND_ISSUE";
+  let outcome: CrmOutcome<CrmOperationState>;
+  try {
+    outcome = await deps.crm.getOperation(
+      primary.crmRequestId,
+      isRefund ? REFUND_ISSUE_ENTITY_TYPE : undefined,
+    );
+  } catch (e) {
+    outcome = { kind: "unknown", status: 0, msg: String(e) };
+  }
+  if (outcome.kind !== "ok") {
+    await deps.ops.update(voidRow.id, {
+      transient: true,
+      lastError: `reconcile: CRM ${outcome.kind} ${outcome.status}: ${outcome.msg}`.slice(0, 500),
+    });
+    return "unreachable";
+  }
+  const { state } = outcome.result;
+  if (state === (isRefund ? "issue_voided" : "voided")) {
+    await deps.ops.update(voidRow.id, { status: "CONFIRMED", attempted: true, lastError: null });
+    await deps.ops.update(primary.id, { status: "VOIDED", lastError: null });
+    return "voided";
+  }
+  if (state === "not_found") {
+    await deps.ops.update(voidRow.id, {
+      status: "FAILED",
+      attempted: true,
+      lastError: "reconcile: nothing to void (CRM has no event)",
+    });
+    await deps.ops.update(primary.id, {
+      status: "FAILED",
+      lastError: "reconcile: CRM has no event for this key (nothing happened)",
+    });
+    return "failed";
+  }
+  const reason = "reconcile: re-sending a void whose answer was lost";
+  return voidResultOf(
+    primary,
+    isRefund
+      ? await voidRefundIssueRow(primary, reason, deps)
+      : await voidRedeemRow(primary, reason, deps),
+    deps,
+  );
+}
+
 async function reconcileRow(
   row: CvOperationRow,
   deps: ReconcileDeps,
@@ -130,7 +214,7 @@ async function reconcileRow(
   }
   if (outcome.kind !== "ok") {
     await deps.ops.update(row.id, {
-      attempted: true,
+      transient: true, // F-12: no answer never counts toward the budget
       lastError: `reconcile: CRM ${outcome.kind} ${outcome.status}: ${outcome.msg}`.slice(0, 500),
     });
     return "unreachable";
@@ -164,13 +248,11 @@ async function reconcileRow(
         });
         return "linked";
       }
-      const result = await voidRedeemRow(
+      return voidResultOf(
         row,
-        "reconcile: CRM redeem without a local invoice carrying it",
+        await voidRedeemRow(row, "reconcile: CRM redeem without a local invoice carrying it", deps),
         deps,
       );
-      await deps.ops.update(row.id, { attempted: true });
-      return result === "VOIDED" ? "voided" : "unresolved";
     }
   }
 
@@ -199,13 +281,15 @@ async function reconcileRow(
         });
         return "linked";
       }
-      const result = await voidRefundIssueRow(
+      return voidResultOf(
         row,
-        "reconcile: CRM refund issue without a local refund invoice carrying it",
+        await voidRefundIssueRow(
+          row,
+          "reconcile: CRM refund issue without a local refund invoice carrying it",
+          deps,
+        ),
         deps,
       );
-      await deps.ops.update(row.id, { attempted: true });
-      return result === "VOIDED" ? "voided" : "unresolved";
     }
   }
 
@@ -248,12 +332,36 @@ export async function reconcileCustomerVoucherOperations(
       continue;
     }
     try {
-      for (const row of opRows) {
+      // F-11 — voids first; a primary with a void still pending is not touched.
+      const voidRows = opRows.filter(isPendingVoidRow);
+      let all = await deps.ops.findByOperationId(operationId);
+      for (const voidRow of voidRows) {
+        summary.checked += 1;
+        const primaryKey = voidRow.crmRequestId.replace(/:void$/, "");
+        try {
+          summary[await reconcileVoidRow(voidRow, all.find((r) => r.crmRequestId === primaryKey), deps)] += 1;
+        } catch (e) {
+          summary.unresolved += 1;
+          console.error("[customer-voucher] reconcile void row failed", {
+            operationId,
+            crmRequestId: voidRow.crmRequestId,
+            error: e,
+          });
+        }
+      }
+      if (voidRows.length > 0) all = await deps.ops.findByOperationId(operationId);
+      for (const listed of opRows.filter((r) => !isPendingVoidRow(r))) {
+        const row = all.find((r) => r.id === listed.id) ?? listed;
+        if (!isReconcilableRow(row)) continue; // settled by its void just now
+        if (all.some((r) => isPendingVoidRow(r) && r.crmRequestId === voidRequestIdFor(row.crmRequestId))) {
+          summary.skipped += 1;
+          continue;
+        }
         summary.checked += 1;
         try {
           const result = await reconcileRow(row, deps);
           summary[result] += 1;
-          // row.attempts is the count before this pass (+1 made in reconcileRow).
+          // row.attempts counts settled-but-unsettling answers only (F-12).
           if (result === "unresolved" && row.attempts + 1 >= MAX_RECONCILE_ATTEMPTS) {
             await deps.ops.update(row.id, { status: "UNRESOLVED_MANUAL" });
             console.error("[customer-voucher] reconcile gave up — UNRESOLVED_MANUAL, needs a person", {

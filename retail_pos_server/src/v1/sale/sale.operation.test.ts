@@ -412,3 +412,27 @@ test("F-8: the sale committed but its ack was lost (non-unique error) → redeem
   assert.equal(h.crm.balances.get(7), 600, "charged once, not given back");
   assert.equal(h.crm.calls.filter((c) => c.startsWith("voidRedeem")).length, 0);
 });
+
+test("F-11: local failure + void answer lost → retry with the same payload is 409 EFFECT_PENDING, no Invoice; reconciler completes the void", async () => {
+  const h = harness();
+  h.setPersist("fail");
+  h.crm.mode.voidRedeem = ["unknown"];
+  await assert.rejects(createSaleService(salePayload({ operationId: OP }), CONTEXT, h.deps));
+  assert.equal(h.ops.byKey(`${KEY7}:void`)!.status, "UNRESOLVED");
+
+  h.setPersist("ok");
+  await assert.rejects(
+    createSaleService(salePayload({ operationId: OP }), CONTEXT, h.deps),
+    (e: unknown) =>
+      e instanceof HttpException &&
+      e.statusCode === 409 &&
+      (e.result as { code?: string }).code === "CUSTOMER_VOUCHER_EFFECT_PENDING",
+  );
+  assert.equal(h.invoices.length, 0, "the still-active redeem never became payment");
+
+  const summary = await reconcileCustomerVoucherOperations(h.reconcileDeps(3));
+  assert.equal(summary.voided, 1);
+  assert.equal(h.ops.byKey(`${KEY7}:void`)!.status, "CONFIRMED");
+  assert.equal(h.ops.byKey(KEY7)!.status, "VOIDED");
+  assert.equal(h.crm.balances.get(7), 1000);
+});

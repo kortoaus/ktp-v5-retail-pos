@@ -10,6 +10,7 @@ import {
   type CustomerVoucherCrm,
 } from "./customer-voucher.crm";
 import {
+  isPendingVoidRow,
   prismaCvOperationStore,
   type CustomerVoucherOperationStore,
   type CvOperationKind,
@@ -163,7 +164,25 @@ export async function assertNoPendingVoucherEffects(
   expected: Map<string, number>,
   deps: CvDeps,
 ) {
-  const pending = (await deps.ops.findByOperationId(operationId)).filter(
+  const all = await deps.ops.findByOperationId(operationId);
+  // F-11 — a reversal not yet confirmed: this operation can never become
+  // payment again, whatever the payload.
+  const pendingVoids = all.filter(isPendingVoidRow);
+  if (pendingVoids.length > 0)
+    throw new HttpException(
+      409,
+      "A customer voucher reversal for this checkout is still being confirmed with CRM. Clear the cart and ring the sale again; the voucher is given back automatically.",
+      {
+        code: CUSTOMER_VOUCHER_EFFECT_PENDING,
+        effects: pendingVoids.map((row) => ({
+          kind: row.kind,
+          voucherId: row.voucherId,
+          amount: row.amount,
+          status: row.status,
+        })),
+      },
+    );
+  const pending = all.filter(
     (row) =>
       row.kind === kind &&
       PENDING_STATUSES.includes(row.status) &&
@@ -362,85 +381,95 @@ export async function redeemCustomerVouchersForOperation(
     await deps.ops.update(row.id, {
       status: "UNRESOLVED",
       lastError: errorText(outcome),
-      attempted: true,
+      transient: true,
     });
     throw unresolvedError("voucher redeem");
   }
   return confirmed;
 }
 
-async function recordVoidAudit(
-  parent: CvOperationRow,
-  kind: CvOperationKind,
-  requestId: string,
-  outcome: CrmOutcome<{ eventId: number | null }>,
+// F-11 — a compensation is recorded BEFORE it is sent: the VOID_* row is
+// committed as INTENT, then the CRM void, then
+//   ok        → void row CONFIRMED, primary VOIDED            → "VOIDED"
+//   rejected  → void row FAILED (CRM refused; nothing reversed),
+//               primary UNRESOLVED                            → "REJECTED"
+//   unknown   → void row UNRESOLVED, primary UNRESOLVED       → "UNKNOWN"
+// While the void row is INTENT/UNRESOLVED the primary can never become
+// payment again (assertNoPendingVoucherEffects); the reconciler settles the
+// void first. If the intent cannot be written, no void is sent ("UNKNOWN").
+// Never throws.
+export type VoidResult = "VOIDED" | "REJECTED" | "UNKNOWN";
+
+async function sendVoid(
+  primary: CvOperationRow,
+  kind: "VOID_REDEEM" | "VOID_REFUND_ISSUE",
+  send: (requestId: string) => Promise<CrmOutcome<{ eventId: number | null }>>,
   deps: CvDeps,
-) {
+): Promise<VoidResult> {
+  const requestId = voidRequestIdFor(primary.crmRequestId);
+  const log = { operationId: primary.operationId, crmRequestId: primary.crmRequestId };
+  let voidRow: CvOperationRow;
   try {
-    const audit = await deps.ops.ensureIntent({
-      operationId: parent.operationId,
+    voidRow = await deps.ops.ensureIntent({
+      operationId: primary.operationId,
       kind,
-      voucherId: parent.voucherId,
-      memberId: parent.memberId,
-      amount: parent.amount,
+      voucherId: primary.voucherId,
+      memberId: primary.memberId,
+      amount: primary.amount,
       crmRequestId: requestId,
     });
-    const status: CvOperationStatus =
-      outcome.kind === "ok" ? "CONFIRMED" : outcome.kind === "rejected" ? "FAILED" : "UNRESOLVED";
-    await deps.ops.update(audit.id, {
-      status,
-      crmEventId: outcome.kind === "ok" ? outcome.result.eventId : null,
+  } catch (e) {
+    console.error("[customer-voucher] void intent write failed — void NOT sent", { ...log, error: e });
+    await markRowsUnresolved([primary], "void intent could not be recorded", deps);
+    return "UNKNOWN";
+  }
+
+  let outcome: CrmOutcome<{ eventId: number | null }>;
+  if (voidRow.status === "CONFIRMED") {
+    outcome = { kind: "ok", result: { eventId: voidRow.crmEventId } }; // already done
+  } else {
+    try {
+      outcome = await send(requestId);
+    } catch (e) {
+      outcome = { kind: "unknown", status: 0, msg: String(e) };
+    }
+  }
+
+  const result: VoidResult =
+    outcome.kind === "ok" ? "VOIDED" : outcome.kind === "rejected" ? "REJECTED" : "UNKNOWN";
+  try {
+    await deps.ops.update(voidRow.id, {
+      status: result === "VOIDED" ? "CONFIRMED" : result === "REJECTED" ? "FAILED" : "UNRESOLVED",
+      crmEventId: outcome.kind === "ok" ? outcome.result.eventId : voidRow.crmEventId,
       lastError: errorText(outcome),
-      attempted: true,
+      ...(result === "UNKNOWN" ? { transient: true } : { attempted: true }),
+    });
+    await deps.ops.update(primary.id, {
+      status: result === "VOIDED" ? "VOIDED" : "UNRESOLVED",
+      lastError: result === "VOIDED" ? null : `void ${errorText(outcome)}`,
     });
   } catch (e) {
-    console.error("[customer-voucher] void audit row write failed", {
-      operationId: parent.operationId,
-      requestId,
-      error: e,
-    });
+    // The void row stays INTENT (or as it was): still pending, still swept.
+    console.error("[customer-voucher] ledger update after void failed", { ...log, error: e });
   }
+  if (result !== "VOIDED")
+    console.error("[customer-voucher] void not confirmed — left for the reconciler", { ...log, outcome });
+  return result;
 }
 
-// Voids one REDEEM row. Never throws: a failed void leaves the row
-// UNRESOLVED for the reconciler.
-export async function voidRedeemRow(
+// Voids one REDEEM row. Never throws.
+export function voidRedeemRow(
   row: CvOperationRow,
   reason: string,
   deps: CvDeps = defaultCvDeps,
-): Promise<"VOIDED" | "UNRESOLVED"> {
-  const requestId = voidRequestIdFor(row.crmRequestId);
-  let outcome: CrmOutcome<{ eventId: number | null }>;
-  try {
-    outcome = await deps.crm.voidRedeem({
-      redeemRequestId: row.crmRequestId,
-      requestId,
-      note: reason,
-    });
-  } catch (e) {
-    outcome = { kind: "unknown", status: 0, msg: String(e) };
-  }
-  await recordVoidAudit(row, "VOID_REDEEM", requestId, outcome, deps);
-  const status = outcome.kind === "ok" ? "VOIDED" : "UNRESOLVED";
-  try {
-    await deps.ops.update(row.id, {
-      status,
-      lastError: outcome.kind === "ok" ? null : `void ${errorText(outcome)}`,
-    });
-  } catch (e) {
-    console.error("[customer-voucher] ledger update after void failed", {
-      operationId: row.operationId,
-      crmRequestId: row.crmRequestId,
-      error: e,
-    });
-  }
-  if (status === "UNRESOLVED")
-    console.error("[customer-voucher] redeem void failed — left UNRESOLVED for the reconciler", {
-      operationId: row.operationId,
-      crmRequestId: row.crmRequestId,
-      outcome,
-    });
-  return status;
+): Promise<VoidResult> {
+  return sendVoid(
+    row,
+    "VOID_REDEEM",
+    (requestId) =>
+      deps.crm.voidRedeem({ redeemRequestId: row.crmRequestId, requestId, note: reason }),
+    deps,
+  );
 }
 
 export async function voidRedeemRows(rows: CvOperationRow[], reason: string, deps: CvDeps) {
@@ -536,50 +565,29 @@ export async function issueRefundVoucherForOperation(
   await deps.ops.update(row.id, {
     status: "UNRESOLVED",
     lastError: errorText(outcome),
-    attempted: true,
+    transient: true,
   });
   throw unresolvedError("refund voucher issue");
 }
 
 // Voids one REFUND_ISSUE row through CRM's refund-issue/void. Never throws.
-export async function voidRefundIssueRow(
+export function voidRefundIssueRow(
   row: CvOperationRow,
   reason: string,
   deps: CvDeps = defaultCvDeps,
-): Promise<"VOIDED" | "UNRESOLVED"> {
-  const requestId = voidRequestIdFor(row.crmRequestId);
-  let outcome: CrmOutcome<{ eventId: number | null }>;
-  try {
-    outcome = await deps.crm.voidRefundIssue({
-      entityType: REFUND_ISSUE_ENTITY_TYPE,
-      entityId: row.crmRequestId,
-      requestId,
-      note: reason,
-    });
-  } catch (e) {
-    outcome = { kind: "unknown", status: 0, msg: String(e) };
-  }
-  await recordVoidAudit(row, "VOID_REFUND_ISSUE", requestId, outcome, deps);
-  const status = outcome.kind === "ok" ? "VOIDED" : "UNRESOLVED";
-  try {
-    await deps.ops.update(row.id, {
-      status,
-      lastError: outcome.kind === "ok" ? null : `void ${errorText(outcome)}`,
-    });
-  } catch (e) {
-    console.error("[customer-voucher] ledger update after refund void failed", {
-      operationId: row.operationId,
-      crmRequestId: row.crmRequestId,
-      error: e,
-    });
-  }
-  if (status === "UNRESOLVED")
-    console.error("[customer-voucher] refund issue void failed — left UNRESOLVED", {
-      operationId: row.operationId,
-      crmRequestId: row.crmRequestId,
-      outcome,
-    });
-  return status;
+): Promise<VoidResult> {
+  return sendVoid(
+    row,
+    "VOID_REFUND_ISSUE",
+    (requestId) =>
+      deps.crm.voidRefundIssue({
+        entityType: REFUND_ISSUE_ENTITY_TYPE,
+        entityId: row.crmRequestId,
+        requestId,
+        note: reason,
+      }),
+    deps,
+  );
 }
 
 // ── V-6: whole-Invoice CRM reachability ─────────────────────────────────────
