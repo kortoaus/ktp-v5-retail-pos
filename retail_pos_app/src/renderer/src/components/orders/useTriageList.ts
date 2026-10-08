@@ -1,8 +1,9 @@
 // 트리아지 목록 로더 (2026-09-24 트리아지 스펙 §6.2·§6.3).
 //
 // - 버킷 목록 = page 1 · limit 100 한 번에 (페이지 병합 없음). keyword 검색도 같은 방식.
-// - 화면/칩 전환·수동 ⟳ = 서버 순서로 전체 교체(replace). 소켓 `order:buckets` 틱·자기 액션
-//   성공 = 위치 유지 병합(merge — 제자리 갱신, 이탈 행 흐림, 새 행 맨 아래).
+// - 화면/칩 전환·수동 ⟳ = 서버 순서로 전체 교체(replace). `order:buckets` revision 변화
+//   (T-24 R-15 — 내용이 같은 틱은 신호 없음)·자기 액션 성공 = 위치 유지 병합(merge —
+//   제자리 갱신, 이탈 행 흐림, 새 행 맨 아래).
 // - paused(뷰어 모달 열림·일괄 실행/인쇄 중) 동안의 병합 요청은 보류했다가 풀릴 때 1회.
 // - 구 crm 감지: bucket 에코 없음 → serverOutdated (목록 대신 "Server update required").
 
@@ -121,7 +122,8 @@ export function useTriageList(
     if (key) void load("replace");
   }, [key, load]);
 
-  // order:buckets 틱(또는 폴백 폴링) → 병합 재조회.
+  // order:buckets revision 변화(또는 폴백 폴링의 내용 변화) → 병합 재조회.
+  // refreshSignal = orderInboxStore.bucketsSeq — 같은 revision 이면 오르지 않는다.
   const firstSignalRef = useRef(true);
   useEffect(() => {
     if (firstSignalRef.current) {

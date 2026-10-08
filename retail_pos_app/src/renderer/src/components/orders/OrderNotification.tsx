@@ -152,7 +152,7 @@ export default function OrderNotification() {
     // 트리아지 buckets (30s 틱) — 카운트 + 트리아지 화면 silent 재조회 트리거.
     socket.on(ORDER_BUCKETS_EVENT, (next: unknown) => {
       const normalized = normalizeOrderBucketsPayload(next);
-      if (normalized) applyOrderBuckets(normalized.result);
+      if (normalized) applyOrderBuckets(normalized.result, Date.now(), normalized.revision);
     });
     socket.on(ORDER_NEW_EVENT, () => {
       if (chimeEnabledRef.current) playChime();

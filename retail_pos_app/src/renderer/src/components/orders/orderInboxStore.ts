@@ -1,4 +1,5 @@
 import type { OrderBuckets } from "../../service/order.service";
+import { bucketsRevisionOf, nextBucketsSignal } from "./buckets-revision";
 
 // 주문 수신함 소켓 상태의 모듈 레벨 공유 스토어.
 //
@@ -16,12 +17,14 @@ export type OrderPendingCountPayload = {
 
 // 트리아지 buckets (2026-09-24, 스펙 §5-2) — pos_server 30s 틱 `order:buckets`.
 // result null = crm 불통. receivedAt = 앱 수신 시각(ms) — 90초 무수신 폴백 판정용.
-// seq = 수신마다 +1 — 트리아지 화면이 이 값 변화로 현재 목록을 silent 재조회한다.
+// seq = revision 이 바뀔 때만 +1 (T-24 R-15) — 트리아지 화면이 이 값 변화로 현재
+// 목록을 silent 재조회한다. 같은 내용의 틱은 seq 를 올리지 않는다.
 export type OrderBucketsPayload = {
   ok: boolean;
   result: OrderBuckets | null;
   chimeTerminalIds: number[];
   generatedAt: string;
+  revision: string | null; // 구 서버는 없음 → 내용으로 대체 (buckets-revision.ts)
 };
 
 export type OrderInboxState = {
@@ -31,6 +34,7 @@ export type OrderInboxState = {
   bucketsOk: boolean | null; // 마지막 틱 성공 여부 (null = 아직 없음)
   bucketsReceivedAt: number | null;
   bucketsSeq: number;
+  bucketsRevision: string | null; // 마지막으로 본 revision (seq 를 올린 값)
 };
 
 export const ORDER_PENDING_COUNT_EVENT = "order:pending-count";
@@ -44,6 +48,7 @@ let state: OrderInboxState = {
   bucketsOk: null,
   bucketsReceivedAt: null,
   bucketsSeq: 0,
+  bucketsRevision: null,
 };
 const listeners = new Set<() => void>();
 
@@ -97,15 +102,23 @@ export function normalizeOrderPendingCountPayload(
 
 // 소켓 수신 또는 앱 폴백 폴링(GET /api/order/buckets) 결과를 반영한다.
 // 실패(result null)는 마지막 성공 값을 지우지 않는다 — 카운트가 깜빡이지 않게.
+// T-24 (R-15): bucketsSeq 는 revision 이 바뀔 때만 오른다 — 변화 없는 틱마다
+// 모든 단말이 목록을 재조회하던 것을 막는다.
 export function applyOrderBuckets(
   buckets: OrderBuckets | null,
   receivedAt: number = Date.now(),
+  serverRevision?: string | null,
 ): void {
+  const signal = nextBucketsSignal(
+    { seq: state.bucketsSeq, revision: state.bucketsRevision },
+    bucketsRevisionOf(buckets, serverRevision),
+  );
   setOrderInboxState({
     buckets: buckets ?? state.buckets,
     bucketsOk: buckets != null,
     bucketsReceivedAt: receivedAt,
-    bucketsSeq: state.bucketsSeq + 1,
+    bucketsSeq: signal.seq,
+    bucketsRevision: signal.revision,
   });
 }
 
@@ -131,5 +144,7 @@ export function normalizeOrderBucketsPayload(
       typeof maybe.generatedAt === "string"
         ? maybe.generatedAt
         : new Date().toISOString(),
+    revision:
+      typeof maybe.revision === "string" && maybe.revision ? maybe.revision : null,
   };
 }
