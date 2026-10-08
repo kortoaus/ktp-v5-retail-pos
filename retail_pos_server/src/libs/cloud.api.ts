@@ -8,9 +8,15 @@ export type ApiResponse<T = any> = {
   message?: string;
   msg?: string;
   status?: number;
+  // T-24 (R-8) — set only when no HTTP answer came back: the 30 s axios
+  // timeout ("timeout") or a connection/DNS failure ("network"). `status` keeps
+  // its historical value (500) for those so existing callers are unchanged.
+  transport?: "timeout" | "network";
   result?: T | null;
   paging?: PagingType | null;
 };
+
+const TIMEOUT_CODES = new Set(["ECONNABORTED", "ETIMEDOUT"]);
 
 class ApiService {
   private instance: AxiosInstance;
@@ -59,12 +65,18 @@ class ApiService {
         const status = error.response?.status ?? 500;
         const data = error.response?.data ?? {};
         const msg = data.message || data.msg || "Server Error";
+        const transport = error.response
+          ? undefined
+          : TIMEOUT_CODES.has(error.code ?? "")
+            ? ("timeout" as const)
+            : ("network" as const);
 
         return {
           ok: false,
           msg,
           message: msg,
           status,
+          ...(transport ? { transport } : {}),
           result: data.result ?? null,
           paging: data.paging ?? null,
         };
@@ -75,6 +87,7 @@ class ApiService {
         msg: "Network Error",
         message: "Network Error",
         status: 0,
+        transport: "network",
         result: null,
         paging: null,
       };

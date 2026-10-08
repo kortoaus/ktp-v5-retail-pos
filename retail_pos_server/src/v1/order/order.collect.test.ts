@@ -28,10 +28,32 @@ test("409 TRANSITION_CONFLICT classifies as permanent conflict", () => {
 
 // S3 리뷰 반영 — 4xx 는 재시도해도 같은 응답이라 스윕 head-of-line poison 이
 // 된다. 409 와 같이 영구 처리 (synced 마킹 + warn).
-test("other 4xx (400/404/422) classify as permanent conflict", () => {
-  assert.equal(classifyCollectResult({ ok: false, status: 400 }), "conflict");
-  assert.equal(classifyCollectResult({ ok: false, status: 404 }), "conflict");
-  assert.equal(classifyCollectResult({ ok: false, status: 422 }), "conflict");
+// T-24 (R-8): 409 만 conflict, 그 외 4xx 는 permanent — 둘 다 stamp + warn.
+test("other 4xx (400/404/422) classify as permanent", () => {
+  assert.equal(classifyCollectResult({ ok: false, status: 400 }), "permanent");
+  assert.equal(classifyCollectResult({ ok: false, status: 404 }), "permanent");
+  assert.equal(classifyCollectResult({ ok: false, status: 422 }), "permanent");
+});
+
+test("408 / 429 classify as retry (temporary — never stamped)", () => {
+  assert.equal(classifyCollectResult({ ok: false, status: 408 }), "retry");
+  assert.equal(classifyCollectResult({ ok: false, status: 429 }), "retry");
+});
+
+test("axios timeout and network failure classify as retry", () => {
+  // cloud.api reports a missing HTTP answer as status 500 + transport.
+  assert.equal(
+    classifyCollectResult({ ok: false, status: 500, transport: "timeout" }),
+    "retry",
+  );
+  assert.equal(
+    classifyCollectResult({ ok: false, status: 500, transport: "network" }),
+    "retry",
+  );
+  assert.equal(
+    classifyCollectResult({ ok: false, status: 0, transport: "network" }),
+    "retry",
+  );
 });
 
 // 예외 — 401/403 은 .env API_KEY 미스컨피그: 키를 고치면 회복되므로 synced
@@ -62,6 +84,7 @@ test("ok flag wins over status", () => {
 test("outcome maps to response tri-state", () => {
   assert.equal(toCollectSaleResult("synced"), "collected");
   assert.equal(toCollectSaleResult("conflict"), "conflict");
+  assert.equal(toCollectSaleResult("permanent"), "conflict");
   assert.equal(toCollectSaleResult("retry"), "pending");
   assert.equal(toCollectSaleResult("timeout"), "pending");
 });
