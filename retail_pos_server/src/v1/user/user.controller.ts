@@ -42,6 +42,6 @@ export async function getMeUserController(req: Request, res: Response) {
 }
 
 export async function getUserByCodeController(req: Request, res: Response) {
-  const result = await getUserByCodeService(req.query.code as string);
+  const result = await getUserByCodeService(req.query.code);
   res.status(200).json(result);
 }

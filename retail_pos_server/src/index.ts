@@ -13,8 +13,13 @@ import {
   startOrderPendingBroadcaster,
 } from "./v1/order/order.pending-broadcaster";
 import dotenv from "dotenv";
+import { initStaffSession } from "./v1/user/staff-session";
 
 dotenv.config();
+
+// R-1 — resolve the staff-session secret/mode once at boot so a missing
+// STAFF_SESSION_SECRET logs its single WARN line now, not at first login.
+initStaffSession();
 
 const port = process.env.PORT || 3000;
 

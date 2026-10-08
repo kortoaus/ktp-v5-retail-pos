@@ -9,7 +9,8 @@ const stripeRouter = Router();
 
 // Same middleware shape as `sale.router.ts`: app-level `terminalMiddleware`
 // has already resolved terminal/company/storeSetting, then `userMiddleware`
-// (Bearer `<userId>%%%<lastSignedAt>`) + `scopeMiddleware("sale")`. Minting a
+// (Bearer staff session, or the legacy `<userId>%%%<ts>` while
+// STAFF_AUTH_ACCEPT=both) + `scopeMiddleware("sale")`. Minting a
 // connection token or a PaymentIntent is exactly as privileged as writing the
 // invoice it pays for, so it carries exactly the same gate — no more, no less.
 

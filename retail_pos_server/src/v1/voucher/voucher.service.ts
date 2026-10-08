@@ -7,6 +7,9 @@ import {
   NotFoundException,
 } from "../../libs/exceptions";
 import { StoreSettingModel, UserModel } from "../../generated/prisma/models";
+import { isUniqueViolation } from "../../libs/prisma-errors";
+
+export const DAILY_VOUCHER_ALREADY_ISSUED = "Daily voucher already issued today";
 
 // Daily voucher validity window: from NOW to end of today (AU/Sydney).
 // Using moment-timezone because the server side uses it consistently
@@ -65,13 +68,18 @@ export async function issueDailyVoucherService(
   targetUserId: number,
   storeSetting: StoreSettingModel,
   issuedBy: UserModel,
+  client: Pick<typeof db, "voucher" | "user" | "$transaction"> = db,
 ) {
   try {
     const { from, to } = todayWindow();
 
     // 2차 검증 — 클라이언트에서 Issue 버튼을 눌렀다 해도 validity 겹치는
     // ACTIVE daily voucher 가 이미 있으면 refuse. 하루 한 장 원칙 (D-19).
-    const existing = await db.voucher.findFirst({
+    // R-2: this read only gives the early message. The durable guard is the
+    // partial unique index Voucher_staff_daily_user_day_key on
+    // (userId, validTo) WHERE kind = 'staff-daily' — validTo is always the end
+    // of the Sydney day, so a concurrent second issue fails with P2002 below.
+    const existing = await client.voucher.findFirst({
       where: {
         userId: targetUserId,
         kind: "staff-daily",
@@ -81,10 +89,10 @@ export async function issueDailyVoucherService(
       },
     });
     if (existing) {
-      throw new BadRequestException("Daily voucher already issued today");
+      throw new BadRequestException(DAILY_VOUCHER_ALREADY_ISSUED);
     }
 
-    const targetUser = await db.user.findUnique({
+    const targetUser = await client.user.findUnique({
       where: { id: targetUserId },
     });
     if (!targetUser) throw new NotFoundException("Target user not found");
@@ -99,7 +107,7 @@ export async function issueDailyVoucherService(
       );
     }
 
-    const voucher = await db.$transaction(async (tx) => {
+    const voucher = await client.$transaction(async (tx) => {
       const v = await tx.voucher.create({
         data: {
           userId: targetUserId,
@@ -126,6 +134,8 @@ export async function issueDailyVoucherService(
     return { ok: true, result: voucher };
   } catch (e) {
     if (e instanceof HttpException) throw e;
+    if (isUniqueViolation(e))
+      throw new BadRequestException(DAILY_VOUCHER_ALREADY_ISSUED);
     console.error("issueDailyVoucherService error:", e);
     throw new InternalServerException("Internal server error");
   }

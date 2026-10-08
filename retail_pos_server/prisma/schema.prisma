@@ -781,6 +781,11 @@ model Voucher {
 
   @@index([userId])
   @@index([status])
+  // R-2: raw-SQL partial unique index "Voucher_staff_daily_user_day_key"
+  // ("userId", "validTo") WHERE kind = 'staff-daily' AND "validTo" >= '2026-10-09'
+  // (migration 20261008051333_staff_daily_voucher_unique). Prisma 7.3 cannot
+  // express partial indexes (its diff ignores this one) — if a generated
+  // migration ever tries to DROP it, trim that line.
 }
 
 // Applied — append-only event log. Balance 는 이 로그의 합과 항상 일치.

@@ -26,6 +26,10 @@ import {
   voidRedeemedCustomerVouchersForSale,
 } from "../customer-voucher/customer-voucher.service";
 import { nextDocCounter } from "./sale.doc-counter";
+import {
+  redeemUserVoucherInTx,
+  voucherIneligibility,
+} from "../voucher/voucher.redeem";
 
 // ──────────────────────────────────────────────────────────────
 // Sale create — 순서:
@@ -58,8 +62,9 @@ export interface SaleContext {
 
 // ── 1. Voucher 검증 ─────────────────────────────────────────
 //
-// user-voucher payment 마다 DB 조회해서 유효성 + 잔액 확인. 중복 선택은 클라
-// 측 UI 가 막지만 서버도 "같은 voucher 복수 payment" 를 거부 (합계 대비 잔액).
+// user-voucher payment 마다 DB 조회해서 유효성 + 잔액 확인 (early message only —
+// R-2: 실제 결정은 buildSaleInTx 의 redeemUserVoucherInTx 조건부 decrement).
+// 중복 선택은 클라 측 UI 가 막지만 서버도 "같은 voucher 복수 payment" 를 거부 (합계 대비 잔액).
 //
 // tx 파라미터: Repay 가 refund step 에서 voucher balance 를 복구한 뒤
 //   같은 tx 안에서 새 SALE 의 redeem 을 검증해야 정확하다. 따라서 tx client 를
@@ -93,23 +98,84 @@ export async function validateVouchers(
     const v = byId.get(vp.entityId!);
     if (!v)
       throw new NotFoundException(`voucher ${vp.entityId} not found`);
-    if (v.status !== "ACTIVE")
-      throw new BadRequestException(
-        `voucher ${v.id} is ${v.status.toLowerCase()}, not ACTIVE`,
-      );
-    if (v.validFrom > now)
-      throw new BadRequestException(`voucher ${v.id} not yet valid`);
-    if (v.validTo < now)
-      throw new BadRequestException(`voucher ${v.id} expired`);
-    if (v.balance < vp.amount)
-      throw new BadRequestException(
-        `voucher ${v.id} insufficient: balance ${v.balance} < requested ${vp.amount}`,
-      );
+    const problem = voucherIneligibility(v, vp.amount, now);
+    if (problem) throw problem;
   }
 }
 
 // ── 2. 금액 검증 ────────────────────────────────────────────
+//
+// R-9 — shape/sign guard before any arithmetic. Signs allowed for a SALE (as
+// found in the till code, 2026-10-08):
+//   rows: qty > 0 (changeLineQty removes a line at qty ≤ 0; weight lines need
+//         weight > 0), unit prices ≥ 0 (override/discount modals and
+//         calcMarkdownPrice floor at 0), measured_weight null or ≥ 0;
+//         total / tax_amount / net integers (their values are then pinned by
+//         the invariants below, so they follow the price/qty signs).
+//   header: linesTotal / lineTax / creditSurchargeAmount / surchargeTax /
+//         total / cashChange ≥ 0; rounding is signed (cash rounding ±).
+//   payments: amount ≥ 0 (the till skips 0 non-cash tenders); type is one of
+//         PaymentTypeWire; a VOUCHER carries entityType user-voucher |
+//         customer-voucher.
+const PAYMENT_TYPES: readonly string[] = ["CASH", "CREDIT", "VOUCHER", "GIFTCARD"];
+const VOUCHER_ENTITY_TYPES: readonly string[] = ["user-voucher", "customer-voucher"];
+
+function requireInt(v: unknown, label: string, min?: number): number {
+  if (typeof v !== "number" || !Number.isSafeInteger(v))
+    throw new BadRequestException(`${label} must be an integer`);
+  if (min != null && v < min)
+    throw new BadRequestException(`${label} must be >= ${min}`);
+  return v;
+}
+
+function requireIntOrNull(v: unknown, label: string, min?: number) {
+  if (v == null) return; // nullable columns: null (or omitted) is allowed
+  requireInt(v, label, min);
+}
+
+export function validateSaleShape(p: SaleCreatePayload) {
+  if (!Array.isArray(p.rows))
+    throw new BadRequestException("rows must be an array");
+  if (!Array.isArray(p.payments))
+    throw new BadRequestException("payments must be an array");
+
+  requireInt(p.linesTotal, "linesTotal", 0);
+  requireInt(p.rounding, "rounding");
+  requireInt(p.creditSurchargeAmount, "creditSurchargeAmount", 0);
+  requireInt(p.lineTax, "lineTax", 0);
+  requireInt(p.surchargeTax, "surchargeTax", 0);
+  requireInt(p.total, "total", 0);
+  requireInt(p.cashChange, "cashChange", 0);
+
+  p.rows.forEach((r, i) => {
+    if (r == null || typeof r !== "object")
+      throw new BadRequestException(`row[${i}] must be an object`);
+    const at = `row[${i}]`;
+    requireInt(r.qty, `${at} qty`, 1);
+    requireInt(r.unit_price_original, `${at} unit_price_original`, 0);
+    requireIntOrNull(r.unit_price_discounted, `${at} unit_price_discounted`, 0);
+    requireIntOrNull(r.unit_price_adjusted, `${at} unit_price_adjusted`, 0);
+    requireInt(r.unit_price_effective, `${at} unit_price_effective`, 0);
+    requireIntOrNull(r.measured_weight, `${at} measured_weight`, 0);
+    requireInt(r.total, `${at} total`);
+    requireInt(r.tax_amount, `${at} tax_amount`);
+    requireInt(r.net, `${at} net`);
+  });
+
+  p.payments.forEach((q, i) => {
+    if (q == null || typeof q !== "object")
+      throw new BadRequestException(`payment[${i}] must be an object`);
+    if (!PAYMENT_TYPES.includes(q.type))
+      throw new BadRequestException(`payment[${i}] type is not supported`);
+    requireInt(q.amount, `payment[${i}] amount`, 0);
+    if (q.type === "VOUCHER" && !VOUCHER_ENTITY_TYPES.includes(q.entityType ?? ""))
+      throw new BadRequestException(`payment[${i}] voucher entityType is not supported`);
+    if (q.entityId != null) requireInt(q.entityId, `payment[${i}] entityId`, 1);
+  });
+}
+
 export function validateAmounts(p: SaleCreatePayload) {
+  validateSaleShape(p);
   if (p.rows.length === 0)
     throw new BadRequestException("rows must not be empty");
   if (p.payments.length === 0)
@@ -379,10 +445,9 @@ export async function buildSaleInTx(
   for (const pm of payload.payments) {
     if (pm.type !== "VOUCHER" || pm.entityType !== "user-voucher") continue;
     const voucherId = pm.entityId!;
-    await tx.voucher.update({
-      where: { id: voucherId },
-      data: { balance: { decrement: pm.amount } },
-    });
+    // R-2: the conditional decrement decides; validateVouchers above only
+    // gives the early message.
+    await redeemUserVoucherInTx(tx, voucherId, pm.amount);
     await tx.voucherEvent.create({
       data: {
         voucherId,

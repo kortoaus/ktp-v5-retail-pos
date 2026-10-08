@@ -8,9 +8,18 @@ import {
 } from "../../libs/exceptions";
 import { FindManyQuery } from "../../libs/query";
 import { normalizeUserScopes } from "./user.scopes";
+import { initStaffSession, signStaffSession } from "./staff-session";
 
-export const getUserByCodeService = async (code: string) => {
+// R-1: proving the staff code is what earns a signed staff session. The user
+// row keeps its shape; the session rides next to it as `token`. A missing or
+// non-string code must not reach Prisma (an undefined filter would match any
+// user), so it fails exactly like an unknown code.
+export const getUserByCodeService = async (code: unknown) => {
   try {
+    if (typeof code !== "string" || code.length === 0) {
+      throw new NotFoundException("User not found");
+    }
+
     const result = await db.user.findFirst({
       where: {
         code,
@@ -22,7 +31,10 @@ export const getUserByCodeService = async (code: string) => {
       throw new NotFoundException("User not found");
     }
 
-    return { ok: true, result, msg: "User found" };
+    const { secret } = initStaffSession();
+    const token = signStaffSession(result.id, secret);
+
+    return { ok: true, result, token, msg: "User found" };
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("getUserByCodeService error:", e);

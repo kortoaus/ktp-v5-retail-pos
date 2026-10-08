@@ -2,25 +2,41 @@ import { Terminal, TerminalShift, User } from "../../generated/prisma/client";
 import { CashInOutWhereInput } from "../../generated/prisma/models";
 import db from "../../libs/db";
 import {
+  BadRequestException,
   HttpException,
   InternalServerException,
   NotFoundException,
 } from "../../libs/exceptions";
 import { FindManyQuery } from "../../libs/query";
 
-type CashInOutDTO = {
-  type: string;
+// R-9 — CashInOut.type is a free string column whose only readers expect
+// "in" | "out" (shift.service close totals). The amount is unsigned cents; the
+// direction lives in `type`, so a signed amount would double-flip the drawer.
+export function parseCashIODto(body: unknown): {
+  type: "in" | "out";
   amount: number;
   note?: string;
-};
+} {
+  if (body == null || typeof body !== "object")
+    throw new BadRequestException("Invalid cash in/out payload");
+  const { type, amount, note } = body as Record<string, unknown>;
+  if (type !== "in" && type !== "out")
+    throw new BadRequestException('type must be "in" or "out"');
+  if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0)
+    throw new BadRequestException("amount must be a positive integer (cents)");
+  if (note != null && typeof note !== "string")
+    throw new BadRequestException("note must be a string");
+  return { type, amount, note: note ?? undefined };
+}
 
 export async function createCashIOService(
   shift: TerminalShift,
   terminal: Terminal,
   user: User,
-  dto: CashInOutDTO,
+  body: unknown,
 ) {
   try {
+    const dto = parseCashIODto(body);
     if (!shift) throw new NotFoundException("Shift not found");
     if (!terminal) throw new NotFoundException("Terminal not found");
     if (!user) throw new NotFoundException("User not found");
@@ -31,7 +47,7 @@ export async function createCashIOService(
         terminalId: terminal.id,
         userId: user.id,
         userName: user.name,
-        type: dto.type.toLowerCase(),
+        type: dto.type,
         amount: dto.amount,
         note: dto.note,
       },
