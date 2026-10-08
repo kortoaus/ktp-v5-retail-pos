@@ -644,17 +644,19 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     });
   }
 
-  function selectCustomerVoucher(
-    voucher: CustomerVoucher,
-    memberPoints?: number,
-  ) {
-    setStagedCustomerVoucher(voucher);
-    if (typeof memberPoints === "number") {
-      setCustomerVoucherMemberPoints(memberPoints);
-      if (activeMember) {
-        setMember({ ...activeMember, points: memberPoints });
-      }
+  // F-17 (T-17): the member's points after a points→voucher exchange answer
+  // (fresh or replayed), reported by the modal whether or not a voucher is
+  // then selected — keeps ISSUE gating and memberPointsBefore on the receipt
+  // at the post-exchange balance.
+  function updateCustomerVoucherMemberPoints(memberPoints: number) {
+    setCustomerVoucherMemberPoints(memberPoints);
+    if (activeMember) {
+      setMember({ ...activeMember, points: memberPoints });
     }
+  }
+
+  function selectCustomerVoucher(voucher: CustomerVoucher) {
+    setStagedCustomerVoucher(voucher);
     setStagedPayment({
       key: "staged",
       tender: "VOUCHER",
@@ -884,6 +886,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
                   }
                   usedVoucherIds={usedCustomerVoucherIds}
                   onSelectVoucher={selectCustomerVoucher}
+                  onMemberPoints={updateCustomerVoucherMemberPoints}
                   onCommit={commitStaged}
                 />
               )}

@@ -10,7 +10,11 @@ import {
   getValidCustomerVouchers,
   issueCustomerVoucher,
 } from "../../../service/customer-voucher.service";
-import { decideIssueAnswer } from "../../../libs/customer-voucher-issue";
+import {
+  decideIssueAnswer,
+  memberPointsAfterIssue,
+} from "../../../libs/customer-voucher-issue";
+import { searchMemberById } from "../../../service/crm.service";
 import dayjsAU from "../../../libs/dayjsAU";
 import TapTarget from "./TapTarget";
 
@@ -25,7 +29,9 @@ type Props = {
   memberPoints: number;
   usedVoucherIds: number[];
   onClose: () => void;
-  onSelect: (voucher: CustomerVoucher, memberPoints?: number) => void;
+  onSelect: (voucher: CustomerVoucher) => void;
+  // F-17: the member's points after any ok exchange answer (fresh or replay).
+  onMemberPoints: (points: number) => void;
 };
 
 export default function SearchCustomerVoucherModal({
@@ -35,6 +41,7 @@ export default function SearchCustomerVoucherModal({
   usedVoucherIds,
   onClose,
   onSelect,
+  onMemberPoints,
 }: Props) {
   const [rows, setRows] = useState<CustomerVoucher[]>([]);
   const [loading, setLoading] = useState(false);
@@ -67,6 +74,13 @@ export default function SearchCustomerVoucherModal({
         window.alert(decision.message);
         return;
       }
+      // F-17: update the member's points on any ok answer, selected or not;
+      // a replay without points re-reads the member before the modal moves on.
+      const points = await memberPointsAfterIssue(decision.memberPoints, async () => {
+        const res = await searchMemberById(memberId);
+        return res.ok && res.result ? res.result.points : null;
+      });
+      if (points !== null) onMemberPoints(points);
       if (decision.action === "recovered") {
         // F-16: the recovered voucher may be spent, expired or already in
         // this sale — refresh the list and let the cashier pick.
@@ -74,12 +88,12 @@ export default function SearchCustomerVoucherModal({
         await refetch();
         return;
       }
-      onSelect(decision.voucher, decision.memberPoints);
+      onSelect(decision.voucher);
       onClose();
     } finally {
       setIssuing(false);
     }
-  }, [memberId, memberPoints, onClose, onSelect, refetch]);
+  }, [memberId, memberPoints, onClose, onMemberPoints, onSelect, refetch]);
 
   const handlePick = useCallback(
     (voucher: CustomerVoucher) => {

@@ -15,7 +15,8 @@ type Props = {
   memberId: string;
   memberPoints: number;
   usedVoucherIds: number[];
-  onSelectVoucher: (voucher: CustomerVoucher, memberPoints?: number) => void;
+  onSelectVoucher: (voucher: CustomerVoucher) => void;
+  onMemberPoints: (points: number) => void;
   onCommit: () => void;
 };
 
@@ -28,6 +29,7 @@ export default function CustomerVoucherInput({
   memberPoints,
   usedVoucherIds,
   onSelectVoucher,
+  onMemberPoints,
   onCommit,
 }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
@@ -142,10 +144,11 @@ export default function CustomerVoucherInput({
         memberPoints={memberPoints}
         usedVoucherIds={usedVoucherIds}
         onClose={() => setModalOpen(false)}
-        onSelect={(nextVoucher, nextPoints) => {
-          onSelectVoucher(nextVoucher, nextPoints);
+        onSelect={(nextVoucher) => {
+          onSelectVoucher(nextVoucher);
           setModalOpen(false);
         }}
+        onMemberPoints={onMemberPoints}
       />
     </div>
   );
