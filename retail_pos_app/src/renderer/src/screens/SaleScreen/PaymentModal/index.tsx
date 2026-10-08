@@ -362,6 +362,13 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
         window.alert(res.msg || "Failed to complete sale");
         return;
       }
+      // T-15 — a retry after a lost response: the server already had this
+      // sale and returns the same invoice instead of charging again.
+      if (res.result.replayed) {
+        window.alert(
+          `This sale was already recorded (${res.result.serial ?? `#${res.result.id}`}) — nothing was charged twice.`,
+        );
+      }
 
       setCompletedInfo({
         invoice: res.result,

@@ -6,6 +6,7 @@ import type {
   SaleCreatePayload,
 } from "../libs/sale/payload.types";
 import type { RefundCreatePayload } from "../libs/refund/payload.types";
+import { operationIdFor, settleOperation } from "../libs/operation-id";
 
 export type InvoiceTypeWire = "SALE" | "REFUND" | "SPEND";
 
@@ -26,6 +27,9 @@ export interface SaleInvoiceCreated {
   externalOrderId?: string | null;
   collectResult?: OrderCollectResult;
   collectSynced?: boolean;
+  // T-15 — true when the server returned an invoice it had already recorded
+  // for this operationId (a retry after a lost response).
+  replayed?: boolean;
 }
 
 export type OrderCollectResult = "collected" | "pending" | "conflict";
@@ -69,10 +73,18 @@ export interface SaleSearchParams {
   type?: InvoiceTypeWire;
 }
 
+// T-15 — every submit carries the attempt's operationId (libs/operation-id.ts):
+// a retry of the same cart after a lost response replays the original invoice.
 export async function createSale(
   payload: SaleCreatePayload,
 ): Promise<ApiResponse<SaleInvoiceCreated>> {
-  return apiService.post<SaleInvoiceCreated>("/api/sale", payload);
+  const operationId = operationIdFor("sale", payload);
+  const res = await apiService.post<SaleInvoiceCreated>("/api/sale", {
+    ...payload,
+    operationId,
+  });
+  settleOperation("sale", res);
+  return res;
 }
 
 // 내부 소비 (SPEND). 금액 0, payments 없음. 서버가 row-level 강제 정규화.
@@ -87,7 +99,13 @@ export async function createSpend(
 export async function createRefundInvoice(
   payload: RefundCreatePayload,
 ): Promise<ApiResponse<SaleInvoiceCreated>> {
-  return apiService.post<SaleInvoiceCreated>("/api/sale/refund", payload);
+  const operationId = operationIdFor("refund", payload);
+  const res = await apiService.post<SaleInvoiceCreated>("/api/sale/refund", {
+    ...payload,
+    operationId,
+  });
+  settleOperation("refund", res);
+  return res;
 }
 
 // Repay — 원본 전량 환불 + 새 tender 로 새 SALE 을 한 transaction 에 원자적
@@ -110,12 +128,19 @@ export interface RepayPayload {
 export interface RepayResponse {
   refund: SaleInvoiceCreated;
   newSale: SaleInvoiceCreated;
+  replayed?: boolean;
 }
 
 export async function repayInvoice(
   payload: RepayPayload,
 ): Promise<ApiResponse<RepayResponse>> {
-  return apiService.post<RepayResponse>("/api/sale/repay", payload);
+  const operationId = operationIdFor("repay", payload);
+  const res = await apiService.post<RepayResponse>("/api/sale/repay", {
+    ...payload,
+    operationId,
+  });
+  settleOperation("repay", res);
+  return res;
 }
 
 export async function searchSaleInvoices(

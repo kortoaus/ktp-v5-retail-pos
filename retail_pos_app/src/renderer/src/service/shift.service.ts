@@ -56,6 +56,9 @@ export type ClosingShiftData = {
   shift: TerminalShift;
   aggregate: ShiftAggregate;
   endedCashExpected: number;
+  // T-15 — customer-voucher operations the store server has not settled yet
+  // (absent on servers before T-15; -1 = the count could not be read).
+  customerVoucherOpenOperations?: number;
 };
 
 export const getClosingShiftData = async (): Promise<

@@ -59,6 +59,7 @@ export default function CloseShiftScreen() {
   }
 
   const { aggregate, endedCashExpected } = closingData;
+  const openVoucherOps = closingData.customerVoucherOpenOperations ?? 0;
   const startedCash = shift.startedCash;
   const cashActualCents = Math.round(cashActual * MONEY_SCALE);
   const difference = cashActualCents - endedCashExpected;
@@ -168,6 +169,13 @@ export default function CloseShiftScreen() {
       <div className="flex-1 flex overflow-hidden">
         {/* Summary */}
         <div className="w-[340px] border-r border-gray-200 p-4 flex flex-col">
+          {openVoucherOps !== 0 && (
+            <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {openVoucherOps > 0
+                ? `${openVoucherOps} customer voucher payment${openVoucherOps === 1 ? " is" : "s are"} still being checked with CRM`
+                : "Customer voucher checks could not be read"}
+            </div>
+          )}
           <h3 className="text-sm font-bold mb-3">Tender Summary</h3>
           <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 flex flex-col gap-2 text-base">
             {tenderSummaryRows.map(([label, value]) => (
