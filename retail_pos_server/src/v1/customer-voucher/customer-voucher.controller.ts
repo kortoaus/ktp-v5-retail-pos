@@ -4,6 +4,7 @@ import {
   issueCustomerVoucherService,
 } from "./customer-voucher.service";
 import { listCustomerVoucherOperationsService } from "./customer-voucher.operations.query";
+import { normalizeOperationId } from "../sale/sale.operation";
 
 export async function getValidCustomerVouchersController(
   req: Request,
@@ -27,7 +28,9 @@ export async function issueCustomerVoucherController(req: Request, res: Response
       .json({ ok: false, msg: "memberId is required", result: null });
     return;
   }
-  res.json(await issueCustomerVoucherService(memberId));
+  // T-17 (V-5): optional; malformed → 400, absent → legacy (no CRM requestId).
+  const operationId = normalizeOperationId(req.body?.operationId);
+  res.json(await issueCustomerVoucherService(memberId, operationId));
 }
 
 export async function getCustomerVoucherOperationsController(

@@ -10,10 +10,13 @@ import {
   getValidCustomerVouchers,
   issueCustomerVoucher,
 } from "../../../service/customer-voucher.service";
+import dayjsAU from "../../../libs/dayjsAU";
 import TapTarget from "./TapTarget";
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
-const fmtDate = (value: string) => value.slice(0, 10);
+// T-17 (D-11): the Sydney calendar date, same as the voucher label and the
+// customer app — never a UTC slice of validTo.
+const fmtDate = (value: string) => dayjsAU(value).format("DD/MM/YYYY");
 
 type Props = {
   open: boolean;
@@ -60,7 +63,7 @@ export default function SearchCustomerVoucherModal({
         window.alert(res.msg || "Failed to issue voucher");
         return;
       }
-      onSelect(res.result.voucher, res.result.memberPoints);
+      onSelect(res.result.voucher, res.result.memberPoints ?? undefined);
       onClose();
     } finally {
       setIssuing(false);

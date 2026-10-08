@@ -1,4 +1,8 @@
 import apiService, { ApiResponse } from "../libs/api";
+import {
+  customerVoucherIssueAttemptKey,
+  sendWithOperation,
+} from "../libs/operation-id";
 
 export type CustomerVoucher = {
   id: number;
@@ -15,7 +19,9 @@ export type CustomerVoucher = {
 
 export type CustomerVoucherIssueResult = {
   voucher: CustomerVoucher;
-  memberPoints: number;
+  // null only on a replay when CRM could not read the member's balance.
+  memberPoints: number | null;
+  replayed?: boolean;
 };
 
 export async function getValidCustomerVouchers(
@@ -26,11 +32,17 @@ export async function getValidCustomerVouchers(
   });
 }
 
+// T-17 (V-5) — the exchange press carries its attempt's operationId
+// (libs/operation-id.ts, key cv-issue:<memberId>), kept until the server
+// answers ok or a settling 409: a retry after a lost answer replays the
+// voucher CRM already issued instead of deducting points twice.
 export async function issueCustomerVoucher(
   memberId: string,
 ): Promise<ApiResponse<CustomerVoucherIssueResult>> {
-  return apiService.post<CustomerVoucherIssueResult>(
-    "/api/customer-voucher/issue",
-    { memberId },
+  return sendWithOperation(customerVoucherIssueAttemptKey(memberId), (operationId) =>
+    apiService.post<CustomerVoucherIssueResult>("/api/customer-voucher/issue", {
+      memberId,
+      operationId,
+    }),
   );
 }

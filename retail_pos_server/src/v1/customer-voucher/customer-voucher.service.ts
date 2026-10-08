@@ -44,11 +44,27 @@ export async function getValidCustomerVouchersService(memberId: string) {
   return { ok: true, result: requireOk(res) };
 }
 
-export async function issueCustomerVoucherService(memberId: string) {
-  const res = await crmApiService.post<{
+// CRM requestId for a till's points→voucher exchange press (T-17, V-5).
+export function customerVoucherIssueRequestId(operationId: string): string {
+  return `${operationId}:cv-issue`;
+}
+
+// T-17 (V-5): a till sends `operationId` (one per exchange press, kept until
+// answered); CRM gets `requestId` = `<operationId>:cv-issue` and replays the
+// voucher it already issued on a retry instead of deducting points twice.
+// Without operationId (Runner, old tills) the body is unchanged — no requestId.
+export async function issueCustomerVoucherService(
+  memberId: string,
+  operationId: string | null = null,
+  crm: Pick<typeof crmApiService, "post"> = crmApiService,
+) {
+  const body: { memberId: string; requestId?: string } = { memberId };
+  if (operationId) body.requestId = customerVoucherIssueRequestId(operationId);
+  const res = await crm.post<{
     voucher: CustomerVoucherWire;
-    memberPoints: number;
-  }>("/device/customer-voucher/issue", { memberId });
+    memberPoints: number | null;
+    replayed?: boolean;
+  }>("/device/customer-voucher/issue", body);
   return { ok: true, result: requireOk(res) };
 }
 

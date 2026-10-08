@@ -5,6 +5,7 @@
 //   sale   "sale:cart:<slot>"            one per cart slot (the till has 4)
 //   refund "refund:invoice:<originalId>"
 //   repay  "repay:invoice:<originalId>"
+//   points→voucher exchange "cv-issue:<memberId>" (T-17, V-5)
 // The attempt's operationId (UUID) is minted on the first submit and resent on
 // every retry of that attempt, whatever the payload looks like now, until:
 //   - the server answers ok (the attempt is recorded), or
@@ -33,6 +34,13 @@ export function refundAttemptKey(originalInvoiceId: number): string {
 
 export function repayAttemptKey(originalInvoiceId: number): string {
   return `repay:invoice:${originalInvoiceId}`;
+}
+
+// T-17 (V-5) — one points→voucher exchange press per member: a retry after a
+// lost answer resends the same id and CRM returns the voucher it already
+// issued instead of deducting points again.
+export function customerVoucherIssueAttemptKey(memberId: string): string {
+  return `cv-issue:${memberId}`;
 }
 
 interface StoredAttempt {
@@ -113,4 +121,16 @@ export function settleOperation(
       ? (res.result as { code?: unknown }).code
       : undefined;
   if (typeof code === "string" && CLEARING_CODES.has(code)) clearOperation(attemptKey);
+}
+
+// One request under an attempt: send with the attempt's id, then settle it by
+// the answer (T-17; used by the customer-voucher exchange press).
+export async function sendWithOperation<R extends { ok: boolean; result?: unknown }>(
+  attemptKey: string,
+  send: (operationId: string) => Promise<R>,
+): Promise<R> {
+  const operationId = operationIdFor(attemptKey);
+  const res = await send(operationId);
+  settleOperation(attemptKey, res);
+  return res;
 }

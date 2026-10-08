@@ -78,3 +78,28 @@ test("F-9: carts that start empty (till start) keep persisted attempts", () => {
   m.endAttemptsOfEmptiedCarts([0, 0, 0, 0], [1, 0, 0, 0]);
   assert.equal(m.operationIdFor(m.saleAttemptKey(0)), a, "retry after restart replays the same attempt");
 });
+
+test("T-17 V-5: exchange press — a retry after a lost answer reuses the id; ok ends the attempt", async () => {
+  const key = m.customerVoucherIssueAttemptKey("member-1");
+  assert.equal(key, "cv-issue:member-1");
+  const sent = [];
+  const lost = { ok: false, status: 0, msg: "Network Error", result: null };
+  const ok = { ok: true, status: 200, msg: "Customer voucher already issued", result: { voucher: { id: 1 } } };
+
+  await m.sendWithOperation(key, async (operationId) => (sent.push(operationId), lost));
+  await m.sendWithOperation(key, async (operationId) => (sent.push(operationId), ok));
+  assert.equal(sent[1], sent[0], "the retry resends the first press's id");
+
+  await m.sendWithOperation(key, async (operationId) => (sent.push(operationId), ok));
+  assert.notEqual(sent[2], sent[0], "after ok the next press is a new exchange");
+});
+
+test("T-17 V-5: exchange id survives a restart (persisted) and is per member", async () => {
+  const a = m.operationIdFor(m.customerVoucherIssueAttemptKey("member-1"));
+  m.settleOperation(m.customerVoucherIssueAttemptKey("member-1"), { ok: false, result: null });
+  // a till restart re-imports the module; the id lives in localStorage
+  const again = await import("./operation-id.ts?restart");
+  assert.equal(again.operationIdFor(again.customerVoucherIssueAttemptKey("member-1")), a);
+  assert.notEqual(m.operationIdFor(m.customerVoucherIssueAttemptKey("member-2")), a);
+  assert.notEqual(m.operationIdFor(m.saleAttemptKey(0)), a, "exchange and checkout attempts never share an id");
+});
