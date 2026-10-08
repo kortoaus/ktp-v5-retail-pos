@@ -166,7 +166,7 @@ function surchargeRateOf(storeSetting: StoreSettingModel): number {
 
 // CREDIT payment.amount (EFTPOS 키인 = bill + surcharge) 의 bill 부분 역산.
 //   bill = round(amount × 1000 / (1000 + rate))
-function billPortionOfCredit(amount: number, rate: number): number {
+export function billPortionOfCredit(amount: number, rate: number): number {
   return Math.round((amount * 1000) / (1000 + rate));
 }
 

@@ -1,0 +1,1000 @@
+{
+  "version": 1,
+  "note": "Generated from retail_pos_server's own functions (server is authoritative). Regenerate with UPDATE_MONEY_VECTORS=1 npm test in retail_pos_server; never hand-edit. Money in cents, qty x1000, rates per-1000.",
+  "scales": {
+    "money": 100,
+    "qty": 1000,
+    "pct": 1000
+  },
+  "lines": [
+    {
+      "name": "1 ea taxable",
+      "input": {
+        "unit_price_original": 1290,
+        "unit_price_discounted": null,
+        "unit_price_adjusted": null,
+        "qty": 1000,
+        "taxable": true
+      },
+      "expected": {
+        "unit_price_effective": 1290,
+        "total": 1290,
+        "tax_amount": 117,
+        "net": 1173
+      }
+    },
+    {
+      "name": "3 ea non-taxable",
+      "input": {
+        "unit_price_original": 333,
+        "unit_price_discounted": null,
+        "unit_price_adjusted": null,
+        "qty": 3000,
+        "taxable": false
+      },
+      "expected": {
+        "unit_price_effective": 333,
+        "total": 999,
+        "tax_amount": 0,
+        "net": 999
+      }
+    },
+    {
+      "name": "0.745 kg taxable (rounds up)",
+      "input": {
+        "unit_price_original": 1299,
+        "unit_price_discounted": null,
+        "unit_price_adjusted": null,
+        "qty": 745,
+        "taxable": true
+      },
+      "expected": {
+        "unit_price_effective": 1299,
+        "total": 968,
+        "tax_amount": 88,
+        "net": 880
+      }
+    },
+    {
+      "name": "1.005 kg non-taxable",
+      "input": {
+        "unit_price_original": 99,
+        "unit_price_discounted": null,
+        "unit_price_adjusted": null,
+        "qty": 1005,
+        "taxable": false
+      },
+      "expected": {
+        "unit_price_effective": 99,
+        "total": 99,
+        "tax_amount": 0,
+        "net": 99
+      }
+    },
+    {
+      "name": "half-cent .5 rounds up",
+      "input": {
+        "unit_price_original": 1299,
+        "unit_price_discounted": null,
+        "unit_price_adjusted": null,
+        "qty": 500,
+        "taxable": false
+      },
+      "expected": {
+        "unit_price_effective": 1299,
+        "total": 650,
+        "tax_amount": 0,
+        "net": 650
+      }
+    },
+    {
+      "name": "member discount wins over original",
+      "input": {
+        "unit_price_original": 1000,
+        "unit_price_discounted": 900,
+        "unit_price_adjusted": null,
+        "qty": 2000,
+        "taxable": true
+      },
+      "expected": {
+        "unit_price_effective": 900,
+        "total": 1800,
+        "tax_amount": 164,
+        "net": 1636
+      }
+    },
+    {
+      "name": "price override wins over discount",
+      "input": {
+        "unit_price_original": 1000,
+        "unit_price_discounted": 900,
+        "unit_price_adjusted": 850,
+        "qty": 1000,
+        "taxable": true
+      },
+      "expected": {
+        "unit_price_effective": 850,
+        "total": 850,
+        "tax_amount": 77,
+        "net": 773
+      }
+    },
+    {
+      "name": "tax rounds to 0 (total 5)",
+      "input": {
+        "unit_price_original": 5,
+        "unit_price_discounted": null,
+        "unit_price_adjusted": null,
+        "qty": 1000,
+        "taxable": true
+      },
+      "expected": {
+        "unit_price_effective": 5,
+        "total": 5,
+        "tax_amount": 0,
+        "net": 5
+      }
+    },
+    {
+      "name": "tax rounds to 1 (total 6)",
+      "input": {
+        "unit_price_original": 6,
+        "unit_price_discounted": null,
+        "unit_price_adjusted": null,
+        "qty": 1000,
+        "taxable": true
+      },
+      "expected": {
+        "unit_price_effective": 6,
+        "total": 6,
+        "tax_amount": 1,
+        "net": 5
+      }
+    },
+    {
+      "name": "zero-price line",
+      "input": {
+        "unit_price_original": 0,
+        "unit_price_discounted": null,
+        "unit_price_adjusted": null,
+        "qty": 1000,
+        "taxable": true
+      },
+      "expected": {
+        "unit_price_effective": 0,
+        "total": 0,
+        "tax_amount": 0,
+        "net": 0
+      }
+    },
+    {
+      "name": "12 ea taxable",
+      "input": {
+        "unit_price_original": 2499,
+        "unit_price_discounted": null,
+        "unit_price_adjusted": null,
+        "qty": 12000,
+        "taxable": true
+      },
+      "expected": {
+        "unit_price_effective": 2499,
+        "total": 29988,
+        "tax_amount": 2726,
+        "net": 27262
+      }
+    }
+  ],
+  "credit": [
+    {
+      "name": "$10.15 at 1.5%",
+      "input": {
+        "amount": 1015,
+        "rate": 15
+      },
+      "expected": {
+        "bill": 1000,
+        "surcharge": 15,
+        "surchargeTax": 1
+      }
+    },
+    {
+      "name": "$12.34 at 1.5%",
+      "input": {
+        "amount": 1234,
+        "rate": 15
+      },
+      "expected": {
+        "bill": 1216,
+        "surcharge": 18,
+        "surchargeTax": 2
+      }
+    },
+    {
+      "name": "$100.00 at 1.5%",
+      "input": {
+        "amount": 10000,
+        "rate": 15
+      },
+      "expected": {
+        "bill": 9852,
+        "surcharge": 148,
+        "surchargeTax": 13
+      }
+    },
+    {
+      "name": "$0.01 at 1.5%",
+      "input": {
+        "amount": 1,
+        "rate": 15
+      },
+      "expected": {
+        "bill": 1,
+        "surcharge": 0,
+        "surchargeTax": 0
+      }
+    },
+    {
+      "name": "$57.99 at 1.0%",
+      "input": {
+        "amount": 5799,
+        "rate": 10
+      },
+      "expected": {
+        "bill": 5742,
+        "surcharge": 57,
+        "surchargeTax": 5
+      }
+    },
+    {
+      "name": "$57.99 at 0% (no surcharge)",
+      "input": {
+        "amount": 5799,
+        "rate": 0
+      },
+      "expected": {
+        "bill": 5799,
+        "surcharge": 0,
+        "surchargeTax": 0
+      }
+    },
+    {
+      "name": "$1,234.56 at 2.2%",
+      "input": {
+        "amount": 123456,
+        "rate": 22
+      },
+      "expected": {
+        "bill": 120798,
+        "surcharge": 2658,
+        "surchargeTax": 242
+      }
+    }
+  ],
+  "surchargeShares": [
+    {
+      "name": "even split",
+      "input": {
+        "creditSurcharge": 30,
+        "rowTotals": [
+          1000,
+          1000
+        ],
+        "linesTotal": 2000
+      },
+      "expected": {
+        "shares": [
+          15,
+          15
+        ]
+      }
+    },
+    {
+      "name": "drift to last row",
+      "input": {
+        "creditSurcharge": 10,
+        "rowTotals": [
+          333,
+          333,
+          334
+        ],
+        "linesTotal": 1000
+      },
+      "expected": {
+        "shares": [
+          3,
+          3,
+          4
+        ]
+      }
+    },
+    {
+      "name": "no surcharge",
+      "input": {
+        "creditSurcharge": 0,
+        "rowTotals": [
+          500,
+          700
+        ],
+        "linesTotal": 1200
+      },
+      "expected": {
+        "shares": [
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "single row",
+      "input": {
+        "creditSurcharge": 19,
+        "rowTotals": [
+          1290
+        ],
+        "linesTotal": 1290
+      },
+      "expected": {
+        "shares": [
+          19
+        ]
+      }
+    }
+  ],
+  "cashRounding": [
+    {
+      "name": "cash-only 1000",
+      "input": {
+        "subtotal": 1000,
+        "cashOnly": true
+      },
+      "expected": {
+        "rounding": 0
+      }
+    },
+    {
+      "name": "cash-only 1001",
+      "input": {
+        "subtotal": 1001,
+        "cashOnly": true
+      },
+      "expected": {
+        "rounding": -1
+      }
+    },
+    {
+      "name": "cash-only 1002",
+      "input": {
+        "subtotal": 1002,
+        "cashOnly": true
+      },
+      "expected": {
+        "rounding": -2
+      }
+    },
+    {
+      "name": "cash-only 1003",
+      "input": {
+        "subtotal": 1003,
+        "cashOnly": true
+      },
+      "expected": {
+        "rounding": 2
+      }
+    },
+    {
+      "name": "cash-only 1004",
+      "input": {
+        "subtotal": 1004,
+        "cashOnly": true
+      },
+      "expected": {
+        "rounding": 1
+      }
+    },
+    {
+      "name": "cash-only 1006",
+      "input": {
+        "subtotal": 1006,
+        "cashOnly": true
+      },
+      "expected": {
+        "rounding": -1
+      }
+    },
+    {
+      "name": "cash-only 1007",
+      "input": {
+        "subtotal": 1007,
+        "cashOnly": true
+      },
+      "expected": {
+        "rounding": -2
+      }
+    },
+    {
+      "name": "cash-only 1008",
+      "input": {
+        "subtotal": 1008,
+        "cashOnly": true
+      },
+      "expected": {
+        "rounding": 2
+      }
+    },
+    {
+      "name": "cash-only 1009",
+      "input": {
+        "subtotal": 1009,
+        "cashOnly": true
+      },
+      "expected": {
+        "rounding": 1
+      }
+    },
+    {
+      "name": "cash-only 7342",
+      "input": {
+        "subtotal": 7342,
+        "cashOnly": true
+      },
+      "expected": {
+        "rounding": -2
+      }
+    },
+    {
+      "name": "cash-only 7343",
+      "input": {
+        "subtotal": 7343,
+        "cashOnly": true
+      },
+      "expected": {
+        "rounding": 2
+      }
+    },
+    {
+      "name": "cash-only 7345",
+      "input": {
+        "subtotal": 7345,
+        "cashOnly": true
+      },
+      "expected": {
+        "rounding": 0
+      }
+    },
+    {
+      "name": "cash-only 0",
+      "input": {
+        "subtotal": 0,
+        "cashOnly": true
+      },
+      "expected": {
+        "rounding": 0
+      }
+    },
+    {
+      "name": "mixed tender — no rounding",
+      "input": {
+        "subtotal": 1003,
+        "cashOnly": false
+      },
+      "expected": {
+        "rounding": 0
+      }
+    }
+  ],
+  "refunds": [
+    {
+      "name": "1 of 3 ea (proportional), card",
+      "input": {
+        "rows": [
+          {
+            "id": 1,
+            "qty": 3000,
+            "refunded_qty": 0,
+            "total": 1000,
+            "surcharge_share": 6,
+            "taxable": true,
+            "isPointExcluded": false
+          },
+          {
+            "id": 2,
+            "qty": 745,
+            "refunded_qty": 0,
+            "total": 968,
+            "surcharge_share": 5,
+            "taxable": false,
+            "isPointExcluded": false
+          },
+          {
+            "id": 3,
+            "qty": 1000,
+            "refunded_qty": 0,
+            "total": 499,
+            "surcharge_share": 3,
+            "taxable": true,
+            "isPointExcluded": true
+          }
+        ],
+        "priorRefunds": [],
+        "request": [
+          {
+            "originalInvoiceRowId": 1,
+            "refund_qty": 1000
+          }
+        ],
+        "cashOnly": false,
+        "originalPointsEarned": 25
+      },
+      "expected": {
+        "rows": [
+          {
+            "originalInvoiceRowId": 1,
+            "total": 333,
+            "surcharge_share": 2,
+            "tax_amount": 30,
+            "net": 303
+          }
+        ],
+        "linesTotal": 333,
+        "creditSurchargeAmount": 2,
+        "lineTax": 30,
+        "surchargeTax": 0,
+        "rounding": 0,
+        "total": 335,
+        "pointsReversed": 4
+      }
+    },
+    {
+      "name": "weighed row whole, cash-only rounding",
+      "input": {
+        "rows": [
+          {
+            "id": 1,
+            "qty": 3000,
+            "refunded_qty": 0,
+            "total": 1000,
+            "surcharge_share": 6,
+            "taxable": true,
+            "isPointExcluded": false
+          },
+          {
+            "id": 2,
+            "qty": 745,
+            "refunded_qty": 0,
+            "total": 968,
+            "surcharge_share": 5,
+            "taxable": false,
+            "isPointExcluded": false
+          },
+          {
+            "id": 3,
+            "qty": 1000,
+            "refunded_qty": 0,
+            "total": 499,
+            "surcharge_share": 3,
+            "taxable": true,
+            "isPointExcluded": true
+          }
+        ],
+        "priorRefunds": [],
+        "request": [
+          {
+            "originalInvoiceRowId": 2,
+            "refund_qty": 745
+          }
+        ],
+        "cashOnly": true,
+        "originalPointsEarned": 25
+      },
+      "expected": {
+        "rows": [
+          {
+            "originalInvoiceRowId": 2,
+            "total": 968,
+            "surcharge_share": 5,
+            "tax_amount": 0,
+            "net": 968
+          }
+        ],
+        "linesTotal": 968,
+        "creditSurchargeAmount": 5,
+        "lineTax": 0,
+        "surchargeTax": 0,
+        "rounding": 2,
+        "total": 975,
+        "pointsReversed": 12
+      }
+    },
+    {
+      "name": "last 2 of 3 ea after a prior 1 — drift absorbed",
+      "input": {
+        "rows": [
+          {
+            "id": 1,
+            "qty": 3000,
+            "refunded_qty": 1000,
+            "total": 1000,
+            "surcharge_share": 6,
+            "taxable": true,
+            "isPointExcluded": false
+          },
+          {
+            "id": 2,
+            "qty": 745,
+            "refunded_qty": 0,
+            "total": 968,
+            "surcharge_share": 5,
+            "taxable": false,
+            "isPointExcluded": false
+          },
+          {
+            "id": 3,
+            "qty": 1000,
+            "refunded_qty": 0,
+            "total": 499,
+            "surcharge_share": 3,
+            "taxable": true,
+            "isPointExcluded": true
+          }
+        ],
+        "priorRefunds": [
+          {
+            "rows": [
+              {
+                "originalInvoiceRowId": 1,
+                "total": 333,
+                "surcharge_share": 2,
+                "qty": 1000
+              }
+            ]
+          }
+        ],
+        "request": [
+          {
+            "originalInvoiceRowId": 1,
+            "refund_qty": 2000
+          }
+        ],
+        "cashOnly": false,
+        "originalPointsEarned": 25
+      },
+      "expected": {
+        "rows": [
+          {
+            "originalInvoiceRowId": 1,
+            "total": 667,
+            "surcharge_share": 4,
+            "tax_amount": 61,
+            "net": 606
+          }
+        ],
+        "linesTotal": 667,
+        "creditSurchargeAmount": 4,
+        "lineTax": 61,
+        "surchargeTax": 0,
+        "rounding": 0,
+        "total": 671,
+        "pointsReversed": 9
+      }
+    },
+    {
+      "name": "everything at once, cash-only",
+      "input": {
+        "rows": [
+          {
+            "id": 1,
+            "qty": 3000,
+            "refunded_qty": 0,
+            "total": 1000,
+            "surcharge_share": 6,
+            "taxable": true,
+            "isPointExcluded": false
+          },
+          {
+            "id": 2,
+            "qty": 745,
+            "refunded_qty": 0,
+            "total": 968,
+            "surcharge_share": 5,
+            "taxable": false,
+            "isPointExcluded": false
+          },
+          {
+            "id": 3,
+            "qty": 1000,
+            "refunded_qty": 0,
+            "total": 499,
+            "surcharge_share": 3,
+            "taxable": true,
+            "isPointExcluded": true
+          }
+        ],
+        "priorRefunds": [],
+        "request": [
+          {
+            "originalInvoiceRowId": 1,
+            "refund_qty": 3000
+          },
+          {
+            "originalInvoiceRowId": 2,
+            "refund_qty": 745
+          },
+          {
+            "originalInvoiceRowId": 3,
+            "refund_qty": 1000
+          }
+        ],
+        "cashOnly": true,
+        "originalPointsEarned": 25
+      },
+      "expected": {
+        "rows": [
+          {
+            "originalInvoiceRowId": 1,
+            "total": 1000,
+            "surcharge_share": 6,
+            "tax_amount": 91,
+            "net": 909
+          },
+          {
+            "originalInvoiceRowId": 2,
+            "total": 968,
+            "surcharge_share": 5,
+            "tax_amount": 0,
+            "net": 968
+          },
+          {
+            "originalInvoiceRowId": 3,
+            "total": 499,
+            "surcharge_share": 3,
+            "tax_amount": 45,
+            "net": 454
+          }
+        ],
+        "linesTotal": 2467,
+        "creditSurchargeAmount": 14,
+        "lineTax": 136,
+        "surchargeTax": 1,
+        "rounding": -1,
+        "total": 2480,
+        "pointsReversed": 25
+      }
+    },
+    {
+      "name": "point-excluded row only — no points reversed",
+      "input": {
+        "rows": [
+          {
+            "id": 1,
+            "qty": 3000,
+            "refunded_qty": 0,
+            "total": 1000,
+            "surcharge_share": 6,
+            "taxable": true,
+            "isPointExcluded": false
+          },
+          {
+            "id": 2,
+            "qty": 745,
+            "refunded_qty": 0,
+            "total": 968,
+            "surcharge_share": 5,
+            "taxable": false,
+            "isPointExcluded": false
+          },
+          {
+            "id": 3,
+            "qty": 1000,
+            "refunded_qty": 0,
+            "total": 499,
+            "surcharge_share": 3,
+            "taxable": true,
+            "isPointExcluded": true
+          }
+        ],
+        "priorRefunds": [],
+        "request": [
+          {
+            "originalInvoiceRowId": 3,
+            "refund_qty": 1000
+          }
+        ],
+        "cashOnly": false,
+        "originalPointsEarned": 25
+      },
+      "expected": {
+        "rows": [
+          {
+            "originalInvoiceRowId": 3,
+            "total": 499,
+            "surcharge_share": 3,
+            "tax_amount": 45,
+            "net": 454
+          }
+        ],
+        "linesTotal": 499,
+        "creditSurchargeAmount": 3,
+        "lineTax": 45,
+        "surchargeTax": 0,
+        "rounding": 0,
+        "total": 502,
+        "pointsReversed": 0
+      }
+    }
+  ],
+  "points": [
+    {
+      "name": "cash only",
+      "input": {
+        "rows": [
+          {
+            "total": 1000,
+            "isPointExcluded": false
+          },
+          {
+            "total": 968,
+            "isPointExcluded": false
+          },
+          {
+            "total": 499,
+            "isPointExcluded": true
+          }
+        ],
+        "linesTotal": 2467,
+        "payments": [
+          {
+            "type": "CASH",
+            "amount": 2465
+          }
+        ],
+        "creditSurchargeRate": 15,
+        "hasMember": true,
+        "cashPointRate": 20,
+        "otherPointRate": 10
+      },
+      "expected": {
+        "pointsEarned": 39
+      }
+    },
+    {
+      "name": "card only (surcharge in the keyed amount)",
+      "input": {
+        "rows": [
+          {
+            "total": 1000,
+            "isPointExcluded": false
+          },
+          {
+            "total": 968,
+            "isPointExcluded": false
+          },
+          {
+            "total": 499,
+            "isPointExcluded": true
+          }
+        ],
+        "linesTotal": 2467,
+        "payments": [
+          {
+            "type": "CREDIT",
+            "amount": 2504
+          }
+        ],
+        "creditSurchargeRate": 15,
+        "hasMember": true,
+        "cashPointRate": 20,
+        "otherPointRate": 10
+      },
+      "expected": {
+        "pointsEarned": 20
+      }
+    },
+    {
+      "name": "cash + card",
+      "input": {
+        "rows": [
+          {
+            "total": 1000,
+            "isPointExcluded": false
+          },
+          {
+            "total": 968,
+            "isPointExcluded": false
+          },
+          {
+            "total": 499,
+            "isPointExcluded": true
+          }
+        ],
+        "linesTotal": 2467,
+        "payments": [
+          {
+            "type": "CREDIT",
+            "amount": 1015
+          },
+          {
+            "type": "CASH",
+            "amount": 1467
+          }
+        ],
+        "creditSurchargeRate": 15,
+        "hasMember": true,
+        "cashPointRate": 20,
+        "otherPointRate": 10
+      },
+      "expected": {
+        "pointsEarned": 31
+      }
+    },
+    {
+      "name": "voucher + cash",
+      "input": {
+        "rows": [
+          {
+            "total": 1000,
+            "isPointExcluded": false
+          },
+          {
+            "total": 968,
+            "isPointExcluded": false
+          },
+          {
+            "total": 499,
+            "isPointExcluded": true
+          }
+        ],
+        "linesTotal": 2467,
+        "payments": [
+          {
+            "type": "VOUCHER",
+            "amount": 2000
+          },
+          {
+            "type": "CASH",
+            "amount": 467
+          }
+        ],
+        "creditSurchargeRate": 15,
+        "hasMember": true,
+        "cashPointRate": 20,
+        "otherPointRate": 10
+      },
+      "expected": {
+        "pointsEarned": 7
+      }
+    },
+    {
+      "name": "no member",
+      "input": {
+        "rows": [
+          {
+            "total": 1000,
+            "isPointExcluded": false
+          },
+          {
+            "total": 968,
+            "isPointExcluded": false
+          },
+          {
+            "total": 499,
+            "isPointExcluded": true
+          }
+        ],
+        "linesTotal": 2467,
+        "payments": [
+          {
+            "type": "CASH",
+            "amount": 2465
+          }
+        ],
+        "creditSurchargeRate": 15,
+        "hasMember": false,
+        "cashPointRate": 20,
+        "otherPointRate": 10
+      },
+      "expected": {
+        "pointsEarned": 0
+      }
+    }
+  ]
+}

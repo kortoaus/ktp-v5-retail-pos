@@ -190,6 +190,29 @@ export function validateSaleShape(p: SaleCreatePayload) {
   });
 }
 
+// The server's line rule (also the source of the money-contract vectors,
+// sale/fixtures/money-contract-vectors.json — T-24 R-16):
+//   unit_price_effective = adjusted ?? discounted ?? original
+//   total      = round(unit_price_effective × qty / QTY_SCALE)
+//   tax_amount = taxable ? round(total / 11) : 0
+//   net        = total − tax_amount
+export function expectedRowAmounts(
+  r: Pick<
+    SaleCreatePayload["rows"][number],
+    | "unit_price_original"
+    | "unit_price_discounted"
+    | "unit_price_adjusted"
+    | "qty"
+    | "taxable"
+  >,
+) {
+  const unit_price_effective =
+    r.unit_price_adjusted ?? r.unit_price_discounted ?? r.unit_price_original;
+  const total = Math.round((unit_price_effective * r.qty) / QTY_SCALE);
+  const tax_amount = r.taxable ? Math.round(total / 11) : 0;
+  return { unit_price_effective, total, tax_amount, net: total - tax_amount };
+}
+
 export function validateAmounts(p: SaleCreatePayload) {
   validateSaleShape(p);
   if (p.rows.length === 0)
@@ -199,15 +222,12 @@ export function validateAmounts(p: SaleCreatePayload) {
 
   // per-row invariants
   for (const r of p.rows) {
-    const expectedEffective =
-      r.unit_price_adjusted ?? r.unit_price_discounted ?? r.unit_price_original;
-    if (r.unit_price_effective !== expectedEffective)
+    const expected = expectedRowAmounts(r);
+    if (r.unit_price_effective !== expected.unit_price_effective)
       throw new BadRequestException(
         `row[${r.index}] unit_price_effective mismatch`,
       );
-    const expectedTotal = Math.round(
-      (r.unit_price_effective * r.qty) / QTY_SCALE,
-    );
+    const expectedTotal = expected.total;
     if (r.total !== expectedTotal)
       throw new BadRequestException(
         `row[${r.index}] total mismatch: got ${r.total}, expected ${expectedTotal}`,
@@ -303,6 +323,29 @@ export function allocateSurchargeShares(
   return shares;
 }
 
+// Points for a SALE payload exactly as buildSaleInTx stores them (also the
+// source of the money-contract points vectors, T-24 R-16).
+export function salePayloadPoints(
+  payload: Pick<SaleCreatePayload, "type" | "member" | "rows" | "payments" | "linesTotal">,
+  rates: Pick<StoreSettingModel, "cash_point_rate" | "other_point_rate">,
+): number {
+  return calculateInvoicePoints({
+    type: payload.type,
+    member: payload.member,
+    rows: payload.rows,
+    payments: payload.payments,
+    linesTotal: payload.linesTotal,
+    nonCashBill: payload.payments
+      .filter((payment) => payment.type !== "CASH")
+      .reduce((sum, payment) => sum + payment.amount, 0),
+    voucherBill: payload.payments
+      .filter((payment) => payment.type === "VOUCHER")
+      .reduce((sum, payment) => sum + payment.amount, 0),
+    cashPointRate: rates.cash_point_rate,
+    otherPointRate: rates.other_point_rate,
+  });
+}
+
 // ── buildSaleInTx — transaction 내부 쓰기 로직 ──────────────────────────────
 // *이미 검증된* (금액) 입력으로 SALE 또는 SPEND invoice 를 생성한다.
 //
@@ -371,21 +414,7 @@ export async function buildSaleInTx(
   const isRepayReplacement = originalInvoiceId != null;
   const pointsEarned = isRepayReplacement
     ? 0
-    : calculateInvoicePoints({
-        type: payload.type,
-        member: payload.member,
-        rows: payload.rows,
-        payments: payload.payments,
-        linesTotal: payload.linesTotal,
-        nonCashBill: payload.payments
-          .filter((payment) => payment.type !== "CASH")
-          .reduce((sum, payment) => sum + payment.amount, 0),
-        voucherBill: payload.payments
-          .filter((payment) => payment.type === "VOUCHER")
-          .reduce((sum, payment) => sum + payment.amount, 0),
-        cashPointRate: storeSetting.cash_point_rate,
-        otherPointRate: storeSetting.other_point_rate,
-      });
+    : salePayloadPoints(payload, storeSetting);
 
   const inv = await tx.saleInvoice.create({
     data: {

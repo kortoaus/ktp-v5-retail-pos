@@ -117,3 +117,105 @@ export interface RepayPayload {
   // T-15 — stored as "<operationId>:refund" / "<operationId>:sale".
   operationId?: string;
 }
+
+// ── Money-contract vectors (T-24, audit R-16) ─────────────────────
+// Golden vectors for the money rules the till and the server both apply.
+// Generated from the server's own functions (the server is authoritative):
+//   UPDATE_MONEY_VECTORS=1 npm test   (rewrites fixtures/money-contract-vectors.json)
+// Read by sale/money-contract.test.ts (server) and by the till's
+// libs/refund/money-contract.test.mjs (renderer). A renderer mismatch is a
+// finding to report, not something to "fix" by regenerating.
+export interface MoneyVectorLine {
+  name: string;
+  input: {
+    unit_price_original: number;
+    unit_price_discounted: number | null;
+    unit_price_adjusted: number | null;
+    qty: number; // ×1000
+    taxable: boolean;
+  };
+  expected: {
+    unit_price_effective: number;
+    total: number;
+    tax_amount: number;
+    net: number;
+  };
+}
+
+export interface MoneyVectorCredit {
+  name: string;
+  input: { amount: number; rate: number }; // CREDIT tender as keyed (bill + surcharge); rate per-1000
+  expected: { bill: number; surcharge: number; surchargeTax: number };
+}
+
+export interface MoneyVectorShares {
+  name: string;
+  input: { creditSurcharge: number; rowTotals: number[]; linesTotal: number };
+  expected: { shares: number[] };
+}
+
+export interface MoneyVectorCashRounding {
+  name: string;
+  input: { subtotal: number; cashOnly: boolean };
+  expected: { rounding: number };
+}
+
+export interface MoneyVectorRefundRow {
+  id: number;
+  qty: number;
+  refunded_qty: number;
+  total: number;
+  surcharge_share: number;
+  taxable: boolean;
+  isPointExcluded: boolean;
+}
+
+export interface MoneyVectorRefund {
+  name: string;
+  input: {
+    rows: MoneyVectorRefundRow[];
+    // prior REFUND children (rows only — enough for the allocation rule)
+    priorRefunds: Array<{
+      rows: Array<{ originalInvoiceRowId: number; total: number; surcharge_share: number; qty: number }>;
+    }>;
+    request: Array<{ originalInvoiceRowId: number; refund_qty: number }>;
+    cashOnly: boolean;
+    originalPointsEarned: number;
+  };
+  expected: {
+    rows: Array<{ originalInvoiceRowId: number; total: number; surcharge_share: number; tax_amount: number; net: number }>;
+    linesTotal: number;
+    creditSurchargeAmount: number;
+    lineTax: number;
+    surchargeTax: number;
+    rounding: number;
+    total: number;
+    pointsReversed: number;
+  };
+}
+
+export interface MoneyVectorPoints {
+  name: string;
+  input: {
+    rows: Array<{ total: number; isPointExcluded: boolean }>;
+    linesTotal: number;
+    payments: Array<{ type: PaymentTypeWire; amount: number }>;
+    creditSurchargeRate: number;
+    hasMember: boolean;
+    cashPointRate: number;
+    otherPointRate: number;
+  };
+  expected: { pointsEarned: number };
+}
+
+export interface MoneyContractVectors {
+  version: 1;
+  note: string;
+  scales: { money: number; qty: number; pct: number };
+  lines: MoneyVectorLine[];
+  credit: MoneyVectorCredit[];
+  surchargeShares: MoneyVectorShares[];
+  cashRounding: MoneyVectorCashRounding[];
+  refunds: MoneyVectorRefund[];
+  points: MoneyVectorPoints[];
+}
