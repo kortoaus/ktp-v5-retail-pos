@@ -21,6 +21,7 @@ import {
   setTerminalOrderChime,
   type TerminalChimeSetting,
 } from "../../service/terminal.service";
+import { invalidateStoreSetting } from "../../hooks/useStoreSetting";
 
 const FIELDS = [
   { key: "name", label: "Store Name", layout: "korean" as const },
@@ -233,6 +234,8 @@ export default function StoreSettingScreen() {
     try {
       const { ok, msg } = await updateStoreSetting(formToPayload(form));
       if (ok) {
+        // T-24 (R-17) — every useStoreSetting() consumer reloads.
+        invalidateStoreSetting();
         window.alert("Store settings saved");
       } else {
         window.alert(msg || "Failed to save settings");

@@ -12,7 +12,7 @@
     "test:zpl-font": "NODE_OPTIONS=\"--import ./src/main/zpl-font/ts-resolve.mjs\" node --test src/main/zpl-font/commands.test.mjs src/main/zpl-font/service.test.mjs src/main/zpl-font/serial-transport.test.mjs src/main/serial-port-lock.test.mjs",
     "test:label-core": "node --experimental-strip-types --import ./src/renderer/src/label-core/ts-resolve.mjs --test src/renderer/src/label-core/*.test.mjs src/renderer/src/label-core/templates/*.test.mjs src/renderer/src/label-core/adapters/*.test.mjs src/renderer/src/libs/pp-barcode.test.mjs src/renderer/src/libs/scale-price-levels.test.mjs",
     "test:scale-core": "node --experimental-strip-types --import ./src/renderer/src/scale-core/ts-resolve.mjs --test src/renderer/src/scale-core/*.test.mjs",
-    "test:orders": "node --experimental-strip-types --import ./src/renderer/src/label-core/ts-resolve.mjs --test src/renderer/src/components/orders/*.test.mjs src/renderer/src/hooks/order-load-policy.test.mjs src/renderer/src/store/till-idle.test.mjs src/main/update-install-policy.test.mjs",
+    "test:orders": "node --experimental-strip-types --import ./src/renderer/src/label-core/ts-resolve.mjs --test src/renderer/src/components/orders/*.test.mjs src/renderer/src/hooks/order-load-policy.test.mjs src/renderer/src/store/till-idle.test.mjs src/renderer/src/hooks/store-setting-cache.test.mjs src/main/update-install-policy.test.mjs",
     "postinstall": "electron-builder install-app-deps",
     "package:win": "npm run build && electron-builder --win",
     "package:win:publish": "npm run build && electron-builder --win --publish always",

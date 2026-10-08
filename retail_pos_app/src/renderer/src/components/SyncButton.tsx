@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import { migrateDataFromCloudServer } from "../service/cloud.service";
 import apiService from "../libs/api";
+import { invalidateStoreSetting } from "../hooks/useStoreSetting";
 
 export default function SyncButton() {
   const [loading, setLoading] = useState(false);
@@ -16,6 +17,8 @@ export default function SyncButton() {
     socketRef.current = socket;
 
     socket.on("cloud-sync-completed", () => {
+      // T-24 (R-17) — the Sync rewrites the store setting from the cloud.
+      invalidateStoreSetting();
       // window.alert(
       //   "Server data is up to date. Please refresh the page to see the latest data.",
       // );

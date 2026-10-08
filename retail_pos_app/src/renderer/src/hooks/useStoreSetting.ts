@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { StoreSetting } from "../types/models";
 import { getStoreSetting } from "../service/store.service";
+import { createStoreSettingCache } from "./store-setting-cache";
 
 interface UseStoreSettingReturn {
   storeSetting: StoreSetting | null;
@@ -8,32 +9,25 @@ interface UseStoreSettingReturn {
   reload: () => Promise<void>;
 }
 
-export function useStoreSetting(): UseStoreSettingReturn {
-  const [storeSetting, setStoreSetting] = useState<StoreSetting | null>(null);
-  const [loading, setLoading] = useState(true);
-  const mountedRef = useRef(true);
+// T-24 (R-17) — one shared cache for all consumers (store-setting-cache.ts).
+const storeSettingCache = createStoreSettingCache<StoreSetting>(getStoreSetting);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await getStoreSetting();
-      if (mountedRef.current && res.ok && res.result) {
-        setStoreSetting(res.result);
-      }
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
-    }
-  }, []);
+// Call after saving the store setting and after a cloud Sync.
+export function invalidateStoreSetting(): void {
+  storeSettingCache.invalidate();
+}
+
+export function useStoreSetting(): UseStoreSettingReturn {
+  const snapshot = useSyncExternalStore(
+    storeSettingCache.subscribe,
+    storeSettingCache.getSnapshot,
+  );
 
   useEffect(() => {
-    mountedRef.current = true;
-    reload();
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [reload]);
+    void storeSettingCache.ensure();
+  }, []);
 
-  return { storeSetting, loading, reload };
+  const reload = useCallback(() => storeSettingCache.reload(), []);
+
+  return { storeSetting: snapshot.value, loading: snapshot.loading, reload };
 }
