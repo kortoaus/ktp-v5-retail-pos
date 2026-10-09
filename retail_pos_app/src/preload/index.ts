@@ -17,16 +17,6 @@ import type { PrinterTarget as ZplFontTarget } from '../main/zpl-font'
 
 contextBridge.exposeInMainWorld('electronAPI', {
   getSerialPorts: (): Promise<string[]> => ipcRenderer.invoke('serial:list-ports'),
-  openSerialPort: (path: string, baudRate: number): Promise<void> =>
-    ipcRenderer.invoke('serial:open', path, baudRate),
-  closeSerialPort: (): Promise<void> => ipcRenderer.invoke('serial:close'),
-  sendSerialData: (data: string): Promise<void> =>
-    ipcRenderer.invoke('serial:send', data),
-  onSerialData: (callback: (data: string) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, data: string) => callback(data)
-    ipcRenderer.on('serial:data', handler)
-    return () => { ipcRenderer.removeListener('serial:data', handler) }
-  },
 
   getConfig: (): Promise<AppConfig> => ipcRenderer.invoke('config:get'),
   setConfig: (config: AppConfig): Promise<AppConfig> =>

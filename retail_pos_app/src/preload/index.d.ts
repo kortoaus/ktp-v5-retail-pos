@@ -230,10 +230,6 @@ export interface ZplFontTestPrintRequest {
 
 export interface ElectronAPI {
   getSerialPorts: () => Promise<string[]>
-  openSerialPort: (path: string, baudRate: number) => Promise<void>
-  closeSerialPort: () => Promise<void>
-  sendSerialData: (data: string) => Promise<void>
-  onSerialData: (callback: (data: string) => void) => () => void
 
   getConfig: () => Promise<AppConfig>
   setConfig: (config: AppConfig) => Promise<AppConfig>

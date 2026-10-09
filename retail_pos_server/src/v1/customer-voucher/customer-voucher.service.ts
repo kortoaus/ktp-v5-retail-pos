@@ -70,8 +70,3 @@ export async function issueCustomerVoucherService(
 
 // Sale redeem / void and refund issue moved to customer-voucher.operation.ts
 // (T-15: durable ledger + reconciliation instead of in-memory compensation).
-
-export function customerVoucherFailure(message: string, cause: unknown): never {
-  console.error(message, cause);
-  throw new InternalServerException(message);
-}

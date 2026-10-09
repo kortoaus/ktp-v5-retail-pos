@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from "axios";
-import { API_KEY, API_URL, CRM_URL, ITEM_URL } from "./constants";
+import { API_KEY, API_URL, CRM_URL } from "./constants";
 import { PagingType } from "../types/cloud";
 import { Request } from "express";
 
