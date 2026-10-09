@@ -1,5 +1,8 @@
 import { Request, Response } from "express";
-import { getCloudPostsService } from "./cloud.post.service";
+import {
+  getCloudPostsService,
+  parseStoreScreenPostLimit,
+} from "./cloud.post.service";
 
 export async function getCloudPostsController(req: Request, res: Response) {
   const company = res.locals.company;
@@ -7,6 +10,7 @@ export async function getCloudPostsController(req: Request, res: Response) {
     res.status(400).json({ ok: false, msg: "Company not found" });
     return;
   }
-  const result = await getCloudPostsService(company);
+  const limit = parseStoreScreenPostLimit(req.query.limit);
+  const result = await getCloudPostsService(company, limit);
   res.json(result);
 }

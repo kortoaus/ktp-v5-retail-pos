@@ -16,7 +16,10 @@ import CloseShiftScreen from "./screens/CloseShiftScreen";
 import CustomerScreen from "./components/CustomerScreen";
 import { useCartBroadcast } from "./hooks/useCartBroadcast";
 import { useStoreSetting } from "./hooks/useStoreSetting";
-import { getCloudPosts } from "./service/cloud.service";
+import {
+  CUSTOMER_DISPLAY_POST_LIMIT,
+  getCloudPosts,
+} from "./service/cloud.service";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CloudPost } from "./types/models";
 import PriceTagScreen from "./screens/PriceTagScreen";
@@ -97,7 +100,7 @@ function CustomerDisplayBroadcast() {
 
   const fetchPosts = useCallback(async () => {
     try {
-      const { result, ok } = await getCloudPosts();
+      const { result, ok } = await getCloudPosts(CUSTOMER_DISPLAY_POST_LIMIT);
       if (ok && result) setPosts(result);
     } catch (e) {
       console.error("Failed to fetch posts", e);

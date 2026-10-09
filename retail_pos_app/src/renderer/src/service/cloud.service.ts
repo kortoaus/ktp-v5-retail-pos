@@ -9,8 +9,18 @@ export async function migrateDataFromCloudServer(): Promise<ApiResponse<void>> {
   return apiService.post<void>(`/api/cloud/migrate/item`);
 }
 
-export async function getCloudPosts(): Promise<ApiResponse<CloudPost[]>> {
-  return apiService.get<CloudPost[]>(`/api/cloud/post`);
+/**
+ * Customer display: the newest five published posts (D-P4-18). The store server forwards the
+ * limit to CRM and drops ended/archived posts, so fewer than five may come back.
+ */
+export const CUSTOMER_DISPLAY_POST_LIMIT = 5;
+
+export async function getCloudPosts(
+  limit: number = CUSTOMER_DISPLAY_POST_LIMIT,
+): Promise<ApiResponse<CloudPost[]>> {
+  return apiService.get<CloudPost[]>(`/api/cloud/post`, {
+    limit: String(limit),
+  });
 }
 
 export async function getCloudLabelUpdateSheets(
