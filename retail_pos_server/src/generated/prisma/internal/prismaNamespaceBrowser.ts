@@ -443,6 +443,7 @@ export const SaleInvoicePaymentScalarFieldEnum = {
   entityType: 'entityType',
   entityId: 'entityId',
   entityLabel: 'entityLabel',
+  crmEventId: 'crmEventId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

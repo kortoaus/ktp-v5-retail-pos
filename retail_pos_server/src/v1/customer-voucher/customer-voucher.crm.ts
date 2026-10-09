@@ -28,6 +28,9 @@ export type CrmOutcome<T> =
 export interface CrmRedeemResult {
   eventId: number | null;
   voucherId: number;
+  // T-25 (V-7): CRM's own label for the redeemed voucher (serial + expiry) —
+  // the receipt label comes from here, never from the till's payload.
+  voucherLabel: string | null;
   replayed: boolean;
   // V-12: true when CRM replays a redeem that was voided since — not payment.
   voided: boolean;
@@ -100,6 +103,8 @@ type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj => (v && typeof v === "object" ? (v as Obj) : {});
 const num = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;
+const str = (v: unknown): string | null =>
+  typeof v === "string" && v.trim() !== "" ? v : null;
 
 export const crmCustomerVoucherClient: CustomerVoucherCrm = {
   async redeem(input) {
@@ -109,6 +114,7 @@ export const crmCustomerVoucherClient: CustomerVoucherCrm = {
       return {
         eventId: num(obj(r.event).id),
         voucherId: num(obj(r.voucher).id) ?? input.voucherId,
+        voucherLabel: str(obj(r.voucher).label),
         replayed: r.replayed === true,
         // CRM before T-15 omits the flag: absent = not voided (old semantics).
         voided: r.voided === true,

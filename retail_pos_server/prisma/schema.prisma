@@ -566,6 +566,11 @@ model SaleInvoicePayment {
   //  GIFTCARD 는 참조 엔티티 없음 → null (D-24)
   entityId    Int? // user-voucher: Voucher.id | customer-voucher: CRM id (FK-by-convention)
   entityLabel String? // 영수증 표시용 snapshot — voucher tender 에서만 씀 (Q11)
+  // T-25 (V-7 / O-17): customer-voucher tender only — the CRM CustomerVoucherEvent id
+  // of the REDEEM (sale) or REFUND_ISSUE (refund) behind this payment, from the
+  // validated CRM answer (same id as CustomerVoucherOperation.crmEventId). Carried to
+  // api-server and on to CRM, which links the voucher event to this receipt by it.
+  crmEventId  Int?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 

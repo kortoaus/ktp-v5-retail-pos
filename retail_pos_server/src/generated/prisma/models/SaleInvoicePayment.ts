@@ -31,6 +31,7 @@ export type SaleInvoicePaymentAvgAggregateOutputType = {
   invoiceId: number | null
   amount: number | null
   entityId: number | null
+  crmEventId: number | null
 }
 
 export type SaleInvoicePaymentSumAggregateOutputType = {
@@ -38,6 +39,7 @@ export type SaleInvoicePaymentSumAggregateOutputType = {
   invoiceId: number | null
   amount: number | null
   entityId: number | null
+  crmEventId: number | null
 }
 
 export type SaleInvoicePaymentMinAggregateOutputType = {
@@ -48,6 +50,7 @@ export type SaleInvoicePaymentMinAggregateOutputType = {
   entityType: string | null
   entityId: number | null
   entityLabel: string | null
+  crmEventId: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -60,6 +63,7 @@ export type SaleInvoicePaymentMaxAggregateOutputType = {
   entityType: string | null
   entityId: number | null
   entityLabel: string | null
+  crmEventId: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -72,6 +76,7 @@ export type SaleInvoicePaymentCountAggregateOutputType = {
   entityType: number
   entityId: number
   entityLabel: number
+  crmEventId: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -83,6 +88,7 @@ export type SaleInvoicePaymentAvgAggregateInputType = {
   invoiceId?: true
   amount?: true
   entityId?: true
+  crmEventId?: true
 }
 
 export type SaleInvoicePaymentSumAggregateInputType = {
@@ -90,6 +96,7 @@ export type SaleInvoicePaymentSumAggregateInputType = {
   invoiceId?: true
   amount?: true
   entityId?: true
+  crmEventId?: true
 }
 
 export type SaleInvoicePaymentMinAggregateInputType = {
@@ -100,6 +107,7 @@ export type SaleInvoicePaymentMinAggregateInputType = {
   entityType?: true
   entityId?: true
   entityLabel?: true
+  crmEventId?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -112,6 +120,7 @@ export type SaleInvoicePaymentMaxAggregateInputType = {
   entityType?: true
   entityId?: true
   entityLabel?: true
+  crmEventId?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -124,6 +133,7 @@ export type SaleInvoicePaymentCountAggregateInputType = {
   entityType?: true
   entityId?: true
   entityLabel?: true
+  crmEventId?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -223,6 +233,7 @@ export type SaleInvoicePaymentGroupByOutputType = {
   entityType: string | null
   entityId: number | null
   entityLabel: string | null
+  crmEventId: number | null
   createdAt: Date
   updatedAt: Date
   _count: SaleInvoicePaymentCountAggregateOutputType | null
@@ -258,6 +269,7 @@ export type SaleInvoicePaymentWhereInput = {
   entityType?: Prisma.StringNullableFilter<"SaleInvoicePayment"> | string | null
   entityId?: Prisma.IntNullableFilter<"SaleInvoicePayment"> | number | null
   entityLabel?: Prisma.StringNullableFilter<"SaleInvoicePayment"> | string | null
+  crmEventId?: Prisma.IntNullableFilter<"SaleInvoicePayment"> | number | null
   createdAt?: Prisma.DateTimeFilter<"SaleInvoicePayment"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"SaleInvoicePayment"> | Date | string
   invoice?: Prisma.XOR<Prisma.SaleInvoiceScalarRelationFilter, Prisma.SaleInvoiceWhereInput>
@@ -271,6 +283,7 @@ export type SaleInvoicePaymentOrderByWithRelationInput = {
   entityType?: Prisma.SortOrderInput | Prisma.SortOrder
   entityId?: Prisma.SortOrderInput | Prisma.SortOrder
   entityLabel?: Prisma.SortOrderInput | Prisma.SortOrder
+  crmEventId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   invoice?: Prisma.SaleInvoiceOrderByWithRelationInput
@@ -287,6 +300,7 @@ export type SaleInvoicePaymentWhereUniqueInput = Prisma.AtLeast<{
   entityType?: Prisma.StringNullableFilter<"SaleInvoicePayment"> | string | null
   entityId?: Prisma.IntNullableFilter<"SaleInvoicePayment"> | number | null
   entityLabel?: Prisma.StringNullableFilter<"SaleInvoicePayment"> | string | null
+  crmEventId?: Prisma.IntNullableFilter<"SaleInvoicePayment"> | number | null
   createdAt?: Prisma.DateTimeFilter<"SaleInvoicePayment"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"SaleInvoicePayment"> | Date | string
   invoice?: Prisma.XOR<Prisma.SaleInvoiceScalarRelationFilter, Prisma.SaleInvoiceWhereInput>
@@ -300,6 +314,7 @@ export type SaleInvoicePaymentOrderByWithAggregationInput = {
   entityType?: Prisma.SortOrderInput | Prisma.SortOrder
   entityId?: Prisma.SortOrderInput | Prisma.SortOrder
   entityLabel?: Prisma.SortOrderInput | Prisma.SortOrder
+  crmEventId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.SaleInvoicePaymentCountOrderByAggregateInput
@@ -320,6 +335,7 @@ export type SaleInvoicePaymentScalarWhereWithAggregatesInput = {
   entityType?: Prisma.StringNullableWithAggregatesFilter<"SaleInvoicePayment"> | string | null
   entityId?: Prisma.IntNullableWithAggregatesFilter<"SaleInvoicePayment"> | number | null
   entityLabel?: Prisma.StringNullableWithAggregatesFilter<"SaleInvoicePayment"> | string | null
+  crmEventId?: Prisma.IntNullableWithAggregatesFilter<"SaleInvoicePayment"> | number | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"SaleInvoicePayment"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"SaleInvoicePayment"> | Date | string
 }
@@ -330,6 +346,7 @@ export type SaleInvoicePaymentCreateInput = {
   entityType?: string | null
   entityId?: number | null
   entityLabel?: string | null
+  crmEventId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
   invoice: Prisma.SaleInvoiceCreateNestedOneWithoutPaymentsInput
@@ -343,6 +360,7 @@ export type SaleInvoicePaymentUncheckedCreateInput = {
   entityType?: string | null
   entityId?: number | null
   entityLabel?: string | null
+  crmEventId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -353,6 +371,7 @@ export type SaleInvoicePaymentUpdateInput = {
   entityType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   entityId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   entityLabel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  crmEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   invoice?: Prisma.SaleInvoiceUpdateOneRequiredWithoutPaymentsNestedInput
@@ -366,6 +385,7 @@ export type SaleInvoicePaymentUncheckedUpdateInput = {
   entityType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   entityId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   entityLabel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  crmEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -378,6 +398,7 @@ export type SaleInvoicePaymentCreateManyInput = {
   entityType?: string | null
   entityId?: number | null
   entityLabel?: string | null
+  crmEventId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -388,6 +409,7 @@ export type SaleInvoicePaymentUpdateManyMutationInput = {
   entityType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   entityId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   entityLabel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  crmEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -400,6 +422,7 @@ export type SaleInvoicePaymentUncheckedUpdateManyInput = {
   entityType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   entityId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   entityLabel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  crmEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -422,6 +445,7 @@ export type SaleInvoicePaymentCountOrderByAggregateInput = {
   entityType?: Prisma.SortOrder
   entityId?: Prisma.SortOrder
   entityLabel?: Prisma.SortOrder
+  crmEventId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -431,6 +455,7 @@ export type SaleInvoicePaymentAvgOrderByAggregateInput = {
   invoiceId?: Prisma.SortOrder
   amount?: Prisma.SortOrder
   entityId?: Prisma.SortOrder
+  crmEventId?: Prisma.SortOrder
 }
 
 export type SaleInvoicePaymentMaxOrderByAggregateInput = {
@@ -441,6 +466,7 @@ export type SaleInvoicePaymentMaxOrderByAggregateInput = {
   entityType?: Prisma.SortOrder
   entityId?: Prisma.SortOrder
   entityLabel?: Prisma.SortOrder
+  crmEventId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -453,6 +479,7 @@ export type SaleInvoicePaymentMinOrderByAggregateInput = {
   entityType?: Prisma.SortOrder
   entityId?: Prisma.SortOrder
   entityLabel?: Prisma.SortOrder
+  crmEventId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -462,6 +489,7 @@ export type SaleInvoicePaymentSumOrderByAggregateInput = {
   invoiceId?: Prisma.SortOrder
   amount?: Prisma.SortOrder
   entityId?: Prisma.SortOrder
+  crmEventId?: Prisma.SortOrder
 }
 
 export type SaleInvoicePaymentCreateNestedManyWithoutInvoiceInput = {
@@ -516,6 +544,7 @@ export type SaleInvoicePaymentCreateWithoutInvoiceInput = {
   entityType?: string | null
   entityId?: number | null
   entityLabel?: string | null
+  crmEventId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -527,6 +556,7 @@ export type SaleInvoicePaymentUncheckedCreateWithoutInvoiceInput = {
   entityType?: string | null
   entityId?: number | null
   entityLabel?: string | null
+  crmEventId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -568,6 +598,7 @@ export type SaleInvoicePaymentScalarWhereInput = {
   entityType?: Prisma.StringNullableFilter<"SaleInvoicePayment"> | string | null
   entityId?: Prisma.IntNullableFilter<"SaleInvoicePayment"> | number | null
   entityLabel?: Prisma.StringNullableFilter<"SaleInvoicePayment"> | string | null
+  crmEventId?: Prisma.IntNullableFilter<"SaleInvoicePayment"> | number | null
   createdAt?: Prisma.DateTimeFilter<"SaleInvoicePayment"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"SaleInvoicePayment"> | Date | string
 }
@@ -579,6 +610,7 @@ export type SaleInvoicePaymentCreateManyInvoiceInput = {
   entityType?: string | null
   entityId?: number | null
   entityLabel?: string | null
+  crmEventId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -589,6 +621,7 @@ export type SaleInvoicePaymentUpdateWithoutInvoiceInput = {
   entityType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   entityId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   entityLabel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  crmEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -600,6 +633,7 @@ export type SaleInvoicePaymentUncheckedUpdateWithoutInvoiceInput = {
   entityType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   entityId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   entityLabel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  crmEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -611,6 +645,7 @@ export type SaleInvoicePaymentUncheckedUpdateManyWithoutInvoiceInput = {
   entityType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   entityId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   entityLabel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  crmEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -625,6 +660,7 @@ export type SaleInvoicePaymentSelect<ExtArgs extends runtime.Types.Extensions.In
   entityType?: boolean
   entityId?: boolean
   entityLabel?: boolean
+  crmEventId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   invoice?: boolean | Prisma.SaleInvoiceDefaultArgs<ExtArgs>
@@ -638,6 +674,7 @@ export type SaleInvoicePaymentSelectCreateManyAndReturn<ExtArgs extends runtime.
   entityType?: boolean
   entityId?: boolean
   entityLabel?: boolean
+  crmEventId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   invoice?: boolean | Prisma.SaleInvoiceDefaultArgs<ExtArgs>
@@ -651,6 +688,7 @@ export type SaleInvoicePaymentSelectUpdateManyAndReturn<ExtArgs extends runtime.
   entityType?: boolean
   entityId?: boolean
   entityLabel?: boolean
+  crmEventId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   invoice?: boolean | Prisma.SaleInvoiceDefaultArgs<ExtArgs>
@@ -664,11 +702,12 @@ export type SaleInvoicePaymentSelectScalar = {
   entityType?: boolean
   entityId?: boolean
   entityLabel?: boolean
+  crmEventId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type SaleInvoicePaymentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "invoiceId" | "type" | "amount" | "entityType" | "entityId" | "entityLabel" | "createdAt" | "updatedAt", ExtArgs["result"]["saleInvoicePayment"]>
+export type SaleInvoicePaymentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "invoiceId" | "type" | "amount" | "entityType" | "entityId" | "entityLabel" | "crmEventId" | "createdAt" | "updatedAt", ExtArgs["result"]["saleInvoicePayment"]>
 export type SaleInvoicePaymentInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   invoice?: boolean | Prisma.SaleInvoiceDefaultArgs<ExtArgs>
 }
@@ -692,6 +731,7 @@ export type $SaleInvoicePaymentPayload<ExtArgs extends runtime.Types.Extensions.
     entityType: string | null
     entityId: number | null
     entityLabel: string | null
+    crmEventId: number | null
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["saleInvoicePayment"]>
@@ -1125,6 +1165,7 @@ export interface SaleInvoicePaymentFieldRefs {
   readonly entityType: Prisma.FieldRef<"SaleInvoicePayment", 'String'>
   readonly entityId: Prisma.FieldRef<"SaleInvoicePayment", 'Int'>
   readonly entityLabel: Prisma.FieldRef<"SaleInvoicePayment", 'String'>
+  readonly crmEventId: Prisma.FieldRef<"SaleInvoicePayment", 'Int'>
   readonly createdAt: Prisma.FieldRef<"SaleInvoicePayment", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"SaleInvoicePayment", 'DateTime'>
 }

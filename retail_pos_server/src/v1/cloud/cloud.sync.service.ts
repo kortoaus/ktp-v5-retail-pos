@@ -65,6 +65,7 @@ const invoicePaymentSelect = {
   entityType: true,
   entityId: true,
   entityLabel: true,
+  crmEventId: true,
 } satisfies Prisma.SaleInvoicePaymentSelect;
 
 export const pendingInvoiceSelect = {
@@ -464,6 +465,10 @@ export function buildInvoicePayload(
       entityType: p.entityType,
       entityId: p.entityId,
       entityLabel: p.entityLabel,
+      // T-25 (V-7 / O-17): CRM event id of a customer-voucher tender (else
+      // null). api-server stores it and forwards it to CRM with the invoice
+      // push, which links the voucher event to this receipt by it.
+      crmEventId: p.crmEventId,
     })),
   };
 }

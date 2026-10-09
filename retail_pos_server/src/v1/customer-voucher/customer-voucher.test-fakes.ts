@@ -156,6 +156,11 @@ export class FakeCrm implements CustomerVoucherCrm {
     const queue = this.mode[method];
     return queue && queue.length ? queue.shift()! : "ok";
   }
+  // CRM's own voucher label (serial + expiry); null models a CRM that sends none.
+  labels = new Map<number, string | null>([[7, "CV-SEVEN (exp 31/12/2026)"], [8, "CV-EIGHT (exp 31/12/2026)"]]);
+  labelOf(voucherId: number): string | null {
+    return this.labels.has(voucherId) ? this.labels.get(voucherId)! : null;
+  }
   private unknown<T>(): CrmOutcome<T> {
     return { kind: "unknown", status: 0, msg: "Network Error" };
   }
@@ -171,7 +176,7 @@ export class FakeCrm implements CustomerVoucherCrm {
     if (existing) {
       return {
         kind: "ok" as const,
-        result: { eventId: existing.eventId, voucherId: existing.voucherId, replayed: true, voided: existing.voided },
+        result: { eventId: existing.eventId, voucherId: existing.voucherId, voucherLabel: this.labelOf(existing.voucherId), replayed: true, voided: existing.voided },
       };
     }
     const balance = this.balances.get(input.voucherId) ?? 0;
@@ -181,7 +186,7 @@ export class FakeCrm implements CustomerVoucherCrm {
     const record = { voucherId: input.voucherId, amount: input.amount, memberId: input.memberId, eventId: this.nextEvent++, voided: false };
     this.redeems.set(input.requestId, record);
     if (mode === "unknown-after-effect") return this.unknown<never>();
-    return { kind: "ok" as const, result: { eventId: record.eventId, voucherId: record.voucherId, replayed: false, voided: false } };
+    return { kind: "ok" as const, result: { eventId: record.eventId, voucherId: record.voucherId, voucherLabel: this.labelOf(record.voucherId), replayed: false, voided: false } };
   }
 
   async voidRedeem(input: Parameters<CustomerVoucherCrm["voidRedeem"]>[0]) {

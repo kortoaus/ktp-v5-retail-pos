@@ -49,6 +49,11 @@ export interface PaymentPayload {
   entityType?: "user-voucher" | "customer-voucher";
   entityId?: number;
   entityLabel?: string;
+  // T-25 (V-7): server-set only — the CRM event id of a customer-voucher
+  // tender (applyCrmRedeemResults / substituteIssuedVoucher). Any value a
+  // client sends is overwritten for customer-voucher tenders and dropped for
+  // every other tender at persist time.
+  crmEventId?: number | null;
 }
 
 // SALE 과 SPEND 모두 같은 shape 으로 받음. 서버가 분기 처리.

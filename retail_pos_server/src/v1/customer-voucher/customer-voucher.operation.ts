@@ -252,10 +252,14 @@ export async function markRowsUnresolved(rows: CvOperationRow[], reason: string,
 
 // ── Sale redeem ─────────────────────────────────────────────────────────────
 
+// A CONFIRMED redeem plus CRM's label for the voucher (not persisted on the
+// ledger row; a retry re-asks CRM, whose replay answers the same event).
+export type ConfirmedRedeemRow = CvOperationRow & { crmVoucherLabel: string | null };
+
 export async function redeemCustomerVouchersForOperation(
   args: { operationId: string; memberId: string; payments: PaymentLike[] },
   deps: CvDeps = defaultCvDeps,
-): Promise<CvOperationRow[]> {
+): Promise<ConfirmedRedeemRow[]> {
   const { operationId, memberId } = args;
   const cvPayments = args.payments.filter(isCustomerVoucher);
 
@@ -320,7 +324,7 @@ export async function redeemCustomerVouchersForOperation(
     );
   }
 
-  const confirmed: CvOperationRow[] = [];
+  const confirmed: ConfirmedRedeemRow[] = [];
   for (let i = 0; i < intents.length; i++) {
     const intent = intents[i];
     const row = rows[i];
@@ -336,15 +340,14 @@ export async function redeemCustomerVouchersForOperation(
     });
 
     if (outcome.kind === "ok" && !outcome.result.voided) {
-      confirmed.push(
-        await deps.ops.update(row.id, {
-          status: "CONFIRMED",
-          crmEventId: outcome.result.eventId,
-          crmVoucherId: outcome.result.voucherId,
-          lastError: null,
-          attempted: true,
-        }),
-      );
+      const updated = await deps.ops.update(row.id, {
+        status: "CONFIRMED",
+        crmEventId: outcome.result.eventId,
+        crmVoucherId: outcome.result.voucherId,
+        lastError: null,
+        attempted: true,
+      });
+      confirmed.push({ ...updated, crmVoucherLabel: outcome.result.voucherLabel });
       continue;
     }
 
@@ -386,6 +389,36 @@ export async function redeemCustomerVouchersForOperation(
     throw unresolvedError("voucher redeem");
   }
   return confirmed;
+}
+
+// ── V-7 / O-17 (T-25): payments carry the validated CRM result ────────────
+// Each customer-voucher tender is persisted with the CRM event id of its
+// REDEEM and CRM's label for the voucher — never the till's label or any
+// client-sent id. Other tenders carry no crmEventId.
+export function customerVoucherFallbackLabel(voucherId: number | null | undefined) {
+  return voucherId != null ? `Customer Voucher #${voucherId}` : "Customer Voucher";
+}
+
+export function applyCrmRedeemResults<P extends PaymentLike>(
+  operationId: string,
+  payments: P[],
+  confirmed: ConfirmedRedeemRow[],
+): Array<P & { crmEventId: number | null }> {
+  const byKey = new Map(confirmed.map((row) => [row.crmRequestId, row]));
+  return payments.map((p) => {
+    if (!isCustomerVoucher(p) || p.entityId == null) return { ...p, crmEventId: null };
+    const row = byKey.get(redeemRequestIdFor(operationId, p.entityId, p.amount));
+    if (!row)
+      throw new HttpException(
+        500,
+        "customer voucher payment has no confirmed CRM redeem",
+      );
+    return {
+      ...p,
+      crmEventId: row.crmEventId,
+      entityLabel: row.crmVoucherLabel ?? customerVoucherFallbackLabel(p.entityId),
+    };
+  });
 }
 
 // F-11 — a compensation is recorded BEFORE it is sent: the VOID_* row is

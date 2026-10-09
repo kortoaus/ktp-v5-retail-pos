@@ -560,6 +560,9 @@ export async function buildRefundInTx(
           entityType: pm.entityType ?? null,
           entityId: pm.entityId ?? null,
           entityLabel: pm.entityLabel ?? null,
+          // T-25 (V-7): only a customer-voucher tender carries a CRM event id.
+          crmEventId:
+            pm.entityType === "customer-voucher" ? (pm.crmEventId ?? null) : null,
         })),
       },
     },
@@ -689,6 +692,8 @@ export function substituteIssuedVoucher(
           ...payment,
           entityId: issue.issued.voucher.id,
           entityLabel: issue.issued.voucher.label,
+          // T-25 (V-7): the REFUND_ISSUE event id from the validated CRM answer.
+          crmEventId: issue.issued.row.crmEventId,
         }
       : payment,
   );

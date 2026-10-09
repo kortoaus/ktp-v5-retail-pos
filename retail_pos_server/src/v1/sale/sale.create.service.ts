@@ -27,6 +27,7 @@ import {
   lookupAfterPersistError,
   markRowsUnresolved,
   redeemCustomerVouchersForOperation,
+  applyCrmRedeemResults,
   saleRedeemExpectations,
   voidRedeemRows,
   type CvDeps,
@@ -488,6 +489,9 @@ export async function buildSaleInTx(
           entityType: pm.entityType ?? null,
           entityId: pm.entityId ?? null,
           entityLabel: pm.entityLabel ?? null,
+          // T-25 (V-7): only a customer-voucher tender carries a CRM event id.
+          crmEventId:
+            pm.entityType === "customer-voucher" ? (pm.crmEventId ?? null) : null,
         })),
       },
     },
@@ -671,12 +675,20 @@ export async function createSaleService(
           )
         : [];
 
+      // V-7 / O-17 (T-25): customer-voucher tenders are stored with the CRM
+      // event id and CRM's voucher label from the validated redeem answers.
+      // The payload hash above stays the hash of what the till sent.
+      const persistPayload: SaleCreatePayload = {
+        ...payload,
+        payments: applyCrmRedeemResults(operationId, payload.payments, confirmed),
+      };
+
       const { dayStr, yyyymmdd, dayStart } = nowAnchor();
 
       let invoice: SaleInvoiceModel;
       try {
         invoice = await deps.persistSale({
-          payload,
+          payload: persistPayload,
           context,
           dayStr,
           yyyymmdd,
