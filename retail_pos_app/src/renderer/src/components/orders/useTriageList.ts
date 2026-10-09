@@ -27,6 +27,7 @@ import {
   replaceTriageRows,
   type TriageRowState,
 } from "./triage-merge";
+import { noteTriageListLoad } from "./orderInboxStore";
 
 export type TriageListSource =
   | { kind: "bucket"; view: TriageView }
@@ -78,6 +79,8 @@ export function useTriageList(
     const res = await getOrders(sourceQuery(current));
     if (seq !== requestSeqRef.current) return; // 더 최신 요청이 있음
     setLoading(false);
+    // T-24 review — 실패하면 같은 revision 의 다음 틱에 다시 재조회 신호.
+    noteTriageListLoad(Boolean(res.ok && res.result));
     if (!res.ok || !res.result) {
       if (mode === "replace") setRows([]);
       setError(res.msg || "Failed to load orders");

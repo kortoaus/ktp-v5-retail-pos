@@ -35,6 +35,7 @@ export type OrderInboxState = {
   bucketsReceivedAt: number | null;
   bucketsSeq: number;
   bucketsRevision: string | null; // 마지막으로 본 revision (seq 를 올린 값)
+  bucketsRetry: boolean; // 그 revision 의 목록 재조회가 실패 — 다음 틱에 다시 신호
 };
 
 export const ORDER_PENDING_COUNT_EVENT = "order:pending-count";
@@ -49,6 +50,7 @@ let state: OrderInboxState = {
   bucketsReceivedAt: null,
   bucketsSeq: 0,
   bucketsRevision: null,
+  bucketsRetry: false,
 };
 const listeners = new Set<() => void>();
 
@@ -110,8 +112,8 @@ export function applyOrderBuckets(
   serverRevision?: string | null,
 ): void {
   const signal = nextBucketsSignal(
-    { seq: state.bucketsSeq, revision: state.bucketsRevision },
-    bucketsRevisionOf(buckets, serverRevision),
+    { seq: state.bucketsSeq, revision: state.bucketsRevision, retry: state.bucketsRetry },
+    bucketsRevisionOf(buckets, serverRevision, receivedAt),
   );
   setOrderInboxState({
     buckets: buckets ?? state.buckets,
@@ -119,7 +121,15 @@ export function applyOrderBuckets(
     bucketsReceivedAt: receivedAt,
     bucketsSeq: signal.seq,
     bucketsRevision: signal.revision,
+    bucketsRetry: signal.retry,
   });
+}
+
+// useTriageList reports each list load. A failed load makes the next
+// heartbeat signal again even with the same revision (T-24 review P2).
+export function noteTriageListLoad(ok: boolean): void {
+  if (state.bucketsRetry === !ok) return;
+  state = { ...state, bucketsRetry: !ok }; // no re-render needed
 }
 
 export function normalizeOrderBucketsPayload(

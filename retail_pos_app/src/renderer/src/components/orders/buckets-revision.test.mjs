@@ -2,11 +2,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { bucketsRevisionOf, nextBucketsSignal } from "./buckets-revision.ts";
+import { BUCKETS_RECONCILE_MS, bucketsRevisionOf, nextBucketsSignal } from "./buckets-revision.ts";
 import {
   applyOrderBuckets,
   getOrderInboxState,
   normalizeOrderBucketsPayload,
+  noteTriageListLoad,
 } from "./orderInboxStore.ts";
 
 const BUCKETS = {
@@ -60,10 +61,30 @@ test("old server / fallback poll without revision: content key ignores asOf", ()
 });
 
 test("nextBucketsSignal is a pure gate", () => {
-  const s0 = { seq: 4, revision: "rev:a" };
+  const s0 = { seq: 4, revision: "rev:a", retry: false };
   assert.equal(nextBucketsSignal(s0, "rev:a"), s0);
   assert.equal(nextBucketsSignal(s0, null), s0);
-  assert.deepEqual(nextBucketsSignal(s0, "rev:b"), { seq: 5, revision: "rev:b" });
+  assert.deepEqual(nextBucketsSignal(s0, "rev:b"), { seq: 5, revision: "rev:b", retry: false });
+  assert.deepEqual(nextBucketsSignal({ ...s0, retry: true }, "rev:a"), { seq: 5, revision: "rev:a", retry: false });
+});
+
+test("a failed list load → the next heartbeat with the same revision refetches (once)", () => {
+  applyOrderBuckets(BUCKETS, 100, "fail-rev");
+  const signalled = getOrderInboxState().bucketsSeq;
+  noteTriageListLoad(false); // getOrders() for that revision failed
+  applyOrderBuckets(BUCKETS, 130, "fail-rev");
+  assert.equal(getOrderInboxState().bucketsSeq, signalled + 1, "retry signal");
+  noteTriageListLoad(true); // the retry succeeded
+  applyOrderBuckets(BUCKETS, 160, "fail-rev");
+  applyOrderBuckets(BUCKETS, 190, "fail-rev");
+  assert.equal(getOrderInboxState().bucketsSeq, signalled + 1, "no more signals once loaded");
+});
+
+test("without a server revision the content key still moves once per 5 min", () => {
+  const t0 = Date.parse("2026-10-09T00:00:00Z");
+  assert.equal(BUCKETS_RECONCILE_MS, 300_000);
+  assert.equal(bucketsRevisionOf(BUCKETS, null, t0), bucketsRevisionOf(BUCKETS, null, t0 + 270_000));
+  assert.notEqual(bucketsRevisionOf(BUCKETS, null, t0), bucketsRevisionOf(BUCKETS, null, t0 + 300_000));
 });
 
 test("normalizeOrderBucketsPayload carries the server revision", () => {
