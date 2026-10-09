@@ -1,5 +1,6 @@
 import { assertShiftOpenInTx } from "../shift/shift.lock";
 import { withoutClientCrmEventIds } from "./sale.payment-persist";
+import { billPortionOfCredit, surchargeRateOf } from "./sale.tender-money";
 import db from "../../libs/db";
 import {
   BadRequestException,
@@ -159,17 +160,9 @@ function buildFullRefundPayload(orig: OrigInvoice): RefundCreatePayload {
   };
 }
 
-// ── Surcharge rate helper ───────────────────────────────────────────────────
-// storeSetting.credit_surcharge_rate (per-1000; 15 = 1.5%)
-function surchargeRateOf(storeSetting: StoreSettingModel): number {
-  return storeSetting.credit_surcharge_rate ?? 15;
-}
-
-// CREDIT payment.amount (EFTPOS 키인 = bill + surcharge) 의 bill 부분 역산.
-//   bill = round(amount × 1000 / (1000 + rate))
-export function billPortionOfCredit(amount: number, rate: number): number {
-  return Math.round((amount * 1000) / (1000 + rate));
-}
+// Surcharge rate + CREDIT bill inverse live in sale.tender-money.ts (shared with
+// SALE's F-24 check); billPortionOfCredit stays exported here for existing importers.
+export { billPortionOfCredit };
 
 // ── Compute new SALE totals from orig rows + new payments ───────────────────
 // Client 신뢰 없이 서버가 모든 합을 계산. `SaleCreatePayload` 를 합성해

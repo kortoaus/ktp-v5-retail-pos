@@ -13,6 +13,7 @@ import {
   UserModel,
 } from "../../generated/prisma/models";
 import { SaleCreatePayload } from "./sale.types";
+import { assertSaleTenderAmounts, surchargeRateOf } from "./sale.tender-money";
 import { paymentCreateData, withoutClientCrmEventIds } from "./sale.payment-persist";
 import type { Prisma } from "../../generated/prisma/client";
 import { nowAnchor } from "./sale.refund.service";
@@ -606,6 +607,9 @@ export async function createSaleService(
 
     // 금액 검증은 순수 함수 — tx 밖에서 fail-fast.
     validateAmounts(payload);
+    // F-24: rounding and creditSurchargeAmount are re-derived from the tenders
+    // and this store's surcharge rate; a till value that differs is a 400.
+    assertSaleTenderAmounts(payload, surchargeRateOf(context.storeSetting));
 
     const { operationId } = resolveOperationId(payload.operationId, "sale");
     const payloadHash = operationPayloadHash(payload);
