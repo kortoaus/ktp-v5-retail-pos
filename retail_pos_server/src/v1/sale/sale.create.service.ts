@@ -607,9 +607,6 @@ export async function createSaleService(
 
     // 금액 검증은 순수 함수 — tx 밖에서 fail-fast.
     validateAmounts(payload);
-    // F-24: rounding and creditSurchargeAmount are re-derived from the tenders
-    // and this store's surcharge rate; a till value that differs is a 400.
-    assertSaleTenderAmounts(payload, surchargeRateOf(context.storeSetting));
 
     const { operationId } = resolveOperationId(payload.operationId, "sale");
     const payloadHash = operationPayloadHash(payload);
@@ -632,6 +629,12 @@ export async function createSaleService(
         assertSameOperationPayload(recorded, payloadHash);
         return respond(recorded, true);
       }
+
+      // F-24: rounding and creditSurchargeAmount are re-derived from the tenders
+      // and this store's current surcharge rate; a till value that differs is a
+      // 400. After the replay branch (a recorded Sale is returned even if the rate
+      // changed since), before any voucher effect or write.
+      assertSaleTenderAmounts(payload, surchargeRateOf(context.storeSetting));
 
       // F-6 — whatever this payload carries, voucher effects already asked
       // for under this id must match it before anything commits.

@@ -475,3 +475,31 @@ test("F-13: a void refused on its FIRST send is FAILED (CRM did nothing); the pr
   assert.equal(h.ops.byKey(`${KEY7}:void`)!.status, "FAILED");
   assert.equal(h.ops.byKey(KEY7)!.status, "UNRESOLVED");
 });
+
+test("F-24 D-14: a lost-response retry after a surcharge-rate change returns the recorded Sale; a new operation at the new rate is a 400", async () => {
+  const h = harness();
+  const card = (operationId: string) =>
+    salePayload({
+      operationId,
+      member: null,
+      creditSurchargeAmount: 15,
+      surchargeTax: 1,
+      total: 1015,
+      payments: [{ type: "CREDIT", amount: 1015 }],
+    });
+  const at = (rate: number) =>
+    ({ ...CONTEXT, storeSetting: { companyId: 1, credit_surcharge_rate: rate } }) as unknown as SaleContext;
+
+  const first = await createSaleService(card(OP), at(15), h.deps);
+  assert.equal(first.replayed, false);
+  const retry = await createSaleService(card(OP), at(20), h.deps);
+  assert.equal(retry.replayed, true);
+  assert.equal(retry.result.id, first.result.id);
+  assert.equal(h.invoices.length, 1);
+
+  await assert.rejects(
+    createSaleService(card("op-cccccccc"), at(20), h.deps),
+    (e: unknown) => e instanceof HttpException && e.statusCode === 400 && /creditSurchargeAmount mismatch/.test(e.message),
+  );
+  assert.equal(h.invoices.length, 1);
+});
