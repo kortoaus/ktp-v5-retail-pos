@@ -132,6 +132,31 @@ test("a trigger during a run coalesces into exactly one rerun", async () => {
   assert.equal(t.pending.size, 0);
 });
 
+test("a trigger while the run's log line awaits pendingStats() causes one more run", async () => {
+  const t = tableSource([1]);
+  const statsGate = deferred();
+  let statsCalls = 0;
+  const pendingStats = t.source.pendingStats;
+  t.source.pendingStats = async () => {
+    statsCalls++;
+    if (statsCalls === 1) await statsGate.promise;
+    return pendingStats();
+  };
+  const { runner } = quietRunner(t.source);
+
+  const cycle = runner.trigger();
+  for (let i = 0; i < 5 && statsCalls === 0; i++) await new Promise((r) => setImmediate(r));
+  assert.equal(statsCalls, 1, "first run is logging");
+  t.pending.add(2); // committed after the first run's page query
+  const again = runner.trigger(); // arrives during logRun
+  assert.equal(again, cycle, "joins the running cycle");
+  statsGate.resolve();
+  await cycle;
+
+  assert.equal(t.runs(), 2, "the late trigger got its own run");
+  assert.equal(t.pending.size, 0, "row 2 did not wait for an unrelated trigger");
+});
+
 test("a trigger after the cycle ends starts a fresh run (nothing dropped)", async () => {
   const t = tableSource([1]);
   const { runner } = quietRunner(t.source);

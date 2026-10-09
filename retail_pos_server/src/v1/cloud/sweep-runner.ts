@@ -200,6 +200,9 @@ export function createSweepRunner<Row extends { id: number }>(
             clearRetry();
           }
           await logRun(stats, retryMs);
+          // A trigger that arrived while logRun awaited pendingStats() must
+          // not be lost (T-24 review): run once more.
+          if (rerunRequested && !stopped) continue;
           break;
         }
       } finally {
