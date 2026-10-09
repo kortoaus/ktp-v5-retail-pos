@@ -15,6 +15,10 @@ import {
   memberPointsAfterIssue,
 } from "../../../libs/customer-voucher-issue";
 import { searchMemberById } from "../../../service/crm.service";
+import {
+  voucherListStateFromAnswer,
+  type VoucherListState,
+} from "../../../libs/customer-voucher-list";
 import dayjsAU from "../../../libs/dayjsAU";
 import TapTarget from "./TapTarget";
 
@@ -43,20 +47,22 @@ export default function SearchCustomerVoucherModal({
   onSelect,
   onMemberPoints,
 }: Props) {
-  const [rows, setRows] = useState<CustomerVoucher[]>([]);
-  const [loading, setLoading] = useState(false);
+  // T-25 (V-10): loading / CRM unavailable (Retry) / empty / ready — a failed
+  // list read is never shown as "No vouchers".
+  const [listState, setListState] = useState<VoucherListState>({ kind: "loading" });
   const [issuing, setIssuing] = useState(false);
   // F-16: set when a press replayed an earlier exchange (not auto-selected).
   const [notice, setNotice] = useState<string | null>(null);
 
   const refetch = useCallback(async () => {
-    setLoading(true);
+    setListState({ kind: "loading" });
+    let answer: Awaited<ReturnType<typeof getValidCustomerVouchers>> | null = null;
     try {
-      const res = await getValidCustomerVouchers(memberId);
-      setRows(res.ok && res.result ? res.result : []);
-    } finally {
-      setLoading(false);
+      answer = await getValidCustomerVouchers(memberId);
+    } catch {
+      answer = null;
     }
+    setListState(voucherListStateFromAnswer(answer, new Date()));
   }, [memberId]);
 
   useEffect(() => {
@@ -157,18 +163,31 @@ export default function SearchCustomerVoucherModal({
         )}
 
         <div className="max-h-96 overflow-y-auto">
-          {rows.length === 0 && !loading && (
-            <div className="flex items-center justify-center text-gray-400 min-h-48">
-              No vouchers
-            </div>
-          )}
-          {loading && (
+          {listState.kind === "loading" && (
             <div className="flex items-center justify-center text-gray-400 min-h-48">
               Loading...
             </div>
           )}
-          {!loading &&
-            rows.map((voucher) => {
+          {listState.kind === "unavailable" && (
+            <div className="flex flex-col items-center justify-center gap-3 min-h-48">
+              <div className="text-sm font-semibold text-red-600">
+                {listState.message} — the member's vouchers could not be read
+              </div>
+              <TapTarget
+                onPointerDown={refetch}
+                className="min-w-[120px] h-12 px-4 rounded-lg font-bold text-sm bg-gray-900 text-white active:bg-black flex items-center justify-center"
+              >
+                Retry
+              </TapTarget>
+            </div>
+          )}
+          {listState.kind === "empty" && (
+            <div className="flex items-center justify-center text-gray-400 min-h-48">
+              No vouchers
+            </div>
+          )}
+          {listState.kind === "ready" &&
+            listState.rows.map((voucher) => {
               const isUsed = usedVoucherIds.includes(voucher.id);
               return (
                 <div

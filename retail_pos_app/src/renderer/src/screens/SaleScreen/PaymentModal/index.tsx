@@ -2,7 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSalesStore } from "../../../store/SalesStore";
 import { cn } from "../../../libs/cn";
 import { useStoreSetting } from "../../../hooks/useStoreSetting";
-import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../../../libs/constants";
+import {
+  CUSTOMER_VOUCHER_ISSUE_POINTS,
+  MONEY_DP,
+  MONEY_SCALE,
+  QTY_SCALE,
+} from "../../../libs/constants";
 import type { PaymentQueueItem } from "./types";
 import {
   billPortionOf,
@@ -17,7 +22,15 @@ import GiftCardInput from "./GiftCardInput";
 import UserVoucherInput from "./UserVoucherInput";
 import CustomerVoucherInput from "./CustomerVoucherInput";
 import { Voucher } from "../../../service/voucher.service";
-import { CustomerVoucher } from "../../../service/customer-voucher.service";
+import {
+  CustomerVoucher,
+  getValidCustomerVouchers,
+} from "../../../service/customer-voucher.service";
+import {
+  memberVoucherIndicators,
+  voucherListStateFromAnswer,
+  type VoucherListState,
+} from "../../../libs/customer-voucher-list";
 import {
   createSale,
   createSpend,
@@ -177,8 +190,18 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     [lines, activeMember],
   );
   const activeMemberId = activeMember?.id ?? null;
-  const hasAvailableCustomerVoucher =
-    activeMember?.points != null && activeMember.points >= 1000;
+  // T-25 (V-10): "Voucher available" = the member owns spendable voucher
+  // balance (read from CRM); points → voucher exchange readiness is a
+  // separate indicator. A failed read shows "unknown", never "available".
+  const [memberVoucherState, setMemberVoucherState] = useState<VoucherListState>({
+    kind: "loading",
+  });
+  const voucherIndicators = memberVoucherIndicators({
+    state: memberVoucherState,
+    points: customerVoucherMemberPoints ?? activeMember?.points ?? null,
+    issuePoints: CUSTOMER_VOUCHER_ISSUE_POINTS,
+  });
+  const hasAvailableCustomerVoucher = voucherIndicators.voucherBadge === "available";
   const previousMemberIdRef = useRef<string | null>(activeMemberId);
   const voucherSlot: TenderSlot = activeMember
     ? "CUSTOMER_VOUCHER"
@@ -188,6 +211,21 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     "CASH",
     ...EXACT_TENDER_SLOTS,
   ];
+
+  useEffect(() => {
+    if (!activeMemberId) return;
+    let ignore = false;
+    setMemberVoucherState({ kind: "loading" });
+    getValidCustomerVouchers(activeMemberId)
+      .catch(() => null)
+      .then((answer) => {
+        if (!ignore) setMemberVoucherState(voucherListStateFromAnswer(answer, new Date()));
+      });
+    return () => {
+      ignore = true;
+    };
+    // customerVoucherMemberPoints changes after a points → voucher exchange.
+  }, [activeMemberId, customerVoucherMemberPoints]);
 
   useEffect(() => {
     if (previousMemberIdRef.current === activeMemberId) return;
@@ -699,7 +737,19 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
                     : "bg-emerald-100 text-emerald-700",
                 )}
               >
-                {hasAvailableCustomerVoucher ? "Voucher available" : "Member"}
+                {hasAvailableCustomerVoucher
+                  ? `Voucher available $${fmtMoney(voucherIndicators.ownedBalance ?? 0)}`
+                  : "Member"}
+              </span>
+            )}
+            {activeMember && memberVoucherState.kind === "unavailable" && (
+              <span className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide bg-amber-100 text-amber-800">
+                Vouchers: CRM unavailable
+              </span>
+            )}
+            {activeMember && voucherIndicators.exchangeReady && (
+              <span className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide bg-blue-100 text-blue-700">
+                Points → voucher ready
               </span>
             )}
             {activeMember && !spendMode && (
