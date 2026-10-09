@@ -101,7 +101,7 @@ export function withContext(
   loaders: ContextLoaders = defaultContextLoaders,
 ) {
   const wants = new Set(needs);
-  return async function contextMiddleware(
+  const middleware = async function contextMiddleware(
     _req: Request,
     res: Response,
     next: NextFunction,
@@ -130,4 +130,6 @@ export function withContext(
       throw new InternalServerException("Internal server error");
     }
   };
+  // Introspectable for the route audit test (request-context.test.ts).
+  return Object.assign(middleware, { contextNeeds: [...wants] as ContextNeed[] });
 }

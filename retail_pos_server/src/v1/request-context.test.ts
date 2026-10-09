@@ -173,3 +173,114 @@ test("saving the store setting invalidates the cache", async () => {
   assert.deepEqual(await cache.get(), { id: 1, name: "v2" });
   assert.equal(loads, 2);
 });
+
+// ── T-24 review (P1): every route whose controller reads a context value
+// mounts the loader for it; /api/shift/close reaches the close transaction
+// with only what terminalMiddleware + userMiddleware set. ─────────────────
+
+import shiftRouter from "./shift/shift.router";
+import saleRouter from "./sale/sale.router";
+import terminalRouter from "./terminal/terminal.router";
+import voucherRouter from "./voucher/voucher.router";
+import cashIORouter from "./cashio/cashio.router";
+import { defaultShiftCloseDeps } from "./shift/shift.service";
+
+type RouteLayer = {
+  name?: string;
+  method?: string;
+  handle: ((req: Request, res: Response, next: NextFunction) => unknown) & {
+    contextNeeds?: string[];
+  };
+};
+
+function routeLayers(router: unknown, method: string, path: string): RouteLayer[] {
+  const layer = stackOf(router).find(
+    (l) => l.route?.path === path && (l.route.stack as RouteLayer[]).some((s) => s.method === method),
+  );
+  assert.ok(layer?.route, `${method.toUpperCase()} ${path} exists`);
+  return (layer.route.stack as RouteLayer[]).filter((s) => !s.method || s.method === method);
+}
+
+function contextNeedsOf(router: unknown, method: string, path: string): string[] {
+  return routeLayers(router, method, path).flatMap((l) => l.handle.contextNeeds ?? []).sort();
+}
+
+test("context audit: each controller's res.locals reads have a loader on its route", () => {
+  // [router, method, path, what the controller reads beyond terminal/user]
+  const table: Array<[unknown, string, string, string[]]> = [
+    [saleRouter, "post", "/", ["shift", "storeSetting"]],
+    [saleRouter, "post", "/spend", ["shift", "storeSetting"]],
+    [saleRouter, "post", "/refund", ["shift", "storeSetting"]],
+    [saleRouter, "post", "/repay", ["shift", "storeSetting"]],
+    [shiftRouter, "post", "/open", ["company"]],
+    [shiftRouter, "post", "/close/data", ["shift"]],
+    [shiftRouter, "post", "/close", []], // close finds and locks the shift itself
+    [terminalRouter, "get", "/me", ["company"]],
+    [cloudRouter, "get", "/post", ["company"]],
+    [voucherRouter, "post", "/daily/issue", ["storeSetting"]],
+    [cashIORouter, "post", "/", ["shift"]],
+  ];
+  for (const [router, method, path, needs] of table) {
+    assert.deepEqual(contextNeedsOf(router, method, path), needs, `${method} ${path}`);
+  }
+});
+
+async function runRoute(layers: RouteLayer[], req: Request, res: Response) {
+  for (const layer of layers) {
+    let nexted = false;
+    await layer.handle(req, res, ((err?: unknown) => {
+      if (err) throw err;
+      nexted = true;
+    }) as NextFunction);
+    if (!nexted) return; // the controller answered
+  }
+}
+
+test("POST /api/shift/close reaches the close transaction with terminal + user only", async () => {
+  const layers = routeLayers(shiftRouter, "post", "/close").map((l) =>
+    l.name === "userMiddleware"
+      ? {
+          ...l,
+          handle: (_req: Request, res: Response, next: NextFunction) => {
+            res.locals.user = { id: 9, name: "Kim", scope: ["shift"] };
+            next();
+          },
+        }
+      : l,
+  );
+  assert.deepEqual(
+    layers.map((l) => l.name),
+    ["userMiddleware", "<anonymous>", "closeTerminalShiftController"],
+  );
+
+  const saved = { ...defaultShiftCloseDeps };
+  let transactions = 0;
+  defaultShiftCloseDeps.transaction = (async () => {
+    transactions++;
+    return { id: 3, closedAt: new Date() };
+  }) as typeof defaultShiftCloseDeps.transaction;
+  defaultShiftCloseDeps.afterClose = () => {};
+  defaultShiftCloseDeps.countOpenCustomerVoucherOperations = async () => 0;
+
+  let status = 0;
+  let body: unknown = null;
+  const res = {
+    locals: { terminal: { id: 1, name: "T1" } }, // what terminalMiddleware sets
+    status(code: number) {
+      status = code;
+      return this;
+    },
+    json(b: unknown) {
+      body = b;
+      return this;
+    },
+  } as unknown as Response;
+  try {
+    await runRoute(layers, { body: { endedCashActual: 0 } } as Request, res);
+  } finally {
+    Object.assign(defaultShiftCloseDeps, saved);
+  }
+  assert.equal(transactions, 1, "close transaction reached");
+  assert.equal(status, 200);
+  assert.equal((body as { ok: boolean }).ok, true);
+});

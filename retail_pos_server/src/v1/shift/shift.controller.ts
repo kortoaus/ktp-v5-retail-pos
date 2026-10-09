@@ -8,20 +8,23 @@ import {
 } from "./shift.service";
 import { BadRequestException, NotFoundException } from "../../libs/exceptions";
 
+// terminal (terminalMiddleware) + user (userMiddleware). T-24 review: the
+// company is loaded only where it is used — `/open` mounts
+// withContext(["company"]); `/close` does not need it.
 function getAuth(res: Response) {
-  const company = res.locals.company;
   const terminal = res.locals.terminal;
   const user = res.locals.user;
 
-  if (!company) throw new NotFoundException("Company not found");
   if (!terminal) throw new NotFoundException("Terminal not found");
   if (!user) throw new NotFoundException("User not found");
 
-  return { company, terminal, user };
+  return { terminal, user };
 }
 
 export async function openTerminalShiftController(req: Request, res: Response) {
-  const { company, terminal, user } = getAuth(res);
+  const { terminal, user } = getAuth(res);
+  const company = res.locals.company;
+  if (!company) throw new NotFoundException("Company not found");
   const result = await openTerminalShiftService(
     company,
     terminal,
