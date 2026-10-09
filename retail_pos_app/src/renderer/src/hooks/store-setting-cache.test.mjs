@@ -84,3 +84,29 @@ test("a stale value (older than maxAge) is refetched on the next mount", async (
   mount(cache);
   assert.equal(server.requests(), 2);
 });
+
+test("a failed GET ({ok:false,result:null}) is not fresh: the next mount retries", async () => {
+  let requests = 0;
+  const answers = [{ ok: false, result: null }, { ok: true, result: { id: 1, credit_surcharge_rate: 15 } }];
+  const cache = createStoreSettingCache(async () => answers[Math.min(requests++, answers.length - 1)]);
+  await mount(cache).p;
+  assert.deepEqual(cache.getSnapshot(), { value: null, loading: false });
+  await mount(cache).p; // e.g. PaymentModal opening right after
+  assert.equal(requests, 2, "retried instead of pinning the failure for 5 min");
+  assert.deepEqual(cache.getSnapshot().value, { id: 1, credit_surcharge_rate: 15 });
+  await mount(cache).p;
+  assert.equal(requests, 2, "a good value is cached");
+});
+
+test("a thrown fetch is not fresh either", async () => {
+  let requests = 0;
+  const cache = createStoreSettingCache(async () => {
+    requests++;
+    if (requests === 1) throw new Error("net");
+    return { ok: true, result: { id: 1 } };
+  });
+  await mount(cache).p;
+  await mount(cache).p;
+  assert.equal(requests, 2);
+  assert.deepEqual(cache.getSnapshot().value, { id: 1 });
+});

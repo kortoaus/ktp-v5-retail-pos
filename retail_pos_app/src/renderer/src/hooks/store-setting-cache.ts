@@ -47,8 +47,12 @@ export function createStoreSettingCache<T>(
       try {
         const res = await fetcher();
         if (myGeneration !== generation) return; // superseded by invalidate
-        loadedAt = now();
-        set({ value: res.ok && res.result ? res.result : snapshot.value, loading: false });
+        // ApiService answers failures as { ok: false, result: null } — only a
+        // real setting counts as fresh; a failure is retried on the next mount
+        // (T-24 review), it never pins a missing setting for maxAgeMs.
+        const valid = res.ok && res.result != null && typeof res.result === "object";
+        if (valid) loadedAt = now();
+        set({ value: valid ? (res.result as T) : snapshot.value, loading: false });
       } catch {
         if (myGeneration === generation) set({ value: snapshot.value, loading: false });
       }
