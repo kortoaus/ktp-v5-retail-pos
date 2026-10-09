@@ -8,6 +8,7 @@ import {
   ORDER_PENDING_COUNT_INTERVAL_MS,
   pendingCountFromBuckets,
   computeOrderPendingTickOutcome,
+  BUCKETS_RECONCILE_MS,
   computeBucketsRevision,
   noteLocalOrderWrite,
   shouldEmitOrderNew,
@@ -175,6 +176,21 @@ test("revision changes when a count, the day, or a proxied order write changes",
   assert.notEqual(computeBucketsRevision({ ...BUCKETS, today: "2026-08-11" }, 0), base);
   assert.notEqual(computeBucketsRevision(BUCKETS, 1), base);
   assert.equal(computeBucketsRevision(null, 0), null);
+});
+
+test("identical content is still re-signalled once per 5-min reconcile window (bounded)", () => {
+  assert.equal(BUCKETS_RECONCILE_MS, 300_000);
+  const at = (iso: string) => buildOrderBucketsPayload(BUCKETS, [], new Date(iso)).revision;
+  // 10 heartbeats inside one window → one revision
+  const window1 = new Set(
+    Array.from({ length: 10 }, (_, i) =>
+      at(new Date(Date.parse("2026-08-10T03:00:00.000Z") + i * 30_000).toISOString()),
+    ),
+  );
+  assert.equal(window1.size, 1);
+  // the next window moves it even though nothing changed (catches a CRM-side
+  // replacement that kept every count the same)
+  assert.notEqual(at("2026-08-10T03:05:00.000Z"), at("2026-08-10T03:04:30.000Z"));
 });
 
 test("noteLocalOrderWrite moves the next payload's revision once", () => {

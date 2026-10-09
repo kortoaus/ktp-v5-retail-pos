@@ -110,18 +110,34 @@ function canonicalJson(value: unknown): string {
     .join(",")}}`;
 }
 
-// T-24 (R-15). The crm buckets wire carries counts, not order ids/statuses, so
-// the revision is the bucket content minus the clock (`asOf`) plus a counter of
-// order writes this server proxied (accept/ready/reject/… from any till) — a
-// write that leaves the counts unchanged still moves the revision.
+// T-24 (R-15). The crm buckets wire carries counts only — no order ids,
+// statuses or updatedAt — so the revision is:
+//   - the bucket content minus the clock (`asOf`),
+//   - a counter of order writes this server proxied (accept/ready/reject/…
+//     from any till): a write that leaves the counts unchanged still moves it,
+//   - a reconcile epoch (review P2): a change made elsewhere (web office,
+//     customer) that keeps every count the same — e.g. one order replaced by
+//     another — cannot be seen in counts, so the revision is also forced to
+//     move once per BUCKETS_RECONCILE_MS (5 min = every 10th heartbeat).
+//     Tills therefore refetch at most once per 5 min when nothing changed,
+//     instead of every 30 s, and never keep a stale list longer than that.
+// A crm-side fingerprint field (newest order id/updatedAt) would make the
+// revision exact — recorded as finding F-24-3.
+export const BUCKETS_RECONCILE_MS = 5 * 60_000;
+
+export function bucketsReconcileEpoch(now: Date): number {
+  return Math.floor(now.getTime() / BUCKETS_RECONCILE_MS);
+}
+
 export function computeBucketsRevision(
   buckets: OrderBucketsWire | null,
   localOrderWriteSeq: number,
+  reconcileEpoch = 0,
 ): string | null {
   if (!buckets) return null;
   const { asOf: _asOf, ...content } = buckets;
   return createHash("sha1")
-    .update(`${canonicalJson(content)}|${localOrderWriteSeq}`)
+    .update(`${canonicalJson(content)}|${localOrderWriteSeq}|${reconcileEpoch}`)
     .digest("hex")
     .slice(0, 16);
 }
@@ -137,7 +153,11 @@ export function buildOrderBucketsPayload(
   buckets: OrderBucketsWire | null,
   chimeTerminalIds: number[],
   now: Date = new Date(),
-  revision: string | null = computeBucketsRevision(buckets, localOrderWriteSeq),
+  revision: string | null = computeBucketsRevision(
+    buckets,
+    localOrderWriteSeq,
+    bucketsReconcileEpoch(now),
+  ),
 ): OrderBucketsPayload {
   return {
     ok: buckets != null,
