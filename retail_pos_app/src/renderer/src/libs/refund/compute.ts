@@ -26,8 +26,37 @@ import type {
 export type RefundSelection = Record<number, number>; // originalInvoiceRowId → refund_qty
 
 // ── Per-row cap ─────────────────────────────────────────────────
-export function rowRefundable(row: SaleInvoiceRowItem): number {
+// D-16 / rule retail-pos/refund-weighed-rows-whole-only: a weighed (by-kg)
+// row is refunded whole or not at all — never by a partial weight. Its only
+// refundable qty is the original qty, and only while nothing of it was
+// refunded (a legacy partial refund leaves the rest unrefundable; the server
+// rejects anything else).
+export function isWeighedRow(row: Pick<SaleInvoiceRowItem, "type">): boolean {
+  return row.type === "WEIGHT" || row.type === "WEIGHT_PREPACKED";
+}
+
+export function rowRefundable(
+  row: Pick<SaleInvoiceRowItem, "type" | "qty" | "refunded_qty">,
+): number {
+  if (isWeighedRow(row)) return row.refunded_qty === 0 ? row.qty : 0;
   return Math.max(0, row.qty - row.refunded_qty);
+}
+
+// Tap on a row's qty button: weighed rows toggle whole ↔ none (no numpad);
+// every other row opens the integer numpad.
+export type RowQtyTap =
+  | { kind: "none" }
+  | { kind: "toggle"; qty: number }
+  | { kind: "numpad" };
+
+export function rowQtyTap(
+  row: Pick<SaleInvoiceRowItem, "type" | "qty" | "refunded_qty">,
+  currentQty: number,
+): RowQtyTap {
+  const cap = rowRefundable(row);
+  if (cap === 0) return { kind: "none" };
+  if (isWeighedRow(row)) return { kind: "toggle", qty: currentQty === cap ? 0 : cap };
+  return { kind: "numpad" };
 }
 
 // ── Prior refund 집계 (원본 row 기준) ───────────────────────────

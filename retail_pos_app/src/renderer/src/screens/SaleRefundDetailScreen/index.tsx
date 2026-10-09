@@ -3,9 +3,9 @@
 // 단계). refund-plan.md §4 참조.
 //
 // 입력 방식 (row.type 별):
-//  - WEIGHT             : Numpad (소수점, maxDp=3)
 //  - NORMAL / PREPACKED : Numpad (정수만 — useDot=false)
-//  - WEIGHT_PREPACKED  : all-or-nothing 토글 (qty ↔ cap)
+//  - WEIGHT / WEIGHT_PREPACKED : whole-row 토글 (0 ↔ 원 qty), numpad 없음 —
+//    D-16 / rule retail-pos/refund-weighed-rows-whole-only (F-23)
 //  - Tender amount      : MoneyNumpad
 // 각각 해당 row/tender 의 display 버튼을 누르면 모달 open (또는 토글).
 
@@ -20,8 +20,10 @@ import {
 import {
   computeInvoice,
   computeTenderCaps,
+  rowQtyTap,
   rowRefundable,
   rowRefundAmount,
+  isWeighedRow,
   type RefundSelection,
   type TenderCapEntry,
 } from "../../libs/refund/compute";
@@ -186,17 +188,16 @@ export default function SaleRefundDetailScreen({
     setNumpadValue(cur > 0 ? String(cur) : "");
   }
 
-  // WEIGHT_PREPACKED 은 numpad 안 열고 바로 토글 (0 ↔ cap). 나머지는
-  // 모달 open — NumpadModal 내부에서 useDot 을 row.type 으로 결정.
+  // 무게 row (WEIGHT / WEIGHT_PREPACKED) 는 numpad 안 열고 바로 토글
+  // (0 ↔ 원 qty, D-16). 나머지는 정수 numpad 모달.
   function handleRowQtyTap(row: SaleInvoiceRowItem) {
-    const cap = rowRefundable(row);
-    if (cap === 0) return;
-    if (row.type === "WEIGHT_PREPACKED") {
-      const cur = selections[row.id] ?? 0;
-      setRowQty(row, cur === cap ? 0 : cap);
+    const cur = selections[row.id] ?? 0;
+    const tap = rowQtyTap(row, cur);
+    if (tap.kind === "none") return;
+    if (tap.kind === "toggle") {
+      setRowQty(row, tap.qty);
       return;
     }
-    const cur = selections[row.id] ?? 0;
     setNumpadTarget({ kind: "rowQty", rowId: row.id });
     setNumpadValue(qtyToInputStr(cur));
   }
@@ -498,7 +499,7 @@ function RowCard({
   const refundThisRow = rowRefundAmount(row, qty, refunds);
   const priceChanged = row.unit_price_effective !== row.unit_price_original;
   const exhausted = cap === 0;
-  const isToggleOnly = row.type === "WEIGHT_PREPACKED";
+  const isToggleOnly = isWeighedRow(row);
 
   return (
     <div
@@ -531,6 +532,7 @@ function RowCard({
             Refundable {fmtQty(cap)} / {fmtQty(row.qty)} {row.uom}
             {row.refunded_qty > 0 &&
               ` (already refunded ${fmtQty(row.refunded_qty)})`}
+            {isToggleOnly && " · whole row only"}
           </div>
         </div>
 
@@ -694,8 +696,8 @@ function NumpadModal({
     if (row) {
       label = row.name_en;
       capHint = `Max ${fmtQty(rowRefundable(row))} ${row.uom}`;
-      // NORMAL/PREPACKED 은 정수만, WEIGHT 는 소수 허용.
-      useDot = row.type === "WEIGHT";
+      // numpad 는 NORMAL/PREPACKED 만 연다 — 정수만. 무게 row 는 토글 (D-16).
+      useDot = false;
     }
   }
 

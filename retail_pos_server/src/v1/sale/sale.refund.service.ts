@@ -224,6 +224,11 @@ export interface ComputedRefundRow {
   net: number; // total - tax_amount
 }
 
+// Weighed (by-kg) rows: their qty is a weight, refunded whole or not at all.
+export function isWeighedRowType(type: string): boolean {
+  return type === "WEIGHT" || type === "WEIGHT_PREPACKED";
+}
+
 export function computeRefundRows(
   orig: OrigInvoice,
   requested: RefundRowPayload[],
@@ -265,6 +270,12 @@ export function computeRefundRows(
     if (req.refund_qty > remainingQty)
       throw new BadRequestException(
         `row ${origRow.id} refund_qty ${req.refund_qty} exceeds remaining ${remainingQty}`,
+      );
+    // D-16 / rule retail-pos/refund-weighed-rows-whole-only — a weighed row
+    // is refunded whole (the original qty) or not at all; never by weight.
+    if (isWeighedRowType(origRow.type) && req.refund_qty !== origRow.qty)
+      throw new BadRequestException(
+        `row ${origRow.id} is weighed — refund the whole row (qty ${origRow.qty}) or none`,
       );
 
     const prior = priorByOrigRow.get(origRow.id) ?? {
