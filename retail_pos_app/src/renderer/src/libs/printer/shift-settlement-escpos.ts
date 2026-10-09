@@ -1,4 +1,11 @@
-import type { TerminalShift } from "../../types/models";
+import {
+  CUSTOMER_VOUCHER_LABEL,
+  RECONCILIATION_HEADER,
+  STAFF_VOUCHER_LABEL,
+  reconciliationRows,
+  settlementTotals,
+  type ShiftSettlement,
+} from "./shift-settlement-lines";
 import dayjsAU from "../dayjsAU";
 import { cutCommand, initPrinterCommand } from "./escpos";
 import type { ReceiptTextEncoding } from "./sale-invoice-escpos";
@@ -138,24 +145,14 @@ async function appendSectionHeader(
 }
 
 export async function buildShiftSettlementEscposReceipt(
-  shift: TerminalShift,
+  shift: ShiftSettlement,
   options: { encoding: ReceiptTextEncoding },
 ): Promise<Uint8Array> {
   const writer = new EscposWriter(options.encoding);
 
-  const salesVoucherTotal = shift.salesUserVoucher + shift.salesCustomerVoucher;
-  const refundsVoucherTotal =
-    shift.refundsUserVoucher + shift.refundsCustomerVoucher;
-  const salesTenderTotal =
-    shift.salesCash +
-    shift.salesCredit +
-    salesVoucherTotal +
-    shift.salesGiftcard;
-  const refundsTenderTotal =
-    shift.refundsCash +
-    shift.refundsCredit +
-    refundsVoucherTotal +
-    shift.refundsGiftcard;
+  // T-25 (V-11): Staff Voucher and Customer Voucher on separate lines.
+  const { salesTenderTotal, refundsTenderTotal, netStaffVoucher, netCustomerVoucher } =
+    settlementTotals(shift);
 
   writer.raw(initPrinterCommand());
 
@@ -193,7 +190,8 @@ export async function buildShiftSettlementEscposReceipt(
   );
   await appendMoneyRow(writer, "Cash", fmt(shift.salesCash));
   await appendMoneyRow(writer, "Credit", fmt(shift.salesCredit));
-  await appendMoneyRow(writer, "Voucher", fmt(salesVoucherTotal));
+  await appendMoneyRow(writer, STAFF_VOUCHER_LABEL, fmt(shift.salesUserVoucher));
+  await appendMoneyRow(writer, CUSTOMER_VOUCHER_LABEL, fmt(shift.salesCustomerVoucher));
   await appendMoneyRow(writer, "Gift Card", fmt(shift.salesGiftcard));
   await appendMoneyRow(writer, "GST", fmt(shift.salesTax));
   writer.bold(true);
@@ -203,7 +201,8 @@ export async function buildShiftSettlementEscposReceipt(
   await appendSectionHeader(writer, `REFUNDS (${shift.refundsCount})`);
   await appendMoneyRow(writer, "Cash", fmt(shift.refundsCash));
   await appendMoneyRow(writer, "Credit", fmt(shift.refundsCredit));
-  await appendMoneyRow(writer, "Voucher", fmt(refundsVoucherTotal));
+  await appendMoneyRow(writer, STAFF_VOUCHER_LABEL, fmt(shift.refundsUserVoucher));
+  await appendMoneyRow(writer, CUSTOMER_VOUCHER_LABEL, fmt(shift.refundsCustomerVoucher));
   await appendMoneyRow(writer, "Gift Card", fmt(shift.refundsGiftcard));
   await appendMoneyRow(writer, "GST", fmt(shift.refundsTax));
 
@@ -214,11 +213,8 @@ export async function buildShiftSettlementEscposReceipt(
     "Credit",
     fmtSigned(shift.salesCredit - shift.refundsCredit),
   );
-  await appendMoneyRow(
-    writer,
-    "Voucher",
-    fmtSigned(salesVoucherTotal - refundsVoucherTotal),
-  );
+  await appendMoneyRow(writer, STAFF_VOUCHER_LABEL, fmtSigned(netStaffVoucher));
+  await appendMoneyRow(writer, CUSTOMER_VOUCHER_LABEL, fmtSigned(netCustomerVoucher));
   await appendMoneyRow(
     writer,
     "Gift Card",
@@ -236,6 +232,12 @@ export async function buildShiftSettlementEscposReceipt(
   if (shift.spendCount > 0) {
     await appendSectionHeader(writer, `SPEND (${shift.spendCount})`);
     await appendMoneyRow(writer, "Retail Value", fmt(shift.spendRetailValue));
+  }
+
+  const crmRows = reconciliationRows(shift.customerVoucherReconciliation);
+  if (crmRows) {
+    await appendSectionHeader(writer, RECONCILIATION_HEADER);
+    for (const [label, value] of crmRows) await appendMoneyRow(writer, label, value);
   }
 
   await appendSectionHeader(writer, "CASH DRAWER");

@@ -2,6 +2,10 @@ import { Company, Terminal, User } from "../../generated/prisma/client";
 import type { Prisma } from "../../generated/prisma/client";
 import { lockShiftRowInTx } from "./shift.lock";
 import { prismaCvOperationStore } from "../customer-voucher/customer-voucher.operation.store";
+import {
+  customerVoucherShiftReconciliation,
+  type CustomerVoucherShiftReconciliation,
+} from "../customer-voucher/customer-voucher.shift-summary";
 import momentAU from "../../libs/date-utils";
 import db from "../../libs/db";
 import {
@@ -104,7 +108,9 @@ export async function getShiftByIdService(shiftId: number) {
       where: { id: shiftId },
     });
     if (!shift) throw new NotFoundException("Shift not found");
-    return { ok: true, result: shift, msg: "Success" };
+    // T-25 (V-11): the settlement print's CRM reconciliation block.
+    const customerVoucherReconciliation = await customerVoucherShiftReconciliation(shift);
+    return { ok: true, result: { ...shift, customerVoucherReconciliation }, msg: "Success" };
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("getShiftByIdService error:", e);
@@ -334,6 +340,8 @@ export interface ShiftClosePreviewResult {
   // T-15 — store-wide customer-voucher ledger rows the reconciler has not
   // settled yet (INTENT / UNRESOLVED / CONFIRMED without invoice).
   customerVoucherOpenOperations: number;
+  // T-25 (V-11) — CRM reconciliation block for this shift (null if unreadable).
+  customerVoucherReconciliation: CustomerVoucherShiftReconciliation | null;
 }
 
 // Shift close never fails on this count: an unreadable ledger reads as -1.
@@ -351,6 +359,7 @@ export async function previewCloseShiftService(shift: TerminalShiftModel) {
     const aggregate = await aggregateShift(shift.id);
     const endedCashExpected = computeExpectedCash(shift.startedCash, aggregate);
     const customerVoucherOpenOperations = await countOpenCustomerVoucherOperations();
+    const customerVoucherReconciliation = await customerVoucherShiftReconciliation(shift);
     return {
       ok: true,
       result: {
@@ -358,6 +367,7 @@ export async function previewCloseShiftService(shift: TerminalShiftModel) {
         aggregate,
         endedCashExpected,
         customerVoucherOpenOperations,
+        customerVoucherReconciliation,
       } satisfies ShiftClosePreviewResult,
     };
   } catch (e) {

@@ -11,6 +11,13 @@ import {
 } from "../service/shift.service";
 import { MONEY_DP, MONEY_SCALE } from "../libs/constants";
 import { printShiftSettlementReceipt } from "../libs/printer/shift-settlement-receipt";
+import {
+  CUSTOMER_VOUCHER_LABEL,
+  RECONCILIATION_HEADER,
+  STAFF_VOUCHER_LABEL,
+  reconciliationRows,
+  settlementTotals,
+} from "../libs/printer/shift-settlement-lines";
 
 const fmt = (cents: number) => `$${(Math.abs(cents) / MONEY_SCALE).toFixed(MONEY_DP)}`;
 const signedFmt = (cents: number) => {
@@ -64,18 +71,18 @@ export default function CloseShiftScreen() {
   const cashActualCents = Math.round(cashActual * MONEY_SCALE);
   const difference = cashActualCents - endedCashExpected;
 
-  // Voucher 는 user / customer 분리 저장 (D-20). UI 는 합산 표시.
-  const salesVoucher = aggregate.salesUserVoucher + aggregate.salesCustomerVoucher;
-  const refundsVoucher =
-    aggregate.refundsUserVoucher + aggregate.refundsCustomerVoucher;
+  // Voucher 는 user / customer 분리 저장 (D-20). T-25 (V-11): UI 도 분리 표시
+  // (Staff Voucher = 직원 바우처, Customer Voucher = CRM). 합계는 그대로.
+  const { netStaffVoucher, netCustomerVoucher } = settlementTotals(aggregate);
   const netCredit = aggregate.salesCredit - aggregate.refundsCredit;
-  const netVoucher = salesVoucher - refundsVoucher;
   const netGiftcard = aggregate.salesGiftcard - aggregate.refundsGiftcard;
+  const crmRows = reconciliationRows(closingData.customerVoucherReconciliation);
 
   const tenderSummaryRows: [string, string][] = [
     ["Cash Drawer", fmt(endedCashExpected)],
     ["Card Terminal", netFmt(netCredit)],
-    ["Voucher", netFmt(netVoucher)],
+    [STAFF_VOUCHER_LABEL, netFmt(netStaffVoucher)],
+    [CUSTOMER_VOUCHER_LABEL, netFmt(netCustomerVoucher)],
     ["Gift Card", netFmt(netGiftcard)],
   ];
 
@@ -117,7 +124,8 @@ export default function CloseShiftScreen() {
     [`Sales (${aggregate.salesCount})`, ""],
     ["  Cash", fmt(aggregate.salesCash)],
     ["  Credit", fmt(aggregate.salesCredit)],
-    ["  Voucher", fmt(salesVoucher)],
+    [`  ${STAFF_VOUCHER_LABEL}`, fmt(aggregate.salesUserVoucher)],
+    [`  ${CUSTOMER_VOUCHER_LABEL}`, fmt(aggregate.salesCustomerVoucher)],
     ["  Gift Card", fmt(aggregate.salesGiftcard)],
     ["  GST", fmt(aggregate.salesTax)],
     ...(aggregate.repayCount > 0
@@ -126,7 +134,8 @@ export default function CloseShiftScreen() {
     [`Refunds (${aggregate.refundsCount})`, ""],
     ["  Cash", `-${fmt(aggregate.refundsCash)}`],
     ["  Credit", `-${fmt(aggregate.refundsCredit)}`],
-    ["  Voucher", `-${fmt(refundsVoucher)}`],
+    [`  ${STAFF_VOUCHER_LABEL}`, `-${fmt(aggregate.refundsUserVoucher)}`],
+    [`  ${CUSTOMER_VOUCHER_LABEL}`, `-${fmt(aggregate.refundsCustomerVoucher)}`],
     ["  Gift Card", `-${fmt(aggregate.refundsGiftcard)}`],
     ["  GST", `-${fmt(aggregate.refundsTax)}`],
     ["Cash In", fmt(aggregate.totalCashIn)],
@@ -135,6 +144,12 @@ export default function CloseShiftScreen() {
       ? ([
           [`Spend (${aggregate.spendCount})`, ""],
           ["  Retail value", fmt(aggregate.spendRetailValue)],
+        ] as [string, string][])
+      : []),
+    ...(crmRows
+      ? ([
+          [RECONCILIATION_HEADER, ""],
+          ...crmRows.map(([label, value]) => [`  ${label}`, value]),
         ] as [string, string][])
       : []),
   ];

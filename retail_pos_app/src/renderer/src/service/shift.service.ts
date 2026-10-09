@@ -1,5 +1,9 @@
 import apiService, { ApiResponse } from "../libs/api";
 import { TerminalShift } from "../types/models";
+import type {
+  CustomerVoucherShiftReconciliation,
+  ShiftSettlement,
+} from "../libs/printer/shift-settlement-lines";
 
 interface OpenShiftPayload {
   openedNote: string;
@@ -59,6 +63,9 @@ export type ClosingShiftData = {
   // T-15 — customer-voucher operations the store server has not settled yet
   // (absent on servers before T-15; -1 = the count could not be read).
   customerVoucherOpenOperations?: number;
+  // T-25 (V-11) — CRM reconciliation block for this shift (absent on older
+  // servers, null when the ledger could not be read).
+  customerVoucherReconciliation?: CustomerVoucherShiftReconciliation | null;
 };
 
 export const getClosingShiftData = async (): Promise<
@@ -81,6 +88,6 @@ export const closeShift = async (
 
 export const getShiftById = async (
   id: number,
-): Promise<ApiResponse<TerminalShift>> => {
-  return await apiService.get<TerminalShift>(`/api/shift/${id}`);
+): Promise<ApiResponse<ShiftSettlement>> => {
+  return await apiService.get<ShiftSettlement>(`/api/shift/${id}`);
 };

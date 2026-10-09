@@ -1,8 +1,15 @@
-import { TerminalShift } from "../../types/models";
 import { buildPrintBuffer } from "./escpos";
 import { printESCPOS } from "./print.service";
 import dayjsAU from "../dayjsAU";
 import { buildShiftSettlementEscposReceipt } from "./shift-settlement-escpos";
+import {
+  CUSTOMER_VOUCHER_LABEL,
+  RECONCILIATION_HEADER,
+  STAFF_VOUCHER_LABEL,
+  reconciliationRows,
+  settlementTotals,
+  type ShiftSettlement,
+} from "./shift-settlement-lines";
 import type { ReceiptTextEncoding } from "./sale-invoice-escpos";
 
 const W = 576;
@@ -54,12 +61,12 @@ function row(
 function estimateHeight(): number {
   // header(3) + meta(6) + sales(8) + refunds(7) + net(8) + cashio(3) + spend(3) +
   // drawer(5) + footer(2)  — 여유 포함. D-37 에서 counts / Gift Card / SPEND 추가.
-  const lines = 48;
+  const lines = 56; // T-25: +3 voucher split lines, +5 CRM block
   return 60 + lines * LH + 100;
 }
 
 export function renderShiftSettlementReceipt(
-  shift: TerminalShift,
+  shift: ShiftSettlement,
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -128,27 +135,18 @@ export function renderShiftSettlementReceipt(
   ctx.fillText(salesHeader, PAD, y);
   y += LH;
 
-  // Voucher 는 user / customer 분리 저장 (D-20). 영수증에는 합산 표기.
-  const salesVoucherTotal = shift.salesUserVoucher + shift.salesCustomerVoucher;
-  const refundsVoucherTotal =
-    shift.refundsUserVoucher + shift.refundsCustomerVoucher;
-  const salesTenderTotal =
-    shift.salesCash +
-    shift.salesCredit +
-    salesVoucherTotal +
-    shift.salesGiftcard;
-  const refundsTenderTotal =
-    shift.refundsCash +
-    shift.refundsCredit +
-    refundsVoucherTotal +
-    shift.refundsGiftcard;
+  // Voucher 는 user / customer 분리 저장 (D-20). T-25 (V-11): 영수증도 분리 표기.
+  const { salesTenderTotal, refundsTenderTotal, netStaffVoucher, netCustomerVoucher } =
+    settlementTotals(shift);
 
   ctx.font = `${FONT}px sans-serif`;
   row(ctx, "Cash", fmt(shift.salesCash), y);
   y += LH;
   row(ctx, "Credit", fmt(shift.salesCredit), y);
   y += LH;
-  row(ctx, "Voucher", fmt(salesVoucherTotal), y);
+  row(ctx, STAFF_VOUCHER_LABEL, fmt(shift.salesUserVoucher), y);
+  y += LH;
+  row(ctx, CUSTOMER_VOUCHER_LABEL, fmt(shift.salesCustomerVoucher), y);
   y += LH;
   row(ctx, "Gift Card", fmt(shift.salesGiftcard), y);
   y += LH;
@@ -158,12 +156,7 @@ export function renderShiftSettlementReceipt(
   row(
     ctx,
     "Total Sales",
-    fmt(
-      shift.salesCash +
-        shift.salesCredit +
-        salesVoucherTotal +
-        shift.salesGiftcard,
-    ),
+    fmt(salesTenderTotal),
     y,
   );
   y += LH;
@@ -181,7 +174,9 @@ export function renderShiftSettlementReceipt(
   y += LH;
   row(ctx, "Credit", fmt(shift.refundsCredit), y);
   y += LH;
-  row(ctx, "Voucher", fmt(refundsVoucherTotal), y);
+  row(ctx, STAFF_VOUCHER_LABEL, fmt(shift.refundsUserVoucher), y);
+  y += LH;
+  row(ctx, CUSTOMER_VOUCHER_LABEL, fmt(shift.refundsCustomerVoucher), y);
   y += LH;
   row(ctx, "Gift Card", fmt(shift.refundsGiftcard), y);
   y += LH;
@@ -201,7 +196,9 @@ export function renderShiftSettlementReceipt(
   y += LH;
   row(ctx, "Credit", fmtSigned(shift.salesCredit - shift.refundsCredit), y);
   y += LH;
-  row(ctx, "Voucher", fmtSigned(salesVoucherTotal - refundsVoucherTotal), y);
+  row(ctx, STAFF_VOUCHER_LABEL, fmtSigned(netStaffVoucher), y);
+  y += LH;
+  row(ctx, CUSTOMER_VOUCHER_LABEL, fmtSigned(netCustomerVoucher), y);
   y += LH;
   row(
     ctx,
@@ -244,6 +241,21 @@ export function renderShiftSettlementReceipt(
     y += LH;
   }
 
+  /* ── CRM reconciliation (T-25, V-11) ── */
+  const crmRows = reconciliationRows(shift.customerVoucherReconciliation);
+  if (crmRows) {
+    dashedLine(ctx, y);
+    y += 14;
+    ctx.font = `bold ${FONT}px sans-serif`;
+    ctx.fillText(RECONCILIATION_HEADER, PAD, y);
+    y += LH;
+    ctx.font = `${FONT}px sans-serif`;
+    for (const [label, value] of crmRows) {
+      row(ctx, label, value, y);
+      y += LH;
+    }
+  }
+
   /* ── Drawer ── */
   dashedLine(ctx, y);
   y += 14;
@@ -282,7 +294,7 @@ export function renderShiftSettlementReceipt(
 }
 
 export async function printShiftSettlementReceipt(
-  shift: TerminalShift,
+  shift: ShiftSettlement,
 ): Promise<void> {
   const receiptConfig = await getReceiptPrintConfig();
 
