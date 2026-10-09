@@ -468,7 +468,8 @@ export function buildInvoicePayload(
       // T-25 (V-7 / O-17): CRM event id of a customer-voucher tender (else
       // null). api-server stores it and forwards it to CRM with the invoice
       // push, which links the voucher event to this receipt by it.
-      crmEventId: p.crmEventId,
+      crmEventId:
+        p.type === "VOUCHER" && p.entityType === "customer-voucher" ? p.crmEventId : null,
     })),
   };
 }

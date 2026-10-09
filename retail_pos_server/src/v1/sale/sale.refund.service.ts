@@ -44,6 +44,11 @@ import {
   withOperationClaim,
 } from "./sale.operation";
 import { nextDocCounter } from "./sale.doc-counter";
+import {
+  paymentCreateData,
+  stripCrmEventId,
+  withoutClientCrmEventIds,
+} from "./sale.payment-persist";
 import { assertShiftOpenInTx } from "../shift/shift.lock";
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -554,16 +559,8 @@ export async function buildRefundInTx(
         })),
       },
       payments: {
-        create: payments.map((pm) => ({
-          type: pm.type,
-          amount: pm.amount,
-          entityType: pm.entityType ?? null,
-          entityId: pm.entityId ?? null,
-          entityLabel: pm.entityLabel ?? null,
-          // T-25 (V-7): only a customer-voucher tender carries a CRM event id.
-          crmEventId:
-            pm.entityType === "customer-voucher" ? (pm.crmEventId ?? null) : null,
-        })),
+        // T-25 (V-7): only the issued refund voucher's tender carries a CRM event id.
+        create: payments.map(paymentCreateData),
       },
     },
   });
@@ -685,7 +682,7 @@ export function substituteIssuedVoucher(
   payments: PaymentPayload[],
   issue: PersistRefundArgs["customerVoucherIssue"],
 ): PaymentPayload[] {
-  if (!issue) return payments;
+  if (!issue) return payments.map((payment) => stripCrmEventId(payment));
   return payments.map((payment, index) =>
     index === issue.tenderIndex
       ? {
@@ -695,7 +692,7 @@ export function substituteIssuedVoucher(
           // T-25 (V-7): the REFUND_ISSUE event id from the validated CRM answer.
           crmEventId: issue.issued.row.crmEventId,
         }
-      : payment,
+      : stripCrmEventId(payment),
   );
 }
 
@@ -750,6 +747,8 @@ export async function createRefundService(
 ) {
   try {
     validatePayloadShape(payload);
+    // D-14 review P2: a client never supplies crmEventId.
+    payload = withoutClientCrmEventIds(payload);
 
     const { operationId } = resolveOperationId(payload.operationId, "refund");
     const payloadHash = operationPayloadHash(payload);

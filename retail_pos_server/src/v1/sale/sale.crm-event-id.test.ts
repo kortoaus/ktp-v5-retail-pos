@@ -3,7 +3,15 @@ import test from "node:test";
 
 import type { SaleInvoiceModel } from "../../generated/prisma/models";
 import { createSaleService, type PersistSaleArgs, type SaleContext, type SaleCreateDeps } from "./sale.create.service";
-import { substituteIssuedVoucher } from "./sale.refund.service";
+import {
+  createRefundService,
+  substituteIssuedVoucher,
+  type OrigInvoice,
+  type PersistRefundArgs,
+  type RefundContext,
+  type RefundCreateDeps,
+} from "./sale.refund.service";
+import { paymentCreateData } from "./sale.payment-persist";
 import { applyCrmRedeemResults, type ConfirmedRedeemRow } from "../customer-voucher/customer-voucher.operation";
 import { buildInvoicePayload, type PendingInvoice } from "../cloud/cloud.sync.service";
 import type { PaymentPayload, SaleCreatePayload } from "./sale.types";
@@ -154,4 +162,79 @@ test("cloud invoice DTO carries crmEventId per payment", () => {
   const dto = buildInvoicePayload(inv, null);
   assert.equal(dto.payments[0].crmEventId, 41);
   assert.equal(dto.payments[1].crmEventId, null);
+});
+
+// ── D-14 review P2: a client-supplied crmEventId is never stored or uploaded ──
+
+function cashOriginal(): OrigInvoice {
+  return {
+    id: 60,
+    type: "SALE",
+    serial: "3-20261009-S000060",
+    memberId: "m-1",
+    pointsEarned: 0,
+    shiftId: 3,
+    createdAt: new Date(),
+    rows: [{ id: 21, type: "NORMAL", qty: 1000, refunded_qty: 0, total: 1000, surcharge_share: 0, taxable: false, isPointExcluded: false }],
+    payments: [{ id: 1, type: "CASH", amount: 1000, entityType: null, entityId: null, entityLabel: null }],
+    refunds: [],
+  } as unknown as OrigInvoice;
+}
+
+test("cash refund with forged entityType + crmEventId → stored payment and cloud DTO carry no crmEventId", async () => {
+  const orig = cashOriginal();
+  const crm = new FakeCrm();
+  const persisted: PersistRefundArgs[] = [];
+  const deps: RefundCreateDeps = {
+    crm,
+    ops: new FakeOpsStore(),
+    findInvoiceByOperationId: async () => null,
+    loadOriginal: async () => orig,
+    persistRefund: async (args) => {
+      persisted.push(args);
+      return { id: 300, type: "REFUND", operationId: args.operationId } as unknown as SaleInvoiceModel;
+    },
+    afterCommit: () => {},
+  };
+  const forged = {
+    type: "CASH",
+    amount: 1000,
+    entityType: "customer-voucher",
+    crmEventId: 4242,
+  } as unknown as PaymentPayload;
+  await createRefundService(
+    { originalInvoiceId: 60, rows: [{ originalInvoiceRowId: 21, refund_qty: 1000 }], payments: [forged], operationId: "bbbbbbbb-2222-4333-8444-555555555555" },
+    CONTEXT as unknown as RefundContext,
+    deps,
+  );
+  assert.equal(crm.calls.length, 0, "no CRM issuance for a cash refund");
+  // exactly what buildRefundInTx persists
+  const stored = substituteIssuedVoucher(persisted[0].payload.payments, persisted[0].customerVoucherIssue).map(paymentCreateData);
+  assert.equal(stored[0].crmEventId, null);
+  assert.equal("crmEventId" in persisted[0].payload.payments[0], false, "stripped on entry");
+  // and even if such a row existed, the cloud DTO forwards nothing for a non-VOUCHER tender
+  const dto = buildInvoicePayload({ id: 1, rows: [], payments: [{ ...stored[0], crmEventId: 4242 }] } as unknown as PendingInvoice, null);
+  assert.equal(dto.payments[0].crmEventId, null);
+});
+
+test("persist mapping: crmEventId kept only on a VOUCHER customer-voucher tender", () => {
+  assert.equal(paymentCreateData({ type: "CASH", amount: 1, entityType: "customer-voucher", crmEventId: 5 }).crmEventId, null);
+  assert.equal(paymentCreateData({ type: "VOUCHER", amount: 1, entityType: "user-voucher", crmEventId: 5 }).crmEventId, null);
+  assert.equal(paymentCreateData({ type: "VOUCHER", amount: 1, entityType: "customer-voucher", crmEventId: 5 }).crmEventId, 5);
+});
+
+test("sale: forged crmEventId on a CASH tender dressed as customer-voucher → null; voucher id only from CRM", async () => {
+  const h = harness();
+  await createSaleService(
+    salePayload([
+      { type: "VOUCHER", amount: 400, entityType: "customer-voucher", entityId: 7, crmEventId: 999 },
+      { type: "CASH", amount: 600, entityType: "customer-voucher", crmEventId: 998 } as unknown as PaymentPayload,
+    ]),
+    CONTEXT,
+    h.deps,
+  );
+  const stored = h.persisted[0].payload.payments.map(paymentCreateData);
+  assert.equal(stored[0].crmEventId, h.ops.byKey(KEY7)!.crmEventId);
+  assert.notEqual(stored[0].crmEventId, 999);
+  assert.equal(stored[1].crmEventId, null);
 });

@@ -1,4 +1,5 @@
 import { assertShiftOpenInTx } from "../shift/shift.lock";
+import { withoutClientCrmEventIds } from "./sale.payment-persist";
 import db from "../../libs/db";
 import {
   BadRequestException,
@@ -273,6 +274,8 @@ export async function createRepayService(
 ) {
   try {
     validateRepayPayloadShape(payload);
+    // D-14 review P2: a client never supplies crmEventId.
+    payload = withoutClientCrmEventIds(payload);
 
     const { operationId } = resolveOperationId(payload.operationId, "repay");
     const payloadHash = operationPayloadHash(payload);

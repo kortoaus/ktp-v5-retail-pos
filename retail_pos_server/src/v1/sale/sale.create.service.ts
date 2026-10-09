@@ -13,6 +13,7 @@ import {
   UserModel,
 } from "../../generated/prisma/models";
 import { SaleCreatePayload } from "./sale.types";
+import { paymentCreateData, withoutClientCrmEventIds } from "./sale.payment-persist";
 import type { Prisma } from "../../generated/prisma/client";
 import { nowAnchor } from "./sale.refund.service";
 import { triggerSyncAllSaleInvoices } from "../cloud/cloud.sync.service";
@@ -483,16 +484,9 @@ export async function buildSaleInTx(
         })),
       },
       payments: {
-        create: payload.payments.map((pm) => ({
-          type: pm.type,
-          amount: pm.amount,
-          entityType: pm.entityType ?? null,
-          entityId: pm.entityId ?? null,
-          entityLabel: pm.entityLabel ?? null,
-          // T-25 (V-7): only a customer-voucher tender carries a CRM event id.
-          crmEventId:
-            pm.entityType === "customer-voucher" ? (pm.crmEventId ?? null) : null,
-        })),
+        // T-25 (V-7): only a customer-voucher tender carries a CRM event id,
+        // and only the one the server set from CRM's answer.
+        create: payload.payments.map(paymentCreateData),
       },
     },
   });
@@ -605,6 +599,8 @@ export async function createSaleService(
   deps: SaleCreateDeps = defaultSaleCreateDeps,
 ) {
   try {
+    // D-14 review P2: a client never supplies crmEventId.
+    payload = withoutClientCrmEventIds(payload);
     if (payload.type !== "SALE")
       throw new BadRequestException(`unexpected payload.type: ${payload.type}`);
 
