@@ -85,6 +85,11 @@ Single-tenant: `Company` and `StoreSetting` are always row `id: 1`.
 - **ip-address-only writes.** Routes with no user check that still write: `POST/DELETE /api/hotkey`, `POST /api/cloud/migrate/item`,
   `POST /api/cloud/item-sheet/label-update/:id/printed`, `POST /api/crm/member/*` (7), `POST/DELETE /api/free-text-template`,
   `POST /api/printer/print`. Any LAN host that sends a registered terminal IP passes.
+- **LAN printers from a remote shell (macOS 15 local network privacy).** SSH sessions, launchd daemons and root are exempt;
+  a PM2 daemon's children inherit the daemon's grant, not the CLI's. If prints fail with `EHOSTUNREACH`, re-parent the
+  daemon from SSH with `pm2 kill && pm2 resurrect` (`restart`/`reload`/`resurrect` alone keep the old daemon). The 2026-09-24
+  "SSH cannot reach printers" finding was a tmux/iTerm2 lineage misdiagnosis. Evidence and open reboot/LaunchAgent question:
+  hub `rooms/platform/docs/S-3.md` → `surveys/2026-10-12-macos-local-network-privacy.md`.
 - **Printer route = TCP relay.** `POST /api/printer/print` opens a socket to whatever `ip`/`port` (default 9100) the query
   names and writes the body (≤20 MB). Do not widen it; do not expose port 2200 beyond the store LAN.
 - **Staff session (T-12, 2026-10-08).** `GET /api/user/code?code=` (terminal-only) returns the `User` row plus a signed HS256 `token`
