@@ -27,6 +27,9 @@ export interface CloseShiftAnswer {
 }
 
 export const SHIFT_RELOAD_FAILED_MESSAGE = "Could not reload the shift — Retry";
+// The terminal's shift was never read successfully (boot read failed, or the
+// terminal changed and its read failed): no close until a Retry works.
+export const SHIFT_LOAD_FAILED_MESSAGE = "Could not load the shift — Retry";
 
 export type CloseShiftOutcome =
   | { kind: "closed" }
@@ -44,6 +47,9 @@ export interface ShiftCloseDeps<B> {
   onClosed(): void;
   staleShiftId(): number | null;
   setStaleShiftId(id: number | null): void;
+  // false while the till has not read this terminal's shift (optional; absent
+  // = known).
+  shiftKnown?(): boolean;
 }
 
 export function shiftMismatchOf(res: CloseShiftAnswer): ShiftMismatch | null {
@@ -82,6 +88,8 @@ export async function closeShiftGuarded<B extends { expectedShiftId?: number }>(
   deps: ShiftCloseDeps<B>,
   fallbackMessage = "Failed to close shift",
 ): Promise<CloseShiftOutcome> {
+  if (deps.shiftKnown && !deps.shiftKnown())
+    return { kind: "stale", message: SHIFT_LOAD_FAILED_MESSAGE };
   if (deps.staleShiftId() != null)
     return { kind: "stale", message: SHIFT_RELOAD_FAILED_MESSAGE };
   const res = await deps.close(body);
@@ -113,7 +121,10 @@ export type ClosePreviewState = "loading" | "failed" | "ready";
 
 export interface CloseShiftView {
   staleBanner: boolean;
-  body: "no-shift" | "loading" | "preview-failed" | "ready";
+  // The shift could not be loaded for this terminal: "Could not load the
+  // shift — Retry" (same Retry as the stale banner).
+  unknownBanner: boolean;
+  body: "unknown" | "no-shift" | "loading" | "preview-failed" | "ready";
   canClose: boolean;
 }
 
@@ -121,14 +132,24 @@ export function closeShiftView(input: {
   hasShift: boolean;
   staleShiftId: number | null;
   preview: ClosePreviewState;
+  // Absent = known (callers before round 4).
+  shiftKnown?: boolean;
 }): CloseShiftView {
   const staleBanner = input.staleShiftId != null;
+  const unknownBanner = input.shiftKnown === false && !staleBanner;
   const body: CloseShiftView["body"] = !input.hasShift
-    ? "no-shift"
+    ? unknownBanner
+      ? "unknown"
+      : "no-shift"
     : input.preview === "failed"
       ? "preview-failed"
       : input.preview === "loading"
         ? "loading"
         : "ready";
-  return { staleBanner, body, canClose: !staleBanner && body === "ready" };
+  return {
+    staleBanner,
+    unknownBanner,
+    body,
+    canClose: !staleBanner && !unknownBanner && body === "ready",
+  };
 }

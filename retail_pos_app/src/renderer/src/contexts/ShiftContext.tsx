@@ -52,6 +52,9 @@ interface ShiftContextValue {
   reloadShift: () => Promise<boolean>;
   // Set after a SHIFT_MISMATCH until a reload succeeds (T-10 review).
   staleShiftId: number | null;
+  // false until this terminal's shift was read successfully (boot, or after a
+  // terminal change); Close Shift offers Retry and refuses to close meanwhile.
+  shiftKnown: boolean;
   retryShiftReload: () => Promise<boolean>;
 }
 
@@ -65,7 +68,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
   const [store] = useState(() =>
     createShiftStateStore<TerminalShift>(getCurrentShift, (e) => console.error(e)),
   );
-  const { shift, loading, staleShiftId } = useSyncExternalStore(
+  const { shift, loading, staleShiftId, shiftKnown } = useSyncExternalStore(
     store.subscribe,
     store.getSnapshot,
   );
@@ -108,6 +111,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
         onClosed: () => store.setShift(null),
         staleShiftId: () => store.getSnapshot().staleShiftId,
         setStaleShiftId: store.setStaleShiftId,
+        shiftKnown: () => store.getSnapshot().shiftKnown,
       });
       if (outcome.kind === "closed") return { ok: true, msg: "" };
       if (outcome.kind === "mismatch")
@@ -133,6 +137,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
         closeShift: doCloseShift,
         reloadShift: reload,
         staleShiftId,
+        shiftKnown,
         retryShiftReload,
       }}
     >

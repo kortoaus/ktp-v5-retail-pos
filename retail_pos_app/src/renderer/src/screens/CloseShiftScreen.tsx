@@ -12,6 +12,7 @@ import {
 import { MONEY_DP, MONEY_SCALE } from "../libs/constants";
 import { printShiftSettlementReceipt } from "../libs/printer/shift-settlement-receipt";
 import {
+  SHIFT_LOAD_FAILED_MESSAGE,
   SHIFT_RELOAD_FAILED_MESSAGE,
   closeShiftView,
   type ClosePreviewState,
@@ -195,7 +196,8 @@ function ReadyBody({
 
 export default function CloseShiftScreen() {
   const navigate = useNavigate();
-  const { shift, closeShift, staleShiftId, retryShiftReload } = useShift();
+  const { shift, closeShift, staleShiftId, shiftKnown, retryShiftReload } =
+    useShift();
   const [retrying, setRetrying] = useState(false);
   const [cashActual, setCashActual] = useState(0);
   const [note, setNote] = useState("");
@@ -241,17 +243,22 @@ export default function CloseShiftScreen() {
     }
   }, [retryShiftReload]);
 
-  // Entering the screen while stale (e.g. Home, then back) retries once, so a
-  // recovered network clears the banner without a press.
-  const enteredStale = useRef(staleShiftId != null);
+  // Entering the screen while stale or unknown (e.g. Home, then back) retries
+  // once, so a recovered network clears the banner without a press.
+  const enteredStale = useRef(staleShiftId != null || !shiftKnown);
   useEffect(() => {
     if (enteredStale.current) void handleRetryReload();
   }, [handleRetryReload]);
 
-  const view = closeShiftView({ hasShift: shift != null, staleShiftId, preview });
+  const view = closeShiftView({
+    hasShift: shift != null,
+    staleShiftId,
+    preview,
+    shiftKnown,
+  });
   const stale = view.staleBanner;
 
-  if (!shift && !stale) {
+  if (!shift && !stale && !view.unknownBanner) {
     return <BlockScreen label="No shift is open" link="/" />;
   }
 
@@ -343,6 +350,22 @@ export default function CloseShiftScreen() {
           <span className="text-sm font-medium">
             Shift {staleShiftId} is no longer open. {SHIFT_RELOAD_FAILED_MESSAGE}
           </span>
+          <div className="flex gap-2">
+            {homeButton}
+            <button
+              onClick={handleRetryReload}
+              disabled={retrying}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              {retrying ? "Retrying..." : "Retry"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {view.unknownBanner && (
+        <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-red-200 bg-red-50 text-red-800">
+          <span className="text-sm font-medium">{SHIFT_LOAD_FAILED_MESSAGE}</span>
           <div className="flex gap-2">
             {homeButton}
             <button

@@ -13,12 +13,19 @@
 //  - Stale marker: set on a 409 SHIFT_MISMATCH (libs/shift-close.ts), cleared
 //    by a successful reload — and when the terminal identity changes (the
 //    marker belonged to the old terminal's shift).
+//  - Known shift: a terminal identity change also drops the previous
+//    terminal's shift and marks the state unknown (`shiftKnown: false`) until
+//    a read for the new terminal succeeds; no close is allowed meanwhile, so
+//    an old terminal's shift id can never be sent for the new one.
 
 export interface ShiftStateSnapshot<S> {
   shift: S | null;
   // A full load is in flight (Gateway shows its loading screen).
   loading: boolean;
   staleShiftId: number | null;
+  // false until a read for the current terminal has succeeded (boot, or
+  // after a terminal identity change): `shift` is then not trustworthy.
+  shiftKnown: boolean;
 }
 
 export interface ShiftStateStore<S> {
@@ -39,7 +46,12 @@ export function createShiftStateStore<S>(
   fetchCurrent: () => Promise<{ ok: boolean; result?: S | null }>,
   log: (e: unknown) => void = () => {},
 ): ShiftStateStore<S> {
-  let snapshot: ShiftStateSnapshot<S> = { shift: null, loading: true, staleShiftId: null };
+  let snapshot: ShiftStateSnapshot<S> = {
+    shift: null,
+    loading: true,
+    staleShiftId: null,
+    shiftKnown: false,
+  };
   let terminalId: number | null | undefined = undefined;
   let readSeq = 0;
   const listeners = new Set<() => void>();
@@ -63,7 +75,7 @@ export function createShiftStateStore<S>(
       ok = false;
     }
     if (seq !== readSeq) return false; // a newer read owns the state
-    update(ok ? { shift: next, loading: false } : { loading: false });
+    update(ok ? { shift: next, loading: false, shiftKnown: true } : { loading: false });
     return ok;
   };
 
@@ -76,7 +88,12 @@ export function createShiftStateStore<S>(
     async setTerminal(next) {
       const changed = terminalId !== undefined && next !== terminalId;
       terminalId = next;
-      if (changed && snapshot.staleShiftId != null) update({ staleShiftId: null });
+      if (changed) {
+        // The previous terminal's shift and stale marker do not describe the
+        // new terminal; nothing is known until its own read succeeds.
+        readSeq++; // a read still in flight for the old terminal is void
+        update({ shift: null, staleShiftId: null, shiftKnown: false });
+      }
       if (next == null) {
         readSeq++; // any read for the old terminal no longer owns the state
         update({ loading: false });
