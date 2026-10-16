@@ -35,6 +35,8 @@ export default function CloseShiftScreen() {
   const [closingData, setClosingData] = useState<ClosingShiftData | null>(null);
   const [fetching, setFetching] = useState(true);
   const [confirmClose, setConfirmClose] = useState(false);
+  // Bumped to remount CashCounter (it keeps its own denomination counts).
+  const [countGeneration, setCountGeneration] = useState(0);
 
   const fetchData = useCallback(async () => {
     setFetching(true);
@@ -94,7 +96,7 @@ export default function CloseShiftScreen() {
     setLoading(true);
     try {
       // DTO 단순화 — 서버가 aggregate 전부 재계산 (D-34 / D-37).
-      const { ok, msg } = await closeShift({
+      const { ok, msg, mismatch } = await closeShift({
         closedNote: note.trim(),
         endedCashActual: cashActualCents,
         expectedShiftId: shift.id,
@@ -109,6 +111,14 @@ export default function CloseShiftScreen() {
           // print failure should not block close
         }
         navigate("/");
+      } else if (mismatch) {
+        // T-10 review: the shift was already reloaded from the server; the
+        // count belonged to the old shift, so start over for the open one.
+        setConfirmClose(false);
+        setCashActual(0);
+        setNote("");
+        setCountGeneration((g) => g + 1);
+        window.alert(msg);
       } else {
         window.alert(msg || "Failed to close shift");
       }
@@ -253,7 +263,11 @@ export default function CloseShiftScreen() {
 
         {/* Cash Counter */}
         <div className="flex-1 p-4">
-          <CashCounter value={cashActual} onChange={setCashActual} />
+          <CashCounter
+            key={`${shift.id}:${countGeneration}`}
+            value={cashActual}
+            onChange={setCashActual}
+          />
         </div>
       </div>
     </div>
