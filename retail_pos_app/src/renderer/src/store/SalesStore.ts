@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import { SaleLineItem } from "../types/sales";
+import type { SaleLineItem } from "../types/sales";
 import { QTY_SCALE } from "../libs/constants";
 import { removeLineFromCart } from "./cart-line-remove";
 import { endAttemptsOfEmptiedCarts } from "../libs/operation-id";

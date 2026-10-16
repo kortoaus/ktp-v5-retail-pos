@@ -112,3 +112,31 @@ export function calcMarkdownPrice(
   }
   return Math.max(0, effectivePrice - discountAmount);
 }
+
+/**
+ * Price-embedded EAN-13 — the scale's printed linear barcode, distinct from the
+ * `00:` QR payload above: 12–13 digits with a "2"/"02" prefix (the same
+ * candidacy test `generateSaleLineItem` uses to promote weight →
+ * weight-prepacked), price in cents at digits 8–12 of the 13-digit form.
+ *
+ * F-2 (retail-runner, 2026-10-16): a fixed-weight ("prepacked") item reaches
+ * the embedded-price branch on ANY of its barcodes, so the till must check
+ * the shape first — a plain GTIN (e.g. `9300…`) is not a price carrier and
+ * the line keeps its catalog price.
+ */
+export function isEmbeddedPriceBarcode(raw: string): boolean {
+  if (!/^\d{12,13}$/.test(raw)) return false;
+  return raw.startsWith("2") || raw.startsWith("02");
+}
+
+/**
+ * Integer cents embedded in `raw`, or `null` when `raw` is not a
+ * price-embedded EAN-13. A 12-digit UPC-A gains a leading 0 first so the
+ * price digits sit at the EAN-13 offsets (same window as
+ * `libs/scan-utils.ts embededPriceParser`, which returns dollars).
+ */
+export function parseEmbeddedPriceCents(raw: string): number | null {
+  if (!isEmbeddedPriceBarcode(raw)) return null;
+  const raw13 = raw.length === 12 ? "0" + raw : raw;
+  return parseInt(raw13.slice(7, 12), 10);
+}

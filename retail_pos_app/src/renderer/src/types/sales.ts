@@ -1,5 +1,5 @@
-import { ItemTypes } from "../libs/item-utils";
-import { Price, PromoPrice } from "./models";
+import type { ItemTypes } from "../libs/item-utils";
+import type { Price, PromoPrice } from "./models";
 
 /**
  * SaleLineItem — the item-level snapshot produced at scan time, BEFORE it

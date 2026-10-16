@@ -1,4 +1,4 @@
-import { SaleLineItem, SaleLineType } from "../types/sales";
+import type { SaleLineItem, SaleLineType } from "../types/sales";
 import { QTY_SCALE } from "../libs/constants";
 import { calcMarkdownPrice } from "../libs/pp-barcode";
 
@@ -20,7 +20,7 @@ export interface SaleMember {
   unverified?: boolean;
 }
 
-import { PPMarkdown } from "../types/sales";
+import type { PPMarkdown } from "../types/sales";
 
 export interface AddLineOptions {
   qty?: number;

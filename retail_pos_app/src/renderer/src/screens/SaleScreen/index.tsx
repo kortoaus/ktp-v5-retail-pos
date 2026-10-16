@@ -1,26 +1,23 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { searchMemberById } from "../../service/crm.service";
-import { Item } from "../../types/models";
 import { searchItemByBarcode } from "../../service/item.service";
 import { useBarcodeScanner } from "../../hooks/useBarcodeScanner";
-import { generateSaleLineItem } from "../../libs/item-utils";
 import { SaleLineItem } from "../../types/sales";
-import { embededPriceParser } from "../../libs/scan-utils";
-import { parseMemberQr } from "../../libs/member-qr";
-import { parseOrderQr } from "../../libs/order-qr";
 import { useOrderLoad } from "../../hooks/useOrderLoad";
 import {
-  isPPBarcode,
-  parsePPBarcode,
-  calcMarkdownPrice,
-} from "../../libs/pp-barcode";
-import {
-  resolveDiscountedPrice,
-  type AddLineOptions,
-} from "../../store/SalesStore.helper";
+  itemLookupAction,
+  lineFromItem,
+  memberChangeBlockedMessage,
+  memberLookupAction,
+  ppLookupAction,
+  routeScan,
+  SCAN_MESSAGES,
+  searchPickBarcode,
+  weighedLine,
+  type ScanAction,
+} from "../../libs/sale/scan-dispatch";
 import { useSalesStore, LINE_PAGE_SIZE } from "../../store/SalesStore";
-import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../../libs/constants";
 import { useWeight } from "../../hooks/useWeight";
 import { cn } from "../../libs/cn";
 import SearchItemModal from "../../components/SearchItemModal";
@@ -106,119 +103,110 @@ export default function SaleScreen() {
     [carts, activeCartIndex],
   );
 
+  // Executes a ScanAction from libs/sale/scan-dispatch (the decision is
+  // pure and shared with Runner; the screen only performs it).
+  function runScanAction(action: ScanAction) {
+    switch (action.kind) {
+      case "none":
+        return;
+      case "alert":
+        window.alert(action.message);
+        return;
+      case "set-member":
+        setMember(action.member);
+        return;
+      case "request-weight":
+        pendingWeightLineRef.current = action.line;
+        setModalTarget("weight");
+        return;
+      case "add-line":
+        addLine(action.line, action.options);
+        setSelectedLineKey(null);
+        setModalTarget(null);
+        return;
+    }
+  }
+
   const scanCallback = useCallback(
     async (rawBarcode: string) => {
       if (loading) return;
 
-      // Search Member
-      const memberQr = parseMemberQr(rawBarcode);
-      if (memberQr) {
-        // S3 리뷰 — 주문 로드 카트의 멤버는 주문 스냅샷과 한 몸: 교체하면
-        // 적립/역추적이 다른 멤버로 간다. 카트를 비워야 바꿀 수 있다.
-        // (getState 직접 조회 — scanCallback 클로저의 carts 스테일 방지)
-        const { carts: freshCarts, activeCartIndex: freshIdx } =
-          useSalesStore.getState();
-        const orderCart = freshCarts[freshIdx];
-        if (orderCart?.externalOrderId) {
-          window.alert(
-            `This cart is linked to order #${orderCart.orderNo ?? orderCart.externalOrderId} — clear the cart to change member.`,
-          );
+      // 우선순위: member%%% → order%%% → PP → 상품 바코드 (routeScan).
+      const route = routeScan(rawBarcode);
+
+      switch (route.kind) {
+        case "member": {
+          // S3 리뷰 — 주문 로드 카트의 멤버는 주문 스냅샷과 한 몸.
+          // (getState 직접 조회 — scanCallback 클로저의 carts 스테일 방지)
+          const { carts: freshCarts, activeCartIndex: freshIdx } =
+            useSalesStore.getState();
+          const blocked = memberChangeBlockedMessage(freshCarts[freshIdx]);
+          if (blocked) {
+            window.alert(blocked);
+            return;
+          }
+          try {
+            setLoading(true);
+            const res = await searchMemberById(route.qr.memberId);
+            runScanAction(memberLookupAction(res, route.qr));
+          } catch (e) {
+            console.error(e);
+          } finally {
+            setLoading(false);
+          }
           return;
         }
-        try {
-          setLoading(true);
-          const { ok, msg, status, result } = await searchMemberById(
-            memberQr.memberId,
-          );
-          if (ok && result) {
-            setMember({
-              id: result.id,
-              name: result.name,
-              level: result.level,
-              phone_last4: result.phone_last4,
-              points: result.points,
-            });
-          } else if (status === 0) {
-            // 네트워크 단절 — QR 의 id/level 로 미검증 부착.
-            // 적립은 업싱크 시 CRM 이 member 존재를 검증한 뒤 처리된다.
-            setMember({
-              id: memberQr.memberId,
-              name: null,
-              level: memberQr.level ?? 1,
-              phone_last4: null,
-              points: null,
-              unverified: true,
-            });
-          } else {
-            window.alert(msg);
+
+        // S3 — 픽업리스트 QR. 정책·주입은 useOrderLoad 가 전담 (배선만).
+        case "order": {
+          try {
+            setLoading(true);
+            await loadOrder(route.orderId);
+          } catch (e) {
+            console.error(e);
+          } finally {
+            setLoading(false);
           }
-        } catch (e) {
-          console.error(e);
-        } finally {
-          setLoading(false);
-        }
-
-        return;
-      }
-
-      // S3 — 픽업리스트 QR (order%%%<id>). 우선순위: member%%% → order%%%
-      // → PP → 상품 바코드. 정책·주입은 useOrderLoad 가 전담 (배선만).
-      const orderQr = parseOrderQr(rawBarcode);
-      if (orderQr) {
-        try {
-          setLoading(true);
-          await loadOrder(orderQr.orderId);
-        } catch (e) {
-          console.error(e);
-        } finally {
-          setLoading(false);
-        }
-        return;
-      }
-
-      // Check for PP barcode
-      if (isPPBarcode(rawBarcode)) {
-        const pp = parsePPBarcode(rawBarcode);
-        if (!pp) {
-          window.alert("Invalid prepacked barcode");
           return;
         }
-        try {
-          setLoading(true);
-          const { ok, msg, result } = await searchItemByBarcode(pp.barcode);
-          if (ok && result) {
-            addLinePP(pp, result);
-          } else {
-            window.alert(msg || "Item not found");
-          }
-        } catch (e) {
-          console.error(e);
-          window.alert("Failed to load item");
-        } finally {
-          setLoading(false);
-        }
-        return;
-      }
 
-      try {
-        setLoading(true);
-        const { ok, msg, result } = await searchItemByBarcode(rawBarcode);
+        case "pp-invalid":
+          window.alert(route.message);
+          return;
 
-        if (ok) {
-          if (result) {
-            addLineGateway(result, rawBarcode);
+        case "pp": {
+          try {
+            setLoading(true);
+            const res = await searchItemByBarcode(route.pp.barcode);
+            const { carts: freshCarts, activeCartIndex: freshIdx } =
+              useSalesStore.getState();
+            const memberLevel = freshCarts[freshIdx]?.member?.level ?? 0;
+            runScanAction(ppLookupAction(res, route.pp, memberLevel));
+          } catch (e) {
+            console.error(e);
+            window.alert(SCAN_MESSAGES.ppLookupFailed);
+          } finally {
+            setLoading(false);
           }
-        } else {
-          window.alert(msg);
+          return;
         }
-      } catch (e) {
-        console.error(e);
-        window.alert("Failed to scan barcode");
-      } finally {
-        setLoading(false);
+
+        case "item": {
+          try {
+            setLoading(true);
+            const res = await searchItemByBarcode(route.barcode);
+            runScanAction(itemLookupAction(res, route.barcode));
+          } catch (e) {
+            console.error(e);
+            window.alert(SCAN_MESSAGES.scanFailed);
+          } finally {
+            setLoading(false);
+          }
+          return;
+        }
       }
     },
-    [loading, addLineGateway, loadOrder],
+    [loading, runScanAction, loadOrder],
   );
 
   useBarcodeScanner(scanCallback);
@@ -227,8 +215,8 @@ export default function SaleScreen() {
     (weightKg: number) => {
       const data = pendingWeightLineRef.current;
       if (!data) return;
-      const qtyInt = Math.round(weightKg * QTY_SCALE);
-      addLine(data, { qty: qtyInt, measured_weight: qtyInt });
+      const { line, options } = weighedLine(data, weightKg);
+      addLine(line, options);
       pendingWeightLineRef.current = null;
       setModalTarget(null);
     },
@@ -239,135 +227,6 @@ export default function SaleScreen() {
     pendingWeightLineRef.current = null;
     setModalTarget(null);
   }, []);
-
-  function addLineGateway(item: Item, rawBarcode: string) {
-    const data = generateSaleLineItem(item, rawBarcode);
-
-    if (data.type === "invalid") {
-      window.alert("Invalid item");
-      return;
-    }
-
-    if (data.type === "weight") {
-      pendingWeightLineRef.current = data;
-      setModalTarget("weight");
-      return;
-    }
-
-    if (rawBarcode.startsWith("02") && rawBarcode.length === 7) {
-      if (data.type === "prepacked") {
-        addLine({ ...data, uom: "ea" });
-        setSelectedLineKey(null);
-        setModalTarget(null);
-        return;
-      }
-    }
-
-    if (data.type === "weight-prepacked" || data.type === "prepacked") {
-      const raw13 = rawBarcode.length === 12 ? "0" + rawBarcode : rawBarcode;
-      const dollars = embededPriceParser(raw13);
-      const prepackedPriceCents = Math.round(dollars * MONEY_SCALE);
-      addLine(
-        {
-          ...data,
-          uom: "ea",
-          price: data.price
-            ? { ...data.price, prices: [prepackedPriceCents] }
-            : null,
-        },
-        {
-          qty: QTY_SCALE,
-          adjustedPrice: prepackedPriceCents,
-        },
-      );
-      setSelectedLineKey(null);
-      setModalTarget(null);
-      return;
-    }
-
-    addLine(data);
-    setSelectedLineKey(null);
-    setModalTarget(null);
-  }
-
-  function addLinePP(pp: ReturnType<typeof parsePPBarcode>, item: Item) {
-    if (!pp) return;
-    const data = generateSaleLineItem(item, item.barcode);
-    if (data.type === "invalid") {
-      window.alert("Invalid item");
-      return;
-    }
-
-    data.price = data.price ? { ...data.price, prices: pp.prices } : null;
-    data.promoPrice =
-      pp.promoPrices.length > 0
-        ? {
-            ...(data.promoPrice ?? {
-              id: 0,
-              companyId: 0,
-              itemId: item.id,
-              name_en: "",
-              name_ko: "",
-              priceType: "promo",
-              prices: [],
-              validFrom: new Date().toISOString(),
-              validTo: new Date().toISOString(),
-              archived: false,
-              createdAt: "",
-              updatedAt: "",
-            }),
-            prices: pp.promoPrices,
-          }
-        : null;
-
-    const memberLevel =
-      useSalesStore.getState().carts[useSalesStore.getState().activeCartIndex]
-        ?.member?.level ?? 0;
-    const original = pp.prices[0] ?? 0;
-    const discountedPrice = resolveDiscountedPrice(data, memberLevel);
-    const effectivePrice = discountedPrice ?? original;
-
-    const options: AddLineOptions = {};
-
-    if (pp.discountType && pp.discountAmount > 0) {
-      const tag =
-        pp.discountType === "pct"
-          ? `[${pp.discountAmount / 10}% OFF]`
-          : `[$${(pp.discountAmount / MONEY_SCALE).toFixed(MONEY_DP)} OFF]`;
-      data.name_en = `${tag} ${data.name_en}`;
-    }
-
-    if (pp.weight != null) {
-      data.type = "weight-prepacked";
-      options.qty = pp.weight;
-      options.measured_weight = pp.weight;
-      if (pp.discountType === "pct" && pp.discountAmount > 0) {
-        options.adjustedPrice = calcMarkdownPrice(
-          effectivePrice,
-          "pct",
-          pp.discountAmount,
-        );
-        options.ppMarkdown = {
-          discountType: "pct",
-          discountAmount: pp.discountAmount,
-        };
-      }
-    } else if (pp.discountType && pp.discountAmount > 0) {
-      options.adjustedPrice = calcMarkdownPrice(
-        effectivePrice,
-        pp.discountType,
-        pp.discountAmount,
-      );
-      options.ppMarkdown = {
-        discountType: pp.discountType,
-        discountAmount: pp.discountAmount,
-      };
-    }
-
-    addLine(data, Object.keys(options).length > 0 ? options : undefined);
-    setSelectedLineKey(null);
-    setModalTarget(null);
-  }
 
   return (
     <div className="h-full w-full bg-gray-50 flex flex-col">
@@ -389,11 +248,11 @@ export default function SaleScreen() {
             onClick={() => {
               // S3 리뷰 — 주문 로드 카트에서는 멤버 해제/교체 차단 (스캔
               // 경로와 동일 사유 — 카트 클리어로만 벗어난다).
-              const cart = carts[activeCartIndex];
-              if (cart?.externalOrderId) {
-                window.alert(
-                  `This cart is linked to order #${cart.orderNo ?? cart.externalOrderId} — clear the cart to change member.`,
-                );
+              const blocked = memberChangeBlockedMessage(
+                carts[activeCartIndex],
+              );
+              if (blocked) {
+                window.alert(blocked);
                 return;
               }
               if (member) {
@@ -520,8 +379,7 @@ export default function SaleScreen() {
         open={modalTarget === "item-search"}
         onClose={() => setModalTarget(null)}
         onSelect={(item) => {
-          const { barcode, barcodeGTIN, barcodePLU } = item;
-          addLineGateway(item, barcodeGTIN || barcodePLU || barcode);
+          runScanAction(lineFromItem(item, searchPickBarcode(item)));
         }}
       />
       <WeightModal

@@ -1,6 +1,5 @@
-import { Item } from "../types/models";
-import { SaleLineItem } from "../types/sales";
-import { embededPriceParser } from "./scan-utils";
+import type { Item } from "../types/models";
+import type { SaleLineItem } from "../types/sales";
 
 export type ItemTypes =
   | "invalid"
