@@ -51,8 +51,12 @@ export interface SpendContext {
   terminal: TerminalModel;
   storeSetting: StoreSettingModel;
   user: UserModel;
-  shift: TerminalShiftModel;
+  // The terminal's open shift, or null. A replay of a recorded SPEND needs
+  // none (the shift may have closed since the lost answer); a new SPEND does.
+  shift: TerminalShiftModel | null;
 }
+
+export const SPEND_NO_SHIFT_MESSAGE = "No open shift — spend cannot be created";
 
 function validateSpendPayload(p: SaleCreatePayload) {
   if (p.type !== "SPEND")
@@ -65,7 +69,7 @@ function validateSpendPayload(p: SaleCreatePayload) {
 
 export interface PersistSpendArgs {
   payload: SaleCreatePayload;
-  context: SpendContext;
+  context: SpendContext & { shift: TerminalShiftModel };
   operationId: string;
   payloadHash: string;
 }
@@ -173,7 +177,17 @@ export const defaultSpendCreateDeps: SpendCreateDeps = {
   persistSpend: persistSpendInDb,
 };
 
-function spendReplayCheck(recorded: SaleInvoiceModel, payloadHash: string) {
+function spendReplayCheck(
+  recorded: SaleInvoiceModel,
+  payloadHash: string,
+  context: SpendContext,
+) {
+  // Scope: a replay answers only the terminal (and store company) that
+  // recorded it; any other caller with this id is a conflict, never a read.
+  if (recorded.terminalId !== context.terminal.id || recorded.companyId !== context.storeSetting.companyId)
+    throw operationConflict(
+      "This operationId was recorded by another terminal (409). Pressing again starts a new attempt.",
+    );
   if (recorded.type !== "SPEND")
     throw operationConflict(
       `This cart attempt was already recorded as ${recorded.type} invoice ${recorded.serial ?? `#${recorded.id}`} (409). Check that invoice before recording a spend; pressing again starts a new attempt.`,
@@ -202,12 +216,22 @@ export async function createSpendService(
     return await withOperationClaim(operationId, async () => {
       const recorded = await deps.findInvoiceByOperationId(operationId);
       if (recorded) {
-        spendReplayCheck(recorded, payloadHash);
+        spendReplayCheck(recorded, payloadHash, context);
         return respond(recorded, true);
       }
 
+      // Only a NEW write needs the open shift (review fix: a recorded SPEND
+      // whose answer was lost replays even after its shift closed).
+      const { shift } = context;
+      if (!shift) throw new BadRequestException(SPEND_NO_SHIFT_MESSAGE);
+
       try {
-        const invoice = await deps.persistSpend({ payload, context, operationId, payloadHash });
+        const invoice = await deps.persistSpend({
+          payload,
+          context: { ...context, shift },
+          operationId,
+          payloadHash,
+        });
         return respond(invoice, false);
       } catch (persistenceError) {
         // The error is not proof that nothing committed (a lost COMMIT ack, or
@@ -219,7 +243,7 @@ export async function createSpendService(
           console.error("[sale-operation] spend lookup after a persistence error failed", lookupError);
         }
         if (after) {
-          spendReplayCheck(after, payloadHash);
+          spendReplayCheck(after, payloadHash, context);
           return respond(after, isUniqueViolation(persistenceError));
         }
         throw persistenceError;

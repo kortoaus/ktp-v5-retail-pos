@@ -48,6 +48,7 @@ export interface CashIODto {
 
 export interface RecordedCashIO {
   id: number;
+  terminalId: number;
   operationPayloadHash: string | null;
 }
 
@@ -69,7 +70,7 @@ export const defaultCashIOCreateDeps: CashIOCreateDeps = {
   findByOperationId: (operationId) =>
     db.cashInOut.findUnique({
       where: { operationId },
-      select: { id: true, operationPayloadHash: true },
+      select: { id: true, terminalId: true, operationPayloadHash: true },
     }),
   // T-24 (R-7) — under the shift row lock so a close cannot miss it.
   persist: ({ shift, terminal, user, dto, operationId, payloadHash }) =>
@@ -92,15 +93,27 @@ export const defaultCashIOCreateDeps: CashIOCreateDeps = {
     }),
 };
 
-function assertSameCashIOPayload(recorded: RecordedCashIO, payloadHash: string) {
+function assertSameCashIOPayload(
+  recorded: RecordedCashIO,
+  payloadHash: string,
+  terminal: Terminal,
+) {
+  // Scope: a replay answers only the terminal that recorded the entry.
+  if (recorded.terminalId !== terminal.id)
+    throw operationConflict(
+      "This operationId was recorded by another terminal (409). Pressing Submit again records a new entry.",
+    );
   if (recorded.operationPayloadHash !== payloadHash)
     throw operationConflict(
       `This Cash In/Out attempt was already recorded as entry #${recorded.id} with a different type, amount or note (409). Check the Cash In/Out list before saving again; pressing Submit again records a new entry.`,
     );
 }
 
+// `shift` is the terminal's open shift or null: a replay of a recorded entry
+// needs none (the shift may have closed since the lost answer); a new entry
+// does (404 "Shift not found", as before).
 export async function createCashIOService(
-  shift: TerminalShift,
+  shift: TerminalShift | null,
   terminal: Terminal,
   user: User,
   body: unknown,
@@ -108,7 +121,6 @@ export async function createCashIOService(
 ) {
   try {
     const dto = parseCashIODto(body);
-    if (!shift) throw new NotFoundException("Shift not found");
     if (!terminal) throw new NotFoundException("Terminal not found");
     if (!user) throw new NotFoundException("User not found");
 
@@ -119,7 +131,7 @@ export async function createCashIOService(
     const payloadHash = operationPayloadHash(dto);
 
     const replay = (recorded: RecordedCashIO, replayed: boolean) => {
-      assertSameCashIOPayload(recorded, payloadHash);
+      assertSameCashIOPayload(recorded, payloadHash, terminal);
       return {
         ok: true,
         msg: replayed
@@ -133,6 +145,9 @@ export async function createCashIOService(
     return await withOperationClaim(operationId, async () => {
       const recorded = await deps.findByOperationId(operationId);
       if (recorded) return replay(recorded, true);
+
+      // Only a NEW entry needs the open shift (T-10 review fix).
+      if (!shift) throw new NotFoundException("Shift not found");
 
       try {
         const cashInOut = await deps.persist({

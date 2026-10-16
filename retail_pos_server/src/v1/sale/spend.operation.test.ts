@@ -21,6 +21,9 @@ const CONTEXT = {
   user: { id: 9, name: "Kim" },
   shift: { id: 3 },
 } as unknown as SpendContext;
+const OPEN = CONTEXT as PersistSpendArgs["context"];
+// The same terminal after its shift closed (withContext leaves shift null).
+const CLOSED = { ...CONTEXT, shift: null } as SpendContext;
 
 function spendPayload(over: Partial<SaleCreatePayload> = {}): SaleCreatePayload {
   return {
@@ -75,6 +78,8 @@ function harness() {
       type,
       serial: `3-20261016-P${invoices.length + 1}`,
       total: 0,
+      terminalId: args.context.terminal.id,
+      companyId: args.context.storeSetting.companyId,
       operationId: args.operationId,
       operationPayloadHash: args.payloadHash,
     } as unknown as SaleInvoiceModel;
@@ -150,7 +155,7 @@ test("same operationId with a different payload → 409 PAYLOAD_MISMATCH, nothin
 
 test("the id already belongs to a SALE from that cart → 409 PAYLOAD_MISMATCH naming the invoice, no SPEND", async () => {
   const h = harness();
-  h.record({ payload: spendPayload(), context: CONTEXT, operationId: OP, payloadHash: "sale-hash" }, "SALE");
+  h.record({ payload: spendPayload(), context: OPEN, operationId: OP, payloadHash: "sale-hash" }, "SALE");
   await assert.rejects(
     createSpendService(spendPayload({ operationId: OP }), CONTEXT, h.deps),
     (e: unknown) =>
@@ -235,4 +240,47 @@ test("SPEND shape guards still run first (payments → 400)", async () => {
     (e: unknown) => e instanceof HttpException && e.statusCode === 400,
   );
   assert.equal(h.persisted.length, 0);
+});
+
+// T-10 review fix — the replay lookup runs before the open-shift requirement.
+
+test("lost answer, then the shift closed → the retry still replays the recorded SPEND", async () => {
+  const h = harness();
+  const first = await createSpendService(spendPayload({ operationId: OP }), CONTEXT, h.deps);
+  const retry = await createSpendService(spendPayload({ operationId: OP }), CLOSED, h.deps);
+  assert.equal(retry.replayed, true);
+  assert.equal(retry.result.id, first.result.id);
+  assert.equal(h.invoices.length, 1);
+});
+
+test("a new SPEND (no recorded id, or no id) without an open shift is still 400, nothing written", async () => {
+  const h = harness();
+  for (const payload of [spendPayload({ operationId: OP }), spendPayload()]) {
+    await assert.rejects(
+      createSpendService(payload, CLOSED, h.deps),
+      (e: unknown) =>
+        e instanceof HttpException && e.statusCode === 400 && /No open shift — spend cannot be created/.test(e.message),
+    );
+  }
+  assert.equal(h.persisted.length, 0);
+});
+
+test("after the shift closed, the same id with another payload is still 409", async () => {
+  const h = harness();
+  await createSpendService(spendPayload({ operationId: OP }), CONTEXT, h.deps);
+  await assert.rejects(
+    createSpendService(spendPayload({ operationId: OP, note: "changed" }), CLOSED, h.deps),
+    is409(OPERATION_CODES.PAYLOAD_MISMATCH),
+  );
+});
+
+test("a recorded SPEND is never replayed to another terminal → 409", async () => {
+  const h = harness();
+  await createSpendService(spendPayload({ operationId: OP }), CONTEXT, h.deps);
+  const other = { ...CONTEXT, terminal: { id: 2, name: "T2" } } as unknown as SpendContext;
+  await assert.rejects(
+    createSpendService(spendPayload({ operationId: OP }), other, h.deps),
+    is409(OPERATION_CODES.PAYLOAD_MISMATCH),
+  );
+  assert.equal(h.invoices.length, 1);
 });

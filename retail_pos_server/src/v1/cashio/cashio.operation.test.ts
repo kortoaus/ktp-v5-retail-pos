@@ -29,6 +29,7 @@ function harness() {
     const row = {
       id: rows.length + 1,
       ...args.dto,
+      terminalId: args.terminal.id,
       operationId: args.operationId,
       operationPayloadHash: args.payloadHash,
     };
@@ -38,7 +39,9 @@ function harness() {
   const deps: CashIOCreateDeps = {
     findByOperationId: async (operationId) => {
       const row = rows.find((r) => r.operationId === operationId);
-      return row ? { id: row.id, operationPayloadHash: row.operationPayloadHash } : null;
+      return row
+        ? { id: row.id, terminalId: row.terminalId, operationPayloadHash: row.operationPayloadHash }
+        : null;
     },
     persist: async (args) => {
       persisted.push(args);
@@ -179,4 +182,45 @@ test("parseCashIODto ignores operationId (what an older server does with the fie
     amount: 500,
     note: undefined,
   });
+});
+
+// T-10 review fix — the replay lookup runs before the open-shift requirement.
+
+test("lost answer, then the shift closed → the retry still replays the recorded row", async () => {
+  const h = harness();
+  const first = await create(h, { type: "in", amount: 5000, operationId: OP });
+  const retry = await createCashIOService(null, TERMINAL, USER, { type: "in", amount: 5000, operationId: OP }, h.deps);
+  assert.equal(retry.replayed, true);
+  assert.equal(retry.result, first.result);
+  assert.equal(h.rows.length, 1);
+});
+
+test("a new entry (no recorded id, or no id) without an open shift is still 404, nothing written", async () => {
+  const h = harness();
+  for (const body of [{ type: "in", amount: 100, operationId: OP }, { type: "in", amount: 100 }]) {
+    await assert.rejects(
+      createCashIOService(null, TERMINAL, USER, body, h.deps),
+      (e: unknown) => e instanceof HttpException && e.statusCode === 404 && /Shift not found/.test(e.message),
+    );
+  }
+  assert.equal(h.persisted.length, 0);
+});
+
+test("after the shift closed, the same id with another amount is still 409", async () => {
+  const h = harness();
+  await create(h, { type: "in", amount: 5000, operationId: OP });
+  await assert.rejects(
+    createCashIOService(null, TERMINAL, USER, { type: "in", amount: 4000, operationId: OP }, h.deps),
+    is409(OPERATION_CODES.PAYLOAD_MISMATCH),
+  );
+});
+
+test("a recorded entry is never replayed to another terminal → 409", async () => {
+  const h = harness();
+  await create(h, { type: "in", amount: 5000, operationId: OP });
+  await assert.rejects(
+    createCashIOService(SHIFT, { id: 2, name: "T2" } as Terminal, USER, { type: "in", amount: 5000, operationId: OP }, h.deps),
+    is409(OPERATION_CODES.PAYLOAD_MISMATCH),
+  );
+  assert.equal(h.rows.length, 1);
 });

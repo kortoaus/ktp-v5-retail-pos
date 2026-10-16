@@ -38,17 +38,16 @@ export async function createSaleController(req: Request, res: Response) {
 }
 
 export async function createSpendController(req: Request, res: Response) {
+  // T-10 review: the open-shift requirement lives in createSpendService, after
+  // the operation lookup — a recorded SPEND replays even once its shift closed.
   const { terminal, storeSetting, shift, user } = res.locals;
-  if (!shift) {
-    throw new BadRequestException("No open shift — spend cannot be created");
-  }
 
   const payload = req.body as SaleCreatePayload;
   const result = await createSpendService(payload, {
     terminal,
     storeSetting,
     user,
-    shift,
+    shift: shift ?? null,
   });
   res.json(result);
 }
