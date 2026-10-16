@@ -103,3 +103,32 @@ export async function closeShiftGuarded<B extends { expectedShiftId?: number }>(
   }
   return { kind: "failed", message: res.msg || fallbackMessage };
 }
+
+// ── Close Shift screen view (T-10 review round 3) ───────────────────────────
+// What the screen renders, independent of React. The header (Cancel) and the
+// stale banner (Retry / Home) never wait for the closing preview: a failed
+// preview (by design when no shift is open) shows a message with Home, never
+// an endless "Loading".
+export type ClosePreviewState = "loading" | "failed" | "ready";
+
+export interface CloseShiftView {
+  staleBanner: boolean;
+  body: "no-shift" | "loading" | "preview-failed" | "ready";
+  canClose: boolean;
+}
+
+export function closeShiftView(input: {
+  hasShift: boolean;
+  staleShiftId: number | null;
+  preview: ClosePreviewState;
+}): CloseShiftView {
+  const staleBanner = input.staleShiftId != null;
+  const body: CloseShiftView["body"] = !input.hasShift
+    ? "no-shift"
+    : input.preview === "failed"
+      ? "preview-failed"
+      : input.preview === "loading"
+        ? "loading"
+        : "ready";
+  return { staleBanner, body, canClose: !staleBanner && body === "ready" };
+}

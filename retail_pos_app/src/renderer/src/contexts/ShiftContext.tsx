@@ -2,9 +2,9 @@ import {
   createContext,
   useContext,
   useEffect,
-  useRef,
   useState,
   useCallback,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import {
@@ -19,6 +19,7 @@ import {
   reloadStaleShift,
   type ShiftMismatch,
 } from "../libs/shift-close";
+import { createShiftStateStore } from "../libs/shift-state";
 import { useTerminal } from "./TerminalContext";
 
 interface OpenShiftPayload {
@@ -58,61 +59,33 @@ const ShiftContext = createContext<ShiftContextValue | null>(null);
 
 export function ShiftProvider({ children }: { children: ReactNode }) {
   const { terminal, loading: terminalLoading } = useTerminal();
-  const [shift, setShift] = useState<TerminalShift | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [staleShiftId, setStaleShiftIdState] = useState<number | null>(null);
-  // Read synchronously by closeShift (state alone would lag a render).
-  const staleRef = useRef<number | null>(null);
-  const setStaleShiftId = useCallback((id: number | null) => {
-    staleRef.current = id;
-    setStaleShiftIdState(id);
-  }, []);
+  // T-10 review round 3: state lives in a pure store (libs/shift-state.ts) —
+  // latest-read ownership, in-place stale reloads (no full-screen loading),
+  // stale marker cleared on a terminal change.
+  const [store] = useState(() =>
+    createShiftStateStore<TerminalShift>(getCurrentShift, (e) => console.error(e)),
+  );
+  const { shift, loading, staleShiftId } = useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+  );
 
   useEffect(() => {
-    if (terminalLoading || !terminal) {
-      setLoading(false);
-      return;
-    }
+    if (terminalLoading) return;
+    void store.setTerminal(terminal ? terminal.id : null);
+  }, [store, terminal, terminalLoading]);
 
-    const init = async () => {
-      setLoading(true);
-      try {
-        const res = await getCurrentShift();
-        if (res.ok) {
-          setShift(res.result ?? null);
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    init();
-  }, [terminal, terminalLoading]);
-
-  // A failed GET leaves the state as it was and resolves false, so a caller
-  // (the mismatch recovery) knows the till did not learn the current shift.
-  const reload = useCallback(async (): Promise<boolean> => {
-    setLoading(true);
-    try {
-      const res = await getCurrentShift();
-      if (res.ok) {
-        setShift(res.result ?? null);
-        return true;
-      }
-      return false;
-    } catch (e) {
-      console.error(e);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Full load (post-open). Resolves true only when this read answered and
+  // still owned the state.
+  const reload = useCallback(() => store.reload(), [store]);
 
   const retryShiftReload = useCallback(
-    () => reloadStaleShift({ reloadShift: reload, setStaleShiftId }),
-    [reload, setStaleShiftId],
+    () =>
+      reloadStaleShift({
+        reloadShift: () => store.reload({ inPlace: true }),
+        setStaleShiftId: store.setStaleShiftId,
+      }),
+    [store],
   );
 
   const openShift = useCallback(
@@ -130,10 +103,11 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
     async (dto: CloseShiftDTO) => {
       const outcome = await closeShiftGuarded(dto, {
         close: closeShiftApi,
-        reloadShift: reload,
-        onClosed: () => setShift(null),
-        staleShiftId: () => staleRef.current,
-        setStaleShiftId,
+        // In place: the Close Shift screen (Retry / Home) stays mounted.
+        reloadShift: () => store.reload({ inPlace: true }),
+        onClosed: () => store.setShift(null),
+        staleShiftId: () => store.getSnapshot().staleShiftId,
+        setStaleShiftId: store.setStaleShiftId,
       });
       if (outcome.kind === "closed") return { ok: true, msg: "" };
       if (outcome.kind === "mismatch")
@@ -147,7 +121,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
         return { ok: false, msg: outcome.message, stale: true };
       return { ok: false, msg: outcome.message };
     },
-    [reload, setStaleShiftId],
+    [store],
   );
 
   return (
