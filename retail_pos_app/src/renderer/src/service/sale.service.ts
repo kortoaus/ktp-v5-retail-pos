@@ -11,9 +11,12 @@ import {
   operationIdFor,
   refundAttemptKey,
   repayAttemptKey,
-  saleAttemptKey,
   settleOperation,
 } from "../libs/operation-id";
+import {
+  sendSaleWithOperation,
+  type SaleBody,
+} from "../libs/sale/submit-sale";
 
 export type InvoiceTypeWire = "SALE" | "REFUND" | "SPEND";
 
@@ -80,6 +83,16 @@ export interface SaleSearchParams {
   type?: InvoiceTypeWire;
 }
 
+// The HTTP half of a sale submit (T-1): the body already carries the
+// attempt's operationId — libs/sale/submit-sale.ts mints, resends and settles
+// it (T-15, one attempt per cart slot) and injects this function.
+// T-24 (R-10): an update never installs while this is in flight.
+export async function postSale(
+  body: SaleBody,
+): Promise<ApiResponse<SaleInvoiceCreated>> {
+  return trackCheckout(apiService.post<SaleInvoiceCreated>("/api/sale", body));
+}
+
 // T-15 — every submit carries its attempt's operationId (libs/operation-id.ts),
 // one attempt per cart slot: a retry from the same cart after a lost response
 // replays the original invoice; another cart is always its own attempt.
@@ -87,17 +100,7 @@ export async function createSale(
   payload: SaleCreatePayload,
   cartIndex: number,
 ): Promise<ApiResponse<SaleInvoiceCreated>> {
-  const attemptKey = saleAttemptKey(cartIndex);
-  const operationId = operationIdFor(attemptKey);
-  // T-24 (R-10): an update never installs while this is in flight.
-  const res = await trackCheckout(
-    apiService.post<SaleInvoiceCreated>("/api/sale", {
-      ...payload,
-      operationId,
-    }),
-  );
-  settleOperation(attemptKey, res);
-  return res;
+  return sendSaleWithOperation(payload, cartIndex, postSale);
 }
 
 // 내부 소비 (SPEND). 금액 0, payments 없음. 서버가 row-level 강제 정규화.

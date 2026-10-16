@@ -15,7 +15,6 @@ import {
   isStagedActive,
   isVoucherSlot,
   paymentTypesFor,
-  readyStagedPayment,
   removePaymentPrompt,
   selectTender,
   slotOf,
@@ -42,17 +41,19 @@ import {
   type VoucherListState,
 } from "../../../libs/customer-voucher-list";
 import {
-  createSale,
   createSpend,
   getSaleInvoiceById,
   OrderCollectResult,
+  postSale,
   SaleInvoiceCreated,
   SaleInvoiceDetail,
 } from "../../../service/sale.service";
 import {
-  buildSalePayload,
-  buildSpendPayload,
-} from "../../../libs/sale/build-payload";
+  SALE_MESSAGES,
+  submitSale,
+  submitSpend,
+  type CompletedSaleInfo,
+} from "../../../libs/sale/submit-sale";
 import { getMemberLevelOneEstimate } from "../../../libs/sale/member-level-estimate";
 import LoadingOverlay from "../../../components/LoadingOverlay";
 import { kickDrawer } from "../../../libs/printer/kick-drawer";
@@ -199,82 +200,49 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
 
 
   // Completion flow state:
-  //   processing     — createSale 요청 중. LoadingOverlay 로 유저 행동 블락.
+  //   processing     — submitSale 요청 중. LoadingOverlay 로 유저 행동 블락.
   //   completedInfo  — sale 저장 후 snapshot. ChangeOverlay 에서 receipt print
   //                    여부를 cashier 가 선택. close → cart clear + modal 종료.
   const [processing, setProcessing] = useState(false);
-  const [completedInfo, setCompletedInfo] = useState<{
-    invoice: SaleInvoiceCreated;
-    detail: SaleInvoiceDetail | null; // reprint 때 재조회 없이 바로 사용
-    total: number;
-    paid: number;
-    cashReceived: number;
-    change: number;
-    receiptPrinted: boolean;
-    // clearActiveCart() 가 member 를 지우기 전의 CRM 잔액 스냅샷. 영수증의
-    // Total Points(잔액+적립) 계산용 — 어디에도 저장되지 않는다.
-    memberPointsBefore: number | null;
-    // S3 — 주문 로드 판매의 collect 결과 표시용. null = 주문 연계 없음.
-    order: { orderNo: string; collectResult: OrderCollectResult } | null;
-  } | null>(null);
+  const [completedInfo, setCompletedInfo] = useState<
+    | (CompletedSaleInfo<SaleInvoiceCreated> & {
+        detail: SaleInvoiceDetail | null; // reprint 때 재조회 없이 바로 사용
+      })
+    | null
+  >(null);
 
   async function handleCompleteSale() {
     if (completeDisabled || processing) return;
     const cart = carts[activeCartIndex];
     if (!cart) return;
-    const saleCartSnapshot = {
-      ...cart,
-      lines: cart.lines.map((line) => ({ ...line })),
-    };
 
-    // Non-cash staged (CREDIT / GIFTCARD / VOUCHER) 가 ready 면 committed 처럼
-    // payload 에 포함 → ADD 누르는 단계 생략 (1-step Complete flow).
-    // CASH staged 는 cal.cashApplied 에 이미 반영돼 있어 builder 가 스스로 제외.
-    const payload = buildSalePayload({
-      cart: saleCartSnapshot,
-      cal,
-      payments,
-      stagedPayment: readyStagedPayment(stagedPayment),
-    });
-
+    // libs/sale/submit-sale: cart snapshot → payload (a ready non-cash staged
+    // draft is included — 1-step Complete) → operationId attempt → answer.
     setProcessing(true);
     try {
-      const res = await createSale(payload, activeCartIndex);
-      if (!res.ok || !res.result) {
-        window.alert(res.msg || "Failed to complete sale");
+      const outcome = await submitSale(
+        {
+          cart,
+          cartIndex: activeCartIndex,
+          cal,
+          payments,
+          stagedPayment,
+        },
+        postSale,
+      );
+      if (!outcome.ok) {
+        window.alert(outcome.message);
         return;
       }
       // T-15 — a retry after a lost response: the server already had this
       // sale and returns the same invoice instead of charging again.
-      if (res.result.replayed) {
-        window.alert(
-          `This sale was already recorded (${res.result.serial ?? `#${res.result.id}`}) — nothing was charged twice.`,
-        );
+      if (outcome.replayNotice) {
+        window.alert(outcome.replayNotice);
       }
 
-      setCompletedInfo({
-        invoice: res.result,
-        detail: null,
-        total: cal.total,
-        paid: cal.paid,
-        cashReceived: cal.cashIntent,
-        change: cal.change,
-        receiptPrinted: false,
-        memberPointsBefore: activeMember?.points ?? null,
-        // S3 — 주문 로드 카트면 collect 결과 노출 (pending = 스윕 자동
-        // 재시도, conflict = 영구 실패 — 사람 확인). 구형 서버(트라이스테이트
-        // 이전)는 collectSynced boolean 만 주므로 폴백 매핑 — 필드 전부
-        // 부재면 pending 취급 (S3 리뷰).
-        order: saleCartSnapshot.externalOrderId
-          ? {
-              orderNo:
-                saleCartSnapshot.orderNo ?? saleCartSnapshot.externalOrderId,
-              collectResult:
-                res.result.collectResult ??
-                (res.result.collectSynced === true ? "collected" : "pending"),
-            }
-          : null,
-      });
+      // S3 — 주문 로드 카트면 collect 결과 노출 (pending = 스윕 자동
+      // 재시도, conflict = 영구 실패 — 사람 확인) — completed.order.
+      setCompletedInfo({ ...outcome.completed, detail: null });
       clearActiveCart();
 
       // Drawer 먼저 — 프린트는 수초 걸리므로 서랍을 앞세워 cashier 가 거스름돈
@@ -290,7 +258,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
 
       // 영수증 용 detail 재조회 (rows + payments 포함). 실패해도 거래와 cart
       // clear 는 이미 확정됐고, Print Receipt 에서 다시 조회할 수 있다.
-      const invoiceId = res.result.id;
+      const invoiceId = outcome.invoice.id;
       const detailRes = await getSaleInvoiceById(invoiceId);
       const detail = detailRes.ok ? detailRes.result : null;
       if (detail) {
@@ -358,20 +326,17 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     const cart = carts[activeCartIndex];
     if (!cart || cart.lines.length === 0) return;
 
-    const ok = window.confirm(
-      "Record these items as internal consumption (SPEND)? This is not a sale.",
-    );
+    const ok = window.confirm(SALE_MESSAGES.spendConfirm);
     if (!ok) return;
 
     setProcessing(true);
     try {
-      const payload = buildSpendPayload({ cart });
-      const res = await createSpend(payload);
-      if (!res.ok || !res.result) {
-        window.alert(res.msg || "Failed to record spend");
+      const outcome = await submitSpend(cart, createSpend);
+      if (!outcome.ok) {
+        window.alert(outcome.message);
         return;
       }
-      const detailRes = await getSaleInvoiceById(res.result.id);
+      const detailRes = await getSaleInvoiceById(outcome.invoice.id);
       if (detailRes.ok && detailRes.result) {
         try {
           await printSaleInvoiceReceipt(
