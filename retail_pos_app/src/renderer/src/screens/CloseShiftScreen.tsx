@@ -11,6 +11,7 @@ import {
 } from "../service/shift.service";
 import { MONEY_DP, MONEY_SCALE } from "../libs/constants";
 import { printShiftSettlementReceipt } from "../libs/printer/shift-settlement-receipt";
+import { SHIFT_RELOAD_FAILED_MESSAGE } from "../libs/shift-close";
 import {
   CUSTOMER_VOUCHER_LABEL,
   RECONCILIATION_HEADER,
@@ -28,7 +29,8 @@ const netFmt = (cents: number) => (cents < 0 ? `-${fmt(cents)}` : fmt(cents));
 
 export default function CloseShiftScreen() {
   const navigate = useNavigate();
-  const { shift, closeShift } = useShift();
+  const { shift, closeShift, staleShiftId, retryShiftReload } = useShift();
+  const [retrying, setRetrying] = useState(false);
   const [cashActual, setCashActual] = useState(0);
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
@@ -88,7 +90,20 @@ export default function CloseShiftScreen() {
     ["Gift Card", netFmt(netGiftcard)],
   ];
 
+  // T-10 review round 2 — known-stale shift: re-read it from the server.
+  const handleRetryReload = async () => {
+    setRetrying(true);
+    try {
+      await retryShiftReload();
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  const stale = staleShiftId != null;
+
   const handleClose = async () => {
+    if (stale) return;
     if (!confirmClose) {
       setConfirmClose(true);
       return;
@@ -112,8 +127,9 @@ export default function CloseShiftScreen() {
         }
         navigate("/");
       } else if (mismatch) {
-        // T-10 review: the shift was already reloaded from the server; the
-        // count belonged to the old shift, so start over for the open one.
+        // T-10 review: the count belonged to the old shift, so start over.
+        // The shift was reloaded from the server, or — if that reload failed —
+        // the screen stays stale (Retry banner, Close disabled) until it works.
         setConfirmClose(false);
         setCashActual(0);
         setNote("");
@@ -180,7 +196,7 @@ export default function CloseShiftScreen() {
           </button>
           <button
             onClick={handleClose}
-            disabled={loading}
+            disabled={loading || stale}
             className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
           >
             {loading
@@ -191,6 +207,29 @@ export default function CloseShiftScreen() {
           </button>
         </div>
       </div>
+
+      {stale && (
+        <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-red-200 bg-red-50 text-red-800">
+          <span className="text-sm font-medium">
+            Shift {staleShiftId} is no longer open. {SHIFT_RELOAD_FAILED_MESSAGE}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate("/")}
+              className="rounded-lg bg-white border border-red-200 px-4 py-2 text-sm font-medium text-red-800 hover:bg-red-100 transition-colors"
+            >
+              Home
+            </button>
+            <button
+              onClick={handleRetryReload}
+              disabled={retrying}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              {retrying ? "Retrying..." : "Retry"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Summary */}

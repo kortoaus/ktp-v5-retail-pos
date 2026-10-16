@@ -2,7 +2,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { closeShiftGuarded, shiftMismatchMessage, shiftMismatchOf } from "./shift-close.ts";
+import {
+  SHIFT_RELOAD_FAILED_MESSAGE,
+  closeShiftGuarded,
+  reloadStaleShift,
+  shiftMismatchMessage,
+  shiftMismatchOf,
+} from "./shift-close.ts";
 
 // A fake store server: one open shift per terminal; close guarded like
 // shift.service closeTerminalShiftService.
@@ -24,20 +30,29 @@ function fakeServer(openShiftId) {
   return server;
 }
 
-// Till state as ShiftContext holds it.
+// Till state as ShiftContext holds it. `reloadFails` makes the next N
+// GET /api/shift/current answers fail ({ ok: false, status: 0 }) — the
+// state is then left unchanged, as ShiftContext.reload does.
 function till(server, shiftId) {
-  const state = { shift: shiftId == null ? null : { id: shiftId }, reloads: 0 };
+  const state = { shift: shiftId == null ? null : { id: shiftId }, reloads: 0, stale: null, reloadFails: 0 };
   const deps = {
-    close: server.close,
+    close: async (body) => (state.sent = (state.sent ?? 0) + 1, server.close(body)),
     reloadShift: async () => {
       state.reloads++;
+      if (state.reloadFails > 0) {
+        state.reloadFails--;
+        return false;
+      }
       state.shift = server.open == null ? null : { id: server.open };
+      return true;
     },
     onClosed: () => (state.shift = null),
+    staleShiftId: () => state.stale,
+    setStaleShiftId: (id) => (state.stale = id),
   };
   const press = (endedCashActual) =>
-    closeShiftGuarded({ closedNote: "", endedCashActual, expectedShiftId: state.shift.id }, deps);
-  return { state, press };
+    closeShiftGuarded({ closedNote: "", endedCashActual, expectedShiftId: state.shift?.id }, deps);
+  return { state, press, retry: () => reloadStaleShift(deps) };
 }
 
 test("mismatch → shift reloaded from the server → the next close targets the current shift, once", async () => {
@@ -47,6 +62,8 @@ test("mismatch → shift reloaded from the server → the next close targets the
 
   const first = await t.press(12_345);
   assert.equal(first.kind, "mismatch");
+  assert.equal(first.reloaded, true);
+  assert.equal(t.state.stale, null, "a successful reload clears the stale mark");
   assert.deepEqual(first.mismatch, { expectedShiftId: 12, currentOpenShiftId: 13 });
   assert.match(first.message, /Shift 12 is no longer open\. Shift 13 is open now/);
   assert.equal(t.state.reloads, 1);
@@ -78,7 +95,13 @@ test("matching shift closes without a reload; other failures are not mismatches"
 
   const failed = await closeShiftGuarded(
     { endedCashActual: 0, expectedShiftId: 7 },
-    { close: async () => ({ ok: false, status: 0, msg: "", result: null }), reloadShift: async () => assert.fail(), onClosed: () => assert.fail() },
+    {
+      close: async () => ({ ok: false, status: 0, msg: "", result: null }),
+      reloadShift: async () => assert.fail(),
+      onClosed: () => assert.fail(),
+      staleShiftId: () => null,
+      setStaleShiftId: () => assert.fail(),
+    },
   );
   assert.deepEqual(failed, { kind: "failed", message: "Failed to close shift" });
   assert.equal(shiftMismatchOf({ ok: false, msg: "x", result: { code: "OPERATION_IN_PROGRESS" } }), null);
@@ -86,4 +109,47 @@ test("matching shift closes without a reload; other failures are not mismatches"
     shiftMismatchMessage({ expectedShiftId: 4, currentOpenShiftId: 5 }),
     "Shift 4 is no longer open. Shift 5 is open now — nothing was closed. Count the drawer again to close shift 5.",
   );
+});
+
+test("mismatch + failed reload → stays stale, no close is sent; Retry reload succeeds → the next close targets the current shift once", async () => {
+  const server = fakeServer(13);
+  const t = till(server, 12);
+  t.state.reloadFails = 2;
+
+  const first = await t.press(12_345);
+  assert.equal(first.kind, "mismatch");
+  assert.equal(first.reloaded, false);
+  assert.match(first.message, /Could not reload the shift — Retry/);
+  assert.equal(t.state.shift.id, 12, "the failed GET left the old shift in state");
+  assert.equal(t.state.stale, 12);
+  assert.equal(t.state.sent, 1);
+
+  // A confirmed Close while stale is refused before any request.
+  const refused = await t.press(12_345);
+  assert.deepEqual(refused, { kind: "stale", message: SHIFT_RELOAD_FAILED_MESSAGE });
+  assert.equal(t.state.sent, 1, "shift 12 was not sent again");
+
+  // Retry fails once more → still stale; then succeeds.
+  assert.equal(await t.retry(), false);
+  assert.equal(t.state.stale, 12);
+  assert.equal((await t.press(1)).kind, "stale");
+  assert.equal(await t.retry(), true);
+  assert.equal(t.state.stale, null);
+  assert.equal(t.state.shift.id, 13);
+
+  assert.deepEqual(await t.press(20_000), { kind: "closed" });
+  assert.deepEqual(server.closes, [{ id: 13, endedCashActual: 20_000 }]);
+  assert.equal(t.state.sent, 2, "exactly one close after the stale one, for shift 13");
+});
+
+test("a reload that throws counts as failed (stays stale)", async () => {
+  const state = { stale: 12 };
+  const ok = await reloadStaleShift({
+    reloadShift: async () => {
+      throw new Error("boom");
+    },
+    setStaleShiftId: (id) => (state.stale = id),
+  });
+  assert.equal(ok, false);
+  assert.equal(state.stale, 12);
 });
