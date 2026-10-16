@@ -1,21 +1,31 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useSalesStore } from "../../../store/SalesStore";
 import { cn } from "../../../libs/cn";
 import { useStoreSetting } from "../../../hooks/useStoreSetting";
 import {
   CUSTOMER_VOUCHER_ISSUE_POINTS,
-  MONEY_DP,
-  MONEY_SCALE,
   QTY_SCALE,
 } from "../../../libs/constants";
 import type { PaymentQueueItem } from "./types";
+import { billPortionOf } from "./usePaymentCal";
 import {
-  billPortionOf,
-  calcLeft,
-  eftposAmountOf,
-  round5,
-  usePaymentCal,
-} from "./usePaymentCal";
+  changeSlotDecision,
+  createTenderState,
+  fmtMoney,
+  isStagedActive,
+  isVoucherSlot,
+  paymentTypesFor,
+  readyStagedPayment,
+  removePaymentPrompt,
+  selectTender,
+  slotOf,
+  TENDER_LABEL,
+  tenderReducer,
+  tenderRates,
+  type TenderAction,
+  type TenderSlot,
+  type TenderState,
+} from "../../../libs/sale/tender-queue";
 import CashInput from "./CashInput";
 import CreditInput from "./CreditInput";
 import GiftCardInput from "./GiftCardInput";
@@ -53,89 +63,15 @@ import {
   PAYMENT_CATEGORY_CLASSES,
 } from "../../../libs/payment-colors";
 
-// UI-level tender slot. Distinct from PaymentType in the schema:
-//   USER_VOUCHER + CUSTOMER_VOUCHER both map to tender="VOUCHER" in the
-//   PaymentQueueItem (and SaleInvoicePayment), discriminated by entityType.
-type TenderSlot =
-  | "CASH"
-  | "CREDIT"
-  | "USER_VOUCHER"
-  | "CUSTOMER_VOUCHER"
-  | "GIFTCARD";
-
-const EXACT_TENDER_SLOTS: TenderSlot[] = ["CREDIT", "GIFTCARD"];
-
-// Summary 패널 — tender 별 합계 표시용 라벨.
-const TENDER_LABEL: Record<TenderSlot, string> = {
-  CASH: "Cash",
-  CREDIT: "Credit",
-  USER_VOUCHER: "Staff Voucher",
-  CUSTOMER_VOUCHER: "Customer Voucher",
-  GIFTCARD: "Gift Card",
-};
-
-// Empty draft for each slot. `key: "staged"` is a fixed marker — when the
-// staged item is committed to `payments`, a uuid replaces it. Never two
-// staged items, so no key collision risk.
-function makeDefaultStage(slot: TenderSlot): PaymentQueueItem {
-  switch (slot) {
-    case "CASH":
-      return { key: "staged", tender: "CASH", amount: 0, cashReceived: 0 };
-    case "CREDIT":
-      return { key: "staged", tender: "CREDIT", amount: 0 };
-    case "GIFTCARD":
-      return { key: "staged", tender: "GIFTCARD", amount: 0 };
-    case "USER_VOUCHER":
-      return {
-        key: "staged",
-        tender: "VOUCHER",
-        amount: 0,
-        entityType: "user-voucher",
-        entityId: 0,
-        entityLabel: "",
-      };
-    case "CUSTOMER_VOUCHER":
-      return {
-        key: "staged",
-        tender: "VOUCHER",
-        amount: 0,
-        entityType: "customer-voucher",
-        entityId: 0,
-        entityLabel: "",
-      };
-  }
-}
-
-// Derive UI slot from a staged/committed item — needed because VOUCHER tender
-// covers two UI slots.
-function slotOf(p: PaymentQueueItem): TenderSlot {
-  if (p.tender === "VOUCHER") {
-    return p.entityType === "user-voucher"
-      ? "USER_VOUCHER"
-      : "CUSTOMER_VOUCHER";
-  }
-  return p.tender; // CASH | CREDIT | GIFTCARD
-}
-
-function isVoucherSlot(slot: TenderSlot): boolean {
-  return slot === "USER_VOUCHER" || slot === "CUSTOMER_VOUCHER";
-}
-
-function isExactTenderPayment(p: PaymentQueueItem): boolean {
-  return p.tender === "CREDIT" || p.tender === "GIFTCARD";
-}
-
-// "Has the cashier put anything into this draft yet?" CASH uses cashReceived
-// because amount is derived (allocation). Others use amount as the source.
-function isStagedActive(p: PaymentQueueItem): boolean {
-  if (p.tender === "CASH") return p.cashReceived > 0;
-  return p.amount > 0;
-}
-
-const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
-
-const userVoucherEntityLabel = (userName: string, expectedBalance: number) =>
-  `${userName} - Est. balance $${fmtMoney(Math.max(0, expectedBalance))}`;
+// Tender slots, labels, default drafts and the reducer live in
+// libs/sale/tender-queue.ts (pure, shared with Runner — T-1).
+type TenderStateVM = TenderState<Voucher, CustomerVoucher>;
+const reducer = (
+  state: TenderStateVM,
+  action: TenderAction<Voucher, CustomerVoucher>,
+): TenderStateVM => tenderReducer(state, action);
+const initTenderState = (): TenderStateVM =>
+  createTenderState<Voucher, CustomerVoucher>();
 
 // qty (×QTY_SCALE) → display string. 정수면 그대로, 소수 weight 면 뒤 0 제거.
 const fmtQty = (q: number) => {
@@ -145,34 +81,22 @@ const fmtQty = (q: number) => {
 
 export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
   const { storeSetting } = useStoreSetting();
-  const [stagedPayment, setStagedPayment] = useState<PaymentQueueItem>(
-    makeDefaultStage("CASH"),
-  );
-  const [payments, setPayments] = useState<PaymentQueueItem[]>([]);
-  // Live Voucher object for the currently staged USER_VOUCHER. Held separately
-  // because PaymentQueueItem only carries entityId/entityLabel — not balance.
-  // Cleared on slot change or commit.
-  const [stagedVoucher, setStagedVoucher] = useState<Voucher | null>(null);
-  const [stagedVoucherUserName, setStagedVoucherUserName] = useState<
-    string | null
-  >(null);
-  const [stagedCustomerVoucher, setStagedCustomerVoucher] =
-    useState<CustomerVoucher | null>(null);
-  const [customerVoucherMemberPoints, setCustomerVoucherMemberPoints] =
-    useState<number | null>(null);
-
-  // SPEND 토글 모드 — ON 이면 tender picker (4종) 비활성 + keypad 영역 overlay,
-  // Summary 의 COMPLETE SALE 자리에 RECORD SPEND 버튼. 토글할 때마다 staged /
-  // committed / voucher 전부 리셋 (숨겨진 state 없도록).
-  const [spendMode, setSpendMode] = useState(false);
+  // Tender state — pure reducer (libs/sale/tender-queue). Staged draft,
+  // committed queue, staged Staff/Customer Voucher objects and SPEND mode.
+  // SPEND 토글 모드 — ON 이면 tender picker 비활성 + keypad 영역 overlay,
+  // Summary 의 COMPLETE 자리에 RECORD SPEND 버튼. 토글 시 전부 리셋.
+  const [tender, dispatch] = useReducer(reducer, undefined, initTenderState);
+  const {
+    staged: stagedPayment,
+    payments,
+    stagedVoucher,
+    stagedCustomerVoucher,
+    customerVoucherMemberPoints,
+    spendMode,
+  } = tender;
 
   function toggleSpendMode() {
-    setSpendMode((prev) => !prev);
-    setPayments([]);
-    setStagedPayment(makeDefaultStage("CASH"));
-    setStagedVoucher(null);
-    setStagedVoucherUserName(null);
-    setStagedCustomerVoucher(null);
+    dispatch({ type: "toggle-spend" });
   }
   const { carts, activeCartIndex, clearActiveCart, setMember } =
     useSalesStore();
@@ -181,9 +105,9 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     [carts, activeCartIndex],
   );
 
-  const credit_surcharge_rate = storeSetting?.credit_surcharge_rate ?? 15; // 15: 1.5%, 150:15%, 1500:150%
-  const cash_point_rate = storeSetting?.cash_point_rate ?? 10;
-  const other_point_rate = storeSetting?.other_point_rate ?? 10;
+  // 15: 1.5%, 150:15%, 1500:150% — fallbacks in tenderRates.
+  const rates = useMemo(() => tenderRates(storeSetting), [storeSetting]);
+  const credit_surcharge_rate = rates.creditSurchargeRate;
   const activeMember = carts[activeCartIndex]?.member ?? null;
   const memberLevelEstimate = useMemo(
     () => getMemberLevelOneEstimate({ lines, member: activeMember }),
@@ -203,14 +127,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
   });
   const hasAvailableCustomerVoucher = voucherIndicators.voucherBadge === "available";
   const previousMemberIdRef = useRef<string | null>(activeMemberId);
-  const voucherSlot: TenderSlot = activeMember
-    ? "CUSTOMER_VOUCHER"
-    : "USER_VOUCHER";
-  const paymentTypes: TenderSlot[] = [
-    voucherSlot,
-    "CASH",
-    ...EXACT_TENDER_SLOTS,
-  ];
+  const paymentTypes = paymentTypesFor(activeMember != null);
 
   useEffect(() => {
     if (!activeMemberId) return;
@@ -230,106 +147,42 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
   useEffect(() => {
     if (previousMemberIdRef.current === activeMemberId) return;
     previousMemberIdRef.current = activeMemberId;
-    setPayments([]);
-    setStagedPayment(makeDefaultStage("CASH"));
-    setStagedVoucher(null);
-    setStagedVoucherUserName(null);
-    setStagedCustomerVoucher(null);
-    setCustomerVoucherMemberPoints(null);
+    dispatch({ type: "member-changed" });
   }, [activeMemberId]);
 
-  // Combined list for math. Always include staged so the hook sees the
-  // tender presence (e.g. CASH staged at $0 should still trigger rounding).
-  // Empty drafts are filtered out for display below.
-  const combinedPayments = useMemo(
-    () => [stagedPayment, ...payments],
-    [stagedPayment, payments],
+  // Everything derived from the tender state: cal (usePaymentCal math —
+  // rounding, surcharge, remaining, change, points), input cap `left`, EXACT
+  // cash, display list with cash FIFO allocation, per-slot sums, locks.
+  const hasMember = activeMember != null;
+  const {
+    cal,
+    left,
+    exactCashAmount,
+    derivedPayments,
+    tenderSums,
+    usedUserVoucherIds,
+    usedCustomerVoucherIds,
+    voucherLocked,
+    cashLocked,
+    completeDisabled,
+  } = useMemo(
+    () =>
+      selectTender(
+        { staged: stagedPayment, payments },
+        { lines, rates, hasMember },
+      ),
+    [stagedPayment, payments, lines, rates, hasMember],
   );
-
-  const cal = usePaymentCal({
-    lines,
-    credit_surcharge_rate,
-    cash_point_rate,
-    other_point_rate,
-    hasMember: activeMember != null,
-    payments: combinedPayments,
-  });
-
-  // `left` = cap for the active tender input. Derived from committed-only
-  // payments (excludes staged). Mirrors the hook's allocation logic.
-  const left = useMemo(
-    () => calcLeft(payments, cal.due, credit_surcharge_rate),
-    [payments, cal.due, credit_surcharge_rate],
-  );
-
-  // EXACT 버튼 값. Credit/giftcard exact tender 가 없으면 round5(left) 로 넣어
-  // cash-only and voucher+cash remainder rounding 을 충족시킴.
-  // Exact tender 가 committed 되면 그냥 left (card/giftcard mixed 는 round 금지).
-  const exactCashAmount = payments.some(isExactTenderPayment)
-    ? left
-    : round5(left);
 
   // CREDIT staged needs clamping when `left` shrinks (e.g. another committed
-  // payment grows the non-cash bill, or cash absorbs more). For CASH, the
-  // amount is fully derived (cashAllocations) — no sync needed.
+  // payment grows the non-cash bill, or cash absorbs more).
   useEffect(() => {
-    setStagedPayment((prev) => {
-      if (prev.tender === "CREDIT") {
-        const bill = billPortionOf(prev, credit_surcharge_rate);
-        if (bill <= left) return prev;
-        const next = eftposAmountOf(left, credit_surcharge_rate);
-        return next === prev.amount ? prev : { ...prev, amount: next };
-      }
-      return prev;
+    dispatch({
+      type: "clamp-credit",
+      left,
+      surchargeRate: credit_surcharge_rate,
     });
   }, [left, credit_surcharge_rate]);
-
-  // For pending list display: drop the staged item if it's an empty draft,
-  // then replace each CASH item's stored `amount` with its FIFO allocation.
-  const derivedPayments = useMemo(
-    () =>
-      combinedPayments
-        .filter((p) => p.key !== "staged" || isStagedActive(p))
-        .map((p) =>
-          p.tender === "CASH"
-            ? { ...p, amount: cal.cashAllocations.get(p.key) ?? 0 }
-            : p,
-        ),
-    [combinedPayments, cal.cashAllocations],
-  );
-
-  // Committed 된 user-voucher 의 voucher id 목록. Search modal 에서 이미 쓰인
-  // voucher 를 disabled 로 표시 → 중복 선택 차단 (Option A, D-20).
-  const usedUserVoucherIds = useMemo(
-    () =>
-      payments
-        .filter(
-          (p) => p.tender === "VOUCHER" && p.entityType === "user-voucher",
-        )
-        .map((p) => (p as { entityId: number }).entityId),
-    [payments],
-  );
-
-  const usedCustomerVoucherIds = useMemo(
-    () =>
-      payments
-        .filter(
-          (p) => p.tender === "VOUCHER" && p.entityType === "customer-voucher",
-        )
-        .map((p) => (p as { entityId: number }).entityId),
-    [payments],
-  );
-
-  // Summary 패널 — active staged draft까지 포함한 tender slot 별 합계.
-  // CASH 는 derivedPayments 에서 FIFO allocation 으로 정규화된 amount 를 사용한다.
-  const tenderSums = useMemo(() => {
-    const sums = new Map<TenderSlot, number>();
-    for (const p of derivedPayments) {
-      const slot = slotOf(p);
-      sums.set(slot, (sums.get(slot) ?? 0) + p.amount);
-    }
-    return sums;
-  }, [derivedPayments]);
 
   const completePaymentCategory = useMemo(
     () =>
@@ -344,9 +197,6 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     [tenderSums],
   );
 
-  // Complete Sale — 완납 + 라인 존재 시 활성. 항상 버튼 노출, 불만족 시 disabled.
-  const completeDisabled =
-    lines.length === 0 || cal.remaining !== 0 || cal.total <= 0;
 
   // Completion flow state:
   //   processing     — createSale 요청 중. LoadingOverlay 로 유저 행동 블락.
@@ -380,17 +230,11 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     // Non-cash staged (CREDIT / GIFTCARD / VOUCHER) 가 ready 면 committed 처럼
     // payload 에 포함 → ADD 누르는 단계 생략 (1-step Complete flow).
     // CASH staged 는 cal.cashApplied 에 이미 반영돼 있어 builder 가 스스로 제외.
-    const stagedReady =
-      isStagedActive(stagedPayment) &&
-      stagedPayment.tender !== "CASH" &&
-      stagedPayment.amount > 0 &&
-      (stagedPayment.tender !== "VOUCHER" || stagedPayment.entityId > 0);
-
     const payload = buildSalePayload({
       cart: saleCartSnapshot,
       cal,
       payments,
-      stagedPayment: stagedReady ? stagedPayment : undefined,
+      stagedPayment: readyStagedPayment(stagedPayment),
     });
 
     setProcessing(true);
@@ -547,139 +391,58 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     }
   }
 
-  // Voucher must lead tender order. Cash can follow voucher and absorb rounding,
-  // but exact tenders lock further cash because mixed exact payments settle at 1¢.
-  const voucherLocked = payments.some((p) => p.tender !== "VOUCHER");
-  const cashLocked = payments.some(isExactTenderPayment);
-
-  // Switch tender slot — discards any in-progress staged input.
-  // Confirms first if there's a non-empty draft so the cashier doesn't lose
-  // an entry by mis-tapping a tender button.
+  // Switch tender slot — discards any in-progress staged input. Confirms
+  // first if there's a non-empty draft so the cashier doesn't lose an entry
+  // by mis-tapping a tender button. Locks: changeSlotDecision.
   function changeSlot(slot: TenderSlot) {
-    if (isVoucherSlot(slot) && voucherLocked) return;
-    if (slot === "CASH" && cashLocked) return;
-    const currentSlot = slotOf(stagedPayment);
-    if (currentSlot === slot) return;
-    if (isStagedActive(stagedPayment)) {
-      const draftDisp =
-        stagedPayment.tender === "CASH"
-          ? stagedPayment.cashReceived
-          : stagedPayment.amount;
-      const ok = window.confirm(
-        `Discard staged ${currentSlot.replace("_", " ")} ($${fmtMoney(draftDisp)}) and switch to ${slot.replace("_", " ")}?`,
-      );
-      if (!ok) return;
+    const decision = changeSlotDecision(tender, slot);
+    if (decision.kind === "ignore") return;
+    if (decision.kind === "confirm" && !window.confirm(decision.message)) {
+      return;
     }
-    setStagedPayment(makeDefaultStage(slot));
-    setStagedVoucher(null);
-    setStagedVoucherUserName(null);
-    setStagedCustomerVoucher(null);
+    dispatch({ type: "change-slot", slot });
   }
 
-  // Commit the current staged draft into payments[]. Resets staged to a fresh
-  // default of the same slot so cashier can keep adding more of the same
-  // tender (e.g. multi-cash splits). For CASH, the stored amount is irrelevant
-  // (will be re-derived via cashAllocations); we just snapshot cashReceived.
-  //
-  // VOUCHER 중복 방지는 commit 이 아니라 SELECTION 단계에서 처리한다 —
-  // 이미 committed 된 voucher 는 Search modal 에서 disabled. 캐셔가 항상
-  // "현재 어떤 voucher 가 쓰이고 있는지" 를 눈으로 확인하고 action 하게.
+  // Commit the current staged draft into payments[] (guards in the reducer).
   function commitStaged() {
-    if (!isStagedActive(stagedPayment)) return;
-    if (stagedPayment.tender !== "CASH" && stagedPayment.amount <= 0) return;
-    // VOUCHER 은 entity 선택 없이는 commit 불가 (entityId 0 = 미선택)
-    if (stagedPayment.tender === "VOUCHER" && stagedPayment.entityId <= 0)
-      return;
-    setPayments((prev) => [
-      ...prev,
-      { ...stagedPayment, key: crypto.randomUUID() },
-    ]);
-    setStagedPayment(makeDefaultStage(slotOf(stagedPayment)));
-    setStagedVoucher(null);
-    setStagedVoucherUserName(null);
-    setStagedCustomerVoucher(null);
+    dispatch({ type: "commit-staged", key: crypto.randomUUID() });
   }
 
   function handleRemovePayment(key: string) {
-    const p = payments.find((pp) => pp.key === key);
-    if (!p) return;
-    const label = p.tender === "GIFTCARD" ? "GIFT CARD" : p.tender;
-    const disp = p.tender === "CASH" ? p.cashReceived : p.amount;
-    const ok = window.confirm(`Remove ${label} payment ($${fmtMoney(disp)})?`);
-    if (!ok) return;
-    setPayments((prev) => prev.filter((pp) => pp.key !== key));
+    const message = removePaymentPrompt(payments, key);
+    if (!message) return;
+    if (!window.confirm(message)) return;
+    dispatch({ type: "remove-payment", key });
   }
 
-  // CASH-specific staged updater. amount is no longer stored — it's derived
-  // via cashAllocations on every render. We pin it to 0 as a placeholder.
   function setStagedCashReceived(next: number) {
-    setStagedPayment({
-      key: "staged",
-      tender: "CASH",
-      cashReceived: next,
-      amount: 0,
-    });
+    dispatch({ type: "set-cash-received", cashReceived: next });
   }
 
-  // CREDIT-specific staged updater. Child sends BILL portion; parent stores
-  // EFTPOS amount via the canonical eftposAmountOf helper (so display and
-  // storage never disagree by 1¢ from FP rounding). Hard cap on bill.
+  // Child sends the BILL portion; capped at `left`, stored as EFTPOS amount.
   function setStagedCreditBillPortion(billPortion: number) {
-    const cappedBill = Math.min(billPortion, left);
-    setStagedPayment({
-      key: "staged",
-      tender: "CREDIT",
-      amount: eftposAmountOf(cappedBill, credit_surcharge_rate),
+    dispatch({
+      type: "set-credit-bill",
+      billPortion,
+      left,
+      surchargeRate: credit_surcharge_rate,
     });
   }
 
-  // GIFTCARD-specific staged updater. No surcharge — amount is keyed as-is
-  // on the EFTPOS machine. Hard cap on amount (= bill).
   function setStagedGiftcardAmount(amount: number) {
-    setStagedPayment({
-      key: "staged",
-      tender: "GIFTCARD",
-      amount: Math.min(amount, left),
-    });
+    dispatch({ type: "set-giftcard-amount", amount, left });
   }
 
-  // USER_VOUCHER: voucher 선택/발행 결과를 staged 에 반영. amount 는 0 으로
-  // 초기화 — 캐셔가 numpad 로 얼마를 쓸지 정함. Balance/bill cap 은 child
-  // 에서 계산.
   function selectUserVoucher(
     user: { id: number; name: string },
     voucher: Voucher,
   ) {
-    setStagedVoucher(voucher);
-    setStagedVoucherUserName(user.name);
-    setStagedPayment({
-      key: "staged",
-      tender: "VOUCHER",
-      entityType: "user-voucher",
-      entityId: voucher.id,
-      entityLabel: userVoucherEntityLabel(user.name, voucher.balance),
-      amount: 0,
-    });
+    dispatch({ type: "select-user-voucher", user, voucher });
   }
 
-  // USER_VOUCHER amount 만 갱신. entity 필드는 유지. Child 가 이미 cap 으로
-  // 막았다고 가정 (min(left, voucher.balance)).
+  // Child already caps at min(left, voucher.balance).
   function setStagedVoucherAmount(amount: number) {
-    setStagedPayment((prev) => {
-      if (prev.tender !== "VOUCHER") return prev;
-      if (prev.entityType !== "user-voucher" || !stagedVoucherUserName) {
-        return { ...prev, amount };
-      }
-      const expectedBalance = (stagedVoucher?.balance ?? 0) - amount;
-      return {
-        ...prev,
-        amount,
-        entityLabel: userVoucherEntityLabel(
-          stagedVoucherUserName,
-          expectedBalance,
-        ),
-      };
-    });
+    dispatch({ type: "set-user-voucher-amount", amount });
   }
 
   // F-17 (T-17): the member's points after a points→voucher exchange answer
@@ -687,30 +450,18 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
   // then selected — keeps ISSUE gating and memberPointsBefore on the receipt
   // at the post-exchange balance.
   function updateCustomerVoucherMemberPoints(memberPoints: number) {
-    setCustomerVoucherMemberPoints(memberPoints);
+    dispatch({ type: "set-customer-voucher-member-points", memberPoints });
     if (activeMember) {
       setMember({ ...activeMember, points: memberPoints });
     }
   }
 
   function selectCustomerVoucher(voucher: CustomerVoucher) {
-    setStagedCustomerVoucher(voucher);
-    setStagedPayment({
-      key: "staged",
-      tender: "VOUCHER",
-      entityType: "customer-voucher",
-      entityId: voucher.id,
-      entityLabel: voucher.label,
-      amount: 0,
-    });
+    dispatch({ type: "select-customer-voucher", voucher });
   }
 
   function setStagedCustomerVoucherAmount(amount: number) {
-    setStagedPayment((prev) => {
-      if (prev.tender !== "VOUCHER") return prev;
-      if (prev.entityType !== "customer-voucher") return prev;
-      return { ...prev, amount };
-    });
+    dispatch({ type: "set-customer-voucher-amount", amount });
   }
 
   return (

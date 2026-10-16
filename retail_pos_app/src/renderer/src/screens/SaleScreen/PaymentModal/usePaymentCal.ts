@@ -79,84 +79,94 @@ export function calcLeft(
   return Math.max(0, due - nonCashBill - cashApplied);
 }
 
-export function usePaymentCal({
-  lines,
-  credit_surcharge_rate,
-  cash_point_rate,
-  other_point_rate,
-  hasMember,
-  payments,
-}: {
+export interface PaymentCalInput {
   lines: SaleLineType[];
   credit_surcharge_rate: number;
   cash_point_rate: number;
   other_point_rate: number;
   hasMember: boolean;
   payments: PaymentQueueItem[];
-}) {
+}
+
+// The hook is a memo over calcPayment (T-1): the same math, callable outside
+// React by libs/sale/tender-queue.ts and node tests.
+export function usePaymentCal(input: PaymentCalInput): PaymentCal {
+  const {
+    lines,
+    credit_surcharge_rate,
+    cash_point_rate,
+    other_point_rate,
+    hasMember,
+    payments,
+  } = input;
+  return useMemo(
+    () =>
+      calcPayment({
+        lines,
+        credit_surcharge_rate,
+        cash_point_rate,
+        other_point_rate,
+        hasMember,
+        payments,
+      }),
+    [
+      lines,
+      credit_surcharge_rate,
+      cash_point_rate,
+      other_point_rate,
+      hasMember,
+      payments,
+    ],
+  );
+}
+
+export type PaymentCal = ReturnType<typeof calcPayment>;
+
+export function calcPayment({
+  lines,
+  credit_surcharge_rate,
+  cash_point_rate,
+  other_point_rate,
+  hasMember,
+  payments,
+}: PaymentCalInput) {
   // ── 1. LINES ───────────────────────────────────────────────
   // linesTotal 은 tax-inclusive. lineTax 는 per-line round 후 sum (invoice-level
   // 에서 round(net × 0.1) 을 다시 계산하면 1¢ drift 발생 — sale-domain.md §0).
-  const linesTotal = useMemo(
-    () => lines.reduce((s, l) => s + l.total, 0),
-    [lines],
-  );
-  const lineTax = useMemo(
-    () => lines.reduce((s, l) => s + l.tax_amount, 0),
-    [lines],
-  );
+  const linesTotal = lines.reduce((s, l) => s + l.total, 0);
+  const lineTax = lines.reduce((s, l) => s + l.tax_amount, 0);
 
   // ── 2. PAYMENT INTENT (tender 별 합계) ─────────────────────
   // nonCashBill  : CREDIT(bill portion) + VOUCHER + GIFTCARD 의 bill-terms 합
   // cashIntent   : CASH 의 cashReceived 총합 (실제 받은 현금, applied 와 구별)
   // creditSurcharge : CREDIT amount 에서 bill 부분을 뺀 순수 surcharge 합
-  const nonCashBill = useMemo(
-    () =>
-      payments.reduce(
-        (s, p) =>
-          p.tender === "CASH" ? s : s + billPortionOf(p, credit_surcharge_rate),
-        0,
-      ),
-    [payments, credit_surcharge_rate],
+  const nonCashBill = payments.reduce(
+    (s, p) =>
+      p.tender === "CASH" ? s : s + billPortionOf(p, credit_surcharge_rate),
+    0,
   );
-  const cashIntent = useMemo(
-    () =>
-      payments.reduce(
-        (s, p) => (p.tender === "CASH" ? s + p.cashReceived : s),
-        0,
-      ),
-    [payments],
+  const cashIntent = payments.reduce(
+    (s, p) => (p.tender === "CASH" ? s + p.cashReceived : s),
+    0,
   );
-  const creditSurcharge = useMemo(
-    () =>
-      payments.reduce(
-        (s, p) =>
-          p.tender === "CREDIT"
-            ? s + (p.amount - billPortionOf(p, credit_surcharge_rate))
-            : s,
-        0,
-      ),
-    [payments, credit_surcharge_rate],
+  const creditSurcharge = payments.reduce(
+    (s, p) =>
+      p.tender === "CREDIT"
+        ? s + (p.amount - billPortionOf(p, credit_surcharge_rate))
+        : s,
+    0,
   );
-  const voucherBill = useMemo(
-    () =>
-      payments.reduce(
-        (s, p) => (p.tender === "VOUCHER" ? s + p.amount : s),
-        0,
-      ),
-    [payments],
+  const voucherBill = payments.reduce(
+    (s, p) => (p.tender === "VOUCHER" ? s + p.amount : s),
+    0,
   );
-  const exactNonCashBill = useMemo(
-    () =>
-      payments.reduce((s, p) => {
-        if (p.tender === "CREDIT") {
-          return s + billPortionOf(p, credit_surcharge_rate);
-        }
-        if (p.tender === "GIFTCARD") return s + p.amount;
-        return s;
-      }, 0),
-    [payments, credit_surcharge_rate],
-  );
+  const exactNonCashBill = payments.reduce((s, p) => {
+    if (p.tender === "CREDIT") {
+      return s + billPortionOf(p, credit_surcharge_rate);
+    }
+    if (p.tender === "GIFTCARD") return s + p.amount;
+    return s;
+  }, 0);
   const cashTenderPresent = payments.some((p) => p.tender === "CASH");
 
   // ── 3. ROUNDING (AU 5¢) ────────────────────────────────────
@@ -204,35 +214,22 @@ export function usePaymentCal({
   const cashApplied = Math.min(cashIntent, Math.max(0, due - nonCashBill));
   const change = cashIntent - cashApplied;
 
-  const pointResult = useMemo(
-    () =>
-      calculateSalePoints({
-        lines,
-        linesTotal,
-        cashApplied,
-        nonCashBill,
-        voucherBill,
-        hasMember,
-        cashPointRate: cash_point_rate,
-        otherPointRate: other_point_rate,
-      }),
-    [
-      lines,
-      linesTotal,
-      cashApplied,
-      nonCashBill,
-      voucherBill,
-      hasMember,
-      cash_point_rate,
-      other_point_rate,
-    ],
-  );
+  const pointResult = calculateSalePoints({
+    lines,
+    linesTotal,
+    cashApplied,
+    nonCashBill,
+    voucherBill,
+    hasMember,
+    cashPointRate: cash_point_rate,
+    otherPointRate: other_point_rate,
+  });
 
   // ── 7. CASH FIFO ALLOCATION (per-item) ────────────────────
   // Pending list 디스플레이용. Committed cash 가 먼저 흡수 (insertion order),
   // staged("staged" key) 가 마지막 leftover 를 채움. 비-현금 committed 가 제거
   // 되면 cash 가 자동으로 더 흡수 — stale amount 없음.
-  const cashAllocations = useMemo(() => {
+  const cashAllocations = (() => {
     const map = new Map<string, number>();
     const ordered = [
       ...payments.filter((p) => p.tender === "CASH" && p.key !== "staged"),
@@ -246,7 +243,7 @@ export function usePaymentCal({
       remaining -= allocated;
     }
     return map;
-  }, [payments, cashApplied]);
+  })();
 
   // ── 8. PAID / REMAINING (BILL terms) ───────────────────────
   // paid 가 due 에 도달하면 완납. Complete Sale 버튼 활성화 조건.
