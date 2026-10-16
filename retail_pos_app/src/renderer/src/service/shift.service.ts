@@ -78,6 +78,10 @@ export const getClosingShiftData = async (): Promise<
 export type CloseShiftDTO = {
   closedNote: string;
   endedCashActual: number;
+  // T-10 — the shift this screen counted. The server closes only that shift
+  // (409 SHIFT_MISMATCH otherwise), so a retry after a lost answer cannot
+  // close the next shift with this count. Older servers ignore it.
+  expectedShiftId?: number;
 };
 
 export const closeShift = async (

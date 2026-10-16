@@ -97,6 +97,7 @@ export default function CloseShiftScreen() {
       const { ok, msg } = await closeShift({
         closedNote: note.trim(),
         endedCashActual: cashActualCents,
+        expectedShiftId: shift.id,
       });
       if (ok) {
         try {

@@ -384,6 +384,32 @@ export async function previewCloseShiftService(shift: TerminalShiftModel) {
 export interface CloseShiftDTO {
   closedNote?: string;
   endedCashActual: number;
+  // T-10 (retail-runner T-8 review) — the shift the client means to close.
+  // Present: the terminal's open shift must be exactly this one, otherwise
+  // 409 SHIFT_MISMATCH with `currentOpenShiftId` (number | null) and nothing
+  // is written — a retry after a lost close answer can never close the NEXT
+  // shift with the previous shift's cash count. Absent (older client): closes
+  // whatever shift is open, as before.
+  expectedShiftId?: number | null;
+}
+
+export const SHIFT_MISMATCH = "SHIFT_MISMATCH";
+
+function parseExpectedShiftId(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0)
+    throw new BadRequestException("expectedShiftId must be a positive integer");
+  return value;
+}
+
+function shiftMismatch(expectedShiftId: number, currentOpenShiftId: number | null) {
+  return new HttpException(
+    409,
+    `Shift #${expectedShiftId} is no longer the open shift on this terminal (${
+      currentOpenShiftId == null ? "no shift is open" : `open shift: #${currentOpenShiftId}`
+    }) — nothing was closed. Reload the till before closing again.`,
+    { code: SHIFT_MISMATCH, expectedShiftId, currentOpenShiftId },
+  );
 }
 
 // T-24 (R-7) — the close is one transaction under the shift row lock
@@ -428,22 +454,30 @@ export async function closeTerminalShiftService(
     if (!user) throw new NotFoundException("User not found");
     if (!Number.isFinite(dto.endedCashActual) || dto.endedCashActual < 0)
       throw new BadRequestException("endedCashActual must be >= 0");
+    const expectedShiftId = parseExpectedShiftId(dto.expectedShiftId);
 
     const updated = await deps.transaction(async (tx) => {
-      const open = await tx.terminalShift.findFirst({
-        where: {
-          terminalId: terminal.id,
-          closedAt: null,
-        },
-        select: { id: true },
-      });
+      const findOpen = () =>
+        tx.terminalShift.findFirst({
+          where: {
+            terminalId: terminal.id,
+            closedAt: null,
+          },
+          select: { id: true },
+        });
+      const open = await findOpen();
+      if (expectedShiftId != null && open?.id !== expectedShiftId)
+        throw shiftMismatch(expectedShiftId, open?.id ?? null);
       if (!open) throw new NotFoundException("No open shift found");
 
       // Waits for in-flight writers (FOR SHARE) to commit; blocks new ones.
       const locked = await lockShiftRowInTx(tx, open.id, "update");
       // A concurrent close of the same shift committed first.
-      if (!locked || locked.closedAt != null)
+      if (!locked || locked.closedAt != null) {
+        if (expectedShiftId != null)
+          throw shiftMismatch(expectedShiftId, (await findOpen())?.id ?? null);
         throw new NotFoundException("No open shift found");
+      }
 
       const shift = await tx.terminalShift.findUniqueOrThrow({
         where: { id: open.id },

@@ -243,3 +243,98 @@ test("a second close of the same shift answers 'No open shift found'", async () 
     /No open shift found/,
   );
 });
+
+// T-10 (retail-runner T-8 review) — expectedShiftId: a retry after a lost
+// close answer must never close the next shift with the previous count.
+
+function isShiftMismatch(expectedShiftId: number, currentOpenShiftId: number | null) {
+  return (e: unknown) => {
+    assert.ok(e instanceof HttpException);
+    assert.equal(e.statusCode, 409);
+    assert.deepEqual(e.result, { code: "SHIFT_MISMATCH", expectedShiftId, currentOpenShiftId });
+    return true;
+  };
+}
+
+test("expectedShiftId matching the open shift → closes it", async () => {
+  const db = new FakeLockingDb();
+  const closed = await closeTerminalShiftService(
+    TERMINAL,
+    USER,
+    { endedCashActual: 10_000, expectedShiftId: SHIFT_ID },
+    closeDeps(db),
+  );
+  assert.equal(closed.ok, true);
+  assert.equal(closed.result.id, SHIFT_ID);
+  assert.ok(db.shift.closedAt);
+});
+
+test("close committed, answer lost, next shift opened → the retry is 409 with the new open shift id; the new shift stays open", async () => {
+  const db = new FakeLockingDb();
+  await closeTerminalShiftService(
+    TERMINAL,
+    USER,
+    { endedCashActual: 12_345, expectedShiftId: SHIFT_ID },
+    closeDeps(db),
+  );
+  // Shift 4 opens on the same terminal.
+  db.shift = { id: 4, terminalId: TERMINAL_ID, startedCash: 20_000, closedAt: null, totals: null };
+
+  await assert.rejects(
+    closeTerminalShiftService(
+      TERMINAL,
+      USER,
+      { endedCashActual: 12_345, expectedShiftId: SHIFT_ID },
+      closeDeps(db),
+    ),
+    isShiftMismatch(SHIFT_ID, 4),
+  );
+  assert.equal(db.shift.closedAt, null, "shift 4 not closed");
+  assert.equal(db.shift.totals, null, "nothing written to shift 4");
+});
+
+test("expectedShiftId with no open shift → 409 with currentOpenShiftId null", async () => {
+  const db = new FakeLockingDb();
+  await closeTerminalShiftService(TERMINAL, USER, { endedCashActual: 0 }, closeDeps(db));
+  await assert.rejects(
+    closeTerminalShiftService(
+      TERMINAL,
+      USER,
+      { endedCashActual: 0, expectedShiftId: SHIFT_ID },
+      closeDeps(db),
+    ),
+    isShiftMismatch(SHIFT_ID, null),
+  );
+});
+
+test("no expectedShiftId (older client) → closes whatever shift is open, as before", async () => {
+  const db = new FakeLockingDb();
+  db.shift = { id: 4, terminalId: TERMINAL_ID, startedCash: 0, closedAt: null, totals: null };
+  const closed = await closeTerminalShiftService(TERMINAL, USER, { endedCashActual: 0 }, closeDeps(db));
+  assert.equal(closed.result.id, 4);
+  assert.ok(db.shift.closedAt);
+  const nullField = new FakeLockingDb();
+  const viaNull = await closeTerminalShiftService(
+    TERMINAL,
+    USER,
+    { endedCashActual: 0, expectedShiftId: null },
+    closeDeps(nullField),
+  );
+  assert.equal(viaNull.result.id, SHIFT_ID);
+});
+
+test("a malformed expectedShiftId is a 400 before the transaction", async () => {
+  const db = new FakeLockingDb();
+  for (const expectedShiftId of [0, -1, 1.5, "3"]) {
+    await assert.rejects(
+      closeTerminalShiftService(
+        TERMINAL,
+        USER,
+        { endedCashActual: 0, expectedShiftId: expectedShiftId as number },
+        closeDeps(db),
+      ),
+      (e: unknown) => e instanceof HttpException && e.statusCode === 400,
+    );
+  }
+  assert.equal(db.shift.closedAt, null);
+});
