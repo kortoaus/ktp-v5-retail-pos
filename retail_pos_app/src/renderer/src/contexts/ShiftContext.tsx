@@ -16,6 +16,7 @@ import {
 import { TerminalShift } from "../types/models";
 import {
   closeShiftGuarded,
+  openShiftWithRecovery,
   reloadStaleShift,
   type ShiftMismatch,
 } from "../libs/shift-close";
@@ -33,9 +34,11 @@ interface OpenShiftPayload {
 interface ShiftContextValue {
   shift: TerminalShift | null;
   loading: boolean;
+  // T-10 review round 5: a 400 "Shift already opened" re-reads the shift in
+  // place (alreadyOpen: true) so Home / Close Shift recover.
   openShift: (
     payload: OpenShiftPayload,
-  ) => Promise<{ ok: boolean; msg: string }>;
+  ) => Promise<{ ok: boolean; msg: string; alreadyOpen?: boolean }>;
   // T-10 review: on 409 SHIFT_MISMATCH the shift is reloaded from the server
   // before this resolves; `mismatch` tells the screen to reset its count.
   closeShift: (
@@ -93,13 +96,17 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
 
   const openShift = useCallback(
     async (payload: OpenShiftPayload) => {
-      const res = await openShiftApi(payload);
-      if (res.ok) {
-        await reload();
-      }
-      return { ok: res.ok, msg: res.msg };
+      const outcome = await openShiftWithRecovery(payload, {
+        open: openShiftApi,
+        reload,
+        reloadInPlace: () => store.reload({ inPlace: true }),
+      });
+      if (outcome.kind === "opened") return { ok: true, msg: "" };
+      if (outcome.kind === "already-open")
+        return { ok: false, msg: outcome.message, alreadyOpen: true };
+      return { ok: false, msg: outcome.message };
     },
-    [reload],
+    [reload, store],
   );
 
   const doCloseShift = useCallback(

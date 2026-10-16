@@ -1,7 +1,8 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import apiService from "../libs/api";
 import { useShift } from "../contexts/ShiftContext";
+import { SHIFT_STATUS_UNKNOWN_MESSAGE, homeShiftRow } from "../libs/shift-close";
 import {
   IoPlayCircleOutline,
   IoStopCircleOutline,
@@ -18,13 +19,15 @@ import {
   IoBarcodeOutline,
   IoNotificationsOutline,
   IoScaleOutline,
+  IoRefreshOutline,
 } from "react-icons/io5";
 
 const btn =
   "w-full h-full rounded-xl font-semibold text-sm transition-colors active:scale-[0.98] flex flex-col items-center justify-center gap-1.5";
 
 export default function HomeScreen() {
-  const { shift, loading: shiftLoading } = useShift();
+  const { shift, loading: shiftLoading, shiftKnown, retryShiftReload } = useShift();
+  const [retrying, setRetrying] = useState(false);
   useEffect(() => {
     apiService.logout();
   }, []);
@@ -32,11 +35,35 @@ export default function HomeScreen() {
   const loading = shiftLoading;
   if (loading) return <div>loading...</div>;
 
+  // T-10 review round 5 — an unknown shift (its read failed) is not "no
+  // shift": offer the same in-place Retry as the Close Shift banner.
+  const { row, showShiftActions } = homeShiftRow({ hasShift: shift != null, shiftKnown });
+  const handleRetry = async () => {
+    setRetrying(true);
+    try {
+      await retryShiftReload();
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col gap-5 p-6">
       {/* Shift */}
       <Section label="Shift">
-        {shift === null && (
+        {row === "unknown" && (
+          <div className="flex-1 min-w-0">
+            <button
+              className={`${btn} bg-red-50 text-red-800 hover:bg-red-100 disabled:opacity-50`}
+              onClick={handleRetry}
+              disabled={retrying}
+            >
+              <IoRefreshOutline size={24} />
+              {retrying ? "Retrying..." : SHIFT_STATUS_UNKNOWN_MESSAGE}
+            </button>
+          </div>
+        )}
+        {row === "open-shift" && (
           <NavBtn
             to="/shift/open"
             icon={<IoPlayCircleOutline size={24} />}
@@ -45,7 +72,7 @@ export default function HomeScreen() {
             Open Shift
           </NavBtn>
         )}
-        {shift !== null && (
+        {row === "close-shift" && (
           <NavBtn
             to="/shift/close"
             icon={<IoStopCircleOutline size={24} />}
@@ -58,7 +85,7 @@ export default function HomeScreen() {
 
       {/* Sales */}
       <Section label="Sales">
-        {shift !== null && (
+        {showShiftActions && (
           <>
             <NavBtn
               to="/sale"

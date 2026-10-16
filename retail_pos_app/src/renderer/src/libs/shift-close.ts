@@ -153,3 +153,68 @@ export function closeShiftView(input: {
     canClose: !staleBanner && !unknownBanner && body === "ready",
   };
 }
+
+// ── Home / Open Shift recovery (T-10 review round 5) ───────────────────────
+// Home's Shift row. While the terminal's shift is unknown (its read failed)
+// Home must not pretend no shift is open: it offers "Shift status unknown —
+// Retry" (the same in-place reload as the Close Shift banner), and Sale /
+// Cash In-Out / Close Shift appear once a read succeeds.
+export const SHIFT_STATUS_UNKNOWN_MESSAGE = "Shift status unknown — Retry";
+
+export type HomeShiftRow = "unknown" | "open-shift" | "close-shift";
+
+export function homeShiftRow(input: { hasShift: boolean; shiftKnown: boolean }): {
+  row: HomeShiftRow;
+  // Sale and Cash In / Out need a known open shift.
+  showShiftActions: boolean;
+} {
+  if (!input.shiftKnown) return { row: "unknown", showShiftActions: false };
+  return input.hasShift
+    ? { row: "close-shift", showShiftActions: true }
+    : { row: "open-shift", showShiftActions: false };
+}
+
+// The store server answers 400 "Shift already opened" when this terminal has
+// an open shift the till did not know about (e.g. its read failed).
+export function isShiftAlreadyOpened(res: { ok: boolean; status?: number; msg: string }): boolean {
+  return !res.ok && res.status === 400 && /shift already opened/i.test(res.msg);
+}
+
+export type OpenShiftOutcome =
+  | { kind: "opened" }
+  // "already opened": the shift was re-read; reloaded false → still unknown.
+  | { kind: "already-open"; reloaded: boolean; message: string }
+  | { kind: "failed"; message: string };
+
+export async function openShiftWithRecovery<P>(
+  payload: P,
+  deps: {
+    open(payload: P): Promise<{ ok: boolean; status?: number; msg: string }>;
+    // Full reload after a successful open (as before).
+    reload(): Promise<boolean>;
+    // In-place reload after "already opened".
+    reloadInPlace(): Promise<boolean>;
+  },
+): Promise<OpenShiftOutcome> {
+  const res = await deps.open(payload);
+  if (res.ok) {
+    await deps.reload();
+    return { kind: "opened" };
+  }
+  if (isShiftAlreadyOpened(res)) {
+    let reloaded = false;
+    try {
+      reloaded = await deps.reloadInPlace();
+    } catch {
+      reloaded = false;
+    }
+    return {
+      kind: "already-open",
+      reloaded,
+      message: reloaded
+        ? "A shift is already open on this terminal — the till has reloaded it."
+        : `A shift is already open on this terminal. ${SHIFT_LOAD_FAILED_MESSAGE}.`,
+    };
+  }
+  return { kind: "failed", message: res.msg || "Failed to open shift" };
+}

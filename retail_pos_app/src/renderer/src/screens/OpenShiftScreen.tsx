@@ -30,6 +30,8 @@ export default function OpenShiftScreen() {
       if (ok) {
         navigate("/");
       } else {
+        // T-10 review round 5 — "already opened": the context re-read the
+        // shift; when it worked this screen now shows "Shift is already open".
         window.alert(msg || "Failed to open shift");
       }
     } catch {
