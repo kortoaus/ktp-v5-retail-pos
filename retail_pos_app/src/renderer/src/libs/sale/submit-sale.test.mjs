@@ -144,6 +144,95 @@ test("split CASH + staged CREDIT: the ready draft goes in without ADD", async ()
   assert.equal(bodies[0].total, 10076);
 });
 
+test("one-step GIFTCARD: the staged draft is included exactly once", async () => {
+  const cart = cartOf(2500);
+  const t = tendered(
+    cart,
+    { type: "change-slot", slot: "GIFTCARD" },
+    { type: "set-giftcard-amount", amount: 2500, left: 2500 },
+  );
+  const { bodies, request } = recorder([{ ok: true, msg: "", result: { id: 10, serial: "G" } }]);
+  await submitSale({ cart, cartIndex: 0, ...t }, request);
+  assert.deepEqual(bodies[0].payments, [{ type: "GIFTCARD", amount: 2500 }]);
+  assert.equal(bodies[0].creditSurchargeAmount, 0);
+  assert.equal(bodies[0].total, 2500);
+});
+
+test("one-step Staff Voucher: included once with its entity fields", async () => {
+  const cart = cartOf(1000);
+  const t = tendered(
+    cart,
+    { type: "change-slot", slot: "USER_VOUCHER" },
+    { type: "select-user-voucher", user: { id: 4, name: "Lee" }, voucher: { id: 31, balance: 3000 } },
+    { type: "set-user-voucher-amount", amount: 1000 },
+  );
+  const { bodies, request } = recorder([{ ok: true, msg: "", result: { id: 11, serial: "U" } }]);
+  await submitSale({ cart, cartIndex: 0, ...t }, request);
+  assert.deepEqual(bodies[0].payments, [
+    {
+      type: "VOUCHER",
+      amount: 1000,
+      entityType: "user-voucher",
+      entityId: 31,
+      entityLabel: "Lee - Est. balance $20.00",
+    },
+  ]);
+});
+
+test("one-step Customer Voucher: included once with its entity fields", async () => {
+  const cart = cartOf(1000, {
+    member: { id: "m9", name: "Park", level: 1, phone_last4: "9999", points: 0 },
+  });
+  const t = tendered(
+    cart,
+    { type: "change-slot", slot: "CUSTOMER_VOUCHER" },
+    { type: "select-customer-voucher", voucher: { id: 88, label: "CV-88 $10.00" } },
+    { type: "set-customer-voucher-amount", amount: 1000 },
+  );
+  const { bodies, request } = recorder([{ ok: true, msg: "", result: { id: 12, serial: "C" } }]);
+  await submitSale({ cart, cartIndex: 0, ...t }, request);
+  assert.deepEqual(bodies[0].payments, [
+    {
+      type: "VOUCHER",
+      amount: 1000,
+      entityType: "customer-voucher",
+      entityId: 88,
+      entityLabel: "CV-88 $10.00",
+    },
+  ]);
+});
+
+test("one-step: an unselected voucher draft (entityId 0) is excluded", async () => {
+  const cart = cartOf(1000);
+  const t = tendered(
+    cart,
+    { type: "set-cash-received", cashReceived: 500 },
+    { type: "commit-staged", key: "c1" },
+    { type: "change-slot", slot: "CREDIT" },
+    { type: "set-credit-bill", billPortion: 500, left: 500, surchargeRate: 15 },
+    { type: "commit-staged", key: "k1" },
+  );
+  // Hand-built draft: a voucher amount keyed before any voucher was picked.
+  const unselected = {
+    key: "staged",
+    tender: "VOUCHER",
+    amount: 300,
+    entityType: "customer-voucher",
+    entityId: 0,
+    entityLabel: "",
+  };
+  const { bodies, request } = recorder([{ ok: true, msg: "", result: { id: 13, serial: "X" } }]);
+  await submitSale({ cart, cartIndex: 0, ...t, stagedPayment: unselected }, request);
+  assert.deepEqual(bodies[0].payments, [
+    { type: "CASH", amount: 500 },
+    { type: "CREDIT", amount: 508 },
+  ]);
+  assert.equal(
+    bodies[0].payments.filter((p) => p.type === "VOUCHER").length,
+    0,
+  );
+});
+
 test("order-loaded cart: externalOrderId sent, collect result mapped (old servers too)", async () => {
   const cart = cartOf(500, { externalOrderId: "ord-1", orderNo: null });
   const t = tendered(cart, { type: "set-cash-received", cashReceived: 500 });

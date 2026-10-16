@@ -273,6 +273,22 @@ test("empty drafts do not commit; empty draft is hidden from the list", () => {
   assert.equal(readyStagedPayment(s.staged), undefined);
 });
 
+test("set amount → commit → commit enqueues exactly one payment, leaves an empty draft", () => {
+  const once = run(
+    createTenderState(),
+    { type: "change-slot", slot: "GIFTCARD" },
+    { type: "set-giftcard-amount", amount: 700, left: 1000 },
+    { type: "commit-staged", key: "g1" },
+  );
+  const twice = tenderReducer(once, { type: "commit-staged", key: "g2" });
+  assert.equal(twice, once, "second commit is a no-op");
+  assert.equal(twice.payments.length, 1);
+  assert.equal(twice.payments[0].key, "g1");
+  assert.equal(twice.payments[0].amount, 700);
+  assert.deepEqual(twice.staged, { key: "staged", tender: "GIFTCARD", amount: 0 });
+  assert.equal(readyStagedPayment(twice.staged), undefined);
+});
+
 test("SPEND toggle and member change reset every tender", () => {
   const busy = run(
     createTenderState(),

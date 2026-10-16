@@ -18,8 +18,9 @@
 // and 409 OPERATION_IN_PROGRESS keep the id so the retry replays the same
 // attempt. Two carts never share an id (F-4): an identical cart in another
 // slot is a different attempt and records its own Invoice.
-// Called only from service/*.service.ts and the cart store. Not a sale-core
-// file (Runner does not copy it; Runner sends no operationId and keeps working).
+// Called from service/*.service.ts, the cart store and libs/sale/submit-sale.
+// Runner copies it (sale-core, T-1) and injects its own store
+// (setOperationStorage).
 
 const STORAGE_PREFIX = "ktpv5.operationAttempt.";
 const CLEARING_CODES = new Set(["OPERATION_CANCELLED", "OPERATION_PAYLOAD_MISMATCH"]);
@@ -48,7 +49,26 @@ interface StoredAttempt {
   createdAt: number;
 }
 
-function storage(): Storage | null {
+// The attempt store — exactly the three calls this module makes. The POS uses
+// the till's localStorage (default). A host without localStorage (Runner, React
+// Native) injects a persistent store with setOperationStorage; without one,
+// every call mints a fresh id and retries lose replay protection.
+export interface OperationStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+let injectedStorage: OperationStorage | null = null;
+
+// Install the attempt store; null restores the default (localStorage when
+// defined). Calls must be synchronous, like localStorage.
+export function setOperationStorage(store: OperationStorage | null): void {
+  injectedStorage = store;
+}
+
+function storage(): OperationStorage | null {
+  if (injectedStorage) return injectedStorage;
   try {
     return typeof localStorage === "undefined" ? null : localStorage;
   } catch {
