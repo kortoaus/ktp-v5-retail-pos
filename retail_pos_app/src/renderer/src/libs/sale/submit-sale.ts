@@ -156,15 +156,28 @@ export async function submitSale<I extends SaleSubmitAnswer>(
   };
 }
 
-// SPEND (internal consumption): items only, every amount 0, no payments, no
-// operationId. The caller confirms first (SALE_MESSAGES.spendConfirm).
-export async function submitSpend<I extends { id: number }>(
-  cart: Cart,
-  request: (body: SaleCreatePayload) => Promise<SubmitResponse<I>>,
-): Promise<{ ok: false; message: string } | { ok: true; invoice: I }> {
-  const res = await request(buildSpendPayload({ cart }));
+// SPEND (internal consumption): items only, every amount 0, no payments. The
+// caller confirms first (SALE_MESSAGES.spendConfirm).
+//
+// T-10 (F-27): the request carries the cart slot's attempt operationId — the
+// SAME attempt as a Sale from that slot (saleAttemptKey): one cart is one
+// transaction whatever its kind, so a Spend pressed after a Sale whose answer
+// was lost (or the reverse) gets a 409 naming the recorded invoice instead of
+// recording the cart twice. Retries resend the id until the server settles
+// it; a replay returns the recorded SPEND (`replayed`).
+export type SpendBody = SaleCreatePayload & { operationId: string };
+
+export async function submitSpend<I extends { id: number; replayed?: boolean }>(
+  input: { cart: Cart; cartIndex: number },
+  request: (body: SpendBody) => Promise<SubmitResponse<I>>,
+): Promise<{ ok: false; message: string } | { ok: true; invoice: I; replayed: boolean }> {
+  const res = await sendSaleWithOperation(
+    buildSpendPayload({ cart: input.cart }),
+    input.cartIndex,
+    request,
+  );
   if (!res.ok || !res.result) {
     return { ok: false, message: res.msg || SALE_MESSAGES.spendFailed };
   }
-  return { ok: true, invoice: res.result };
+  return { ok: true, invoice: res.result, replayed: res.result.replayed === true };
 }

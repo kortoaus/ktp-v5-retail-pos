@@ -2,10 +2,12 @@
 //
 // Every checkout / refund / repay ATTEMPT has its own key in localStorage
 // (per till), and the key — not the payload — identifies the transaction:
-//   sale   "sale:cart:<slot>"            one per cart slot (the till has 4)
+//   sale   "sale:cart:<slot>"            one per cart slot (the till has 4);
+//          a SPEND from that slot is the same attempt (T-10)
 //   refund "refund:invoice:<originalId>"
 //   repay  "repay:invoice:<originalId>"
 //   points→voucher exchange "cv-issue:<memberId>" (T-17, V-5)
+//   Cash In/Out "cashio:form" one per till (T-10; ended by the form's Cancel)
 // The attempt's operationId (UUID) is minted on the first submit and resent on
 // every retry of that attempt, whatever the payload looks like now, until:
 //   - the server answers ok (the attempt is recorded), or
@@ -42,6 +44,13 @@ export function repayAttemptKey(originalInvoiceId: number): string {
 // issued instead of deducting points again.
 export function customerVoucherIssueAttemptKey(memberId: string): string {
   return `cv-issue:${memberId}`;
+}
+
+// T-10 (F-27) — the till's Cash In/Out form: one entry at a time. The attempt
+// is kept across a lost answer (the retry replays the recorded row) and ends
+// on an answer or when the cashier cancels the form.
+export function cashIOAttemptKey(): string {
+  return "cashio:form";
 }
 
 interface StoredAttempt {

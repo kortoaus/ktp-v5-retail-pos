@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  cashIOAttemptKey,
+  clearOperation,
   operationIdFor,
   saleAttemptKey,
+  sendWithOperation,
   setOperationStorage,
   settleOperation,
 } from "./operation-id.ts";
@@ -57,4 +60,26 @@ test("setOperationStorage(null) restores the default", () => {
   const key = saleAttemptKey(2);
   assert.notEqual(operationIdFor(key), operationIdFor(key));
   assert.equal(store.map.size, 1, "injected store untouched after reset");
+});
+
+test("Cash In/Out attempt (T-10): lost answer keeps the id for the retry; ok ends it; Cancel clears it", async () => {
+  const store = memoryStorage();
+  setOperationStorage(store);
+  const key = cashIOAttemptKey();
+  const ids = [];
+  const answers = [
+    { ok: false, status: 0, result: null },
+    { ok: true, status: 200, result: 7 },
+  ];
+  const send = async (operationId) => (ids.push(operationId), answers.shift());
+
+  await sendWithOperation(key, send);
+  assert.ok(store.map.has("ktpv5.operationAttempt.cashio:form"), "kept after a lost answer");
+  await sendWithOperation(key, send);
+  assert.equal(ids[0], ids[1], "the retry resends the same id");
+  assert.equal(store.map.size, 0, "an answer ends the attempt");
+
+  const pending = operationIdFor(key);
+  clearOperation(key); // the form's Cancel
+  assert.notEqual(operationIdFor(key), pending, "after Cancel the next entry is a new operation");
 });

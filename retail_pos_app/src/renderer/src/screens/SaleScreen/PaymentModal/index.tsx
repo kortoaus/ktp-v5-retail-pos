@@ -331,7 +331,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
 
     setProcessing(true);
     try {
-      const outcome = await submitSpend(cart, createSpend);
+      const outcome = await submitSpend({ cart, cartIndex: activeCartIndex }, createSpend);
       if (!outcome.ok) {
         window.alert(outcome.message);
         return;

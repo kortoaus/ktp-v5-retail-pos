@@ -16,6 +16,7 @@ import {
 import {
   sendSaleWithOperation,
   type SaleBody,
+  type SpendBody,
 } from "../libs/sale/submit-sale";
 
 export type InvoiceTypeWire = "SALE" | "REFUND" | "SPEND";
@@ -104,11 +105,13 @@ export async function createSale(
 }
 
 // 내부 소비 (SPEND). 금액 0, payments 없음. 서버가 row-level 강제 정규화.
+// T-10 — the body carries the cart slot's attempt operationId;
+// libs/sale/submit-sale.ts submitSpend mints, resends and settles it.
 export async function createSpend(
-  payload: SaleCreatePayload,
+  body: SpendBody,
 ): Promise<ApiResponse<SaleInvoiceCreated>> {
   return trackCheckout(
-    apiService.post<SaleInvoiceCreated>("/api/sale/spend", payload),
+    apiService.post<SaleInvoiceCreated>("/api/sale/spend", body),
   );
 }
 

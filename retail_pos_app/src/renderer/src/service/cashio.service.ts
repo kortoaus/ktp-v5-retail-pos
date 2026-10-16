@@ -1,12 +1,18 @@
 import { CashInOut } from "../types/models";
 import apiService, { ApiResponse } from "../libs/api";
+import { cashIOAttemptKey, sendWithOperation } from "../libs/operation-id";
 
+// T-10 (F-27) — every submit carries the form attempt's operationId
+// (libs/operation-id.ts): a retry after a lost answer resends it and the
+// server returns the recorded entry instead of adding a second one.
 export const createCashIO = async (data: {
   type: string;
   amount: number;
   note?: string;
 }): Promise<ApiResponse<number>> => {
-  return await apiService.post<number>("/api/cashio", data);
+  return sendWithOperation(cashIOAttemptKey(), (operationId) =>
+    apiService.post<number>("/api/cashio", { ...data, operationId }),
+  );
 };
 
 export const getCashIOs = async (

@@ -4,6 +4,7 @@ import OnScreenKeyboard from "../OnScreenKeyboard";
 import { cn } from "../../libs/cn";
 import { kickDrawer } from "../../libs/printer/kick-drawer";
 import { MONEY_SCALE } from "../../libs/constants";
+import { cashIOAttemptKey, clearOperation } from "../../libs/operation-id";
 
 interface CashIOFormProps {
   onSave: () => void;
@@ -32,6 +33,13 @@ export default function CashIOForm({ onSave, onCancel }: CashIOFormProps) {
   };
 
   const keyboardValue = activeField === "amount" ? amount : note;
+
+  // T-10 — Cancel ends the Cash In/Out attempt (like clearing a cart): the
+  // next entry is a new operation even if the last answer was lost.
+  const handleCancel = () => {
+    clearOperation(cashIOAttemptKey());
+    onCancel();
+  };
 
   const onSubmit = async () => {
     const parsed = parseFloat(amount);
@@ -99,7 +107,7 @@ export default function CashIOForm({ onSave, onCancel }: CashIOFormProps) {
             </button>
             <button
               type="button"
-              onClick={onCancel}
+              onClick={handleCancel}
               disabled={loading}
               className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 transition-colors"
             >

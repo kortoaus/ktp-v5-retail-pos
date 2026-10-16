@@ -276,16 +276,50 @@ test("failure without a message falls back to the screen text", async () => {
   assert.deepEqual(out, { ok: false, message: SALE_MESSAGES.saleFailed });
 });
 
-test("SPEND: zero amounts, no payments, no operationId", async () => {
+test("SPEND: zero amounts, no payments, carries the cart slot's operationId", async () => {
+  mem.clear();
   const cart = cartOf(1234);
   const bodies = [];
-  const ok = await submitSpend(cart, async (b) => (bodies.push(b), { ok: true, msg: "", result: { id: 5 } }));
-  assert.deepEqual(ok, { ok: true, invoice: { id: 5 } });
+  const ok = await submitSpend({ cart, cartIndex: 2 }, async (b) => (bodies.push(b), { ok: true, msg: "", result: { id: 5 } }));
+  assert.deepEqual(ok, { ok: true, invoice: { id: 5 }, replayed: false });
   assert.equal(bodies[0].type, "SPEND");
   assert.equal(bodies[0].total, 0);
   assert.deepEqual(bodies[0].payments, []);
   assert.equal(bodies[0].rows[0].total, 0);
-  assert.equal("operationId" in bodies[0], false);
-  const failed = await submitSpend(cart, async () => ({ ok: false, msg: "" }));
+  assert.match(bodies[0].operationId, /^[0-9a-f-]{36}$/);
+  assert.equal(mem.size, 0, "an ok answer ends the attempt");
+  const failed = await submitSpend({ cart, cartIndex: 2 }, async () => ({ ok: false, msg: "" }));
   assert.deepEqual(failed, { ok: false, message: "Failed to record spend" });
+});
+
+test("SPEND: lost answer → the retry resends the same id; the replay is reported and ends the attempt", async () => {
+  mem.clear();
+  const cart = cartOf(1234);
+  const ids = [];
+  const answers = [
+    { ok: false, status: 0, msg: "Network Error", result: null },
+    { ok: true, msg: "Spend already recorded", result: { id: 9, replayed: true } },
+  ];
+  const req = async (b) => (ids.push(b.operationId), answers.shift());
+  const lost = await submitSpend({ cart, cartIndex: 1 }, req);
+  assert.deepEqual(lost, { ok: false, message: "Network Error" });
+  const retry = await submitSpend({ cart, cartIndex: 1 }, req);
+  assert.equal(ids[0], ids[1]);
+  assert.deepEqual(retry, { ok: true, invoice: { id: 9, replayed: true }, replayed: true });
+  assert.equal(mem.size, 0);
+});
+
+test("SPEND and Sale from one cart slot are one attempt; a settling 409 ends it", async () => {
+  mem.clear();
+  const cart = cartOf(100);
+  const t = tendered(cart, { type: "set-cash-received", cashReceived: 100 });
+  const ids = [];
+  await submitSale({ cart, cartIndex: 0, ...t }, async (b) => (ids.push(b.operationId), { ok: false, status: 0, msg: "timeout" }));
+  const conflict = await submitSpend({ cart, cartIndex: 0 }, async (b) => (
+    ids.push(b.operationId),
+    { ok: false, status: 409, msg: "already recorded as SALE invoice", result: { code: "OPERATION_PAYLOAD_MISMATCH" } }
+  ));
+  assert.equal(ids[0], ids[1], "the Spend reuses the Sale attempt of that slot");
+  assert.deepEqual(conflict, { ok: false, message: "already recorded as SALE invoice" });
+  assert.equal(mem.size, 0, "the server settled the id: next press is a new attempt");
 });
