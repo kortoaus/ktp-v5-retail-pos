@@ -53,6 +53,8 @@ export type CashInOutMinAggregateOutputType = {
   note: string | null
   createdAt: Date | null
   updatedAt: Date | null
+  operationId: string | null
+  operationPayloadHash: string | null
 }
 
 export type CashInOutMaxAggregateOutputType = {
@@ -66,6 +68,8 @@ export type CashInOutMaxAggregateOutputType = {
   note: string | null
   createdAt: Date | null
   updatedAt: Date | null
+  operationId: string | null
+  operationPayloadHash: string | null
 }
 
 export type CashInOutCountAggregateOutputType = {
@@ -79,6 +83,8 @@ export type CashInOutCountAggregateOutputType = {
   note: number
   createdAt: number
   updatedAt: number
+  operationId: number
+  operationPayloadHash: number
   _all: number
 }
 
@@ -110,6 +116,8 @@ export type CashInOutMinAggregateInputType = {
   note?: true
   createdAt?: true
   updatedAt?: true
+  operationId?: true
+  operationPayloadHash?: true
 }
 
 export type CashInOutMaxAggregateInputType = {
@@ -123,6 +131,8 @@ export type CashInOutMaxAggregateInputType = {
   note?: true
   createdAt?: true
   updatedAt?: true
+  operationId?: true
+  operationPayloadHash?: true
 }
 
 export type CashInOutCountAggregateInputType = {
@@ -136,6 +146,8 @@ export type CashInOutCountAggregateInputType = {
   note?: true
   createdAt?: true
   updatedAt?: true
+  operationId?: true
+  operationPayloadHash?: true
   _all?: true
 }
 
@@ -236,6 +248,8 @@ export type CashInOutGroupByOutputType = {
   note: string | null
   createdAt: Date
   updatedAt: Date
+  operationId: string | null
+  operationPayloadHash: string | null
   _count: CashInOutCountAggregateOutputType | null
   _avg: CashInOutAvgAggregateOutputType | null
   _sum: CashInOutSumAggregateOutputType | null
@@ -272,6 +286,8 @@ export type CashInOutWhereInput = {
   note?: Prisma.StringNullableFilter<"CashInOut"> | string | null
   createdAt?: Prisma.DateTimeFilter<"CashInOut"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"CashInOut"> | Date | string
+  operationId?: Prisma.StringNullableFilter<"CashInOut"> | string | null
+  operationPayloadHash?: Prisma.StringNullableFilter<"CashInOut"> | string | null
   shift?: Prisma.XOR<Prisma.TerminalShiftScalarRelationFilter, Prisma.TerminalShiftWhereInput>
   terminal?: Prisma.XOR<Prisma.TerminalScalarRelationFilter, Prisma.TerminalWhereInput>
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
@@ -288,6 +304,8 @@ export type CashInOutOrderByWithRelationInput = {
   note?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  operationId?: Prisma.SortOrderInput | Prisma.SortOrder
+  operationPayloadHash?: Prisma.SortOrderInput | Prisma.SortOrder
   shift?: Prisma.TerminalShiftOrderByWithRelationInput
   terminal?: Prisma.TerminalOrderByWithRelationInput
   user?: Prisma.UserOrderByWithRelationInput
@@ -295,6 +313,7 @@ export type CashInOutOrderByWithRelationInput = {
 
 export type CashInOutWhereUniqueInput = Prisma.AtLeast<{
   id?: number
+  operationId?: string
   AND?: Prisma.CashInOutWhereInput | Prisma.CashInOutWhereInput[]
   OR?: Prisma.CashInOutWhereInput[]
   NOT?: Prisma.CashInOutWhereInput | Prisma.CashInOutWhereInput[]
@@ -307,10 +326,11 @@ export type CashInOutWhereUniqueInput = Prisma.AtLeast<{
   note?: Prisma.StringNullableFilter<"CashInOut"> | string | null
   createdAt?: Prisma.DateTimeFilter<"CashInOut"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"CashInOut"> | Date | string
+  operationPayloadHash?: Prisma.StringNullableFilter<"CashInOut"> | string | null
   shift?: Prisma.XOR<Prisma.TerminalShiftScalarRelationFilter, Prisma.TerminalShiftWhereInput>
   terminal?: Prisma.XOR<Prisma.TerminalScalarRelationFilter, Prisma.TerminalWhereInput>
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
-}, "id">
+}, "id" | "operationId">
 
 export type CashInOutOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
@@ -323,6 +343,8 @@ export type CashInOutOrderByWithAggregationInput = {
   note?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  operationId?: Prisma.SortOrderInput | Prisma.SortOrder
+  operationPayloadHash?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.CashInOutCountOrderByAggregateInput
   _avg?: Prisma.CashInOutAvgOrderByAggregateInput
   _max?: Prisma.CashInOutMaxOrderByAggregateInput
@@ -344,6 +366,8 @@ export type CashInOutScalarWhereWithAggregatesInput = {
   note?: Prisma.StringNullableWithAggregatesFilter<"CashInOut"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"CashInOut"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"CashInOut"> | Date | string
+  operationId?: Prisma.StringNullableWithAggregatesFilter<"CashInOut"> | string | null
+  operationPayloadHash?: Prisma.StringNullableWithAggregatesFilter<"CashInOut"> | string | null
 }
 
 export type CashInOutCreateInput = {
@@ -353,6 +377,8 @@ export type CashInOutCreateInput = {
   note?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  operationId?: string | null
+  operationPayloadHash?: string | null
   shift: Prisma.TerminalShiftCreateNestedOneWithoutCashIosInput
   terminal: Prisma.TerminalCreateNestedOneWithoutCashIosInput
   user: Prisma.UserCreateNestedOneWithoutCashIosInput
@@ -369,6 +395,8 @@ export type CashInOutUncheckedCreateInput = {
   note?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  operationId?: string | null
+  operationPayloadHash?: string | null
 }
 
 export type CashInOutUpdateInput = {
@@ -378,6 +406,8 @@ export type CashInOutUpdateInput = {
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  operationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  operationPayloadHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   shift?: Prisma.TerminalShiftUpdateOneRequiredWithoutCashIosNestedInput
   terminal?: Prisma.TerminalUpdateOneRequiredWithoutCashIosNestedInput
   user?: Prisma.UserUpdateOneRequiredWithoutCashIosNestedInput
@@ -394,6 +424,8 @@ export type CashInOutUncheckedUpdateInput = {
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  operationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  operationPayloadHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type CashInOutCreateManyInput = {
@@ -407,6 +439,8 @@ export type CashInOutCreateManyInput = {
   note?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  operationId?: string | null
+  operationPayloadHash?: string | null
 }
 
 export type CashInOutUpdateManyMutationInput = {
@@ -416,6 +450,8 @@ export type CashInOutUpdateManyMutationInput = {
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  operationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  operationPayloadHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type CashInOutUncheckedUpdateManyInput = {
@@ -429,6 +465,8 @@ export type CashInOutUncheckedUpdateManyInput = {
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  operationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  operationPayloadHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type CashInOutListRelationFilter = {
@@ -452,6 +490,8 @@ export type CashInOutCountOrderByAggregateInput = {
   note?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  operationId?: Prisma.SortOrder
+  operationPayloadHash?: Prisma.SortOrder
 }
 
 export type CashInOutAvgOrderByAggregateInput = {
@@ -473,6 +513,8 @@ export type CashInOutMaxOrderByAggregateInput = {
   note?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  operationId?: Prisma.SortOrder
+  operationPayloadHash?: Prisma.SortOrder
 }
 
 export type CashInOutMinOrderByAggregateInput = {
@@ -486,6 +528,8 @@ export type CashInOutMinOrderByAggregateInput = {
   note?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  operationId?: Prisma.SortOrder
+  operationPayloadHash?: Prisma.SortOrder
 }
 
 export type CashInOutSumOrderByAggregateInput = {
@@ -629,6 +673,8 @@ export type CashInOutCreateWithoutTerminalInput = {
   note?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  operationId?: string | null
+  operationPayloadHash?: string | null
   shift: Prisma.TerminalShiftCreateNestedOneWithoutCashIosInput
   user: Prisma.UserCreateNestedOneWithoutCashIosInput
 }
@@ -643,6 +689,8 @@ export type CashInOutUncheckedCreateWithoutTerminalInput = {
   note?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  operationId?: string | null
+  operationPayloadHash?: string | null
 }
 
 export type CashInOutCreateOrConnectWithoutTerminalInput = {
@@ -685,6 +733,8 @@ export type CashInOutScalarWhereInput = {
   note?: Prisma.StringNullableFilter<"CashInOut"> | string | null
   createdAt?: Prisma.DateTimeFilter<"CashInOut"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"CashInOut"> | Date | string
+  operationId?: Prisma.StringNullableFilter<"CashInOut"> | string | null
+  operationPayloadHash?: Prisma.StringNullableFilter<"CashInOut"> | string | null
 }
 
 export type CashInOutCreateWithoutUserInput = {
@@ -694,6 +744,8 @@ export type CashInOutCreateWithoutUserInput = {
   note?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  operationId?: string | null
+  operationPayloadHash?: string | null
   shift: Prisma.TerminalShiftCreateNestedOneWithoutCashIosInput
   terminal: Prisma.TerminalCreateNestedOneWithoutCashIosInput
 }
@@ -708,6 +760,8 @@ export type CashInOutUncheckedCreateWithoutUserInput = {
   note?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  operationId?: string | null
+  operationPayloadHash?: string | null
 }
 
 export type CashInOutCreateOrConnectWithoutUserInput = {
@@ -743,6 +797,8 @@ export type CashInOutCreateWithoutShiftInput = {
   note?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  operationId?: string | null
+  operationPayloadHash?: string | null
   terminal: Prisma.TerminalCreateNestedOneWithoutCashIosInput
   user: Prisma.UserCreateNestedOneWithoutCashIosInput
 }
@@ -757,6 +813,8 @@ export type CashInOutUncheckedCreateWithoutShiftInput = {
   note?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  operationId?: string | null
+  operationPayloadHash?: string | null
 }
 
 export type CashInOutCreateOrConnectWithoutShiftInput = {
@@ -795,6 +853,8 @@ export type CashInOutCreateManyTerminalInput = {
   note?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  operationId?: string | null
+  operationPayloadHash?: string | null
 }
 
 export type CashInOutUpdateWithoutTerminalInput = {
@@ -804,6 +864,8 @@ export type CashInOutUpdateWithoutTerminalInput = {
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  operationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  operationPayloadHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   shift?: Prisma.TerminalShiftUpdateOneRequiredWithoutCashIosNestedInput
   user?: Prisma.UserUpdateOneRequiredWithoutCashIosNestedInput
 }
@@ -818,6 +880,8 @@ export type CashInOutUncheckedUpdateWithoutTerminalInput = {
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  operationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  operationPayloadHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type CashInOutUncheckedUpdateManyWithoutTerminalInput = {
@@ -830,6 +894,8 @@ export type CashInOutUncheckedUpdateManyWithoutTerminalInput = {
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  operationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  operationPayloadHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type CashInOutCreateManyUserInput = {
@@ -842,6 +908,8 @@ export type CashInOutCreateManyUserInput = {
   note?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  operationId?: string | null
+  operationPayloadHash?: string | null
 }
 
 export type CashInOutUpdateWithoutUserInput = {
@@ -851,6 +919,8 @@ export type CashInOutUpdateWithoutUserInput = {
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  operationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  operationPayloadHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   shift?: Prisma.TerminalShiftUpdateOneRequiredWithoutCashIosNestedInput
   terminal?: Prisma.TerminalUpdateOneRequiredWithoutCashIosNestedInput
 }
@@ -865,6 +935,8 @@ export type CashInOutUncheckedUpdateWithoutUserInput = {
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  operationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  operationPayloadHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type CashInOutUncheckedUpdateManyWithoutUserInput = {
@@ -877,6 +949,8 @@ export type CashInOutUncheckedUpdateManyWithoutUserInput = {
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  operationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  operationPayloadHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type CashInOutCreateManyShiftInput = {
@@ -889,6 +963,8 @@ export type CashInOutCreateManyShiftInput = {
   note?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  operationId?: string | null
+  operationPayloadHash?: string | null
 }
 
 export type CashInOutUpdateWithoutShiftInput = {
@@ -898,6 +974,8 @@ export type CashInOutUpdateWithoutShiftInput = {
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  operationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  operationPayloadHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   terminal?: Prisma.TerminalUpdateOneRequiredWithoutCashIosNestedInput
   user?: Prisma.UserUpdateOneRequiredWithoutCashIosNestedInput
 }
@@ -912,6 +990,8 @@ export type CashInOutUncheckedUpdateWithoutShiftInput = {
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  operationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  operationPayloadHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type CashInOutUncheckedUpdateManyWithoutShiftInput = {
@@ -924,6 +1004,8 @@ export type CashInOutUncheckedUpdateManyWithoutShiftInput = {
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  operationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  operationPayloadHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 
@@ -939,6 +1021,8 @@ export type CashInOutSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   note?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  operationId?: boolean
+  operationPayloadHash?: boolean
   shift?: boolean | Prisma.TerminalShiftDefaultArgs<ExtArgs>
   terminal?: boolean | Prisma.TerminalDefaultArgs<ExtArgs>
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
@@ -955,6 +1039,8 @@ export type CashInOutSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   note?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  operationId?: boolean
+  operationPayloadHash?: boolean
   shift?: boolean | Prisma.TerminalShiftDefaultArgs<ExtArgs>
   terminal?: boolean | Prisma.TerminalDefaultArgs<ExtArgs>
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
@@ -971,6 +1057,8 @@ export type CashInOutSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   note?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  operationId?: boolean
+  operationPayloadHash?: boolean
   shift?: boolean | Prisma.TerminalShiftDefaultArgs<ExtArgs>
   terminal?: boolean | Prisma.TerminalDefaultArgs<ExtArgs>
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
@@ -987,9 +1075,11 @@ export type CashInOutSelectScalar = {
   note?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  operationId?: boolean
+  operationPayloadHash?: boolean
 }
 
-export type CashInOutOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "shiftId" | "terminalId" | "userId" | "userName" | "type" | "amount" | "note" | "createdAt" | "updatedAt", ExtArgs["result"]["cashInOut"]>
+export type CashInOutOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "shiftId" | "terminalId" | "userId" | "userName" | "type" | "amount" | "note" | "createdAt" | "updatedAt" | "operationId" | "operationPayloadHash", ExtArgs["result"]["cashInOut"]>
 export type CashInOutInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   shift?: boolean | Prisma.TerminalShiftDefaultArgs<ExtArgs>
   terminal?: boolean | Prisma.TerminalDefaultArgs<ExtArgs>
@@ -1024,6 +1114,8 @@ export type $CashInOutPayload<ExtArgs extends runtime.Types.Extensions.InternalA
     note: string | null
     createdAt: Date
     updatedAt: Date
+    operationId: string | null
+    operationPayloadHash: string | null
   }, ExtArgs["result"]["cashInOut"]>
   composites: {}
 }
@@ -1460,6 +1552,8 @@ export interface CashInOutFieldRefs {
   readonly note: Prisma.FieldRef<"CashInOut", 'String'>
   readonly createdAt: Prisma.FieldRef<"CashInOut", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"CashInOut", 'DateTime'>
+  readonly operationId: Prisma.FieldRef<"CashInOut", 'String'>
+  readonly operationPayloadHash: Prisma.FieldRef<"CashInOut", 'String'>
 }
     
 

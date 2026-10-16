@@ -39,7 +39,9 @@ export function normalizeOperationId(value: unknown): string | null {
   return value.trim();
 }
 
-export type OperationRoute = "sale" | "refund" | "repay";
+// spend (SPEND invoice, SaleInvoice.operationId) and cashio (CashInOut.operationId)
+// joined in T-10 (retail-runner, F-27): same claim, same payload-hash replay/409.
+export type OperationRoute = "sale" | "refund" | "repay" | "spend" | "cashio";
 
 export function resolveOperationId(
   value: unknown,

@@ -8,16 +8,19 @@ import {
   NotFoundException,
 } from "../../libs/exceptions";
 import { FindManyQuery } from "../../libs/query";
+import { isUniqueViolation } from "../../libs/prisma-errors";
 import { assertShiftOpenInTx } from "../shift/shift.lock";
+import {
+  operationConflict,
+  operationPayloadHash,
+  resolveOperationId,
+  withOperationClaim,
+} from "../sale/sale.operation";
 
 // R-9 — CashInOut.type is a free string column whose only readers expect
 // "in" | "out" (shift.service close totals). The amount is unsigned cents; the
 // direction lives in `type`, so a signed amount would double-flip the drawer.
-export function parseCashIODto(body: unknown): {
-  type: "in" | "out";
-  amount: number;
-  note?: string;
-} {
+export function parseCashIODto(body: unknown): CashIODto {
   if (body == null || typeof body !== "object")
     throw new BadRequestException("Invalid cash in/out payload");
   const { type, amount, note } = body as Record<string, unknown>;
@@ -30,20 +33,47 @@ export function parseCashIODto(body: unknown): {
   return { type, amount, note: note ?? undefined };
 }
 
-export async function createCashIOService(
-  shift: TerminalShift,
-  terminal: Terminal,
-  user: User,
-  body: unknown,
-) {
-  try {
-    const dto = parseCashIODto(body);
-    if (!shift) throw new NotFoundException("Shift not found");
-    if (!terminal) throw new NotFoundException("Terminal not found");
-    if (!user) throw new NotFoundException("User not found");
+// T-10 (retail-runner, F-27) — operation identity, the sale discipline
+// (sale.operation.ts): the till sends its Cash In/Out attempt `operationId`
+// and resends it on every retry until the server answers. Stored on
+// CashInOut.operationId (@unique) with a hash of the parsed { type, amount, note }:
+//   - same id + same hash  → the recorded row's id again, `replayed: true`
+//   - same id + other hash → 409 OPERATION_PAYLOAD_MISMATCH (attempt ends)
+//   - no id (older till)   → server-minted, works as before (no idempotency).
+export interface CashIODto {
+  type: "in" | "out";
+  amount: number;
+  note?: string;
+}
 
-    // T-24 (R-7) — under the shift row lock so a close cannot miss it.
-    const cashInOut = await db.$transaction(async (tx) => {
+export interface RecordedCashIO {
+  id: number;
+  operationPayloadHash: string | null;
+}
+
+export interface PersistCashIOArgs {
+  shift: TerminalShift;
+  terminal: Terminal;
+  user: User;
+  dto: CashIODto;
+  operationId: string;
+  payloadHash: string;
+}
+
+export interface CashIOCreateDeps {
+  findByOperationId(operationId: string): Promise<RecordedCashIO | null>;
+  persist(args: PersistCashIOArgs): Promise<{ id: number }>;
+}
+
+export const defaultCashIOCreateDeps: CashIOCreateDeps = {
+  findByOperationId: (operationId) =>
+    db.cashInOut.findUnique({
+      where: { operationId },
+      select: { id: true, operationPayloadHash: true },
+    }),
+  // T-24 (R-7) — under the shift row lock so a close cannot miss it.
+  persist: ({ shift, terminal, user, dto, operationId, payloadHash }) =>
+    db.$transaction(async (tx) => {
       await assertShiftOpenInTx(tx, shift.id, "cash in/out");
       return tx.cashInOut.create({
         data: {
@@ -54,14 +84,79 @@ export async function createCashIOService(
           type: dto.type,
           amount: dto.amount,
           note: dto.note,
+          operationId,
+          operationPayloadHash: payloadHash,
         },
-        select: {
-          id: true,
-        },
+        select: { id: true },
       });
-    });
+    }),
+};
 
-    return { ok: true, msg: "Cash in out created", result: cashInOut.id };
+function assertSameCashIOPayload(recorded: RecordedCashIO, payloadHash: string) {
+  if (recorded.operationPayloadHash !== payloadHash)
+    throw operationConflict(
+      `This Cash In/Out attempt was already recorded as entry #${recorded.id} with a different type, amount or note (409). Check the Cash In/Out list before saving again; pressing Submit again records a new entry.`,
+    );
+}
+
+export async function createCashIOService(
+  shift: TerminalShift,
+  terminal: Terminal,
+  user: User,
+  body: unknown,
+  deps: CashIOCreateDeps = defaultCashIOCreateDeps,
+) {
+  try {
+    const dto = parseCashIODto(body);
+    if (!shift) throw new NotFoundException("Shift not found");
+    if (!terminal) throw new NotFoundException("Terminal not found");
+    if (!user) throw new NotFoundException("User not found");
+
+    const { operationId } = resolveOperationId(
+      (body as Record<string, unknown>).operationId,
+      "cashio",
+    );
+    const payloadHash = operationPayloadHash(dto);
+
+    const replay = (recorded: RecordedCashIO, replayed: boolean) => {
+      assertSameCashIOPayload(recorded, payloadHash);
+      return {
+        ok: true,
+        msg: replayed
+          ? "Cash in out already recorded — returning the original entry"
+          : "Cash in out created",
+        result: recorded.id,
+        replayed,
+      };
+    };
+
+    return await withOperationClaim(operationId, async () => {
+      const recorded = await deps.findByOperationId(operationId);
+      if (recorded) return replay(recorded, true);
+
+      try {
+        const cashInOut = await deps.persist({
+          shift,
+          terminal,
+          user,
+          dto,
+          operationId,
+          payloadHash,
+        });
+        return { ok: true, msg: "Cash in out created", result: cashInOut.id, replayed: false };
+      } catch (persistenceError) {
+        // A persistence error does not prove nothing committed (lost COMMIT
+        // ack, or a racing request took the unique id): look before answering.
+        let after: RecordedCashIO | null = null;
+        try {
+          after = await deps.findByOperationId(operationId);
+        } catch (lookupError) {
+          console.error("[sale-operation] cash in/out lookup after a persistence error failed", lookupError);
+        }
+        if (after) return replay(after, isUniqueViolation(persistenceError));
+        throw persistenceError;
+      }
+    });
   } catch (e) {
     if (e instanceof HttpException) throw e;
     console.error("createCashInOutService error:", e);

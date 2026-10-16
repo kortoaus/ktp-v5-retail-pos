@@ -2678,7 +2678,9 @@ export const CashInOutScalarFieldEnum = {
   amount: 'amount',
   note: 'note',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  operationId: 'operationId',
+  operationPayloadHash: 'operationPayloadHash'
 } as const
 
 export type CashInOutScalarFieldEnum = (typeof CashInOutScalarFieldEnum)[keyof typeof CashInOutScalarFieldEnum]
