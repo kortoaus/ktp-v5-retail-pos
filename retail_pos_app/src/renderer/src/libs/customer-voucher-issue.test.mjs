@@ -14,6 +14,11 @@ const {
   voucherTierRowLabel,
   voucherTierShortfallLabel,
   voucherIssueConfirmText,
+  pendingVoucherIssueFromAttempt,
+  pendingVoucherIssueLabel,
+  voucherExchangeStep,
+  voucherResumeText,
+  PENDING_EXCHANGE_NOTICE,
 } = await import("./customer-voucher-issue.ts");
 
 const voucher = { id: 9, serial: "CV-ABC123", balance: 1000 };
@@ -135,16 +140,36 @@ test("D-24: confirmation 1 (amount, deduction, balance after) and confirmation 2
   assert.equal(second.confirmLabel, "Issue $25");
 });
 
-test("D-24: the exchange attempt key is per member and amount — cv-issue:<memberId>:<amount>", async () => {
+test("D-24: the exchange attempt key is one per member — cv-issue:<memberId>", async () => {
   const { customerVoucherIssueAttemptKey } = await import("./operation-id.ts");
-  assert.equal(customerVoucherIssueAttemptKey("member-1", 2500), "cv-issue:member-1:2500");
-  assert.equal(customerVoucherIssueAttemptKey("member-1", 1000), "cv-issue:member-1:1000");
-  assert.notEqual(
-    customerVoucherIssueAttemptKey("member-1", 1000),
-    customerVoucherIssueAttemptKey("member-1", 2500),
-    "a $25 press never reuses a $10 attempt's id",
-  );
-  for (const tier of CUSTOMER_VOUCHER_TIERS) {
-    assert.notEqual(customerVoucherIssueAttemptKey("member-1", tier.amount), "cv-issue:member-1");
-  }
+  assert.equal(customerVoucherIssueAttemptKey("member-1"), "cv-issue:member-1");
+  assert.notEqual(customerVoucherIssueAttemptKey("member-1"), customerVoucherIssueAttemptKey("member-2"));
+});
+
+test("D-24: pending exchange from a stored attempt", () => {
+  assert.equal(pendingVoucherIssueFromAttempt(null), null);
+  assert.deepEqual(pendingVoucherIssueFromAttempt({ payload: { amount: 2500 } }), { amount: 2500 });
+  assert.deepEqual(pendingVoucherIssueFromAttempt({}), { amount: undefined }, "previous-release record");
+  assert.deepEqual(pendingVoucherIssueFromAttempt({ payload: { amount: "2500" } }), { amount: undefined });
+  assert.deepEqual(pendingVoucherIssueFromAttempt({ payload: { amount: 0 } }), { amount: undefined });
+});
+
+test("D-24: step resolution — pending → finish-previous step; none → tier list", () => {
+  assert.deepEqual(voucherExchangeStep(null), { kind: "tiers" });
+  assert.deepEqual(voucherExchangeStep({ amount: 5000 }), { kind: "resume", amount: 5000, label: "$50" });
+  assert.deepEqual(voucherExchangeStep({ amount: undefined }), {
+    kind: "resume",
+    amount: undefined,
+    label: "$10 (previous version)",
+  });
+});
+
+test("D-24: finish-previous texts and the reopen notice", () => {
+  assert.equal(pendingVoucherIssueLabel({ amount: 10000 }), "$100");
+  const text = voucherResumeText({ amount: 2500 });
+  assert.equal(text.title, "Finish previous exchange");
+  assert.equal(text.lines[0], "A $25 voucher exchange was sent but not confirmed.");
+  assert.equal(text.confirmLabel, "Continue");
+  assert.equal(voucherResumeText({ amount: undefined }).lines[0], "A $10 (previous version) voucher exchange was sent but not confirmed.");
+  assert.equal(PENDING_EXCHANGE_NOTICE, "Previous exchange not confirmed — finish it first");
 });

@@ -6,8 +6,9 @@
 //          a SPEND from that slot is the same attempt (T-10)
 //   refund "refund:invoice:<originalId>"
 //   repay  "repay:invoice:<originalId>"
-//   points→voucher exchange "cv-issue:<memberId>:<amount>" (T-17, V-5;
-//          amount in cents per tier, retail-delivery D-24)
+//   points→voucher exchange "cv-issue:<memberId>" (T-17, V-5) — one pending
+//          exchange per member; the chosen tier travels in the attempt's
+//          payload {amount} (retail-delivery D-24)
 //   Cash In/Out "cashio:form" one per till (T-10; ended by the form's Cancel)
 // The attempt's operationId (UUID) is minted on the first submit and resent on
 // every retry of that attempt, whatever the payload looks like now, until:
@@ -40,13 +41,14 @@ export function repayAttemptKey(originalInvoiceId: number): string {
   return `repay:invoice:${originalInvoiceId}`;
 }
 
-// T-17 (V-5) — one points→voucher exchange press per member and tier: a retry
-// after a lost answer resends the same id and CRM returns the voucher it
-// already issued instead of deducting points again. retail-delivery D-24: the
-// tier's amount (cents) is part of the key, so a $25 press never replays a $10
-// attempt's id (CRM also compares the amount on a requestId replay).
-export function customerVoucherIssueAttemptKey(memberId: string, amount: number): string {
-  return `cv-issue:${memberId}:${amount}`;
+// T-17 (V-5) — one points→voucher exchange per member: a retry after a lost
+// answer resends the same id and CRM returns the voucher it already issued
+// instead of deducting points again. retail-delivery D-24 (review round 1):
+// the key stays per member (not per tier) so an unresolved exchange — also one
+// left by a till on the previous release — blocks a new one; the chosen
+// amount is stored as the attempt's payload and resent on the retry.
+export function customerVoucherIssueAttemptKey(memberId: string): string {
+  return `cv-issue:${memberId}`;
 }
 
 // T-10 (F-27) — the till's Cash In/Out form: one entry at a time. The attempt
@@ -59,6 +61,9 @@ export function cashIOAttemptKey(): string {
 interface StoredAttempt {
   operationId: string;
   createdAt: number;
+  // D-24: what the retry must resend (e.g. the exchange amount). Absent on
+  // records written before it existed and on attempts minted without one.
+  payload?: Record<string, unknown>;
 }
 
 // The attempt store — exactly the three calls this module makes. The POS uses
@@ -94,10 +99,24 @@ function read(attemptKey: string): StoredAttempt | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<StoredAttempt>;
     if (typeof parsed.operationId !== "string" || parsed.operationId.length < 8) return null;
-    return { operationId: parsed.operationId, createdAt: Number(parsed.createdAt) || 0 };
+    const attempt: StoredAttempt = {
+      operationId: parsed.operationId,
+      createdAt: Number(parsed.createdAt) || 0,
+    };
+    if (parsed.payload && typeof parsed.payload === "object" && !Array.isArray(parsed.payload)) {
+      attempt.payload = parsed.payload;
+    }
+    return attempt;
   } catch {
     return null;
   }
+}
+
+// The attempt still open under this key (minted, not yet settled), without
+// minting one — null when there is none (D-24: the exchange modal asks before
+// offering a new exchange).
+export function pendingOperation(attemptKey: string): StoredAttempt | null {
+  return read(attemptKey);
 }
 
 // The cashier ended this attempt (cart cleared / new transaction).
@@ -123,16 +142,21 @@ export function endAttemptsOfEmptiedCarts(prevLineCounts: number[], lineCounts: 
 }
 
 // The attempt's operationId: the stored one, or a new one stored before the
-// request is sent.
-export function operationIdFor(attemptKey: string, now: number = Date.now()): string {
+// request is sent. `payload` is stored only when a new attempt is minted; an
+// existing attempt keeps the payload it was minted with.
+export function operationIdFor(
+  attemptKey: string,
+  now: number = Date.now(),
+  payload?: Record<string, unknown>,
+): string {
   const stored = read(attemptKey);
   if (stored) return stored.operationId;
   const operationId = crypto.randomUUID();
+  const record: StoredAttempt = payload
+    ? { operationId, createdAt: now, payload }
+    : { operationId, createdAt: now };
   try {
-    storage()?.setItem(
-      STORAGE_PREFIX + attemptKey,
-      JSON.stringify({ operationId, createdAt: now } satisfies StoredAttempt),
-    );
+    storage()?.setItem(STORAGE_PREFIX + attemptKey, JSON.stringify(record));
   } catch {
     // storage unavailable — the id still protects retries inside this request
   }
@@ -157,11 +181,13 @@ export function settleOperation(
 
 // One request under an attempt: send with the attempt's id, then settle it by
 // the answer (T-17; used by the customer-voucher exchange press).
+// `payload` is recorded with a newly minted attempt (D-24: the exchange amount).
 export async function sendWithOperation<R extends { ok: boolean; result?: unknown }>(
   attemptKey: string,
   send: (operationId: string) => Promise<R>,
+  payload?: Record<string, unknown>,
 ): Promise<R> {
-  const operationId = operationIdFor(attemptKey);
+  const operationId = operationIdFor(attemptKey, Date.now(), payload);
   const res = await send(operationId);
   settleOperation(attemptKey, res);
   return res;

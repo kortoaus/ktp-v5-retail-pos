@@ -103,6 +103,59 @@ export function voucherIssueConfirmText(
   };
 }
 
+// D-24 review round 1 — one pending exchange per member. While the member's
+// exchange attempt (operation-id key cv-issue:<memberId>) is unsettled — its
+// answer was lost — the till offers no tier list, only "Finish previous
+// exchange": the same operationId resent with the amount stored with the
+// attempt. A record from the previous release has no payload → amount
+// undefined → the request carries no amount and CRM resolves it to $10, the
+// only tier that release could issue. No affordability check on that step:
+// CRM already deducted the points if it issued.
+export interface PendingVoucherIssue {
+  amount: number | undefined;
+}
+
+export function pendingVoucherIssueFromAttempt(
+  attempt: { payload?: Record<string, unknown> } | null,
+): PendingVoucherIssue | null {
+  if (!attempt) return null;
+  const amount = attempt.payload?.amount;
+  return {
+    amount:
+      typeof amount === "number" && Number.isInteger(amount) && amount > 0 ? amount : undefined,
+  };
+}
+
+export const PENDING_EXCHANGE_NOTICE = "Previous exchange not confirmed — finish it first";
+
+export function pendingVoucherIssueLabel(pending: PendingVoucherIssue): string {
+  if (pending.amount === undefined) return "$10 (previous version)";
+  const tier = CUSTOMER_VOUCHER_TIERS.find((t) => t.amount === pending.amount);
+  return tier ? tier.label : `$${(pending.amount / 100).toFixed(2)}`;
+}
+
+export type VoucherExchangeStep =
+  | { kind: "tiers" }
+  | { kind: "resume"; amount: number | undefined; label: string };
+
+// Where the exchange dialog starts: the pending exchange first, else the tiers.
+export function voucherExchangeStep(pending: PendingVoucherIssue | null): VoucherExchangeStep {
+  if (!pending) return { kind: "tiers" };
+  return { kind: "resume", amount: pending.amount, label: pendingVoucherIssueLabel(pending) };
+}
+
+export function voucherResumeText(pending: PendingVoucherIssue): VoucherConfirmText {
+  const label = pendingVoucherIssueLabel(pending);
+  return {
+    title: "Finish previous exchange",
+    lines: [
+      `A ${label} voucher exchange was sent but not confirmed.`,
+      "Continue sends it again — points are not deducted twice.",
+    ],
+    confirmLabel: "Continue",
+  };
+}
+
 export interface IssueAnswerVoucher {
   serial: string;
 }

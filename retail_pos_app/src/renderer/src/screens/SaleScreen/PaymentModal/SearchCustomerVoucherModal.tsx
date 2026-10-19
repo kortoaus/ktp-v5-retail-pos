@@ -4,13 +4,17 @@ import {
   CustomerVoucher,
   getValidCustomerVouchers,
   issueCustomerVoucher,
+  pendingCustomerVoucherIssue,
+  resumeCustomerVoucherIssue,
 } from "../../../service/customer-voucher.service";
 import {
   canExchangePoints,
   decideIssueAnswer,
   memberPointsAfterIssue,
+  PENDING_EXCHANGE_NOTICE,
   voucherTierShortfall,
   type CustomerVoucherTier,
+  type PendingVoucherIssue,
 } from "../../../libs/customer-voucher-issue";
 import { searchMemberById } from "../../../service/crm.service";
 import {
@@ -52,6 +56,9 @@ export default function SearchCustomerVoucherModal({
   const [issuing, setIssuing] = useState(false);
   // D-24: Issue opens the tier list (+ two confirmations) in VoucherTierModal.
   const [tierOpen, setTierOpen] = useState(false);
+  // D-24 review round 1: the member's unsettled exchange (answer lost) — it
+  // must be finished (same operationId, stored amount) before a new one.
+  const [pending, setPending] = useState<PendingVoucherIssue | null>(null);
   // F-16: set when a press replayed an earlier exchange (not auto-selected).
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -68,42 +75,66 @@ export default function SearchCustomerVoucherModal({
 
   useEffect(() => {
     if (!open) return;
-    setNotice(null);
+    const unsettled = pendingCustomerVoucherIssue(memberId);
+    setPending(unsettled);
+    // The shown points may be stale while an exchange is unconfirmed.
+    setNotice(unsettled ? PENDING_EXCHANGE_NOTICE : null);
     setTierOpen(false);
     refetch();
-  }, [open, refetch]);
+  }, [open, memberId, refetch]);
+
+  // One exchange request (new or resumed) and the existing answer handling.
+  const runExchange = useCallback(
+    async (send: () => ReturnType<typeof issueCustomerVoucher>) => {
+      setIssuing(true);
+      try {
+        const decision = decideIssueAnswer(await send());
+        if (decision.action === "error") {
+          window.alert(decision.message);
+          // A lost answer keeps the attempt: finish it before a new exchange.
+          if (pendingCustomerVoucherIssue(memberId)) setNotice(PENDING_EXCHANGE_NOTICE);
+          return;
+        }
+        // F-17: update the member's points on any ok answer, selected or not;
+        // a replay without points re-reads the member before the modal moves on.
+        const points = await memberPointsAfterIssue(decision.memberPoints, async () => {
+          const res = await searchMemberById(memberId);
+          return res.ok && res.result ? res.result.points : null;
+        });
+        if (points !== null) onMemberPoints(points);
+        if (decision.action === "recovered") {
+          // F-16: the recovered voucher may be spent, expired or already in
+          // this sale — refresh the list and let the cashier pick.
+          setNotice(decision.notice);
+          await refetch();
+          return;
+        }
+        onSelect(decision.voucher);
+        onClose();
+      } finally {
+        setPending(pendingCustomerVoucherIssue(memberId));
+        setIssuing(false);
+        setTierOpen(false);
+      }
+    },
+    [memberId, onClose, onMemberPoints, onSelect, refetch],
+  );
 
   // D-24: called by VoucherTierModal only after the second confirmation.
-  const handleIssue = useCallback(async (tier: CustomerVoucherTier) => {
-    if (issuing || voucherTierShortfall(memberPoints, tier) > 0) return;
-    setIssuing(true);
-    try {
-      const decision = decideIssueAnswer(await issueCustomerVoucher(memberId, tier.amount));
-      if (decision.action === "error") {
-        window.alert(decision.message);
-        return;
-      }
-      // F-17: update the member's points on any ok answer, selected or not;
-      // a replay without points re-reads the member before the modal moves on.
-      const points = await memberPointsAfterIssue(decision.memberPoints, async () => {
-        const res = await searchMemberById(memberId);
-        return res.ok && res.result ? res.result.points : null;
-      });
-      if (points !== null) onMemberPoints(points);
-      if (decision.action === "recovered") {
-        // F-16: the recovered voucher may be spent, expired or already in
-        // this sale — refresh the list and let the cashier pick.
-        setNotice(decision.notice);
-        await refetch();
-        return;
-      }
-      onSelect(decision.voucher);
-      onClose();
-    } finally {
-      setIssuing(false);
-      setTierOpen(false);
-    }
-  }, [issuing, memberId, memberPoints, onClose, onMemberPoints, onSelect, refetch]);
+  const handleIssue = useCallback(
+    (tier: CustomerVoucherTier) => {
+      if (issuing || pending || voucherTierShortfall(memberPoints, tier) > 0) return;
+      void runExchange(() => issueCustomerVoucher(memberId, tier.amount));
+    },
+    [issuing, pending, memberId, memberPoints, runExchange],
+  );
+
+  // "Finish previous exchange" → Continue: no affordability check (CRM
+  // already deducted the points if it issued).
+  const handleResume = useCallback(() => {
+    if (issuing || !pending) return;
+    void runExchange(() => resumeCustomerVoucherIssue(memberId));
+  }, [issuing, pending, memberId, runExchange]);
 
   const handlePick = useCallback(
     (voucher: CustomerVoucher) => {
@@ -116,7 +147,7 @@ export default function SearchCustomerVoucherModal({
 
   if (!open) return null;
 
-  const canIssue = canExchangePoints(memberPoints);
+  const canIssue = pending !== null || canExchangePoints(memberPoints);
 
   return (
     <div
@@ -153,7 +184,7 @@ export default function SearchCustomerVoucherModal({
                   : "min-w-[120px] h-12 px-4 rounded-lg font-bold text-sm bg-blue-600 text-white active:bg-blue-700 flex items-center justify-center"
               }
             >
-              {issuing ? "..." : "ISSUE VOUCHER"}
+              {issuing ? "..." : pending ? "FINISH EXCHANGE" : "ISSUE VOUCHER"}
             </TapTarget>
           )}
         </div>
@@ -233,8 +264,10 @@ export default function SearchCustomerVoucherModal({
         open={tierOpen}
         memberPoints={memberPoints}
         issuing={issuing}
+        pending={pending}
         onCancel={() => setTierOpen(false)}
         onIssue={handleIssue}
+        onResume={handleResume}
       />
     </div>
   );

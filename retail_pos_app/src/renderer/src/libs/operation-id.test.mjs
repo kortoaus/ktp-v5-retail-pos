@@ -80,8 +80,8 @@ test("F-9: carts that start empty (till start) keep persisted attempts", () => {
 });
 
 test("T-17 V-5: exchange press — a retry after a lost answer reuses the id; ok ends the attempt", async () => {
-  const key = m.customerVoucherIssueAttemptKey("member-1", 2500);
-  assert.equal(key, "cv-issue:member-1:2500");
+  const key = m.customerVoucherIssueAttemptKey("member-1");
+  assert.equal(key, "cv-issue:member-1");
   const sent = [];
   const lost = { ok: false, status: 0, msg: "Network Error", result: null };
   const ok = { ok: true, status: 200, msg: "Customer voucher already issued", result: { voucher: { id: 1 } } };
@@ -95,11 +95,63 @@ test("T-17 V-5: exchange press — a retry after a lost answer reuses the id; ok
 });
 
 test("T-17 V-5: exchange id survives a restart (persisted) and is per member", async () => {
-  const a = m.operationIdFor(m.customerVoucherIssueAttemptKey("member-1", 1000));
-  m.settleOperation(m.customerVoucherIssueAttemptKey("member-1", 1000), { ok: false, result: null });
+  const a = m.operationIdFor(m.customerVoucherIssueAttemptKey("member-1"));
+  m.settleOperation(m.customerVoucherIssueAttemptKey("member-1"), { ok: false, result: null });
   // a till restart re-imports the module; the id lives in localStorage
   const again = await import("./operation-id.ts?restart");
-  assert.equal(again.operationIdFor(again.customerVoucherIssueAttemptKey("member-1", 1000)), a);
-  assert.notEqual(m.operationIdFor(m.customerVoucherIssueAttemptKey("member-2", 1000)), a);
+  assert.equal(again.operationIdFor(again.customerVoucherIssueAttemptKey("member-1")), a);
+  assert.notEqual(m.operationIdFor(m.customerVoucherIssueAttemptKey("member-2")), a);
   assert.notEqual(m.operationIdFor(m.saleAttemptKey(0)), a, "exchange and checkout attempts never share an id");
+});
+
+// retail-delivery D-24 review round 1 — one pending exchange per member; the
+// chosen amount is stored with the attempt; previous-release records have none.
+
+const { pendingVoucherIssueFromAttempt } = await import("./customer-voucher-issue.ts");
+
+test("D-24: the payload is stored with a newly minted attempt and kept on retries", () => {
+  const key = m.customerVoucherIssueAttemptKey("member-1");
+  const id = m.operationIdFor(key, 1000, { amount: 2500 });
+  assert.deepEqual(JSON.parse(store.get("ktpv5.operationAttempt.cv-issue:member-1")), {
+    operationId: id,
+    createdAt: 1000,
+    payload: { amount: 2500 },
+  });
+  // a later call (even with another payload) reuses the attempt and its payload
+  assert.equal(m.operationIdFor(key, 2000, { amount: 10000 }), id);
+  assert.deepEqual(m.pendingOperation(key), { operationId: id, createdAt: 1000, payload: { amount: 2500 } });
+  assert.deepEqual(pendingVoucherIssueFromAttempt(m.pendingOperation(key)), { amount: 2500 });
+});
+
+test("D-24: an attempt without payload keeps the previous storage format", () => {
+  const id = m.operationIdFor(m.saleAttemptKey(0), 5);
+  assert.deepEqual(JSON.parse(store.get("ktpv5.operationAttempt.sale:cart:0")), { operationId: id, createdAt: 5 });
+  assert.equal("payload" in m.pendingOperation(m.saleAttemptKey(0)), false);
+});
+
+test("D-24: a previous-release record (cv-issue:<memberId>, no payload) is pending with amount undefined", () => {
+  const legacyId = "3f2b9c1e-7a4d-4e8b-9c0f-1a2b3c4d5e6f";
+  store.set("ktpv5.operationAttempt.cv-issue:member-1", JSON.stringify({ operationId: legacyId, createdAt: 1 }));
+  const key = m.customerVoucherIssueAttemptKey("member-1");
+  assert.equal(m.pendingOperation(key).operationId, legacyId);
+  assert.deepEqual(pendingVoucherIssueFromAttempt(m.pendingOperation(key)), { amount: undefined });
+  assert.equal(m.operationIdFor(key), legacyId, "the retry resends the previous release's id");
+});
+
+test("D-24: pendingOperation never mints; sendWithOperation records the payload and an ok answer ends it", async () => {
+  const key = m.customerVoucherIssueAttemptKey("member-3");
+  assert.equal(m.pendingOperation(key), null);
+  assert.equal(store.size, 0);
+  const lost = { ok: false, status: 0, msg: "Network Error", result: null };
+  await m.sendWithOperation(key, async () => lost, { amount: 5000 });
+  assert.deepEqual(pendingVoucherIssueFromAttempt(m.pendingOperation(key)), { amount: 5000 });
+  await m.sendWithOperation(key, async () => ({ ok: true, result: { voucher: { id: 1 } } }));
+  assert.equal(m.pendingOperation(key), null);
+});
+
+test("D-24: a malformed payload is ignored", () => {
+  store.set("ktpv5.operationAttempt.cv-issue:member-4", JSON.stringify({ operationId: "abcdefgh-1234", createdAt: 1, payload: [1] }));
+  const attempt = m.pendingOperation(m.customerVoucherIssueAttemptKey("member-4"));
+  assert.equal("payload" in attempt, false);
+  assert.deepEqual(pendingVoucherIssueFromAttempt(attempt), { amount: undefined });
 });
