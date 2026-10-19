@@ -1,4 +1,11 @@
 import { createServer } from "http";
+import { setDefaultAutoSelectFamilyAttemptTimeout } from "net";
+
+// F-18 (2026-10-19): Node's Happy Eyeballs connector gives each resolved address
+// 250 ms by default; the store → Cloudflare (SIN) TCP connect is 160–250 ms, so
+// cloud calls to crm/api failed a few times an hour with AggregateError ETIMEDOUT
+// (shown by the POS as "500 Server Error"). 3 s keeps IPv6→IPv4 fallback working.
+setDefaultAutoSelectFamilyAttemptTimeout(3000);
 import { Server } from "socket.io";
 import app from "./app";
 import { setIO } from "./libs/socket";
