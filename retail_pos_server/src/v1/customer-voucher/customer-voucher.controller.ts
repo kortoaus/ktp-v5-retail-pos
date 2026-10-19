@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import {
   getValidCustomerVouchersService,
   issueCustomerVoucherService,
+  normalizeCustomerVoucherIssueAmount,
 } from "./customer-voucher.service";
 import { listCustomerVoucherOperationsService } from "./customer-voucher.operations.query";
 import { normalizeOperationId } from "../sale/sale.operation";
@@ -30,7 +31,9 @@ export async function issueCustomerVoucherController(req: Request, res: Response
   }
   // T-17 (V-5): optional; malformed → 400, absent → legacy (no CRM requestId).
   const operationId = normalizeOperationId(req.body?.operationId);
-  res.json(await issueCustomerVoucherService(memberId, operationId));
+  // D-24: cents, one of 1000/2500/5000/10000; absent → 1000; else 400.
+  const amount = normalizeCustomerVoucherIssueAmount(req.body?.amount);
+  res.json(await issueCustomerVoucherService(memberId, operationId, amount));
 }
 
 export async function getCustomerVoucherOperationsController(

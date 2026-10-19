@@ -6,7 +6,8 @@
 //          a SPEND from that slot is the same attempt (T-10)
 //   refund "refund:invoice:<originalId>"
 //   repay  "repay:invoice:<originalId>"
-//   points→voucher exchange "cv-issue:<memberId>" (T-17, V-5)
+//   points→voucher exchange "cv-issue:<memberId>:<amount>" (T-17, V-5;
+//          amount in cents per tier, retail-delivery D-24)
 //   Cash In/Out "cashio:form" one per till (T-10; ended by the form's Cancel)
 // The attempt's operationId (UUID) is minted on the first submit and resent on
 // every retry of that attempt, whatever the payload looks like now, until:
@@ -39,11 +40,13 @@ export function repayAttemptKey(originalInvoiceId: number): string {
   return `repay:invoice:${originalInvoiceId}`;
 }
 
-// T-17 (V-5) — one points→voucher exchange press per member: a retry after a
-// lost answer resends the same id and CRM returns the voucher it already
-// issued instead of deducting points again.
-export function customerVoucherIssueAttemptKey(memberId: string): string {
-  return `cv-issue:${memberId}`;
+// T-17 (V-5) — one points→voucher exchange press per member and tier: a retry
+// after a lost answer resends the same id and CRM returns the voucher it
+// already issued instead of deducting points again. retail-delivery D-24: the
+// tier's amount (cents) is part of the key, so a $25 press never replays a $10
+// attempt's id (CRM also compares the amount on a requestId replay).
+export function customerVoucherIssueAttemptKey(memberId: string, amount: number): string {
+  return `cv-issue:${memberId}:${amount}`;
 }
 
 // T-10 (F-27) — the till's Cash In/Out form: one entry at a time. The attempt

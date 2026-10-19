@@ -1,18 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  CUSTOMER_VOUCHER_ISSUE_AMOUNT,
-  CUSTOMER_VOUCHER_ISSUE_POINTS,
-  MONEY_DP,
-  MONEY_SCALE,
-} from "../../../libs/constants";
+import { MONEY_DP, MONEY_SCALE } from "../../../libs/constants";
 import {
   CustomerVoucher,
   getValidCustomerVouchers,
   issueCustomerVoucher,
 } from "../../../service/customer-voucher.service";
 import {
+  canExchangePoints,
   decideIssueAnswer,
   memberPointsAfterIssue,
+  voucherTierShortfall,
+  type CustomerVoucherTier,
 } from "../../../libs/customer-voucher-issue";
 import { searchMemberById } from "../../../service/crm.service";
 import {
@@ -21,6 +19,7 @@ import {
 } from "../../../libs/customer-voucher-list";
 import dayjsAU from "../../../libs/dayjsAU";
 import TapTarget from "./TapTarget";
+import VoucherTierModal from "./VoucherTierModal";
 
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 // T-17 (D-11): the Sydney calendar date, same as the voucher label and the
@@ -51,6 +50,8 @@ export default function SearchCustomerVoucherModal({
   // list read is never shown as "No vouchers".
   const [listState, setListState] = useState<VoucherListState>({ kind: "loading" });
   const [issuing, setIssuing] = useState(false);
+  // D-24: Issue opens the tier list (+ two confirmations) in VoucherTierModal.
+  const [tierOpen, setTierOpen] = useState(false);
   // F-16: set when a press replayed an earlier exchange (not auto-selected).
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -68,14 +69,16 @@ export default function SearchCustomerVoucherModal({
   useEffect(() => {
     if (!open) return;
     setNotice(null);
+    setTierOpen(false);
     refetch();
   }, [open, refetch]);
 
-  const handleIssue = useCallback(async () => {
-    if (memberPoints < CUSTOMER_VOUCHER_ISSUE_POINTS) return;
+  // D-24: called by VoucherTierModal only after the second confirmation.
+  const handleIssue = useCallback(async (tier: CustomerVoucherTier) => {
+    if (issuing || voucherTierShortfall(memberPoints, tier) > 0) return;
     setIssuing(true);
     try {
-      const decision = decideIssueAnswer(await issueCustomerVoucher(memberId));
+      const decision = decideIssueAnswer(await issueCustomerVoucher(memberId, tier.amount));
       if (decision.action === "error") {
         window.alert(decision.message);
         return;
@@ -98,8 +101,9 @@ export default function SearchCustomerVoucherModal({
       onClose();
     } finally {
       setIssuing(false);
+      setTierOpen(false);
     }
-  }, [memberId, memberPoints, onClose, onMemberPoints, onSelect, refetch]);
+  }, [issuing, memberId, memberPoints, onClose, onMemberPoints, onSelect, refetch]);
 
   const handlePick = useCallback(
     (voucher: CustomerVoucher) => {
@@ -112,7 +116,7 @@ export default function SearchCustomerVoucherModal({
 
   if (!open) return null;
 
-  const canIssue = memberPoints >= CUSTOMER_VOUCHER_ISSUE_POINTS;
+  const canIssue = canExchangePoints(memberPoints);
 
   return (
     <div
@@ -141,7 +145,7 @@ export default function SearchCustomerVoucherModal({
           </div>
           {canIssue && (
             <TapTarget
-              onPointerDown={handleIssue}
+              onPointerDown={() => setTierOpen(true)}
               disabled={issuing}
               className={
                 issuing
@@ -149,9 +153,7 @@ export default function SearchCustomerVoucherModal({
                   : "min-w-[120px] h-12 px-4 rounded-lg font-bold text-sm bg-blue-600 text-white active:bg-blue-700 flex items-center justify-center"
               }
             >
-              {issuing
-                ? "..."
-                : `ISSUE $${fmtMoney(CUSTOMER_VOUCHER_ISSUE_AMOUNT)}`}
+              {issuing ? "..." : "ISSUE VOUCHER"}
             </TapTarget>
           )}
         </div>
@@ -227,6 +229,13 @@ export default function SearchCustomerVoucherModal({
             })}
         </div>
       </div>
+      <VoucherTierModal
+        open={tierOpen}
+        memberPoints={memberPoints}
+        issuing={issuing}
+        onCancel={() => setTierOpen(false)}
+        onIssue={handleIssue}
+      />
     </div>
   );
 }

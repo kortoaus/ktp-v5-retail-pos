@@ -33,15 +33,18 @@ export async function getValidCustomerVouchers(
 }
 
 // T-17 (V-5) — the exchange press carries its attempt's operationId
-// (libs/operation-id.ts, key cv-issue:<memberId>), kept until the server
-// answers ok or a settling 409: a retry after a lost answer replays the
+// (libs/operation-id.ts, key cv-issue:<memberId>:<amount>), kept until the
+// server answers ok or a settling 409: a retry after a lost answer replays the
 // voucher CRM already issued instead of deducting points twice.
+// retail-delivery D-24: `amount` is the chosen tier in cents (1000/2500/5000/10000).
 export async function issueCustomerVoucher(
   memberId: string,
+  amount: number,
 ): Promise<ApiResponse<CustomerVoucherIssueResult>> {
-  return sendWithOperation(customerVoucherIssueAttemptKey(memberId), (operationId) =>
+  return sendWithOperation(customerVoucherIssueAttemptKey(memberId, amount), (operationId) =>
     apiService.post<CustomerVoucherIssueResult>("/api/customer-voucher/issue", {
       memberId,
+      amount,
       operationId,
     }),
   );

@@ -49,16 +49,41 @@ export function customerVoucherIssueRequestId(operationId: string): string {
   return `${operationId}:cv-issue`;
 }
 
+// D-24 (retail-delivery T-17): points→voucher exchange tiers in cents — 1,000 P → $10,
+// 2,500 P → $25, 5,000 P → $50, 10,000 P → $100. An absent amount means $10 so tills on
+// the previous release keep working; anything else is rejected before CRM is called.
+export const CUSTOMER_VOUCHER_ISSUE_AMOUNTS = [1000, 2500, 5000, 10000] as const;
+export const DEFAULT_CUSTOMER_VOUCHER_ISSUE_AMOUNT = 1000;
+
+export function normalizeCustomerVoucherIssueAmount(value: unknown): number {
+  if (value === undefined || value === null) {
+    return DEFAULT_CUSTOMER_VOUCHER_ISSUE_AMOUNT;
+  }
+  if (
+    typeof value !== "number" ||
+    !(CUSTOMER_VOUCHER_ISSUE_AMOUNTS as readonly number[]).includes(value)
+  ) {
+    throw new BadRequestException("Invalid voucher amount");
+  }
+  return value;
+}
+
 // T-17 (V-5): a till sends `operationId` (one per exchange press, kept until
 // answered); CRM gets `requestId` = `<operationId>:cv-issue` and replays the
 // voucher it already issued on a retry instead of deducting points twice.
-// Without operationId (Runner, old tills) the body is unchanged — no requestId.
+// Without operationId (Runner, old tills) there is no requestId.
+// D-24: `amount` (cents, one of CUSTOMER_VOUCHER_ISSUE_AMOUNTS) is always
+// forwarded; CRM compares it on a requestId replay.
 export async function issueCustomerVoucherService(
   memberId: string,
   operationId: string | null = null,
+  amount: number = DEFAULT_CUSTOMER_VOUCHER_ISSUE_AMOUNT,
   crm: Pick<typeof crmApiService, "post"> = crmApiService,
 ) {
-  const body: { memberId: string; requestId?: string } = { memberId };
+  const body: { memberId: string; amount: number; requestId?: string } = {
+    memberId,
+    amount: normalizeCustomerVoucherIssueAmount(amount),
+  };
   if (operationId) body.requestId = customerVoucherIssueRequestId(operationId);
   const res = await crm.post<{
     voucher: CustomerVoucherWire;

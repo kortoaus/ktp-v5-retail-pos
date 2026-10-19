@@ -3,7 +3,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { decideIssueAnswer, memberPointsAfterIssue } = await import("./customer-voucher-issue.ts");
+const {
+  decideIssueAnswer,
+  memberPointsAfterIssue,
+  CUSTOMER_VOUCHER_TIERS,
+  affordableVoucherTiers,
+  voucherTierShortfall,
+  canExchangePoints,
+  formatVoucherPoints,
+  voucherTierRowLabel,
+  voucherTierShortfallLabel,
+  voucherIssueConfirmText,
+} = await import("./customer-voucher-issue.ts");
 
 const voucher = { id: 9, serial: "CV-ABC123", balance: 1000 };
 
@@ -63,4 +74,77 @@ test("F-17: replay with memberPoints null → member re-fetched", async () => {
 test("F-17: re-fetch failure → null (caller keeps what it shows)", async () => {
   assert.equal(await memberPointsAfterIssue(null, async () => { throw new Error("offline"); }), null);
   assert.equal(await memberPointsAfterIssue(null, async () => null), null);
+});
+
+// retail-delivery D-24 (T-17) — four tiers, affordability, shortfall, texts, attempt key.
+
+const [T10, T25, T50, T100] = CUSTOMER_VOUCHER_TIERS;
+
+test("D-24: the four tiers — cents and points at 100 P per $1, no bonus", () => {
+  assert.deepEqual(CUSTOMER_VOUCHER_TIERS, [
+    { amount: 1000, points: 1000, label: "$10" },
+    { amount: 2500, points: 2500, label: "$25" },
+    { amount: 5000, points: 5000, label: "$50" },
+    { amount: 10000, points: 10000, label: "$100" },
+  ]);
+});
+
+test("D-24: affordableVoucherTiers — tiers the balance covers, smallest first", () => {
+  assert.deepEqual(affordableVoucherTiers(0), []);
+  assert.deepEqual(affordableVoucherTiers(999), []);
+  assert.deepEqual(affordableVoucherTiers(1000), [T10]);
+  assert.deepEqual(affordableVoucherTiers(1200), [T10]);
+  assert.deepEqual(affordableVoucherTiers(2500), [T10, T25]);
+  assert.deepEqual(affordableVoucherTiers(9999), [T10, T25, T50]);
+  assert.deepEqual(affordableVoucherTiers(10000), [T10, T25, T50, T100]);
+  assert.deepEqual(affordableVoucherTiers(123456), [T10, T25, T50, T100]);
+  assert.deepEqual(affordableVoucherTiers(-5), []);
+  assert.deepEqual(affordableVoucherTiers(Number.NaN), [], "an unknown balance covers nothing");
+});
+
+test("D-24: voucherTierShortfall — points still needed, 0 when affordable", () => {
+  assert.equal(voucherTierShortfall(1200, T10), 0);
+  assert.equal(voucherTierShortfall(1200, T25), 1300);
+  assert.equal(voucherTierShortfall(1200, T50), 3800);
+  assert.equal(voucherTierShortfall(1200, T100), 8800);
+  assert.equal(voucherTierShortfall(10000, T100), 0);
+  assert.equal(voucherTierShortfall(Number.NaN, T25), 2500);
+});
+
+test("D-24: canExchangePoints keeps meaning 'can afford the smallest tier'", () => {
+  assert.equal(canExchangePoints(999), false);
+  assert.equal(canExchangePoints(1000), true);
+  assert.equal(canExchangePoints(Number.NaN), false);
+});
+
+test("D-24: row, shortfall and point labels", () => {
+  assert.equal(voucherTierRowLabel(T25), "$25 · 2,500 P");
+  assert.equal(voucherTierRowLabel(T100), "$100 · 10,000 P");
+  assert.equal(voucherTierShortfallLabel(1000, T25), "needs 1,500 P more");
+  assert.equal(formatVoucherPoints(1234567), "1,234,567 P");
+  assert.equal(formatVoucherPoints(0), "0 P");
+});
+
+test("D-24: confirmation 1 (amount, deduction, balance after) and confirmation 2 (irreversible)", () => {
+  const { first, second } = voucherIssueConfirmText(T25, 3734);
+  assert.equal(
+    [first.title, ...first.lines].join(" "),
+    "Issue a $25 voucher? 2,500 P will be deducted. Member balance after: 1,234 P",
+  );
+  assert.equal([second.title, ...second.lines].join(" "), "This cannot be undone. Issue the $25 voucher now?");
+  assert.equal(second.confirmLabel, "Issue $25");
+});
+
+test("D-24: the exchange attempt key is per member and amount — cv-issue:<memberId>:<amount>", async () => {
+  const { customerVoucherIssueAttemptKey } = await import("./operation-id.ts");
+  assert.equal(customerVoucherIssueAttemptKey("member-1", 2500), "cv-issue:member-1:2500");
+  assert.equal(customerVoucherIssueAttemptKey("member-1", 1000), "cv-issue:member-1:1000");
+  assert.notEqual(
+    customerVoucherIssueAttemptKey("member-1", 1000),
+    customerVoucherIssueAttemptKey("member-1", 2500),
+    "a $25 press never reuses a $10 attempt's id",
+  );
+  for (const tier of CUSTOMER_VOUCHER_TIERS) {
+    assert.notEqual(customerVoucherIssueAttemptKey("member-1", tier.amount), "cv-issue:member-1");
+  }
 });
