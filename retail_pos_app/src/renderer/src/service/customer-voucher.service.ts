@@ -1,4 +1,4 @@
-import apiService, { ApiResponse } from "../libs/api";
+import apiService, { type ApiResponse } from "../libs/api";
 import {
   customerVoucherIssueAttemptKey,
   pendingOperation,
