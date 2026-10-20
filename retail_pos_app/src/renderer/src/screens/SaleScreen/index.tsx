@@ -5,6 +5,7 @@ import { searchItemByBarcode } from "../../service/item.service";
 import { useBarcodeScanner } from "../../hooks/useBarcodeScanner";
 import { SaleLineItem } from "../../types/sales";
 import { useOrderLoad } from "../../hooks/useOrderLoad";
+import { useTerminal } from "../../contexts/TerminalContext";
 import {
   itemLookupAction,
   lineFromItem,
@@ -71,6 +72,9 @@ export default function SaleScreen() {
   const { readWeight } = useWeight();
   const { cloudHotkeys, cloudHotkeysLoading } = useCloudHotkeys();
   const { loadOrder } = useOrderLoad();
+  // D-27 — offline member attach only for this store's company's QR.
+  const { company } = useTerminal();
+  const storeCompanyId = company?.cloudId ?? null;
 
   const lines = useMemo(
     () => carts[activeCartIndex]?.lines ?? [],
@@ -148,7 +152,9 @@ export default function SaleScreen() {
           try {
             setLoading(true);
             const res = await searchMemberById(route.qr.memberId);
-            runScanAction(memberLookupAction(res, route.qr));
+            runScanAction(
+              memberLookupAction(res, route.qr, storeCompanyId),
+            );
           } catch (e) {
             console.error(e);
           } finally {
@@ -206,7 +212,7 @@ export default function SaleScreen() {
         }
       }
     },
-    [loading, runScanAction, loadOrder],
+    [loading, runScanAction, loadOrder, storeCompanyId],
   );
 
   useBarcodeScanner(scanCallback);

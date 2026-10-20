@@ -40,6 +40,8 @@ export const SCAN_MESSAGES = {
   itemNotFound: "Item not found",
   ppLookupFailed: "Failed to load item",
   scanFailed: "Failed to scan barcode",
+  memberQrNeedsUpdate: "Member QR needs the latest app — try again online",
+  memberOtherCompany: "This member card belongs to another store",
 } as const;
 
 // ── Route: which lookup the raw scan needs ─────────────────────
@@ -106,11 +108,20 @@ export function memberChangeBlockedMessage(
   return `This cart is linked to order #${cart.orderNo ?? cart.externalOrderId} — clear the cart to change member.`;
 }
 
-// Member QR lookup answer → action. Network down (status 0) attaches the QR's
-// id/level unverified; CRM verifies the member at upsync before awarding points.
+// Member QR lookup answer → action. Offline (F-20, D-27) = the till cannot
+// reach the store server (status 0) or the store server cannot reach CRM
+// (HTTP 503 from /api/crm/member/search/id with `transport`). Offline, the
+// QR's id/level are attached unverified — only when the QR's company id is
+// the store's company (`Company.cloudId`); CRM verifies the member at upsync
+// before awarding points. Any other failure is a plain alert.
+export function isMemberLookupOffline(status: number | undefined): boolean {
+  return status === 0 || status === 503;
+}
+
 export function memberLookupAction(
   res: LookupAnswer<MemberLookupResult>,
   qr: ParsedMemberQr,
+  storeCompanyId: number | null | undefined,
 ): ScanAction {
   if (res.ok && res.result) {
     const m = res.result;
@@ -125,7 +136,13 @@ export function memberLookupAction(
       },
     };
   }
-  if (res.status === 0) {
+  if (isMemberLookupOffline(res.status)) {
+    if (qr.companyId == null) {
+      return { kind: "alert", message: SCAN_MESSAGES.memberQrNeedsUpdate };
+    }
+    if (storeCompanyId == null || qr.companyId !== storeCompanyId) {
+      return { kind: "alert", message: SCAN_MESSAGES.memberOtherCompany };
+    }
     return {
       kind: "set-member",
       member: {

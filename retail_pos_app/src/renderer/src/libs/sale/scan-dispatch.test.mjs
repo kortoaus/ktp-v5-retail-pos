@@ -19,6 +19,7 @@ import {
   parseEmbeddedPriceCents,
   parsePPBarcode,
 } from "../pp-barcode.ts";
+import { parseMemberQr } from "../member-qr.ts";
 // libs/scan-utils.ts embededPriceParser, restated: that module imports
 // service/item.service (axios) at runtime, so node cannot load it here.
 const embededPriceParser = (raw13) => parseInt(raw13.slice(7, 12)) / 100;
@@ -52,7 +53,11 @@ const openWeight = (over = {}) =>
 test("routeScan priority: member → order → PP → item", () => {
   assert.deepEqual(routeScan("member%%%abc%%%2"), {
     kind: "member",
-    qr: { memberId: "abc", level: 2 },
+    qr: { memberId: "abc", level: 2, companyId: null },
+  });
+  assert.deepEqual(routeScan("member%%%abc%%%2%%%48"), {
+    kind: "member",
+    qr: { memberId: "abc", level: 2, companyId: 48 },
   });
   assert.deepEqual(routeScan("order%%%42"), { kind: "order", orderId: 42 });
   const pp = buildPPBarcodeString({ barcode: "1234567", prices: [500], promoPrices: [] });
@@ -231,34 +236,92 @@ test("ppLookupAction: missing item alerts 'Item not found' when msg is empty", (
 });
 
 // ── member ───────────────────────────────────────────────────
-test("member QR: verified attach, offline unverified attach, error alert", () => {
-  const qr = { memberId: "m-1", level: null };
-  const online = memberLookupAction(
-    {
-      ok: true,
-      msg: "",
-      status: 200,
-      result: { id: "m-1", name: "Kim", level: 3, phone_last4: "1234", points: 50, extra: 1 },
-    },
-    qr,
-  );
-  assert.deepEqual(online, {
+// F-20 / D-27 — offline = status 0 (store server unreachable) or 503 (store
+// server could not reach CRM); offline attach only for the store's company.
+const STORE = 48;
+const OTHER = 49;
+const unverified = (level) => ({
+  kind: "set-member",
+  member: { id: "m-1", name: null, level, phone_last4: null, points: null, unverified: true },
+});
+const crmDown = { ok: false, msg: "CRM unreachable", status: 503 };
+const lanDown = { ok: false, msg: "Network Error", status: 0 };
+
+test("member QR online: verified attach whatever the QR company", () => {
+  const answer = {
+    ok: true,
+    msg: "",
+    status: 200,
+    result: { id: "m-1", name: "Kim", level: 3, phone_last4: "1234", points: 50, extra: 1 },
+  };
+  const expected = {
     kind: "set-member",
     member: { id: "m-1", name: "Kim", level: 3, phone_last4: "1234", points: 50 },
-  });
-  const offline = memberLookupAction({ ok: false, msg: "net", status: 0 }, qr);
-  assert.deepEqual(offline.member, {
-    id: "m-1",
-    name: null,
-    level: 1,
-    phone_last4: null,
-    points: null,
-    unverified: true,
-  });
-  assert.deepEqual(memberLookupAction({ ok: false, msg: "Not found", status: 404 }, qr), {
+  };
+  for (const companyId of [null, STORE, OTHER]) {
+    assert.deepEqual(memberLookupAction(answer, { memberId: "m-1", level: 2, companyId }, STORE), expected);
+  }
+});
+
+test("member QR online failure: plain alert (404, CRM 5xx forwarded as 200, 500)", () => {
+  const qr = { memberId: "m-1", level: 2, companyId: STORE };
+  for (const status of [404, 200, 500, 502, undefined]) {
+    assert.deepEqual(memberLookupAction({ ok: false, msg: "Not found", status }, qr, STORE), {
+      kind: "alert",
+      message: "Not found",
+    });
+  }
+  // ok with no member is not offline either
+  assert.deepEqual(memberLookupAction({ ok: true, msg: "x", status: 200, result: null }, qr, STORE), {
     kind: "alert",
-    message: "Not found",
+    message: "x",
   });
+});
+
+test("member QR offline (status 0 or 503) + same company: unverified attach, level from QR else 1", () => {
+  for (const res of [lanDown, crmDown]) {
+    assert.deepEqual(memberLookupAction(res, { memberId: "m-1", level: 3, companyId: STORE }, STORE), unverified(3));
+    assert.deepEqual(memberLookupAction(res, { memberId: "m-1", level: null, companyId: STORE }, STORE), unverified(1));
+  }
+});
+
+test("member QR offline + no company in QR (old app): needs-latest-app alert", () => {
+  for (const res of [lanDown, crmDown]) {
+    assert.deepEqual(memberLookupAction(res, { memberId: "m-1", level: 3, companyId: null }, STORE), {
+      kind: "alert",
+      message: "Member QR needs the latest app — try again online",
+    });
+  }
+});
+
+test("member QR offline + another company: another-store alert", () => {
+  for (const res of [lanDown, crmDown]) {
+    assert.deepEqual(memberLookupAction(res, { memberId: "m-1", level: 3, companyId: OTHER }, STORE), {
+      kind: "alert",
+      message: "This member card belongs to another store",
+    });
+    // store company unknown (terminal not loaded) → never attach
+    for (const store of [null, undefined]) {
+      assert.deepEqual(memberLookupAction(res, { memberId: "m-1", level: 3, companyId: STORE }, store), {
+        kind: "alert",
+        message: "This member card belongs to another store",
+      });
+    }
+  }
+});
+
+test("parseMemberQr: 2/3/4/5-segment inputs", () => {
+  assert.deepEqual(parseMemberQr("member%%%m-1"), { memberId: "m-1", level: null, companyId: null });
+  assert.deepEqual(parseMemberQr("member%%%m-1%%%3"), { memberId: "m-1", level: 3, companyId: null });
+  assert.deepEqual(parseMemberQr("member%%%m-1%%%3%%%48"), { memberId: "m-1", level: 3, companyId: 48 });
+  assert.deepEqual(parseMemberQr("member%%%m-1%%%3%%%48%%%future"), { memberId: "m-1", level: 3, companyId: 48 });
+  // non-positive-integer segments → null
+  for (const bad of ["0", "-1", "4.5", "abc", "", "048"]) {
+    assert.equal(parseMemberQr(`member%%%m-1%%%3%%%${bad}`).companyId, null, bad);
+  }
+  assert.deepEqual(parseMemberQr("member%%%m-1%%%x%%%48"), { memberId: "m-1", level: null, companyId: 48 });
+  assert.equal(parseMemberQr("member%%%"), null);
+  assert.equal(parseMemberQr("order%%%42"), null);
 });
 
 test("member change is blocked on an order-loaded cart", () => {

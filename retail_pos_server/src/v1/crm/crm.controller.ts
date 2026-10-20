@@ -8,6 +8,26 @@ import {
   stageMemberSignupService,
   verifyMemberSignupService,
 } from "./crm.service";
+import type { ApiResponse } from "../../libs/cloud.api";
+
+// F-20 / D-27 — the member lookups are the till/Runner's only signal that the
+// store server could not reach CRM. A transport failure (no HTTP answer:
+// timeout or connection/DNS error) becomes HTTP 503 with `transport` so the
+// till can attach a scanned member offline. Every other CRM answer (ok, 404,
+// CRM's own 4xx/5xx) is forwarded exactly as before — HTTP 200 with CRM's
+// body and status — so a CRM-originated 503 can never look like "offline".
+export function sendMemberLookup(res: Response, result: ApiResponse) {
+  if (result.transport) {
+    res.status(503).json({
+      ok: false,
+      msg: "CRM unreachable",
+      transport: result.transport,
+      result: null,
+    });
+    return;
+  }
+  res.json(result);
+}
 
 export async function createMemberController(req: Request, res: Response) {
   const result = await createMemberService(req.body);
@@ -37,7 +57,7 @@ export async function verifyMemberSignupController(
 
 export async function searchMemberController(req: Request, res: Response) {
   const result = await searchMemberService(req.body);
-  res.json(result);
+  sendMemberLookup(res, result);
 }
 
 export async function searchMembersByKeywordController(
@@ -45,10 +65,10 @@ export async function searchMembersByKeywordController(
   res: Response,
 ) {
   const result = await searchMembersByKeywordService(req.body);
-  res.json(result);
+  sendMemberLookup(res, result);
 }
 
 export async function searchMemberByIdController(req: Request, res: Response) {
   const result = await searchMemberByIdService(req.body);
-  res.json(result);
+  sendMemberLookup(res, result);
 }

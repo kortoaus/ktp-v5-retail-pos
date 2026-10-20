@@ -31,3 +31,4 @@ npm run package:win           # local NSIS x64 installer (package:mac → dmg x6
 - HTTP only through `service/*.service.ts` → local server. Native access only through `window.electronAPI`.
 - `store/SalesStore.helper.ts`, `libs/sale/*`, `libs/pp-barcode.ts`, `types/models.ts` and others are copied by the Android
   tablet and the runner (`sync-sale-core.mjs`). Changing them creates drift there. See root danger zones.
+- Member QR `member%%%<id>%%%<level>%%%<companyId>` (D-27): offline (status 0, or 503 `transport` = the store server cannot reach CRM, F-20) attaches the QR member unverified only when its companyId equals `company.cloudId`; no companyId → "needs the latest app", other company → "another store" alert (`libs/sale/scan-dispatch.ts` `memberLookupAction`).
