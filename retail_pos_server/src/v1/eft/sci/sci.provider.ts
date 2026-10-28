@@ -96,6 +96,25 @@ function redactValues(value: unknown, redact: string[], depth = 0): unknown {
 }
 
 /**
+ * F-8: the only provider error codes we ever surface (lane answer, EftEvent.errorCode,
+ * console) — the public SCI codes from the guides. Anything else becomes HTTP_<status>,
+ * so a body reflecting a secret in its `error`/`code` field cannot leak through the code.
+ */
+const PUBLIC_SCI_CODES: Record<string, string> = {
+  no_valid_signatures_found: "no_valid_signatures_found",
+  no_active_pairings_found: "no_active_pairings_found",
+  device_not_connected: "device_not_connected",
+  transaction_refused: "TRANSACTION_REFUSED",
+  transaction_not_found: "transaction_not_found",
+  transaction_not_found_within_timeout: "transaction_not_found_within_timeout",
+};
+
+export function publicErrorCode(body: unknown): string | null {
+  const raw = errorCodeOf(body);
+  return raw ? PUBLIC_SCI_CODES[raw.toLowerCase()] ?? null : null;
+}
+
+/**
  * Bounded excerpt of an upstream error body for the event log (F-4): a
  * structured body is redacted (known secret values of this request, then the
  * key/PAN/signature scrub) *before* it is serialised; an unstructured body is
@@ -126,21 +145,22 @@ export function classifySciError(status: number | null, body: unknown, networkEr
       ambiguous: true,
     };
   }
-  const code = errorCodeOf(body);
-  const lc = (code ?? "").toLowerCase();
   const detail = excerpt(body, redact);
-  if (lc === "no_active_pairings_found")
-    return { errorClass: "PAIR", errorCode: "no_active_pairings_found", message: "No active pairing", retryable: false, unpaired: true, detail };
-  if (lc === "no_valid_signatures_found")
-    return { errorClass: "PAIR", errorCode: "no_valid_signatures_found", message: "Signature rejected", retryable: false, detail };
-  if (status === 424 || lc === "device_not_connected")
-    return { errorClass: "TERM", errorCode: "device_not_connected", message: "Terminal not connected", retryable: false, detail };
-  if (lc === "transaction_refused")
-    return { errorClass: "TERM", errorCode: "TRANSACTION_REFUSED", message: "Terminal refused the transaction", retryable: false, detail };
-  if (status === 401 || status === 403)
-    return { errorClass: "PAIR", errorCode: code ?? `HTTP_${status}`, message: "Not authorised", retryable: false, detail };
+  // F-7: the HTTP status decides certainty first. A 5xx / 408 may have taken
+  // effect upstream whatever code its body carries — never a certain refusal.
   if (status >= 500 || status === 408)
-    return { errorClass: "NET", errorCode: code ?? `HTTP_${status}`, message: "Payment service error", retryable: true, ambiguous: true, detail };
+    return { errorClass: "NET", errorCode: `HTTP_${status}`, message: "Payment service error", retryable: true, ambiguous: true, detail };
+  const code = publicErrorCode(body);
+  if (code === "no_active_pairings_found")
+    return { errorClass: "PAIR", errorCode: code, message: "No active pairing", retryable: false, unpaired: true, detail };
+  if (code === "no_valid_signatures_found")
+    return { errorClass: "PAIR", errorCode: code, message: "Signature rejected", retryable: false, detail };
+  if (status === 424 || code === "device_not_connected")
+    return { errorClass: "TERM", errorCode: "device_not_connected", message: "Terminal not connected", retryable: false, detail };
+  if (code === "TRANSACTION_REFUSED")
+    return { errorClass: "TERM", errorCode: code, message: "Terminal refused the transaction", retryable: false, detail };
+  if (status === 401 || status === 403)
+    return { errorClass: "PAIR", errorCode: `HTTP_${status}`, message: "Not authorised", retryable: false, detail };
   return { errorClass: "POS", errorCode: code ?? `HTTP_${status}`, message: "Unexpected answer", retryable: false, detail };
 }
 
@@ -399,7 +419,7 @@ export class SciProvider implements EftProvider {
       return { ok: true, value: { kind: "not_yet" }, http: raw.http };
     if (raw.status !== 200) {
       const r = this.fail<PollOutcome>(raw);
-      if (!r.ok && raw.status === 404) r.error.errorCode = errorCodeOf(raw.body) ?? "transaction_not_found";
+      if (!r.ok && raw.status === 404) r.error.errorCode = publicErrorCode(raw.body) ?? "transaction_not_found";
       return r;
     }
     const answer = normaliseSciTransaction(raw.body);
