@@ -17,10 +17,10 @@ const SECRET_KEY = "a".repeat(64);
 type FetchWrap = (url: string, init: RequestInit, next: FetchLike) => Promise<Response>;
 
 async function harness(
-  opts: { enginePartA?: string; mode?: Partial<FakeSciMode>; config?: Partial<EftConfig>; fakeHoldMs?: number; fetchWrap?: FetchWrap } = {},
+  opts: { enginePartA?: string; mode?: Partial<FakeSciMode>; config?: Partial<EftConfig>; fakeHoldMs?: number; fetchWrap?: FetchWrap; anyCode?: boolean } = {},
 ) {
   const fakeLog: string[] = [];
-  const fake = await startFakeSci({ port: 0, partA: PART_A, pairingApiKey: API_KEY, stepMs: 30, holdMs: opts.fakeHoldMs ?? 150, mode: opts.mode, log: (l) => fakeLog.push(l) });
+  const fake = await startFakeSci({ port: 0, partA: PART_A, pairingApiKey: API_KEY, stepMs: 30, holdMs: opts.fakeHoldMs ?? 150, mode: opts.mode, anyCode: opts.anyCode, log: (l) => fakeLog.push(l) });
   const sentHeaders: Record<string, string>[] = [];
   const plain: FetchLike = (url, init) => fetch(url, init);
   const fetchImpl: FetchLike = (url, init) => {
@@ -609,5 +609,145 @@ test("F-9: lost action response, first recovery GET fails, second succeeds → t
     assert.equal(done.financialStatus, "APPROVED");
   } finally {
     await h.close();
+  }
+});
+
+type LaneErr = Error & { statusCode?: number; result?: { errorClass?: string; errorCode?: string } };
+
+test("T-9 (F-20): fake SCI pairs with 123456 only — 123457 → 400 [PAIR] invalid_pairing_code, nothing stored; anyCode pairs any 6 digits", async () => {
+  const h = await harness();
+  try {
+    await assert.rejects(h.engine.pair({ pairingCode: "123457" }, null), (e: LaneErr) => {
+      assert.equal(e.statusCode, 400);
+      assert.equal(e.message, "Invalid pairing code — check the code on the terminal [PAIR]");
+      assert.equal(e.result?.errorClass, "PAIR");
+      assert.equal(e.result?.errorCode, "invalid_pairing_code");
+      return true;
+    });
+    assert.equal(h.store.pairings.length, 0);
+    assert.ok(h.lines.some((l) => l === "[eft] pairing PAIR_FAILED PAIR code=invalid_pairing_code 400"));
+    const ok = await h.engine.pair({ pairingCode: "123456" }, null);
+    assert.equal(ok.confirmationCode, "456456");
+  } finally {
+    await h.close();
+  }
+  const any = await harness({ anyCode: true });
+  try {
+    const a = await any.engine.pair({ pairingCode: "123457" }, null);
+    assert.equal(a.confirmationCode, "457457");
+    const b = await any.engine.pair({ pairingCode: "654321" }, null);
+    assert.equal(b.confirmationCode, "321321");
+    assert.equal(any.store.pairings.length, 2);
+  } finally {
+    await any.close();
+  }
+});
+
+test("T-9 (F-19): delete pairing — active → 409 [PAIR]; open txn → 409 [POS]; inactive → deleted, lane cleared, past txn + events kept", async () => {
+  const h = await harness();
+  try {
+    const p = await h.pairLane();
+    const { txn } = await h.engine.createTransaction(h.lane(), { operationId: op(), kind: "PURCHASE", amountCents: 100 });
+    await h.until(txn.id, (v) => v.final);
+    await h.engine.idle();
+    const eventsBefore = (await h.engine.listEvents(txn.id)).length;
+    assert.ok(eventsBefore > 0);
+
+    await assert.rejects(h.engine.deletePairing(p.id), (e: LaneErr) => {
+      assert.equal(e.statusCode, 409);
+      assert.equal(e.message, "Unpair this terminal before deleting it [PAIR]");
+      assert.equal(e.result?.errorCode, "PAIRING_ACTIVE");
+      return true;
+    });
+    assert.equal(h.store.pairings.length, 1);
+
+    // A transaction on it that is not final blocks the delete (seeded while active; no loop runs for it).
+    const open = await h.store.insertTxn({
+      provider: "sci", eftPairingId: p.id, terminalId: 1, kind: "PURCHASE", requestedCents: 500, surchargeCents: 0,
+      operationId: op(), saleOperationId: "op-open", createdBy: 7, message: null,
+    });
+    assert.ok(open);
+    await h.engine.unpair(p.id);
+    for (const status of ["CREATING", "TIMEOUT"] as const) {
+      await h.store.updateTxn(open.id, { status });
+      await assert.rejects(h.engine.deletePairing(p.id), (e: LaneErr) => {
+        assert.equal(e.statusCode, 409);
+        assert.equal(e.message, "A payment on this terminal is not finished — finish it before deleting [POS]");
+        assert.equal(e.result?.errorCode, "PAIRING_IN_USE");
+        return true;
+      });
+    }
+    await h.store.updateTxn(open.id, { status: "FINALISED", financialStatus: "UNKNOWN" });
+    await assert.rejects(h.engine.deletePairing(p.id), (e: LaneErr) => e.statusCode === 409 && e.result?.errorCode === "PAIRING_IN_USE");
+    await h.store.updateTxn(open.id, { status: "CANCELLED_BY_OVERRIDE", overrideAnswer: "NO" });
+
+    assert.equal(h.store.terminals[0].eftPairingId, p.id);
+    await h.engine.deletePairing(p.id);
+    assert.equal(h.store.pairings.length, 0);
+    assert.equal(h.store.terminals[0].eftPairingId, null);
+    assert.equal((await h.store.getTxn(txn.id))?.eftPairingId, null);
+    assert.equal((await h.engine.listEvents(txn.id)).length, eventsBefore);
+    assert.equal((await h.engine.getTransaction(txn.id, null)).financialStatus, "APPROVED");
+    assert.deepEqual(await h.engine.listPairings(null), []);
+    assert.ok(h.lines.includes(`[eft] pairing=${p.id} DELETED lanes_cleared=1`));
+    await assert.rejects(h.engine.deletePairing(p.id), (e: LaneErr) => e.statusCode === 404);
+    // The lane now refuses a card payment until another pairing is chosen.
+    await assert.rejects(
+      h.engine.createTransaction(h.lane(), { operationId: op(), kind: "PURCHASE", amountCents: 100 }),
+      (e: LaneErr) => e.statusCode === 409 && e.result?.errorCode === "NO_PAIRING_SELECTED",
+    );
+  } finally {
+    await h.close();
+  }
+});
+
+test("F-21: create that read the active pairing, then Unpair + Delete, then insert → create 409 PAIRING_INACTIVE, nothing charged; insert first → delete 409 PAIRING_IN_USE", async () => {
+  // Ordering A (the reviewed interleaving): create has passed its pairing check; Unpair and
+  // Delete run before its insert. The insert re-checks under the pairing lock → no row.
+  const h = await harness();
+  try {
+    const p = await h.pairLane();
+    const insert = h.store.insertTxn.bind(h.store);
+    let deleted: Promise<void> | null = null;
+    h.store.insertTxn = async (data) => {
+      deleted ??= (async () => {
+        await h.engine.unpair(p.id);
+        await h.engine.deletePairing(p.id); // no unresolved row yet → deleted
+      })();
+      await deleted;
+      return insert(data);
+    };
+    await assert.rejects(
+      h.engine.createTransaction(h.lane(), { operationId: op(), kind: "PURCHASE", amountCents: 100 }),
+      (e: LaneErr) => e.statusCode === 409 && e.result?.errorCode === "PAIRING_INACTIVE",
+    );
+    assert.equal(h.store.pairings.length, 0);
+    assert.equal(h.store.txns.size, 0);
+    assert.equal(h.fakeLog.filter((l) => l.includes("/v1/transactions")).length, 0); // nothing sent upstream
+  } finally {
+    await h.close();
+  }
+
+  // Ordering B: the insert lands first; Unpair + Delete right after → 409 PAIRING_IN_USE and
+  // the payment keeps its pairing (recovery can still poll it).
+  const g = await harness();
+  try {
+    const p = await g.pairLane();
+    const insert = g.store.insertTxn.bind(g.store);
+    let refused: unknown = null;
+    g.store.insertTxn = async (data) => {
+      const row = await insert(data);
+      await g.engine.unpair(p.id);
+      refused = await g.engine.deletePairing(p.id).then(() => null, (e: unknown) => e);
+      return row;
+    };
+    const { txn } = await g.engine.createTransaction(g.lane(), { operationId: op(), kind: "PURCHASE", amountCents: 100 });
+    assert.equal((refused as LaneErr | null)?.statusCode, 409);
+    assert.equal((refused as LaneErr | null)?.result?.errorCode, "PAIRING_IN_USE");
+    assert.equal(g.store.pairings.length, 1);
+    assert.equal((await g.store.getTxn(txn.id))?.eftPairingId, p.id);
+    for (const t of g.store.txns.values()) assert.ok(t.eftPairingId != null || ["FAILED", "FINALISED"].includes(t.status), `${t.status} with null pairing`);
+  } finally {
+    await g.close();
   }
 });

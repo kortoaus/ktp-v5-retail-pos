@@ -44,6 +44,10 @@ export function eftControllers(getEngine: () => EftEngine) {
     unpair: async (req: Request, res: Response) => {
       res.status(200).json({ ok: true, result: await getEngine().unpair(idParam(req)) });
     },
+    deletePairing: async (req: Request, res: Response) => {
+      await getEngine().deletePairing(idParam(req));
+      res.status(204).end();
+    },
     selectPairing: async (req: Request, res: Response) => {
       const lane = laneOf(res);
       const id = req.params.id === "none" ? null : idParam(req);

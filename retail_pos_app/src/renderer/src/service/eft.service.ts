@@ -35,6 +35,11 @@ export async function unpairEftPairing(id: number): Promise<ApiResponse<{ ok: bo
   return apiService.post<{ ok: boolean }>(`/api/eft/pairings/${id}/unpair`);
 }
 
+/** Removes an unpaired (inactive) pairing row — 204; 409 while active or a payment on it is unfinished (T-9). */
+export async function deleteEftPairing(id: number): Promise<ApiResponse<null>> {
+  return apiService.delete<null>(`/api/eft/pairings/${id}`);
+}
+
 /** The operator's pick for this lane; `null` clears it (`/select` with id "none"). */
 export async function selectEftPairing(
   id: number | null,

@@ -1,6 +1,6 @@
 import db from "../../libs/db";
 import { Prisma } from "../../generated/prisma/client";
-import { EftDuplicateError, type EftStore, type TxnPatch } from "./eft.store";
+import { EftDuplicateError, UNRESOLVED_TXN_STATUSES, type EftStore, type TxnPatch } from "./eft.store";
 
 const JSON_KEYS = ["resultAmounts", "cardDetails", "posInstructions", "providerData"] as const;
 
@@ -31,6 +31,24 @@ export const prismaEftStore: EftStore = {
   setTerminalPairing: async (terminalId, eftPairingId) => {
     await db.terminal.update({ where: { id: terminalId }, data: { eftPairingId } });
   },
+  deleteIdlePairing: (id) =>
+    db.$transaction(async (tx) => {
+      // F-21: the same row lock insertTxn takes — a create on this pairing either
+      // committed before (its row is counted below) or sees it gone / inactive.
+      const rows = await tx.$queryRaw<{ active: boolean }[]>`SELECT "active" FROM "EftPairing" WHERE "id" = ${id} FOR UPDATE`;
+      if (rows.length === 0) return { outcome: "missing" as const, terminalsCleared: 0 };
+      if (rows[0].active) return { outcome: "active" as const, terminalsCleared: 0 };
+      const unresolved = await tx.eftTransaction.count({
+        where: {
+          eftPairingId: id,
+          OR: [{ status: { in: [...UNRESOLVED_TXN_STATUSES] } }, { status: "FINALISED", financialStatus: "UNKNOWN" }],
+        },
+      });
+      if (unresolved > 0) return { outcome: "in_use" as const, terminalsCleared: 0 };
+      const cleared = await tx.terminal.updateMany({ where: { eftPairingId: id }, data: { eftPairingId: null } });
+      await tx.eftPairing.delete({ where: { id } });
+      return { outcome: "deleted" as const, terminalsCleared: cleared.count };
+    }),
   listLaneTerminals: () =>
     db.terminal.findMany({
       where: { archived: false },
@@ -45,7 +63,12 @@ export const prismaEftStore: EftStore = {
     db.eftTransaction.findUnique({ where: { operationId_kind: { operationId, kind } } }),
   insertTxn: async (data) => {
     try {
-      return await db.eftTransaction.create({ data: { ...data, status: "CREATING" } });
+      return await db.$transaction(async (tx) => {
+        // F-21: pairing row lock shared with deleteIdlePairing.
+        const rows = await tx.$queryRaw<{ active: boolean }[]>`SELECT "active" FROM "EftPairing" WHERE "id" = ${data.eftPairingId} FOR UPDATE`;
+        if (rows.length === 0 || !rows[0].active) return null;
+        return tx.eftTransaction.create({ data: { ...data, status: "CREATING" } });
+      });
     } catch (e) {
       if (isUnique(e)) throw new EftDuplicateError("duplicate (operationId, kind)");
       throw e;

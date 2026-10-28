@@ -14,6 +14,10 @@
 // 68 response too late (never finalises → override demo), 91 issuer
 // inoperative, other < 100 declined, ≥ 100 approved; any amount ending in .77
 // → signature verification on the POS (AWAITING_POS + Approve/Decline).
+// Pairing (T-9, F-20): only code 123456 pairs (confirmation 456456); any other
+// 6-digit code answers 400 {error:"invalid_pairing_code"} so the invalid-code
+// path can be shown. `anyCode` (env FAKE_SCI_ANY_CODE=1) restores "any 6-digit
+// code pairs, confirmation = last 3 digits twice" for tests needing several pairings.
 // Switches: ?fake=device_not_connected | refused | unknown on the create URL,
 // env FAKE_SCI_DEVICE_OFFLINE=1 / FAKE_SCI_REFUSE=1 / FAKE_SCI_UNPAIR=1, or at
 // runtime POST /_fake/mode {"deviceOffline":true,"refuse":false,"unpaired":false}.
@@ -40,8 +44,13 @@ export interface FakeSciOptions {
   stepMs?: number;
   holdMs?: number;
   mode?: Partial<FakeSciMode>;
+  /** Accept any 6-digit pairing code (default: env FAKE_SCI_ANY_CODE === "1"); otherwise only FAKE_SCI_PAIRING_CODE. */
+  anyCode?: boolean;
   log?: (line: string) => void;
 }
+
+/** The one pairing code the fake accepts unless `anyCode` (T-9, F-20); confirmation 456456. */
+export const FAKE_SCI_PAIRING_CODE = "123456";
 
 type Outcome =
   | { kind: "approve" }
@@ -138,6 +147,7 @@ export async function startFakeSci(opts: FakeSciOptions) {
   const stepMs = opts.stepMs ?? 2000;
   const holdMs = opts.holdMs ?? 10_000;
   const mode: FakeSciMode = { deviceOffline: false, refuse: false, unpaired: false, ...opts.mode };
+  const anyCode = opts.anyCode ?? process.env.FAKE_SCI_ANY_CODE === "1";
   const pairings = new Map<string, FakePairing>();
   const txns = new Map<string, FakeTxn>();
   let baseUrl = "";
@@ -277,6 +287,10 @@ export async function startFakeSci(opts: FakeSciOptions) {
         const b = body ? (JSON.parse(body) as Record<string, unknown>) : {};
         const code = String(b.pairing_code ?? "");
         if (!/^\d{6}$/.test(code)) return err(res, 400, "invalid_pairing_code", "pairing_code must be 6 digits");
+        if (!anyCode && code !== FAKE_SCI_PAIRING_CODE) {
+          summary = "pairing refused: invalid_pairing_code";
+          return send(res, 400, { error: "invalid_pairing_code", message: "Invalid pairing code" });
+        }
         const p: FakePairing = {
           pairingId: `pair_${randomBytes(6).toString("hex")}`,
           keyId: `key_${randomBytes(8).toString("hex")}`,

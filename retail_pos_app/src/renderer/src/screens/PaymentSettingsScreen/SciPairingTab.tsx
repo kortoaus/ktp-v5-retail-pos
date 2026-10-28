@@ -2,7 +2,8 @@
 // Errors are the lane API's text verbatim (invalid code, network, externally
 // unpaired); the till never sees a key or secret. The operator picks the
 // terminal for this lane (POST /pairings/:id/select) — a new pairing is not
-// selected automatically.
+// selected automatically. An unpaired row can be deleted from the list
+// (DELETE /pairings/:id, confirm first; T-9).
 import { useCallback, useEffect, useState } from "react";
 import OnScreenKeyboard from "../../components/OnScreenKeyboard";
 import SciLogo from "../../components/eft/SciLogo";
@@ -11,6 +12,7 @@ import { eftErrorText, pairingStateText } from "../../libs/eft/eft-flow";
 import type { EftPairing, EftPairResult } from "../../libs/eft/eft-types";
 import dayjsAU from "../../libs/dayjsAU";
 import {
+  deleteEftPairing,
   listEftPairings,
   pairEftTerminal,
   selectEftPairing,
@@ -34,6 +36,7 @@ export default function SciPairingTab() {
   const [line, setLine] = useState<Line>(null);
   const [paired, setPaired] = useState<EftPairResult | null>(null);
   const [rowLine, setRowLine] = useState<Record<number, Line>>({});
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await listEftPairings();
@@ -85,10 +88,16 @@ export default function SciPairingTab() {
     }
   }
 
-  async function rowAction(p: EftPairing, kind: "test" | "unpair" | "select" | "clear") {
+  async function rowAction(p: EftPairing, kind: "test" | "unpair" | "select" | "clear" | "delete") {
     if (busy) return;
     if (kind === "unpair" && !window.confirm(`Unpair ${p.nickname || p.pairingId}? The lane falls back to keyed card payments.`)) return;
+    if (
+      kind === "delete" &&
+      !window.confirm(`Delete ${p.nickname || p.pairingId} from this list? Past card payments keep their records. To use this terminal again, pair it again.`)
+    )
+      return;
     setBusy(true);
+    setNotice(null);
     setRowLine((m) => ({ ...m, [p.id]: null }));
     try {
       let next: Line = null;
@@ -101,6 +110,14 @@ export default function SciPairingTab() {
         const res = await unpairEftPairing(p.id);
         next = res.ok ? { tone: "ok", text: "Unpaired" } : { tone: "error", text: eftErrorText(res) };
         if (res.ok && paired?.id === p.id) setPaired(null);
+      } else if (kind === "delete") {
+        const res = await deleteEftPairing(p.id);
+        if (res.ok) {
+          if (paired?.id === p.id) setPaired(null);
+          setNotice(`Deleted ${p.nickname || p.pairingId}`);
+        } else {
+          next = { tone: "error", text: eftErrorText(res) };
+        }
       } else {
         const res = await selectEftPairing(kind === "select" ? p.id : null);
         next = res.ok
@@ -150,6 +167,7 @@ export default function SciPairingTab() {
         </div>
 
         {listError && <Banner tone="error" text={listError} />}
+        {notice && <Banner tone="ok" text={notice} />}
 
         {paired && (
           <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm flex flex-col gap-1">
@@ -261,6 +279,11 @@ export default function SciPairingTab() {
                     {p.active && (
                       <button type="button" onClick={() => void rowAction(p, "unpair")} disabled={busy} className={btn("danger")}>
                         Unpair
+                      </button>
+                    )}
+                    {!p.active && (
+                      <button type="button" onClick={() => void rowAction(p, "delete")} disabled={busy} className={btn("danger")}>
+                        Delete
                       </button>
                     )}
                   </div>

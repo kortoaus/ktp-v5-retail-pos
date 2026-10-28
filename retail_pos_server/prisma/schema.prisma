@@ -1025,8 +1025,10 @@ model EftPairing {
 model EftTransaction {
   id                String               @id @default(cuid())
   provider          String
-  eftPairingId      Int
-  pairing           EftPairing           @relation(fields: [eftPairingId], references: [id])
+  // Null once the pairing row was deleted (T-9, F-19): the transaction and its
+  // EftEvents stay; only the link to the deleted pairing goes.
+  eftPairingId      Int?
+  pairing           EftPairing?          @relation(fields: [eftPairingId], references: [id], onDelete: SetNull)
   terminalId        Int
   terminal          Terminal             @relation(fields: [terminalId], references: [id])
   providerTxnId     String? // SCI transaction id, null until created upstream
