@@ -1,4 +1,5 @@
 import moment from "moment-timezone";
+import { linkEftTransactionsInTx } from "../eft/eft.link";
 import db from "../../libs/db";
 import {
   BadRequestException,
@@ -735,6 +736,8 @@ export const defaultRefundCreateDeps: RefundCreateDeps = {
         args.customerVoucherIssue ? [args.customerVoucherIssue.issued.row.id] : [],
         invoice.id,
       );
+      // retail-eftpos A-2 — backfill EftTransaction.invoiceId by operation id.
+      await linkEftTransactionsInTx(tx, args.operationId, "REFUND", invoice.id);
       return invoice;
     }),
   afterCommit: () => triggerSyncAllSaleInvoices(),

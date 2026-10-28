@@ -22,6 +22,7 @@ import {
 import dotenv from "dotenv";
 import { initStaffSession } from "./v1/user/staff-session";
 import { startCustomerVoucherReconciler } from "./v1/customer-voucher/customer-voucher.reconcile.service";
+import { startEftRecovery } from "./v1/eft/eft.instance";
 
 dotenv.config();
 
@@ -66,4 +67,7 @@ httpServer.listen(port, () => {
   // T-15 — settle customer-voucher operations left open by a crash, a lost
   // CRM answer or a failed void: now, then every 5 minutes.
   startCustomerVoucherReconciler();
+  // retail-eftpos S-3 §4 — resume the SCI poll loop of every open EFT
+  // transaction (CREATING without an upstream id → FAILED [POS], A-5).
+  startEftRecovery();
 });
