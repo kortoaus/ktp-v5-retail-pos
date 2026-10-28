@@ -9,7 +9,7 @@ import {
   OVERRIDE_QUESTION,
   STORE_UNREACHABLE,
   activeLanePairing,
-  approvedAmountOf,
+  approvedTender,
   eftErrorText,
   pairingStateText,
   createEftSession,
@@ -189,14 +189,34 @@ test("reducer: the same approved row is never applied twice to one payment list"
   assert.equal(resumed.outcome.kind, "paid", "a restart / reopened panel resumes the same approved row once");
 });
 
-test("amount replacement on APPROVED: resultAmounts purchase + surcharge + tip, never the keyed amount", () => {
-  assert.equal(approvedAmountOf({ amountCents: 1000, resultAmounts: { purchase: 950, surcharge: 0, tip: 0 } }), 950);
-  assert.equal(approvedAmountOf({ amountCents: 1000, resultAmounts: { purchase: 1000, surcharge: 15, tip: 200, cashout: 5000 } }), 1215);
-  assert.equal(outcomeOf(approved({ resultAmounts: { purchase: 990, surcharge: 10, tip: 0 } })).amountCents, 1000);
-  assert.equal(outcomeOf(approved({ amountCents: 1234, resultAmounts: { purchase: 1200 } })).amountCents, 1200);
-  // no result block at all: what the terminal was asked
-  assert.equal(approvedAmountOf({ amountCents: 777, resultAmounts: null }), 777);
+test("F-11 A-27: 1000¢ requested, approved 1215¢ (purchase 1000 + surcharge 215) → no auto-commit, breakdown shown", () => {
+  const o = outcomeOf(approved({ resultAmounts: { purchase: 1000, surcharge: 215, tip: 0, cashout: 0, refund: 0, moto: 0 } }));
+  assert.deepEqual(o, { kind: "review", txnId: "t1", message: "Approved $12.15 — purchase $10.00, surcharge $2.15; differs from the sale" });
+  const s = eftFlowReducer(started(), { type: "create-answer", res: ok(approved({ resultAmounts: { purchase: 1000, surcharge: 215 } })) });
+  assert.equal(s.outcome.kind, "review");
+  assert.match(eftPanelView(s).message, /^Approved \$12\.15 — purchase \$10\.00, surcharge \$2\.15/);
+  assert.equal(outcomeOf(approved({ resultAmounts: { purchase: 1000, tip: 200 } })).kind, "review", "tip");
+  assert.equal(outcomeOf(approved({ resultAmounts: { purchase: 1000, cashout: 5000 } })).kind, "review", "cashout");
+  assert.equal(outcomeOf(approved({ resultAmounts: { purchase: 950 } })).kind, "review", "purchase ≠ requested");
+});
+
+test("F-11 A-27: approved purchase exactly the requested 1000¢ → commit 1000", () => {
+  assert.deepEqual(outcomeOf(approved({ resultAmounts: { purchase: 1000, surcharge: 0, tip: 0, cashout: 0, refund: 0, moto: 0 } })), {
+    kind: "paid",
+    txnId: "t1",
+    amountCents: 1000,
+    viaOverride: false,
+  });
+  assert.deepEqual(approvedTender({ amountCents: 1000, resultAmounts: { purchase: 1000 } }), { ok: true, amountCents: 1000 });
   assert.equal(outcomeOf(txn({ status: "FINALISED", financialStatus: "UNKNOWN", overrideRequired: true })), null);
+});
+
+test("F-15: APPROVED without a valid resultAmounts.purchase never commits the requested amount", () => {
+  for (const resultAmounts of [null, {}, { purchase: null }, { purchase: "1000" }, { purchase: 0 }, { purchase: 10.5 }]) {
+    const o = outcomeOf(approved({ resultAmounts }));
+    assert.equal(o.kind, "review", JSON.stringify(resultAmounts));
+    assert.match(o.message, /no valid purchase amount \(requested \$10\.00\)/);
+  }
 });
 
 test("receipt jobs: final prints both once; print seqs and the auto action print the merchant copy", () => {
@@ -205,15 +225,29 @@ test("receipt jobs: final prints both once; print seqs and the auto action print
   let r = receiptJobs(marks, sig);
   assert.deepEqual(r.jobs, [{ which: "merchant", text: "SIGNATURE SLIP" }]);
   marks = r.marks;
-  assert.deepEqual(receiptJobs(marks, sig).jobs, [], "same version → no second auto print");
+  assert.deepEqual(receiptJobs(marks, sig).jobs, [], "same view → no second auto print");
   r = receiptJobs(marks, txn({ version: 4, status: "AWAITING_POS", merchantReceipt: "SIGNATURE SLIP", customerPrintSeq: 1, customerReceipt: "CUST" }));
   assert.deepEqual(r.jobs, [{ which: "customer", text: "CUST" }]);
   marks = r.marks;
   r = receiptJobs(marks, approved({ version: 6 }));
   assert.deepEqual(r.jobs.map((j) => j.which), ["merchant", "customer"]);
-  assert.deepEqual(receiptJobs(r.marks, approved({ version: 6 })).jobs, []);
+  assert.deepEqual(receiptJobs(r.marks, approved({ version: 7 })).jobs, [], "final prints once, whatever the version");
   const declined = txn({ status: "FINALISED", financialStatus: "DECLINED", final: true, merchantReceipt: "M", customerReceipt: "C" });
   assert.equal(receiptJobs(initialPrintMarks(), declined).jobs.length, 2, "declined receipts print too");
+});
+
+test("F-16: a version bump with unchanged print seqs and slip prints nothing (Cancel on the signature prompt)", () => {
+  const sig = (patch) => txn({ status: "AWAITING_POS", autoActions: ["PRINT_MERCHANT_RECEIPT"], merchantReceipt: "SIGNATURE SLIP", ...patch });
+  let r = receiptJobs(initialPrintMarks(), sig({ version: 3 }));
+  assert.equal(r.jobs.length, 1);
+  r = receiptJobs(r.marks, sig({ version: 4, cancelRequested: true }));
+  assert.deepEqual(r.jobs, [], "local version bump → no second print");
+  r = receiptJobs(r.marks, sig({ version: 5, merchantPrintSeq: 1 }));
+  assert.deepEqual(r.jobs, [{ which: "merchant", text: "SIGNATURE SLIP" }], "an explicit PRINT action (seq grew) still prints");
+  r = receiptJobs(r.marks, sig({ version: 6, merchantPrintSeq: 1, merchantReceipt: "SECOND SLIP" }));
+  assert.deepEqual(r.jobs, [{ which: "merchant", text: "SECOND SLIP" }], "a new slip from the terminal prints");
+  const other = receiptJobs(r.marks, sig({ id: "t2", version: 1 }));
+  assert.equal(other.jobs.length, 1, "marks are per transaction");
 });
 
 test("receipt bytes: init, ASCII text, cut", () => {
@@ -234,14 +268,15 @@ test("activeLanePairing: only the lane's selected, active pairing", () => {
 
 function fakeApi(script) {
   const calls = [];
+  const signals = [];
   const api = {
     create: async (body) => (calls.push(["create", body]), script.create(body)),
-    get: async (id, minVersion) => (calls.push(["get", id, minVersion]), script.get(minVersion)),
+    get: async (id, minVersion, signal) => (calls.push(["get", id, minVersion]), signals.push(signal), script.get(minVersion, signal)),
     action: async (id, body) => (calls.push(["action", id, body]), script.action(body)),
     override: async (id, answer) => (calls.push(["override", id, answer]), script.override(answer)),
     cancel: async (id) => (calls.push(["cancel", id]), script.cancel()),
   };
-  return { api, calls };
+  return { api, calls, signals };
 }
 
 test("session: create with surcharge 0, long-poll min_version = last + 1, stop at final, receipts printed", async () => {
@@ -293,21 +328,36 @@ test("session: 502 / STALE_VERSION on an action → immediate re-read, then the 
   assert.equal(s.getState().outcome.kind, "paid");
 });
 
-test("session: stop() leaves the payment without further requests", async () => {
-  let release;
-  const { api, calls } = fakeApi({ create: () => ok(txn(), 201), get: () => new Promise((r) => (release = r)) });
-  const s = createEftSession({ api, onState: () => {}, sleep: async () => {} });
+test("F-17: stop() during a pending poll aborts the request and sends nothing more", async () => {
+  const { api, calls, signals } = fakeApi({
+    create: () => ok(txn(), 201),
+    // a real client resolves an aborted request as status 0
+    get: (_mv, signal) =>
+      new Promise((resolve) => signal.addEventListener("abort", () => resolve(fail(0, "Request aborted")))),
+  });
+  const s = createEftSession({ api, onState: () => {}, retryDelayMs: 60_000 });
+  const run = s.start({ operationId: "op-12345678", amountCents: 1000 });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(signals[0].aborted, false);
+  s.stop();
+  assert.equal(signals[0].aborted, true, "in-flight long poll aborted");
+  await run; // resolves at once: no 60 s retry pause left behind
+  assert.equal(calls.filter((c) => c[0] === "get").length, 1, "no further requests");
+  assert.equal(s.getState().phase, "live", "the aborted answer is not applied");
+});
+
+test("F-17: stop() during the retry pause ends the pause without another poll", async () => {
+  const { api, calls } = fakeApi({ create: () => ok(txn(), 201), get: () => fail(0, "Network Error") });
+  const s = createEftSession({ api, onState: () => {}, retryDelayMs: 60_000 });
   const run = s.start({ operationId: "op-12345678", amountCents: 1000 });
   await new Promise((r) => setImmediate(r));
   s.stop();
-  release(ok(approved({ version: 2 })));
   await run;
   assert.equal(calls.filter((c) => c[0] === "get").length, 1);
-  assert.equal(s.getState().phase, "live", "a late answer after stop is not applied");
 });
 
 // ── the approved amount in the tender queue ───────────────────────────────
-import { addApprovedCredit, appliedTxnIds } from "./eft-tender.ts";
+import { addApprovedCredit, appliedTxnIds, applyEftTenderAction } from "./eft-tender.ts";
 import { createTenderState, selectTender, tenderReducer } from "../sale/tender-queue.ts";
 import { buildNewLine } from "../../store/SalesStore.helper.ts";
 
@@ -358,4 +408,28 @@ test("pairing screen texts: server text verbatim, externally unpaired is visible
   assert.equal(pairingStateText({ active: false, lastError: "no_active_pairings_found", lastTestOk: false }).tone, "warn");
   assert.match(pairingStateText({ active: false, lastError: "no_active_pairings_found", lastTestOk: false }).text, /\[PAIR\]$/);
   assert.equal(pairingStateText({ active: false, lastError: "unpaired", lastTestOk: null }).text, "Unpaired");
+});
+
+test("F-12 A-28: an unsuccessful outcome clears the keyed CREDIT draft — COMPLETE cannot record it", () => {
+  const rates = { creditSurchargeRate: 0, cashPointRate: 10, otherPointRate: 10 };
+  const lines = [saleLine(1000)];
+  let s = createTenderState();
+  s = tenderReducer(s, { type: "change-slot", slot: "CREDIT" });
+  s = tenderReducer(s, { type: "set-credit-bill", billPortion: 1000, left: 1000, surchargeRate: 0 });
+  assert.equal(selectTender(s, { lines, rates, hasMember: false }).completeDisabled, false, "keyed draft would complete");
+  for (const res of [
+    ok(txn({ status: "FINALISED", financialStatus: "DECLINED", final: true, displayMessage: "Declined [BANK]" })),
+    ok(txn({ status: "CANCELLED_BY_OVERRIDE", final: true })),
+    ok(approved({ resultAmounts: { purchase: 1000, surcharge: 215 } })),
+  ]) {
+    const flow = eftFlowReducer(started(), { type: "create-answer", res });
+    assert.notEqual(flow.outcome.kind, "paid");
+    const cleared = applyEftTenderAction(s, { type: "eft-clear-credit-draft" });
+    assert.equal(cleared.staged.tender, "CREDIT");
+    assert.equal(cleared.staged.amount, 0);
+    assert.equal(selectTender(cleared, { lines, rates, hasMember: false }).completeDisabled, true);
+  }
+  // no draft → no change
+  const empty = createTenderState();
+  assert.equal(applyEftTenderAction(empty, { type: "eft-clear-credit-draft" }), empty);
 });

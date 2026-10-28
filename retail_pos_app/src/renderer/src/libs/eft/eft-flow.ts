@@ -30,8 +30,13 @@ export const OVERRIDE_QUESTION = "Was the transaction successful?";
 export const EFT_NOT_CONFIGURED = "EFT is not configured";
 export const ALREADY_APPLIED = "This card payment is already in the payments list [POS]";
 
+// "review" (A-27, F-11/F-15): the terminal approved, but its result is not
+// exactly the requested purchase (another purchase amount, a surcharge / tip /
+// cashout added on the terminal, or no purchase amount at all). Nothing is
+// committed; the cashier sees the breakdown and handles it manually.
 export type EftOutcome =
   | { kind: "paid"; txnId: string; amountCents: number; viaOverride: boolean }
+  | { kind: "review"; txnId: string; message: string }
   | { kind: "not-paid"; txnId: string | null; message: string };
 
 export interface EftFlowState {
@@ -60,20 +65,46 @@ export function initialEftFlow(): EftFlowState {
   return { phase: "idle", requestCents: 0, txn: null, notice: null, busy: false, outcome: null, unavailable: false };
 }
 
-/** The tender the APPROVED answer stands for: purchase + surcharge + tip from `resultAmounts`. */
-export function approvedAmountOf(txn: Pick<EftTxn, "resultAmounts" | "amountCents">): number {
-  const ra = txn.resultAmounts;
-  const n = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v > 0 ? v : 0);
-  if (!ra || typeof ra.purchase !== "number") return txn.amountCents; // no result block — what the terminal was asked
-  return n(ra.purchase) + n(ra.surcharge) + n(ra.tip);
+const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+const EXTRA_KEYS = ["surcharge", "tip", "cashout"] as const;
+const isCents = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
+
+/**
+ * A-27: the CREDIT tender an APPROVED answer stands for = the result's
+ * `purchase` component, and only when it equals the requested amount with no
+ * surcharge / tip / cashout added on the terminal. Otherwise `ok: false` with
+ * the breakdown text for the cashier (F-11, F-15: a missing `purchase` is
+ * never replaced by the requested amount).
+ */
+export function approvedTender(
+  txn: Pick<EftTxn, "resultAmounts" | "amountCents">,
+): { ok: true; amountCents: number } | { ok: false; message: string } {
+  const ra = txn.resultAmounts ?? null;
+  const purchase = ra?.purchase;
+  const extras = EXTRA_KEYS.map((k) => [k, ra?.[k]] as const).filter(([, v]) => v != null && v !== 0);
+  const extrasValid = extras.every(([, v]) => isCents(v));
+  if (isCents(purchase) && purchase > 0 && purchase === txn.amountCents && extras.length === 0)
+    return { ok: true, amountCents: purchase };
+  if (!isCents(purchase) || purchase <= 0 || !extrasValid)
+    return {
+      ok: false,
+      message: `Approved — the terminal sent no valid purchase amount (requested ${money(txn.amountCents)}); differs from the sale`,
+    };
+  const total = purchase + extras.reduce((n, [, v]) => n + (v as number), 0);
+  const parts = [`purchase ${money(purchase)}`, ...extras.map(([k, v]) => `${k} ${money(v as number)}`)];
+  return { ok: false, message: `Approved ${money(total)} — ${parts.join(", ")}; differs from the sale` };
 }
 
 /** Final outcome of a transaction view, or null while it is still open. */
 export function outcomeOf(txn: EftTxn): EftOutcome | null {
   if (txn.status === "FINALISED_BY_OVERRIDE")
     return { kind: "paid", txnId: txn.id, amountCents: txn.amountCents, viaOverride: true };
-  if (txn.status === "FINALISED" && txn.financialStatus === "APPROVED")
-    return { kind: "paid", txnId: txn.id, amountCents: approvedAmountOf(txn), viaOverride: false };
+  if (txn.status === "FINALISED" && txn.financialStatus === "APPROVED") {
+    const t = approvedTender(txn);
+    return t.ok
+      ? { kind: "paid", txnId: txn.id, amountCents: t.amountCents, viaOverride: false }
+      : { kind: "review", txnId: txn.id, message: t.message };
+  }
   if (txn.final) return { kind: "not-paid", txnId: txn.id, message: txn.displayMessage };
   return null;
 }
@@ -177,7 +208,7 @@ export function eftPanelView(state: EftFlowState) {
     message:
       state.phase === "starting"
         ? "Sending to terminal…"
-        : state.outcome?.kind === "not-paid"
+        : state.outcome && state.outcome.kind !== "paid"
           ? state.outcome.message
           : txn?.displayMessage ?? "",
     notice: state.notice,
@@ -192,15 +223,25 @@ export function eftPanelView(state: EftFlowState) {
 
 // ── receipts (D-3 / certification: both receipts printed, declined too) ──────
 
+// F-16: marks are per transaction and never keyed on the lane version — a
+// local version bump (Cancel on a signature prompt, an action relay) with the
+// same print seqs and the same receipt text prints nothing.
 export interface PrintMarks {
+  txnId: string | null;
   merchantSeq: number;
   customerSeq: number;
-  /** Version whose PRINT_MERCHANT_RECEIPT auto action was already run. */
-  autoVersion: number | null;
+  /** Merchant receipt text already printed for a PRINT_MERCHANT_RECEIPT auto action. */
+  autoPrinted: string | null;
   finalPrinted: boolean;
 }
 
-export const initialPrintMarks = (): PrintMarks => ({ merchantSeq: 0, customerSeq: 0, autoVersion: null, finalPrinted: false });
+export const initialPrintMarks = (): PrintMarks => ({
+  txnId: null,
+  merchantSeq: 0,
+  customerSeq: 0,
+  autoPrinted: null,
+  finalPrinted: false,
+});
 
 export interface ReceiptJob {
   which: "merchant" | "customer";
@@ -209,12 +250,14 @@ export interface ReceiptJob {
 
 /**
  * Receipts due for this view: when `merchantPrintSeq` / `customerPrintSeq`
- * grew, when `autoActions` asks for PRINT_MERCHANT_RECEIPT (once per
- * version), and both receipts once the transaction is FINALISED.
+ * grew, when `autoActions` asks for PRINT_MERCHANT_RECEIPT (once per distinct
+ * merchant receipt of the transaction), and both receipts once the
+ * transaction is FINALISED.
  */
-export function receiptJobs(marks: PrintMarks, txn: EftTxn): { jobs: ReceiptJob[]; marks: PrintMarks } {
+export function receiptJobs(prev: PrintMarks, txn: EftTxn): { jobs: ReceiptJob[]; marks: PrintMarks } {
   let merchant = false;
   let customer = false;
+  const marks = prev.txnId === txn.id ? prev : { ...initialPrintMarks(), txnId: txn.id };
   const next: PrintMarks = { ...marks };
   if (txn.merchantPrintSeq > marks.merchantSeq) {
     merchant = true;
@@ -224,9 +267,13 @@ export function receiptJobs(marks: PrintMarks, txn: EftTxn): { jobs: ReceiptJob[
     customer = true;
     next.customerSeq = txn.customerPrintSeq;
   }
-  if (txn.autoActions.includes("PRINT_MERCHANT_RECEIPT") && marks.autoVersion !== txn.version) {
+  if (
+    txn.autoActions.includes("PRINT_MERCHANT_RECEIPT") &&
+    txn.merchantReceipt &&
+    marks.autoPrinted !== txn.merchantReceipt
+  ) {
     merchant = true;
-    next.autoVersion = txn.version;
+    next.autoPrinted = txn.merchantReceipt;
   }
   if (txn.status === "FINALISED" && !marks.finalPrinted) {
     merchant = true;
@@ -241,12 +288,20 @@ export function receiptJobs(marks: PrintMarks, txn: EftTxn): { jobs: ReceiptJob[
 
 // ── the loop driver (React-free; useEftTender owns one per EFT panel) ────────
 
+/** Every call takes the session's AbortSignal: stop() aborts what is in flight (F-17). */
 export interface EftLaneApi {
-  create(body: { operationId: string; kind: "PURCHASE"; amountCents: number; surchargeCents: number }): Promise<EftAnswer<EftTxn>>;
-  get(id: string, minVersion: number | null): Promise<EftAnswer<EftTxn>>;
-  action(id: string, body: { buttonKey: string; inputs: Record<string, string>; version: number }): Promise<EftAnswer<EftTxn>>;
-  override(id: string, answer: "YES" | "NO"): Promise<EftAnswer<EftTxn>>;
-  cancel(id: string): Promise<EftAnswer<EftTxn>>;
+  create(
+    body: { operationId: string; kind: "PURCHASE"; amountCents: number; surchargeCents: number },
+    signal?: AbortSignal,
+  ): Promise<EftAnswer<EftTxn>>;
+  get(id: string, minVersion: number | null, signal?: AbortSignal): Promise<EftAnswer<EftTxn>>;
+  action(
+    id: string,
+    body: { buttonKey: string; inputs: Record<string, string>; version: number },
+    signal?: AbortSignal,
+  ): Promise<EftAnswer<EftTxn>>;
+  override(id: string, answer: "YES" | "NO", signal?: AbortSignal): Promise<EftAnswer<EftTxn>>;
+  cancel(id: string, signal?: AbortSignal): Promise<EftAnswer<EftTxn>>;
 }
 
 export interface EftSessionDeps {
@@ -255,7 +310,21 @@ export interface EftSessionDeps {
   print?: (job: ReceiptJob) => Promise<void>;
   /** Pause after a failed poll before the next one (no hot loop when the server is down). */
   retryDelayMs?: number;
-  sleep?: (ms: number) => Promise<void>;
+  /** Must resolve early when `signal` aborts (the default does and clears its timer). */
+  sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+}
+
+function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (signal.aborted) return resolve();
+    const done = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal.addEventListener("abort", done);
+  });
 }
 
 /**
@@ -267,8 +336,10 @@ export interface EftSessionDeps {
  * server's current state.
  */
 export function createEftSession(deps: EftSessionDeps) {
-  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const sleep = deps.sleep ?? abortableSleep;
   const retryDelayMs = deps.retryDelayMs ?? 1000;
+  const abort = new AbortController();
+  const signal = abort.signal;
   let state = initialEftFlow();
   let marks = initialPrintMarks();
   let stopped = false;
@@ -295,21 +366,22 @@ export function createEftSession(deps: EftSessionDeps) {
       const minVersion = nextMinVersion(state);
       const txn = state.txn;
       if (minVersion == null || !txn) return;
-      const res = await deps.api.get(txn.id, minVersion);
+      const res = await deps.api.get(txn.id, minVersion, signal);
       if (stopped) return;
       dispatch({ type: "poll-answer", res });
-      if (!res.ok) await sleep(retryDelayMs);
+      if (!res.ok) await sleep(retryDelayMs, signal);
     }
   }
 
-  async function relay(send: () => Promise<EftAnswer<EftTxn>>): Promise<void> {
+  async function relay(send: (signal: AbortSignal) => Promise<EftAnswer<EftTxn>>): Promise<void> {
     if (stopped || state.phase !== "live" || state.busy) return;
     dispatch({ type: "request-sent" });
-    const res = await send();
+    const res = await send(signal);
     if (stopped) return;
     dispatch({ type: "request-answer", res });
     if (!res.ok && state.txn && state.phase === "live") {
-      const now = await deps.api.get(state.txn.id, null);
+      const now = await deps.api.get(state.txn.id, null, signal);
+      if (stopped) return;
       dispatch({ type: "poll-answer", res: now });
     }
   }
@@ -318,12 +390,16 @@ export function createEftSession(deps: EftSessionDeps) {
     getState: () => state,
     async start(input: { operationId: string; amountCents: number; appliedTxnIds?: readonly string[] }): Promise<void> {
       dispatch({ type: "start", requestCents: input.amountCents });
-      const res = await deps.api.create({
-        operationId: input.operationId,
-        kind: "PURCHASE",
-        amountCents: input.amountCents,
-        surchargeCents: 0,
-      });
+      if (stopped) return;
+      const res = await deps.api.create(
+        {
+          operationId: input.operationId,
+          kind: "PURCHASE",
+          amountCents: input.amountCents,
+          surchargeCents: 0,
+        },
+        signal,
+      );
       if (stopped) return;
       dispatch({ type: "create-answer", res, appliedTxnIds: input.appliedTxnIds });
       await loop();
@@ -332,21 +408,25 @@ export function createEftSession(deps: EftSessionDeps) {
     pressButton(body: { buttonKey: string; inputs: Record<string, string>; version: number }): Promise<void> {
       const txn = state.txn;
       if (!txn) return Promise.resolve();
-      return relay(() => deps.api.action(txn.id, body));
+      return relay((sig) => deps.api.action(txn.id, body, sig));
     },
     answerOverride(answer: "YES" | "NO"): Promise<void> {
       const txn = state.txn;
       if (!txn) return Promise.resolve();
-      return relay(() => deps.api.override(txn.id, answer));
+      return relay((sig) => deps.api.override(txn.id, answer, sig));
     },
     requestCancel(): Promise<void> {
       const txn = state.txn;
       if (!txn) return Promise.resolve();
-      return relay(() => deps.api.cancel(txn.id));
+      return relay((sig) => deps.api.cancel(txn.id, sig));
     },
-    /** Leave the payment (panel closed / unmounted). The server keeps going. */
+    /**
+     * Leave the payment (panel closed / unmounted). The server keeps going.
+     * In-flight requests are aborted and the retry pause ends (F-17).
+     */
     stop(): void {
       stopped = true;
+      abort.abort();
     },
     /** Settle queued receipt prints (tests). */
     printsSettled: () => printChain,
