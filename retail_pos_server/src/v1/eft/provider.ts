@@ -85,6 +85,12 @@ export interface ProviderError {
   retryable: boolean;
   /** The provider says this pairing is gone — mark it inactive. */
   unpaired?: boolean;
+  /**
+   * The request may have taken effect upstream (no answer, timeout, 5xx, or a
+   * 2xx we could not read). A create or action with this flag is never treated
+   * as a certain failure (F-1/F-3).
+   */
+  ambiguous?: boolean;
   /** Bounded, sanitised excerpt of the provider's error body. */
   detail?: Record<string, unknown>;
 }
@@ -107,11 +113,15 @@ export interface EftProvider {
   pairingInfo(creds: PairingCredentials): Promise<ProviderResult<Record<string, unknown>>>;
   unpair(creds: PairingCredentials): Promise<ProviderResult<null>>;
   createTransaction(creds: PairingCredentials, input: CreateTxnInput): Promise<ProviderResult<ProviderTxnAnswer>>;
-  /** Long poll. `minVersion` undefined → current state at once (recovery). */
+  /**
+   * Long poll. `minVersion` undefined → current state at once (recovery).
+   * `signal` lets the engine's deadline abort an in-flight poll (F-5).
+   */
   pollTransaction(
     creds: PairingCredentials,
     providerTxnId: string,
     minVersion: number | undefined,
+    signal?: AbortSignal,
   ): Promise<ProviderResult<PollOutcome>>;
   /** Relay an Action Framework button's submit_url with input values keyed by name. */
   submitAction(

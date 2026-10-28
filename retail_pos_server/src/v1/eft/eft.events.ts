@@ -8,8 +8,11 @@ const ALLOWED_KEY = /^pan_(first_6|last_4)$/;
 // 13–19 digit runs (optionally spaced/dashed) look like a PAN → keep last 4.
 const PAN_RUN = /\b(?:\d[ -]?){12,18}\d\b/g;
 
+// RFC 9421 header values echoed inside strings: `sig1=:<b64>:` / `sig1=("@method" …);created=…`.
+const SIG_VALUE = /sig1=(?::[A-Za-z0-9+/=]*:?|\([^)]*\)[^\s"',}]*)/g;
+
 function maskPan(s: string): string {
-  return s.replace(PAN_RUN, (run) => {
+  return s.replace(SIG_VALUE, "[redacted]").replace(PAN_RUN, (run) => {
     const digits = run.replace(/\D/g, "");
     return `****${digits.slice(-4)}`;
   });

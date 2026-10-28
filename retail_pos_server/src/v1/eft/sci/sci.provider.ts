@@ -24,6 +24,7 @@ import type {
   ProviderResult,
   ProviderTxnAnswer,
 } from "../provider";
+import { sanitizeDetail } from "../eft.events";
 import { signRequest } from "./sci.signing";
 
 export const SCI_POLL_TIMEOUT_MS = 70_000;
@@ -51,7 +52,14 @@ const REQUEST_FLAGS = {
   pos_auto_print_signature_receipt: false,
 } as const;
 
-type RawResponse = { status: number | null; body: unknown; http: HttpMeta; networkError?: string };
+type RawResponse = {
+  status: number | null;
+  body: unknown;
+  http: HttpMeta;
+  networkError?: string;
+  /** Secret values used to make this request — scrubbed from any excerpt (F-4). */
+  redact: string[];
+};
 
 function pathOf(url: string): string {
   const u = new URL(url);
@@ -71,26 +79,56 @@ function errorCodeOf(body: unknown): string | null {
   return null;
 }
 
-function excerpt(body: unknown): Record<string, unknown> | undefined {
-  if (body == null) return undefined;
-  const text = typeof body === "string" ? body : JSON.stringify(body);
-  return { body: text.length > ERROR_DETAIL_MAX ? `${text.slice(0, ERROR_DETAIL_MAX)}…` : text };
+function redactValues(value: unknown, redact: string[], depth = 0): unknown {
+  if (depth > 6) return "[depth]";
+  if (typeof value === "string") {
+    let out = value;
+    for (const secret of redact) if (secret && out.includes(secret)) out = out.split(secret).join("[redacted]");
+    return out;
+  }
+  if (Array.isArray(value)) return value.slice(0, 50).map((v) => redactValues(v, redact, depth + 1));
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = redactValues(v, redact, depth + 1);
+    return out;
+  }
+  return value;
+}
+
+/**
+ * Bounded excerpt of an upstream error body for the event log (F-4): a
+ * structured body is redacted (known secret values of this request, then the
+ * key/PAN/signature scrub) *before* it is serialised; an unstructured body is
+ * dropped — the event keeps only the HTTP status and error code.
+ */
+export function excerpt(body: unknown, redact: string[] = []): Record<string, unknown> | undefined {
+  if (body == null || typeof body !== "object") return undefined;
+  const clean = sanitizeDetail(redactValues(body, redact));
+  return clean == null ? undefined : { body: clean };
+}
+
+/** Request-scoped secret values worth scrubbing (very short values would over-match). */
+function secretsOf(values: Array<string | undefined>): string[] {
+  const out = new Set<string>();
+  for (const v of values) if (v && v.length >= 6) out.add(v);
+  return [...out].sort((a, b) => b.length - a.length);
 }
 
 /** HTTP/transport failure → error class (S-3 §6). */
-export function classifySciError(status: number | null, body: unknown, networkError?: string): ProviderError {
+export function classifySciError(status: number | null, body: unknown, networkError?: string, redact: string[] = []): ProviderError {
   if (status == null) {
     const timedOut = /timeout|aborted/i.test(networkError ?? "");
     return {
       errorClass: "NET",
       errorCode: timedOut ? "SCI_TIMEOUT" : "FETCH_FAILED",
-      message: networkError ?? "network error",
+      message: timedOut ? "timeout" : "network error",
       retryable: true,
+      ambiguous: true,
     };
   }
   const code = errorCodeOf(body);
   const lc = (code ?? "").toLowerCase();
-  const detail = excerpt(body);
+  const detail = excerpt(body, redact);
   if (lc === "no_active_pairings_found")
     return { errorClass: "PAIR", errorCode: "no_active_pairings_found", message: "No active pairing", retryable: false, unpaired: true, detail };
   if (lc === "no_valid_signatures_found")
@@ -101,8 +139,8 @@ export function classifySciError(status: number | null, body: unknown, networkEr
     return { errorClass: "TERM", errorCode: "TRANSACTION_REFUSED", message: "Terminal refused the transaction", retryable: false, detail };
   if (status === 401 || status === 403)
     return { errorClass: "PAIR", errorCode: code ?? `HTTP_${status}`, message: "Not authorised", retryable: false, detail };
-  if (status >= 500)
-    return { errorClass: "NET", errorCode: code ?? `HTTP_${status}`, message: "Payment service error", retryable: true, detail };
+  if (status >= 500 || status === 408)
+    return { errorClass: "NET", errorCode: code ?? `HTTP_${status}`, message: "Payment service error", retryable: true, ambiguous: true, detail };
   return { errorClass: "POS", errorCode: code ?? `HTTP_${status}`, message: "Unexpected answer", retryable: false, detail };
 }
 
@@ -177,17 +215,18 @@ export class SciProvider implements EftProvider {
   private async send(
     method: "GET" | "POST",
     url: string,
-    opts: { body?: string; headers?: Record<string, string>; timeoutMs: number },
+    opts: { body?: string; headers?: Record<string, string>; timeoutMs: number; signal?: AbortSignal; redact: string[] },
   ): Promise<RawResponse> {
     const started = Date.now();
     const http: HttpMeta = { method, path: pathOf(url), status: null, durationMs: 0 };
+    const timeout = AbortSignal.timeout(opts.timeoutMs);
     try {
       const res = await this.fetchImpl(url, {
         method,
         headers: { Accept: "application/json", ...(opts.body != null ? { "Content-Type": "application/json" } : {}), ...opts.headers },
         body: opts.body,
         redirect: "error",
-        signal: AbortSignal.timeout(opts.timeoutMs),
+        signal: opts.signal ? AbortSignal.any([timeout, opts.signal]) : timeout,
       });
       const text = await res.text();
       http.status = res.status;
@@ -200,12 +239,12 @@ export class SciProvider implements EftProvider {
           body = text.slice(0, ERROR_DETAIL_MAX);
         }
       }
-      return { status: res.status, body, http };
+      return { status: res.status, body, http, redact: opts.redact };
     } catch (e) {
       http.durationMs = Date.now() - started;
       const name = e instanceof Error ? e.name : "";
       const msg = e instanceof Error ? e.message : String(e);
-      return { status: null, body: null, http, networkError: `${name}: ${msg}`.slice(0, 200) };
+      return { status: null, body: null, http, networkError: redactValues(`${name}: ${msg}`.slice(0, 200), opts.redact) as string, redact: opts.redact };
     }
   }
 
@@ -215,16 +254,28 @@ export class SciProvider implements EftProvider {
     url: string,
     body: string | undefined,
     timeoutMs: number,
+    signal?: AbortSignal,
   ): Promise<RawResponse> {
+    const secret = this.opts.signingSecretPartA + creds.signingSecretPartB;
     const headers = signRequest({
       method,
       url,
       body: body ?? null,
       keyId: creds.keyId,
-      secret: this.opts.signingSecretPartA + creds.signingSecretPartB,
+      secret,
       created: Math.floor(this.now() / 1000),
     });
-    return this.send(method, url, { body, headers: { ...headers }, timeoutMs });
+    const sigB64 = /^sig1=:(.*):$/.exec(headers.Signature)?.[1];
+    const redact = secretsOf([
+      headers.Signature,
+      sigB64,
+      headers["Signature-Input"],
+      secret,
+      this.opts.signingSecretPartA,
+      creds.signingSecretPartB,
+      creds.keyId,
+    ]);
+    return this.send(method, url, { body, headers: { ...headers }, timeoutMs, signal, redact });
   }
 
   private url(creds: PairingCredentials, path: string): string {
@@ -232,7 +283,7 @@ export class SciProvider implements EftProvider {
   }
 
   private fail<T>(raw: RawResponse): ProviderResult<T> {
-    return { ok: false, error: classifySciError(raw.status, raw.body, raw.networkError), http: raw.http };
+    return { ok: false, error: classifySciError(raw.status, raw.body, raw.networkError, raw.redact), http: raw.http };
   }
 
   async pair(input: { pairingCode: string; nickname?: string | null }): Promise<ProviderResult<PairResult>> {
@@ -245,9 +296,10 @@ export class SciProvider implements EftProvider {
       body,
       headers: { Authorization: `ApiKey ${this.opts.pairingApiKey}` },
       timeoutMs: this.opts.callTimeoutMs ?? SCI_CALL_TIMEOUT_MS,
+      redact: secretsOf([this.opts.pairingApiKey, `ApiKey ${this.opts.pairingApiKey}`]),
     });
     if (raw.status == null || raw.status >= 300) {
-      const err = classifySciError(raw.status, raw.body, raw.networkError);
+      const err = classifySciError(raw.status, raw.body, raw.networkError, raw.redact);
       if (raw.status != null && raw.status < 500 && err.errorClass === "POS") err.errorClass = "PAIR";
       return { ok: false, error: err, http: raw.http };
     }
@@ -323,11 +375,17 @@ export class SciProvider implements EftProvider {
     if (raw.status == null || raw.status >= 300) return this.fail(raw);
     const answer = normaliseSciTransaction(raw.body);
     if (!answer)
-      return { ok: false, error: { errorClass: "POS", errorCode: "UNEXPECTED_SHAPE", message: "Unexpected create answer", retryable: false, detail: excerpt(raw.body) }, http: raw.http };
+      // A 2xx we cannot read: the create landed, we just lost its id → ambiguous.
+      return { ok: false, error: { errorClass: "POS", errorCode: "UNEXPECTED_SHAPE", message: "Unexpected create answer", retryable: false, ambiguous: true, detail: excerpt(raw.body, raw.redact) }, http: raw.http };
     return { ok: true, value: answer, http: raw.http };
   }
 
-  async pollTransaction(creds: PairingCredentials, providerTxnId: string, minVersion: number | undefined): Promise<ProviderResult<PollOutcome>> {
+  async pollTransaction(
+    creds: PairingCredentials,
+    providerTxnId: string,
+    minVersion: number | undefined,
+    signal?: AbortSignal,
+  ): Promise<ProviderResult<PollOutcome>> {
     const q = minVersion != null ? `?min_version=${minVersion}` : "";
     const raw = await this.signed(
       creds,
@@ -335,6 +393,7 @@ export class SciProvider implements EftProvider {
       this.url(creds, `/v1/transactions/${encodeURIComponent(providerTxnId)}${q}`),
       undefined,
       this.opts.pollTimeoutMs ?? SCI_POLL_TIMEOUT_MS,
+      signal,
     );
     if (raw.status === 404 && (errorCodeOf(raw.body) ?? "").toLowerCase() === "transaction_not_found_within_timeout")
       return { ok: true, value: { kind: "not_yet" }, http: raw.http };
@@ -345,7 +404,7 @@ export class SciProvider implements EftProvider {
     }
     const answer = normaliseSciTransaction(raw.body);
     if (!answer)
-      return { ok: false, error: { errorClass: "POS", errorCode: "UNEXPECTED_SHAPE", message: "Unexpected poll answer", retryable: true, detail: excerpt(raw.body) }, http: raw.http };
+      return { ok: false, error: { errorClass: "POS", errorCode: "UNEXPECTED_SHAPE", message: "Unexpected poll answer", retryable: true, detail: excerpt(raw.body, raw.redact) }, http: raw.http };
     return { ok: true, value: { kind: "answer", answer }, http: raw.http };
   }
 
