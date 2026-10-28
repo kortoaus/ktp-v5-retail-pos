@@ -109,6 +109,18 @@ export interface EftStore {
   upsertPairing(data: NewPairing): Promise<PairingRow>;
   updatePairing(id: number, patch: PairingPatch): Promise<PairingRow>;
   setTerminalPairing(terminalId: number, eftPairingId: number | null): Promise<void>;
+  /**
+   * T-9 (F-19): rows on this pairing that may still be unresolved — CREATING / PENDING /
+   * AWAITING_POS / TIMEOUT, or FINALISED with financialStatus UNKNOWN (mirrors the
+   * engine's isFinal, which the engine applies again).
+   */
+  listNonFinalTxnsForPairing(eftPairingId: number): Promise<TxnRow[]>;
+  /**
+   * T-9: in one DB transaction, clear Terminal.eftPairingId where it points here and
+   * delete the row — only while it is still inactive. Past EftTransactions keep their
+   * rows and EftEvents (eftPairingId → NULL). `deleted: false` = gone or active again.
+   */
+  deleteInactivePairing(id: number): Promise<{ deleted: boolean; terminalsCleared: number }>;
   listLaneTerminals(): Promise<LaneTerminal[]>;
   lastTxnForTerminal(terminalId: number): Promise<TxnRow | null>;
 

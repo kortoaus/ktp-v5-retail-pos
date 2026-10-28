@@ -37,7 +37,7 @@ export class MemoryEftStore implements EftStore {
       return { ...existing };
     }
     const row: PairingRow = {
-      id: this.pairings.length + 1,
+      id: this.pairings.reduce((m, x) => Math.max(m, x.id), 0) + 1,
       ...data,
       active: true,
       lastTestAt: null,
@@ -61,6 +61,29 @@ export class MemoryEftStore implements EftStore {
   async setTerminalPairing(terminalId: number, eftPairingId: number | null) {
     const t = this.terminals.find((x) => x.id === terminalId);
     if (t) t.eftPairingId = eftPairingId;
+  }
+  async listNonFinalTxnsForPairing(eftPairingId: number) {
+    return [...this.txns.values()]
+      .filter(
+        (t) =>
+          t.eftPairingId === eftPairingId &&
+          (["CREATING", "PENDING", "AWAITING_POS", "TIMEOUT"].includes(t.status) ||
+            (t.status === "FINALISED" && t.financialStatus === "UNKNOWN")),
+      )
+      .map((t) => ({ ...t }));
+  }
+  async deleteInactivePairing(id: number) {
+    const i = this.pairings.findIndex((x) => x.id === id && !x.active);
+    if (i < 0) return { deleted: false, terminalsCleared: 0 };
+    this.pairings.splice(i, 1);
+    let terminalsCleared = 0;
+    for (const t of this.terminals)
+      if (t.eftPairingId === id) {
+        t.eftPairingId = null;
+        terminalsCleared++;
+      }
+    for (const t of this.txns.values()) if (t.eftPairingId === id) t.eftPairingId = null; // onDelete: SetNull
+    return { deleted: true, terminalsCleared };
   }
   async listLaneTerminals() {
     return this.terminals.map((t) => ({ ...t }));

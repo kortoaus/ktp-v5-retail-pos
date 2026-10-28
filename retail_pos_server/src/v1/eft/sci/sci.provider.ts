@@ -103,6 +103,7 @@ function redactValues(value: unknown, redact: string[], depth = 0): unknown {
 const PUBLIC_SCI_CODES: Record<string, string> = {
   no_valid_signatures_found: "no_valid_signatures_found",
   no_active_pairings_found: "no_active_pairings_found",
+  invalid_pairing_code: "invalid_pairing_code", // Pairing API, wrong code (T-9; fake SCI — confirm on the real API)
   device_not_connected: "device_not_connected",
   transaction_refused: "TRANSACTION_REFUSED",
   transaction_not_found: "transaction_not_found",

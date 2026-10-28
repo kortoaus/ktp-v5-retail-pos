@@ -62,7 +62,9 @@ payment service; the store server drives the terminal.
   COMPLETE (with the keyed draft, confirmed while a terminal payment runs) stay the manual fallback.
 - **Settings → Payments** (`/manager/payments`, `screens/PaymentSettingsScreen/`): Card terminal tab — "Simple Cloud Integration" +
   `components/eft/SciLogo.tsx` (**placeholder wordmark until the logo file arrives, A-21**), Pairing Code / Nickname on the
-  on-screen keyboard, Pair / Test / Cancel, paired state, Unpair, "Use on this lane" (the operator picks; never automatic).
+  on-screen keyboard, Pair / Test / Cancel, paired state, Unpair, "Use on this lane" (the operator picks; never automatic),
+  **Delete** on an unpaired (inactive) row (T-9: `window.confirm` first → `DELETE /api/eft/pairings/:id`, the row leaves the
+  list and a "Deleted …" banner shows; a 409 is shown on the row verbatim). Against the fake SCI only code 123456 pairs.
   Diagnostics tab (read-only, D-5): `GET /api/eft/lanes` table + the selected lane's last transaction events, Refresh.
 - UI text never names the vendor — "SCI" only (`grep -rli mx51 src` → 0).
 

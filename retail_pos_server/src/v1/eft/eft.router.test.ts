@@ -57,15 +57,15 @@ async function setup(cfg: Partial<EftConfig> = {}) {
     await new Promise((r) => server.close(r));
     await fake.stop();
   };
-  return { fake, store, engine, call, close, bodies };
+  return { fake, store, engine, call, close, bodies, base };
 }
 
 test("lane API over HTTP: pair, select, create (201 then 200), long poll, signature action, events, lanes", async () => {
   const h = await setup();
   try {
-    const paired = await h.call("POST", "/pairings", { pairingCode: "654321", nickname: "Front" });
+    const paired = await h.call("POST", "/pairings", { pairingCode: "123456", nickname: "Front" });
     assert.equal(paired.status, 200);
-    assert.equal(paired.json.result.confirmationCode, "321321");
+    assert.equal(paired.json.result.confirmationCode, "456456");
     const pid = paired.json.result.id;
     assert.equal((await h.call("POST", `/pairings/${pid}/select`)).status, 200);
     assert.equal((await h.call("POST", `/pairings/${pid}/test`)).json.result.ok, true);
@@ -124,6 +124,37 @@ test("not configured: POST /pairings → 503 {ok:false,msg:'EFT is not configure
     assert.deepEqual(r.json, { ok: false, msg: "EFT is not configured" });
     const c = await h.call("POST", "/transactions", { operationId: "op-http-0002", kind: "PURCHASE", amountCents: 100 });
     assert.equal(c.status, 503);
+  } finally {
+    await h.close();
+  }
+});
+
+test("T-9: POST /pairings with a wrong code → 400 verbatim [PAIR]; DELETE /pairings/:id active → 409, after unpair → 204 + lane cleared", async () => {
+  const h = await setup();
+  try {
+    const bad = await h.call("POST", "/pairings", { pairingCode: "123457" });
+    assert.equal(bad.status, 400);
+    assert.deepEqual(bad.json, {
+      ok: false,
+      msg: "Invalid pairing code — check the code on the terminal [PAIR]",
+      result: { errorClass: "PAIR", errorCode: "invalid_pairing_code" },
+    });
+
+    const pid = (await h.call("POST", "/pairings", { pairingCode: "123456" })).json.result.id;
+    assert.equal((await h.call("POST", `/pairings/${pid}/select`)).status, 200);
+    const active = await h.call("DELETE", `/pairings/${pid}`);
+    assert.equal(active.status, 409);
+    assert.equal(active.json.msg, "Unpair this terminal before deleting it [PAIR]");
+    assert.equal(active.json.result.errorCode, "PAIRING_ACTIVE");
+
+    assert.equal((await h.call("POST", `/pairings/${pid}/unpair`)).status, 200);
+    const res = await fetch(`${h.base}/pairings/${pid}`, { method: "DELETE" });
+    assert.equal(res.status, 204);
+    assert.equal(await res.text(), "");
+    assert.equal(h.store.terminals[0].eftPairingId, null);
+    assert.deepEqual((await h.call("GET", "/pairings")).json.result, []);
+    assert.equal((await h.call("DELETE", `/pairings/${pid}`)).status, 404);
+    assert.equal((await h.call("DELETE", "/pairings/abc")).status, 400);
   } finally {
     await h.close();
   }

@@ -23,6 +23,7 @@ export function createEftRouter(getEngine: () => EftEngine, guards: RequestHandl
   r.post("/pairings/:id/test", c.testPairing);
   r.post("/pairings/:id/unpair", c.unpair);
   r.post("/pairings/:id/select", c.selectPairing); // :id = "none" clears the lane's choice
+  r.delete("/pairings/:id", c.deletePairing); // inactive only; 204 (T-9, F-19)
 
   r.post("/transactions", c.createTransaction);
   r.get("/transactions/:id/events", c.events);

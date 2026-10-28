@@ -31,6 +31,31 @@ export const prismaEftStore: EftStore = {
   setTerminalPairing: async (terminalId, eftPairingId) => {
     await db.terminal.update({ where: { id: terminalId }, data: { eftPairingId } });
   },
+  listNonFinalTxnsForPairing: (eftPairingId) =>
+    db.eftTransaction.findMany({
+      where: {
+        eftPairingId,
+        OR: [
+          { status: { in: ["CREATING", "PENDING", "AWAITING_POS", "TIMEOUT"] } },
+          { status: "FINALISED", financialStatus: "UNKNOWN" },
+        ],
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+  deleteInactivePairing: async (id) => {
+    const NOT_DELETED = Symbol("not deleted");
+    try {
+      return await db.$transaction(async (tx) => {
+        const cleared = await tx.terminal.updateMany({ where: { eftPairingId: id }, data: { eftPairingId: null } });
+        const gone = await tx.eftPairing.deleteMany({ where: { id, active: false } });
+        if (gone.count === 0) throw NOT_DELETED; // roll back the terminal clear
+        return { deleted: true, terminalsCleared: cleared.count };
+      });
+    } catch (e) {
+      if (e === NOT_DELETED) return { deleted: false, terminalsCleared: 0 };
+      throw e;
+    }
+  },
   listLaneTerminals: () =>
     db.terminal.findMany({
       where: { archived: false },

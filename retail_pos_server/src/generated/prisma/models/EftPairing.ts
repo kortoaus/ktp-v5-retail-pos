@@ -657,11 +657,6 @@ export type EftPairingSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
 }
 
-export type EftPairingScalarRelationFilter = {
-  is?: Prisma.EftPairingWhereInput
-  isNot?: Prisma.EftPairingWhereInput
-}
-
 export type EftPairingCreateNestedOneWithoutTerminalsInput = {
   create?: Prisma.XOR<Prisma.EftPairingCreateWithoutTerminalsInput, Prisma.EftPairingUncheckedCreateWithoutTerminalsInput>
   connectOrCreate?: Prisma.EftPairingCreateOrConnectWithoutTerminalsInput
@@ -688,10 +683,12 @@ export type EftPairingCreateNestedOneWithoutTransactionsInput = {
   connect?: Prisma.EftPairingWhereUniqueInput
 }
 
-export type EftPairingUpdateOneRequiredWithoutTransactionsNestedInput = {
+export type EftPairingUpdateOneWithoutTransactionsNestedInput = {
   create?: Prisma.XOR<Prisma.EftPairingCreateWithoutTransactionsInput, Prisma.EftPairingUncheckedCreateWithoutTransactionsInput>
   connectOrCreate?: Prisma.EftPairingCreateOrConnectWithoutTransactionsInput
   upsert?: Prisma.EftPairingUpsertWithoutTransactionsInput
+  disconnect?: Prisma.EftPairingWhereInput | boolean
+  delete?: Prisma.EftPairingWhereInput | boolean
   connect?: Prisma.EftPairingWhereUniqueInput
   update?: Prisma.XOR<Prisma.XOR<Prisma.EftPairingUpdateToOneWithWhereWithoutTransactionsInput, Prisma.EftPairingUpdateWithoutTransactionsInput>, Prisma.EftPairingUncheckedUpdateWithoutTransactionsInput>
 }

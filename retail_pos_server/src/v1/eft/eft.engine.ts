@@ -532,7 +532,7 @@ export class EftEngine {
   private async runLoop(id: string, handle: LoopHandle, opts: LoopOpts) {
     let row = await this.store.getTxn(id);
     if (!row) return;
-    const pairing = await this.store.getPairing(row.eftPairingId);
+    const pairing = row.eftPairingId == null ? null : await this.store.getPairing(row.eftPairingId);
     const isCreating = (cur: TxnRow) => cur.status === "CREATING" && !cur.providerTxnId;
     if (!pairing) {
       if (opts.fresh) await this.failTxn(row, { errorClass: "PAIR", errorCode: "PAIRING_MISSING" }, null, isCreating);
@@ -783,7 +783,7 @@ export class EftEngine {
     await this.emit(row, { source: "TILL", event: "TILL_ACTION", detail: { buttonKey, inputNames: Object.keys(inputs), action: prop.action ?? null, userId } });
 
     if (typeof prop.submit_url === "string" && prop.submit_url) {
-      const pairing = await this.store.getPairing(row.eftPairingId);
+      const pairing = row.eftPairingId == null ? null : await this.store.getPairing(row.eftPairingId);
       if (!pairing) throw laneError(409, "Payment terminal is not paired", "PAIR", "PAIRING_MISSING");
       const provider = this.deps.providerFor(row.provider);
       await this.emit(row, { source: "SERVER", event: "SCI_ACTION_REQ", httpMethod: "POST", detail: { buttonKey } });
@@ -850,7 +850,7 @@ export class EftEngine {
     if (!row) throw new HttpException(404, "EFT transaction not found");
     if (!OPEN_STATUSES.includes(row.status)) throw laneError(409, "This payment has already finished", "POS", "NOT_OPEN");
     await this.emit(row, { source: "TILL", event: "TILL_CANCEL", detail: { userId } });
-    const pairing = await this.store.getPairing(row.eftPairingId);
+    const pairing = row.eftPairingId == null ? null : await this.store.getPairing(row.eftPairingId);
     if (pairing && row.providerTxnId) {
       const r = await this.deps.providerFor(row.provider).cancel(this.creds(pairing), row.providerTxnId);
       if ("ok" in r && !r.ok)
@@ -933,7 +933,12 @@ export class EftEngine {
     if (!res.ok) {
       this.log(`[eft] pairing PAIR_FAILED ${res.error.errorClass} code=${res.error.errorCode}${res.http?.status != null ? ` ${res.http.status}` : ""}`);
       const status = res.error.errorClass === "NET" ? 502 : 400;
-      const msg = res.error.errorClass === "NET" ? "Could not reach the pairing service" : "Pairing was not accepted — check the code on the terminal";
+      const msg =
+        res.error.errorClass === "NET"
+          ? "Could not reach the pairing service"
+          : res.error.errorCode === "invalid_pairing_code"
+            ? "Invalid pairing code — check the code on the terminal"
+            : "Pairing was not accepted — check the code on the terminal";
       throw laneError(status, msg, res.error.errorClass, res.error.errorCode);
     }
     const v = res.value;
@@ -996,6 +1001,24 @@ export class EftEngine {
     await this.store.updatePairing(p.id, { active: false, lastError: "unpaired" });
     this.log(`[eft] pairing=${p.id} UNPAIRED`);
     return { ok: true };
+  }
+
+  /**
+   * T-9 (F-19): delete an unpaired row from the list. Refused while it is active
+   * (Unpair first) or while a transaction on it is not final; lanes that chose it
+   * are cleared; past transactions keep their rows and EftEvents (eftPairingId → NULL).
+   */
+  async deletePairing(id: number) {
+    const p = await this.pairingOr404(id);
+    if (p.active) throw laneError(409, "Unpair this terminal before deleting it", "PAIR", "PAIRING_ACTIVE");
+    const open = (await this.store.listNonFinalTxnsForPairing(p.id)).filter((t) => !isFinal(t));
+    if (open.length) throw laneError(409, "A payment on this terminal is not finished — finish it before deleting", "POS", "PAIRING_IN_USE");
+    const r = await this.store.deleteInactivePairing(p.id);
+    if (!r.deleted) {
+      await this.pairingOr404(p.id);
+      throw laneError(409, "Unpair this terminal before deleting it", "PAIR", "PAIRING_ACTIVE");
+    }
+    this.log(`[eft] pairing=${p.id} DELETED lanes_cleared=${r.terminalsCleared}`);
   }
 
   async selectPairing(terminalId: number, id: number | null) {

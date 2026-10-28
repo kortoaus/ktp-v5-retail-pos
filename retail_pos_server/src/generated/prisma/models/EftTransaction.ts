@@ -392,7 +392,7 @@ export type EftTransactionGroupByArgs<ExtArgs extends runtime.Types.Extensions.I
 export type EftTransactionGroupByOutputType = {
   id: string
   provider: string
-  eftPairingId: number
+  eftPairingId: number | null
   terminalId: number
   providerTxnId: string | null
   providerVersion: number | null
@@ -454,7 +454,7 @@ export type EftTransactionWhereInput = {
   NOT?: Prisma.EftTransactionWhereInput | Prisma.EftTransactionWhereInput[]
   id?: Prisma.StringFilter<"EftTransaction"> | string
   provider?: Prisma.StringFilter<"EftTransaction"> | string
-  eftPairingId?: Prisma.IntFilter<"EftTransaction"> | number
+  eftPairingId?: Prisma.IntNullableFilter<"EftTransaction"> | number | null
   terminalId?: Prisma.IntFilter<"EftTransaction"> | number
   providerTxnId?: Prisma.StringNullableFilter<"EftTransaction"> | string | null
   providerVersion?: Prisma.IntNullableFilter<"EftTransaction"> | number | null
@@ -488,7 +488,7 @@ export type EftTransactionWhereInput = {
   finalisedAt?: Prisma.DateTimeNullableFilter<"EftTransaction"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"EftTransaction"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"EftTransaction"> | Date | string
-  pairing?: Prisma.XOR<Prisma.EftPairingScalarRelationFilter, Prisma.EftPairingWhereInput>
+  pairing?: Prisma.XOR<Prisma.EftPairingNullableScalarRelationFilter, Prisma.EftPairingWhereInput> | null
   terminal?: Prisma.XOR<Prisma.TerminalScalarRelationFilter, Prisma.TerminalWhereInput>
   invoice?: Prisma.XOR<Prisma.SaleInvoiceNullableScalarRelationFilter, Prisma.SaleInvoiceWhereInput> | null
   events?: Prisma.EftEventListRelationFilter
@@ -497,7 +497,7 @@ export type EftTransactionWhereInput = {
 export type EftTransactionOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   provider?: Prisma.SortOrder
-  eftPairingId?: Prisma.SortOrder
+  eftPairingId?: Prisma.SortOrderInput | Prisma.SortOrder
   terminalId?: Prisma.SortOrder
   providerTxnId?: Prisma.SortOrderInput | Prisma.SortOrder
   providerVersion?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -544,7 +544,7 @@ export type EftTransactionWhereUniqueInput = Prisma.AtLeast<{
   OR?: Prisma.EftTransactionWhereInput[]
   NOT?: Prisma.EftTransactionWhereInput | Prisma.EftTransactionWhereInput[]
   provider?: Prisma.StringFilter<"EftTransaction"> | string
-  eftPairingId?: Prisma.IntFilter<"EftTransaction"> | number
+  eftPairingId?: Prisma.IntNullableFilter<"EftTransaction"> | number | null
   terminalId?: Prisma.IntFilter<"EftTransaction"> | number
   providerTxnId?: Prisma.StringNullableFilter<"EftTransaction"> | string | null
   providerVersion?: Prisma.IntNullableFilter<"EftTransaction"> | number | null
@@ -578,7 +578,7 @@ export type EftTransactionWhereUniqueInput = Prisma.AtLeast<{
   finalisedAt?: Prisma.DateTimeNullableFilter<"EftTransaction"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"EftTransaction"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"EftTransaction"> | Date | string
-  pairing?: Prisma.XOR<Prisma.EftPairingScalarRelationFilter, Prisma.EftPairingWhereInput>
+  pairing?: Prisma.XOR<Prisma.EftPairingNullableScalarRelationFilter, Prisma.EftPairingWhereInput> | null
   terminal?: Prisma.XOR<Prisma.TerminalScalarRelationFilter, Prisma.TerminalWhereInput>
   invoice?: Prisma.XOR<Prisma.SaleInvoiceNullableScalarRelationFilter, Prisma.SaleInvoiceWhereInput> | null
   events?: Prisma.EftEventListRelationFilter
@@ -587,7 +587,7 @@ export type EftTransactionWhereUniqueInput = Prisma.AtLeast<{
 export type EftTransactionOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   provider?: Prisma.SortOrder
-  eftPairingId?: Prisma.SortOrder
+  eftPairingId?: Prisma.SortOrderInput | Prisma.SortOrder
   terminalId?: Prisma.SortOrder
   providerTxnId?: Prisma.SortOrderInput | Prisma.SortOrder
   providerVersion?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -634,7 +634,7 @@ export type EftTransactionScalarWhereWithAggregatesInput = {
   NOT?: Prisma.EftTransactionScalarWhereWithAggregatesInput | Prisma.EftTransactionScalarWhereWithAggregatesInput[]
   id?: Prisma.StringWithAggregatesFilter<"EftTransaction"> | string
   provider?: Prisma.StringWithAggregatesFilter<"EftTransaction"> | string
-  eftPairingId?: Prisma.IntWithAggregatesFilter<"EftTransaction"> | number
+  eftPairingId?: Prisma.IntNullableWithAggregatesFilter<"EftTransaction"> | number | null
   terminalId?: Prisma.IntWithAggregatesFilter<"EftTransaction"> | number
   providerTxnId?: Prisma.StringNullableWithAggregatesFilter<"EftTransaction"> | string | null
   providerVersion?: Prisma.IntNullableWithAggregatesFilter<"EftTransaction"> | number | null
@@ -704,7 +704,7 @@ export type EftTransactionCreateInput = {
   finalisedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
-  pairing: Prisma.EftPairingCreateNestedOneWithoutTransactionsInput
+  pairing?: Prisma.EftPairingCreateNestedOneWithoutTransactionsInput
   terminal: Prisma.TerminalCreateNestedOneWithoutEftTransactionsInput
   invoice?: Prisma.SaleInvoiceCreateNestedOneWithoutEftTransactionsInput
   events?: Prisma.EftEventCreateNestedManyWithoutTransactionInput
@@ -713,7 +713,7 @@ export type EftTransactionCreateInput = {
 export type EftTransactionUncheckedCreateInput = {
   id?: string
   provider: string
-  eftPairingId: number
+  eftPairingId?: number | null
   terminalId: number
   providerTxnId?: string | null
   providerVersion?: number | null
@@ -784,7 +784,7 @@ export type EftTransactionUpdateInput = {
   finalisedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  pairing?: Prisma.EftPairingUpdateOneRequiredWithoutTransactionsNestedInput
+  pairing?: Prisma.EftPairingUpdateOneWithoutTransactionsNestedInput
   terminal?: Prisma.TerminalUpdateOneRequiredWithoutEftTransactionsNestedInput
   invoice?: Prisma.SaleInvoiceUpdateOneWithoutEftTransactionsNestedInput
   events?: Prisma.EftEventUpdateManyWithoutTransactionNestedInput
@@ -793,7 +793,7 @@ export type EftTransactionUpdateInput = {
 export type EftTransactionUncheckedUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.StringFieldUpdateOperationsInput | string
-  eftPairingId?: Prisma.IntFieldUpdateOperationsInput | number
+  eftPairingId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   terminalId?: Prisma.IntFieldUpdateOperationsInput | number
   providerTxnId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   providerVersion?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -833,7 +833,7 @@ export type EftTransactionUncheckedUpdateInput = {
 export type EftTransactionCreateManyInput = {
   id?: string
   provider: string
-  eftPairingId: number
+  eftPairingId?: number | null
   terminalId: number
   providerTxnId?: string | null
   providerVersion?: number | null
@@ -908,7 +908,7 @@ export type EftTransactionUpdateManyMutationInput = {
 export type EftTransactionUncheckedUpdateManyInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.StringFieldUpdateOperationsInput | string
-  eftPairingId?: Prisma.IntFieldUpdateOperationsInput | number
+  eftPairingId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   terminalId?: Prisma.IntFieldUpdateOperationsInput | number
   providerTxnId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   providerVersion?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1295,7 +1295,7 @@ export type EftTransactionCreateWithoutTerminalInput = {
   finalisedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
-  pairing: Prisma.EftPairingCreateNestedOneWithoutTransactionsInput
+  pairing?: Prisma.EftPairingCreateNestedOneWithoutTransactionsInput
   invoice?: Prisma.SaleInvoiceCreateNestedOneWithoutEftTransactionsInput
   events?: Prisma.EftEventCreateNestedManyWithoutTransactionInput
 }
@@ -1303,7 +1303,7 @@ export type EftTransactionCreateWithoutTerminalInput = {
 export type EftTransactionUncheckedCreateWithoutTerminalInput = {
   id?: string
   provider: string
-  eftPairingId: number
+  eftPairingId?: number | null
   providerTxnId?: string | null
   providerVersion?: number | null
   version?: number
@@ -1371,7 +1371,7 @@ export type EftTransactionScalarWhereInput = {
   NOT?: Prisma.EftTransactionScalarWhereInput | Prisma.EftTransactionScalarWhereInput[]
   id?: Prisma.StringFilter<"EftTransaction"> | string
   provider?: Prisma.StringFilter<"EftTransaction"> | string
-  eftPairingId?: Prisma.IntFilter<"EftTransaction"> | number
+  eftPairingId?: Prisma.IntNullableFilter<"EftTransaction"> | number | null
   terminalId?: Prisma.IntFilter<"EftTransaction"> | number
   providerTxnId?: Prisma.StringNullableFilter<"EftTransaction"> | string | null
   providerVersion?: Prisma.IntNullableFilter<"EftTransaction"> | number | null
@@ -1441,7 +1441,7 @@ export type EftTransactionCreateWithoutInvoiceInput = {
   finalisedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
-  pairing: Prisma.EftPairingCreateNestedOneWithoutTransactionsInput
+  pairing?: Prisma.EftPairingCreateNestedOneWithoutTransactionsInput
   terminal: Prisma.TerminalCreateNestedOneWithoutEftTransactionsInput
   events?: Prisma.EftEventCreateNestedManyWithoutTransactionInput
 }
@@ -1449,7 +1449,7 @@ export type EftTransactionCreateWithoutInvoiceInput = {
 export type EftTransactionUncheckedCreateWithoutInvoiceInput = {
   id?: string
   provider: string
-  eftPairingId: number
+  eftPairingId?: number | null
   terminalId: number
   providerTxnId?: string | null
   providerVersion?: number | null
@@ -1649,7 +1649,7 @@ export type EftTransactionCreateWithoutEventsInput = {
   finalisedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
-  pairing: Prisma.EftPairingCreateNestedOneWithoutTransactionsInput
+  pairing?: Prisma.EftPairingCreateNestedOneWithoutTransactionsInput
   terminal: Prisma.TerminalCreateNestedOneWithoutEftTransactionsInput
   invoice?: Prisma.SaleInvoiceCreateNestedOneWithoutEftTransactionsInput
 }
@@ -1657,7 +1657,7 @@ export type EftTransactionCreateWithoutEventsInput = {
 export type EftTransactionUncheckedCreateWithoutEventsInput = {
   id?: string
   provider: string
-  eftPairingId: number
+  eftPairingId?: number | null
   terminalId: number
   providerTxnId?: string | null
   providerVersion?: number | null
@@ -1743,7 +1743,7 @@ export type EftTransactionUpdateWithoutEventsInput = {
   finalisedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  pairing?: Prisma.EftPairingUpdateOneRequiredWithoutTransactionsNestedInput
+  pairing?: Prisma.EftPairingUpdateOneWithoutTransactionsNestedInput
   terminal?: Prisma.TerminalUpdateOneRequiredWithoutEftTransactionsNestedInput
   invoice?: Prisma.SaleInvoiceUpdateOneWithoutEftTransactionsNestedInput
 }
@@ -1751,7 +1751,7 @@ export type EftTransactionUpdateWithoutEventsInput = {
 export type EftTransactionUncheckedUpdateWithoutEventsInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.StringFieldUpdateOperationsInput | string
-  eftPairingId?: Prisma.IntFieldUpdateOperationsInput | number
+  eftPairingId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   terminalId?: Prisma.IntFieldUpdateOperationsInput | number
   providerTxnId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   providerVersion?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1790,7 +1790,7 @@ export type EftTransactionUncheckedUpdateWithoutEventsInput = {
 export type EftTransactionCreateManyTerminalInput = {
   id?: string
   provider: string
-  eftPairingId: number
+  eftPairingId?: number | null
   providerTxnId?: string | null
   providerVersion?: number | null
   version?: number
@@ -1859,7 +1859,7 @@ export type EftTransactionUpdateWithoutTerminalInput = {
   finalisedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  pairing?: Prisma.EftPairingUpdateOneRequiredWithoutTransactionsNestedInput
+  pairing?: Prisma.EftPairingUpdateOneWithoutTransactionsNestedInput
   invoice?: Prisma.SaleInvoiceUpdateOneWithoutEftTransactionsNestedInput
   events?: Prisma.EftEventUpdateManyWithoutTransactionNestedInput
 }
@@ -1867,7 +1867,7 @@ export type EftTransactionUpdateWithoutTerminalInput = {
 export type EftTransactionUncheckedUpdateWithoutTerminalInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.StringFieldUpdateOperationsInput | string
-  eftPairingId?: Prisma.IntFieldUpdateOperationsInput | number
+  eftPairingId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   providerTxnId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   providerVersion?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   version?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1906,7 +1906,7 @@ export type EftTransactionUncheckedUpdateWithoutTerminalInput = {
 export type EftTransactionUncheckedUpdateManyWithoutTerminalInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.StringFieldUpdateOperationsInput | string
-  eftPairingId?: Prisma.IntFieldUpdateOperationsInput | number
+  eftPairingId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   providerTxnId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   providerVersion?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   version?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1944,7 +1944,7 @@ export type EftTransactionUncheckedUpdateManyWithoutTerminalInput = {
 export type EftTransactionCreateManyInvoiceInput = {
   id?: string
   provider: string
-  eftPairingId: number
+  eftPairingId?: number | null
   terminalId: number
   providerTxnId?: string | null
   providerVersion?: number | null
@@ -2013,7 +2013,7 @@ export type EftTransactionUpdateWithoutInvoiceInput = {
   finalisedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  pairing?: Prisma.EftPairingUpdateOneRequiredWithoutTransactionsNestedInput
+  pairing?: Prisma.EftPairingUpdateOneWithoutTransactionsNestedInput
   terminal?: Prisma.TerminalUpdateOneRequiredWithoutEftTransactionsNestedInput
   events?: Prisma.EftEventUpdateManyWithoutTransactionNestedInput
 }
@@ -2021,7 +2021,7 @@ export type EftTransactionUpdateWithoutInvoiceInput = {
 export type EftTransactionUncheckedUpdateWithoutInvoiceInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.StringFieldUpdateOperationsInput | string
-  eftPairingId?: Prisma.IntFieldUpdateOperationsInput | number
+  eftPairingId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   terminalId?: Prisma.IntFieldUpdateOperationsInput | number
   providerTxnId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   providerVersion?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2060,7 +2060,7 @@ export type EftTransactionUncheckedUpdateWithoutInvoiceInput = {
 export type EftTransactionUncheckedUpdateManyWithoutInvoiceInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.StringFieldUpdateOperationsInput | string
-  eftPairingId?: Prisma.IntFieldUpdateOperationsInput | number
+  eftPairingId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   terminalId?: Prisma.IntFieldUpdateOperationsInput | number
   providerTxnId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   providerVersion?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2317,7 +2317,7 @@ export type EftTransactionSelect<ExtArgs extends runtime.Types.Extensions.Intern
   finalisedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  pairing?: boolean | Prisma.EftPairingDefaultArgs<ExtArgs>
+  pairing?: boolean | Prisma.EftTransaction$pairingArgs<ExtArgs>
   terminal?: boolean | Prisma.TerminalDefaultArgs<ExtArgs>
   invoice?: boolean | Prisma.EftTransaction$invoiceArgs<ExtArgs>
   events?: boolean | Prisma.EftTransaction$eventsArgs<ExtArgs>
@@ -2361,7 +2361,7 @@ export type EftTransactionSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   finalisedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  pairing?: boolean | Prisma.EftPairingDefaultArgs<ExtArgs>
+  pairing?: boolean | Prisma.EftTransaction$pairingArgs<ExtArgs>
   terminal?: boolean | Prisma.TerminalDefaultArgs<ExtArgs>
   invoice?: boolean | Prisma.EftTransaction$invoiceArgs<ExtArgs>
 }, ExtArgs["result"]["eftTransaction"]>
@@ -2403,7 +2403,7 @@ export type EftTransactionSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   finalisedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  pairing?: boolean | Prisma.EftPairingDefaultArgs<ExtArgs>
+  pairing?: boolean | Prisma.EftTransaction$pairingArgs<ExtArgs>
   terminal?: boolean | Prisma.TerminalDefaultArgs<ExtArgs>
   invoice?: boolean | Prisma.EftTransaction$invoiceArgs<ExtArgs>
 }, ExtArgs["result"]["eftTransaction"]>
@@ -2449,19 +2449,19 @@ export type EftTransactionSelectScalar = {
 
 export type EftTransactionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "provider" | "eftPairingId" | "terminalId" | "providerTxnId" | "providerVersion" | "version" | "kind" | "requestedCents" | "surchargeCents" | "operationId" | "saleOperationId" | "invoiceId" | "status" | "message" | "financialStatus" | "resultAmounts" | "merchantReceipt" | "customerReceipt" | "cardDetails" | "posInstructions" | "merchantPrintSeq" | "customerPrintSeq" | "errorClass" | "errorCode" | "overrideAnswer" | "overrideBy" | "overrideAt" | "cancelRequestedAt" | "createdBy" | "retiredAt" | "providerData" | "startedAt" | "finalisedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["eftTransaction"]>
 export type EftTransactionInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  pairing?: boolean | Prisma.EftPairingDefaultArgs<ExtArgs>
+  pairing?: boolean | Prisma.EftTransaction$pairingArgs<ExtArgs>
   terminal?: boolean | Prisma.TerminalDefaultArgs<ExtArgs>
   invoice?: boolean | Prisma.EftTransaction$invoiceArgs<ExtArgs>
   events?: boolean | Prisma.EftTransaction$eventsArgs<ExtArgs>
   _count?: boolean | Prisma.EftTransactionCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type EftTransactionIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  pairing?: boolean | Prisma.EftPairingDefaultArgs<ExtArgs>
+  pairing?: boolean | Prisma.EftTransaction$pairingArgs<ExtArgs>
   terminal?: boolean | Prisma.TerminalDefaultArgs<ExtArgs>
   invoice?: boolean | Prisma.EftTransaction$invoiceArgs<ExtArgs>
 }
 export type EftTransactionIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  pairing?: boolean | Prisma.EftPairingDefaultArgs<ExtArgs>
+  pairing?: boolean | Prisma.EftTransaction$pairingArgs<ExtArgs>
   terminal?: boolean | Prisma.TerminalDefaultArgs<ExtArgs>
   invoice?: boolean | Prisma.EftTransaction$invoiceArgs<ExtArgs>
 }
@@ -2469,7 +2469,7 @@ export type EftTransactionIncludeUpdateManyAndReturn<ExtArgs extends runtime.Typ
 export type $EftTransactionPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "EftTransaction"
   objects: {
-    pairing: Prisma.$EftPairingPayload<ExtArgs>
+    pairing: Prisma.$EftPairingPayload<ExtArgs> | null
     terminal: Prisma.$TerminalPayload<ExtArgs>
     invoice: Prisma.$SaleInvoicePayload<ExtArgs> | null
     events: Prisma.$EftEventPayload<ExtArgs>[]
@@ -2477,7 +2477,7 @@ export type $EftTransactionPayload<ExtArgs extends runtime.Types.Extensions.Inte
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
     provider: string
-    eftPairingId: number
+    eftPairingId: number | null
     terminalId: number
     providerTxnId: string | null
     providerVersion: number | null
@@ -2905,7 +2905,7 @@ readonly fields: EftTransactionFieldRefs;
  */
 export interface Prisma__EftTransactionClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
-  pairing<T extends Prisma.EftPairingDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.EftPairingDefaultArgs<ExtArgs>>): Prisma.Prisma__EftPairingClient<runtime.Types.Result.GetResult<Prisma.$EftPairingPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  pairing<T extends Prisma.EftTransaction$pairingArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.EftTransaction$pairingArgs<ExtArgs>>): Prisma.Prisma__EftPairingClient<runtime.Types.Result.GetResult<Prisma.$EftPairingPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   terminal<T extends Prisma.TerminalDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.TerminalDefaultArgs<ExtArgs>>): Prisma.Prisma__TerminalClient<runtime.Types.Result.GetResult<Prisma.$TerminalPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   invoice<T extends Prisma.EftTransaction$invoiceArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.EftTransaction$invoiceArgs<ExtArgs>>): Prisma.Prisma__SaleInvoiceClient<runtime.Types.Result.GetResult<Prisma.$SaleInvoicePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   events<T extends Prisma.EftTransaction$eventsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.EftTransaction$eventsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$EftEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -3367,6 +3367,25 @@ export type EftTransactionDeleteManyArgs<ExtArgs extends runtime.Types.Extension
    * Limit how many EftTransactions to delete.
    */
   limit?: number
+}
+
+/**
+ * EftTransaction.pairing
+ */
+export type EftTransaction$pairingArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the EftPairing
+   */
+  select?: Prisma.EftPairingSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the EftPairing
+   */
+  omit?: Prisma.EftPairingOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.EftPairingInclude<ExtArgs> | null
+  where?: Prisma.EftPairingWhereInput
 }
 
 /**
