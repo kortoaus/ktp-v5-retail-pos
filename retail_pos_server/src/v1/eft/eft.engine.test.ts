@@ -14,13 +14,18 @@ const PART_A = "test-part-a-0123456789";
 const API_KEY = "test-pairing-key";
 const SECRET_KEY = "a".repeat(64);
 
-async function harness(opts: { enginePartA?: string; mode?: Partial<FakeSciMode>; config?: Partial<EftConfig> } = {}) {
+type FetchWrap = (url: string, init: RequestInit, next: FetchLike) => Promise<Response>;
+
+async function harness(
+  opts: { enginePartA?: string; mode?: Partial<FakeSciMode>; config?: Partial<EftConfig>; fakeHoldMs?: number; fetchWrap?: FetchWrap } = {},
+) {
   const fakeLog: string[] = [];
-  const fake = await startFakeSci({ port: 0, partA: PART_A, pairingApiKey: API_KEY, stepMs: 30, holdMs: 150, mode: opts.mode, log: (l) => fakeLog.push(l) });
+  const fake = await startFakeSci({ port: 0, partA: PART_A, pairingApiKey: API_KEY, stepMs: 30, holdMs: opts.fakeHoldMs ?? 150, mode: opts.mode, log: (l) => fakeLog.push(l) });
   const sentHeaders: Record<string, string>[] = [];
+  const plain: FetchLike = (url, init) => fetch(url, init);
   const fetchImpl: FetchLike = (url, init) => {
     sentHeaders.push({ ...(init.headers as Record<string, string>) });
-    return fetch(url, init);
+    return opts.fetchWrap ? opts.fetchWrap(url, init, plain) : plain(url, init);
   };
   const config: EftConfig = {
     pairingApiUrl: fake.url,
@@ -283,7 +288,7 @@ test("lane long poll: holds until the version passes, answers the current state 
   }
 });
 
-test("boot recovery: CREATING without upstream id → FAILED [POS]; PENDING row resumes and finalises", async () => {
+test("boot recovery: CREATING without upstream id → TIMEOUT [POS] CREATE_UNKNOWN (override); PENDING row resumes and finalises", async () => {
   const h = await harness();
   try {
     await h.pairLane();
@@ -299,11 +304,13 @@ test("boot recovery: CREATING without upstream id → FAILED [POS]; PENDING row 
     const fresh = new EftEngine({ store: h.store, config: h.config, providerFor: () => new SciProvider({ pairingApiUrl: h.fake.url, pairingApiKey: API_KEY, signingSecretPartA: PART_A }), log: () => undefined });
     try {
       const r = await fresh.recover();
-      assert.deepEqual(r, { resumed: 1, failed: 1 });
+      assert.deepEqual(r, { resumed: 1, unresolved: 1 });
       const o = await fresh.getTransaction("corphan0001", null);
-      assert.equal(o.status, "FAILED");
+      assert.equal(o.status, "TIMEOUT");
       assert.equal(o.errorClass, "POS");
-      assert.equal(o.errorCode, "RECOVERY_CREATE_UNKNOWN");
+      assert.equal(o.errorCode, "CREATE_UNKNOWN");
+      assert.equal(o.overrideRequired, true);
+      assert.equal(o.final, false);
       let v = await fresh.getTransaction(a.txn.id, null);
       const end = Date.now() + 5000;
       while (!v.final && Date.now() < end) v = await fresh.getTransaction(a.txn.id, v.version + 1, undefined, 500);
@@ -334,5 +341,174 @@ test("not configured: pairing 503 without the pairing key; create 503 without EF
     );
   } finally {
     await h2.close();
+  }
+});
+
+// ── Codex D-14 review round 1 (F-1 … F-6) ───────────────────────────────────
+
+const lostResponse = () => Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
+const isCreate = (url: string, init: RequestInit) => init.method === "POST" && new URL(url).pathname === "/v1/transactions";
+const isAction = (url: string, init: RequestInit) => init.method === "POST" && new URL(url).searchParams.has("action");
+
+test("F-1: create accepted upstream but the answer is lost → TIMEOUT [NET] CREATE_UNKNOWN; no second create until override NO", async () => {
+  let dropCreates = 1;
+  const h = await harness({
+    fetchWrap: async (url, init, next) => {
+      if (isCreate(url, init) && dropCreates > 0) {
+        dropCreates--;
+        await next(url, init); // the create lands on the fake…
+        throw lostResponse(); // …but our side never sees the answer
+      }
+      return next(url, init);
+    },
+  });
+  try {
+    await h.pairLane();
+    const operationId = op();
+    const first = await h.engine.createTransaction(h.lane(), { operationId, kind: "PURCHASE", amountCents: 100 });
+    const unknown = await h.until(first.txn.id, (v) => v.status !== "CREATING");
+    assert.equal(unknown.status, "TIMEOUT");
+    assert.equal(unknown.errorClass, "NET");
+    assert.equal(unknown.errorCode, "CREATE_UNKNOWN");
+    assert.equal(unknown.overrideRequired, true);
+    assert.equal(unknown.final, false);
+    assert.match(unknown.displayMessage, /Was it successful\? \[NET\]$/);
+    assert.equal(h.fake.transactions.size, 1);
+
+    // The till retries the same sale: same row back, nothing sent upstream.
+    const retry = await h.engine.createTransaction(h.lane(), { operationId, kind: "PURCHASE", amountCents: 100 });
+    assert.equal(retry.created, false);
+    assert.equal(retry.txn.id, first.txn.id);
+    await h.engine.idle();
+    assert.equal(h.fake.transactions.size, 1);
+    assert.equal(h.store.txns.get(first.txn.id)!.operationId, operationId); // key not retired
+
+    // Cashier checked the terminal: not paid → only now a new attempt goes out.
+    await h.engine.override(first.txn.id, { answer: "NO" }, 7);
+    const again = await h.engine.createTransaction(h.lane(), { operationId, kind: "PURCHASE", amountCents: 100 });
+    assert.equal(again.created, true);
+    const done = await h.until(again.txn.id, (v) => v.final);
+    assert.equal(done.financialStatus, "APPROVED");
+    assert.equal(h.fake.transactions.size, 2);
+  } finally {
+    await h.close();
+  }
+});
+
+test("F-1: a certain refusal (4xx TRANSACTION_REFUSED) is FAILED and may be retried at once", async () => {
+  const h = await harness({ mode: { refuse: true } });
+  try {
+    await h.pairLane();
+    const operationId = op();
+    const first = await h.engine.createTransaction(h.lane(), { operationId, kind: "PURCHASE", amountCents: 100 });
+    const failed = await h.until(first.txn.id, (v) => v.final);
+    assert.equal(failed.status, "FAILED");
+    assert.equal(failed.errorCode, "TRANSACTION_REFUSED");
+    h.fake.mode.refuse = false;
+    const retry = await h.engine.createTransaction(h.lane(), { operationId, kind: "PURCHASE", amountCents: 100 });
+    assert.equal(retry.created, true);
+    await h.until(retry.txn.id, (v) => v.final);
+  } finally {
+    await h.close();
+  }
+});
+
+test("F-3: signature Approve accepted upstream but our answer is lost → recovery GET finds the result", async () => {
+  let dropActions = 1;
+  const h = await harness({
+    fetchWrap: async (url, init, next) => {
+      if (isAction(url, init) && dropActions > 0) {
+        dropActions--;
+        await next(url, init);
+        throw lostResponse();
+      }
+      return next(url, init);
+    },
+  });
+  try {
+    await h.pairLane();
+    const { txn } = await h.engine.createTransaction(h.lane(), { operationId: op(), kind: "PURCHASE", amountCents: 177 });
+    await h.until(txn.id, (v) => v.status === "AWAITING_POS");
+    await assert.rejects(h.engine.submitAction(txn.id, { buttonKey: "approve", inputs: {} }, 7), (e: Error & { statusCode?: number }) => e.statusCode === 502);
+    const done = await h.until(txn.id, (v) => v.final);
+    assert.equal(done.financialStatus, "APPROVED");
+    await h.engine.idle();
+    assert.deepEqual(h.engine.memoryStats(), { loops: 0, eventQueues: 0, seqs: 0, locks: 0, actionsInFlight: 0, waiters: 0 });
+  } finally {
+    await h.close();
+  }
+});
+
+test("F-3: an action that never reached SCI → back to AWAITING_POS (same form) and the cashier can press again", async () => {
+  let dropActions = 1;
+  const h = await harness({
+    fetchWrap: async (url, init, next) => {
+      if (isAction(url, init) && dropActions > 0) {
+        dropActions--;
+        throw lostResponse(); // never sent
+      }
+      return next(url, init);
+    },
+  });
+  try {
+    await h.pairLane();
+    const { txn } = await h.engine.createTransaction(h.lane(), { operationId: op(), kind: "PURCHASE", amountCents: 177 });
+    const awaiting = await h.until(txn.id, (v) => v.status === "AWAITING_POS");
+    await assert.rejects(h.engine.submitAction(txn.id, { buttonKey: "approve", inputs: {} }, 7));
+    const reshown = await h.until(txn.id, (v) => v.status === "AWAITING_POS" && v.version > awaiting.version);
+    assert.equal(reshown.actionForm?.properties?.approve?.submit, true);
+    const done = await h.engine.submitAction(txn.id, { buttonKey: "approve", inputs: {}, version: reshown.version }, 7);
+    assert.equal(done.financialStatus, "APPROVED");
+  } finally {
+    await h.close();
+  }
+});
+
+test("F-4: an error body echoing the Signature header, key id and part B never reaches EftEvent or the log", async () => {
+  let partB = "";
+  const h = await harness({
+    fetchWrap: async (url, init, next) => {
+      if (!isCreate(url, init)) return next(url, init);
+      const hd = init.headers as Record<string, string>;
+      const keyId = h.store.pairings[0].keyId;
+      partB = decryptSecret(h.store.pairings[0].signingSecretPartBEnc, SECRET_KEY);
+      const echo = {
+        error: {
+          code: "no_valid_signatures_found",
+          message: `bad signature ${hd.Signature} for ${hd["Signature-Input"]} key=${keyId} secret=${PART_A + partB}`,
+          received: { sig: hd.Signature, input: hd["Signature-Input"], k: keyId, b: partB, nested: [`x ${partB} y`] },
+        },
+      };
+      return new Response(JSON.stringify(echo), { status: 401, headers: { "Content-Type": "application/json" } });
+    },
+  });
+  try {
+    await h.pairLane();
+    const { txn } = await h.engine.createTransaction(h.lane(), { operationId: op(), kind: "PURCHASE", amountCents: 100 });
+    const failed = await h.until(txn.id, (v) => v.final);
+    assert.equal(failed.errorClass, "PAIR");
+    const events = await h.engine.listEvents(txn.id);
+    const dump = JSON.stringify(events) + "\n" + h.lines.join("\n");
+    assert.ok(dump.includes("no_valid_signatures_found"));
+    assert.ok(dump.includes("[redacted]")); // the structured body was kept, with values redacted
+    const sig = h.sentHeaders.find((x) => x.Signature)!.Signature;
+    for (const secret of [sig, sig.slice(6, -1), "sig1=", h.store.pairings[0].keyId, partB, PART_A])
+      assert.equal(dump.includes(secret), false, `leaked ${secret.slice(0, 10)}…`);
+  } finally {
+    await h.close();
+  }
+});
+
+test("F-5: the deadline aborts an in-flight long poll — TIMEOUT arrives on time, not after the SCI hold", async () => {
+  const h = await harness({ fakeHoldMs: 3000, config: { pollDeadlineMs: 300, lateWatchMs: 100 } });
+  try {
+    await h.pairLane();
+    const t0 = Date.now();
+    const { txn } = await h.engine.createTransaction(h.lane(), { operationId: op(), kind: "PURCHASE", amountCents: 68 });
+    await h.until(txn.id, (v) => v.status === "TIMEOUT", 2500);
+    const elapsed = Date.now() - t0;
+    assert.ok(elapsed < 1200, `TIMEOUT after ${elapsed} ms (the fake holds polls for 3000 ms)`);
+  } finally {
+    await h.close();
   }
 });

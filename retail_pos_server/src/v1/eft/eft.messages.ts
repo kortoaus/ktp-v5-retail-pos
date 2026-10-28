@@ -17,7 +17,13 @@ export function cashierMessage(input: {
   if (status === "FINALISED" && financialStatus === "APPROVED") return message || "Approved";
   if (status === "FINALISED" && financialStatus === "UNKNOWN")
     return "Result unknown — check the terminal. Was it successful? [TIMEOUT]";
-  if (status === "TIMEOUT") return "No answer from the terminal. Was it successful? [TIMEOUT]";
+  if (status === "TIMEOUT") {
+    if (errorCode === "CREATE_UNKNOWN")
+      return `Lost contact while starting the payment — check the terminal. Was it successful? [${errorClass ?? "NET"}]`;
+    if (errorClass && errorClass !== "TIMEOUT")
+      return `Lost track of the payment — check the terminal. Was it successful? [${errorClass}]`;
+    return "No answer from the terminal. Was it successful? [TIMEOUT]";
+  }
   if (status === "FINALISED" && financialStatus === "CANCELLED") return `${message || "Transaction cancelled"} [BANK]`;
   if (status === "FINALISED" && financialStatus === "DECLINED") return `${message || "Card declined"} [BANK]`;
   if (status === "FAILED") {

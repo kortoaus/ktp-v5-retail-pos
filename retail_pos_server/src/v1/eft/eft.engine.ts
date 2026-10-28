@@ -7,12 +7,19 @@
 //
 // State machine (our status):
 //   CREATING → PENDING → AWAITING_POS → FINALISED (financialStatus set)
-//            ↘ FAILED (create refused / unreachable / recovery gap)
-//   PENDING|CREATING → TIMEOUT (no SCI progress for pollDeadlineMs) → override
+//   CREATING → FAILED   only on a *certain* refusal (4xx answer, no pairing):
+//                       nothing was charged, a retry may create a new attempt
+//   CREATING → TIMEOUT  [NET|POS] CREATE_UNKNOWN when the create's outcome is
+//                       unknown (no answer / timeout / 5xx / server restart)
+//   PENDING  → TIMEOUT  [TIMEOUT] DEADLINE (no new SCI version for pollDeadlineMs;
+//                       the timer aborts an in-flight long poll)
 //   TIMEOUT | FINALISED+UNKNOWN → FINALISED_BY_OVERRIDE | CANCELLED_BY_OVERRIDE
+// Every status write goes through transition(): under the row lock, against
+// the current status/version; an overridden row never changes again (A-19).
 // While TIMEOUT (no override answered yet) the loop keeps watching for
 // lateWatchMs and a FINALISED answer still applies; after an override a late
-// answer is only logged (LATE_RESULT) — override YES is final.
+// answer is only logged (LATE_RESULT) — override YES is final. A retry under
+// the same sale is allowed only after a certain failure, a decline or override NO.
 import { HttpException } from "../../libs/exceptions";
 import { decryptSecret, encryptSecret } from "./eft.crypto";
 import { missingPairingConfig, missingSigningConfig, type EftConfig } from "./eft.config";
@@ -58,13 +65,14 @@ export interface LaneContext {
 type EventInput = Omit<NewEvent, "transactionId" | "seq" | "at">;
 type LoopOpts = { fresh?: boolean; recovery?: boolean };
 /** `again` = a restart was asked while this loop was running/exiting. */
-type LoopHandle = { stop: boolean; wake?: () => void; again?: LoopOpts };
+type LoopHandle = { stop: boolean; wake?: () => void; again?: LoopOpts; abort?: () => void };
 
 const OPEN_STATUSES: TxnStatus[] = ["CREATING", "PENDING", "AWAITING_POS"];
 const OVERRIDDEN: TxnStatus[] = ["FINALISED_BY_OVERRIDE", "CANCELLED_BY_OVERRIDE"];
 const OPERATION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9-]{7,63}$/;
 const MAX_CENTS = 10_000_000; // $100,000 — a typo guard, not a business limit
 
+/** Only after a *certain* outcome: FAILED is never used for an unknown one (F-1). */
 function isRetryable(row: TxnRow): boolean {
   if (row.status === "FAILED" || row.status === "CANCELLED_BY_OVERRIDE") return true;
   return row.status === "FINALISED" && (row.financialStatus === "DECLINED" || row.financialStatus === "CANCELLED");
@@ -168,6 +176,7 @@ export class EftEngine {
   private readonly locks = new Map<string, Promise<unknown>>();
   private readonly seqs = new Map<string, number>();
   private readonly eventQueue = new Map<string, Promise<void>>();
+  private readonly actionsInFlight = new Set<string>();
   private stopped = false;
 
   constructor(private readonly deps: EftEngineDeps) {
@@ -213,20 +222,54 @@ export class EftEngine {
         statusAfter: e.statusAfter,
       }),
     );
-    const prev = this.eventQueue.get(txn.id) ?? Promise.resolve();
-    const next = prev
+    const id = txn.id;
+    const prev = this.eventQueue.get(id) ?? Promise.resolve();
+    const next: Promise<void> = prev
       .then(async () => {
-        let seq = this.seqs.get(txn.id);
-        if (seq == null) seq = await this.store.maxEventSeq(txn.id);
+        let seq = this.seqs.get(id);
+        if (seq == null) seq = await this.store.maxEventSeq(id);
         seq += 1;
-        this.seqs.set(txn.id, seq);
-        await this.store.appendEvent({ ...e, detail, transactionId: txn.id, seq, at: new Date(this.now()) });
+        this.seqs.set(id, seq);
+        await this.store.appendEvent({ ...e, detail, transactionId: id, seq, at: new Date(this.now()) });
       })
       .catch((err) => {
-        console.error(`[eft] txn=${txn.id} event write failed: ${err instanceof Error ? err.message : err}`);
-      });
-    this.eventQueue.set(txn.id, next);
+        console.error(`[eft] txn=${id} event write failed: ${err instanceof Error ? err.message : err}`);
+      })
+      .finally(() => this.settleEvents(id, next));
+    this.eventQueue.set(id, next);
     return next;
+  }
+
+  /**
+   * F-6: drop the per-transaction queue/seq cache as soon as the queue is idle
+   * and no poll loop owns the row (signature completion, overrides and other
+   * loop-less writes included). The next event re-reads max(seq) from the store.
+   */
+  private settleEvents(id: string, tail: Promise<void>): void {
+    // Only a settled tail is ever removed, so a new chain can never race a pending write's seq.
+    if (this.loops.has(id) || this.eventQueue.get(id) !== tail) return;
+    this.eventQueue.delete(id);
+    this.seqs.delete(id);
+  }
+
+  /** Settle every event write queued so far (tests, shutdown). */
+  async flushEvents(): Promise<void> {
+    for (let i = 0; i < 50 && this.eventQueue.size; i++) {
+      await Promise.all([...this.eventQueue.values()]);
+      await new Promise((r) => setImmediate(r));
+    }
+  }
+
+  /** In-process bookkeeping sizes — all 0 when nothing is in flight (F-6). */
+  memoryStats() {
+    return {
+      loops: this.loops.size,
+      eventQueues: this.eventQueue.size,
+      seqs: this.seqs.size,
+      locks: this.locks.size,
+      actionsInFlight: this.actionsInFlight.size,
+      waiters: this.waiters.size(),
+    };
   }
 
   private httpFields(http: HttpMeta | null | undefined) {
@@ -239,6 +282,46 @@ export class EftEngine {
     const row = await this.store.updateTxn(id, patch, { bump });
     if (bump) this.waiters.notify(id);
     return row;
+  }
+
+  /**
+   * The only way a row's state changes (A-19, F-2): under the row lock, re-read
+   * it, refuse any change to an overridden row, check the caller's guard against
+   * the *current* status/version, then write and log STATE. Returns null when
+   * the guard (or the override freeze) refused — the caller decides what that means.
+   */
+  private transition(
+    id: string,
+    guard: (cur: TxnRow) => boolean,
+    patch: TxnPatch | ((cur: TxnRow) => TxnPatch),
+    stateDetail?: Record<string, unknown>,
+  ): Promise<TxnRow | null> {
+    return this.withLock(`txn:${id}`, () => this.transitionLocked(id, guard, patch, stateDetail));
+  }
+
+  private async transitionLocked(
+    id: string,
+    guard: (cur: TxnRow) => boolean,
+    patch: TxnPatch | ((cur: TxnRow) => TxnPatch),
+    stateDetail?: Record<string, unknown>,
+  ): Promise<TxnRow | null> {
+    const cur = await this.store.getTxn(id);
+    if (!cur || OVERRIDDEN.includes(cur.status) || !guard(cur)) return null;
+    const p = typeof patch === "function" ? patch(cur) : patch;
+    const updated = await this.update(id, p);
+    if (p.status && p.status !== cur.status) {
+      await this.emit(cur, {
+        source: "SERVER",
+        event: "STATE",
+        providerVersion: updated.providerVersion,
+        statusBefore: cur.status,
+        statusAfter: updated.status,
+        errorClass: updated.errorClass,
+        errorCode: updated.errorCode,
+        detail: stateDetail ?? null,
+      });
+    }
+    return updated;
   }
 
   private creds(pairing: PairingRow): PairingCredentials {
@@ -266,52 +349,76 @@ export class EftEngine {
     }
   }
 
-  private async failTxn(row: TxnRow, err: { errorClass: EftErrorClass; errorCode: string; message?: string }, http?: HttpMeta | null) {
+  /** A *certain* failure (nothing was charged): FAILED, retryable under the same sale. */
+  private async failTxn(
+    row: TxnRow,
+    err: { errorClass: EftErrorClass; errorCode: string; message?: string },
+    http?: HttpMeta | null,
+    guard: (cur: TxnRow) => boolean = (cur) => OPEN_STATUSES.includes(cur.status),
+  ): Promise<TxnRow | null> {
+    await this.emit(row, { source: "SERVER", event: "ERROR", errorClass: err.errorClass, errorCode: err.errorCode, ...this.httpFields(http), detail: { message: err.message ?? null } });
+    return this.transition(row.id, guard, { status: "FAILED", errorClass: err.errorClass, errorCode: err.errorCode, finalisedAt: new Date(this.now()) });
+  }
+
+  /**
+   * F-1 / amended A-5, A-15: the outcome is unknown (the request may have
+   * reached the provider). Never FAILED, never retired: TIMEOUT with override
+   * required — YES = paid, NO = not paid (and only then retryable).
+   */
+  private async unresolved(
+    row: TxnRow,
+    err: { errorClass: EftErrorClass; errorCode: string; cause?: string; message?: string },
+    guard: (cur: TxnRow) => boolean,
+    http?: HttpMeta | null,
+  ): Promise<TxnRow | null> {
     await this.emit(row, {
       source: "SERVER",
       event: "ERROR",
       errorClass: err.errorClass,
       errorCode: err.errorCode,
       ...this.httpFields(http),
-      detail: { message: err.message ?? null },
+      detail: { cause: err.cause ?? null, message: err.message ?? null, outcome: "unknown — override required" },
     });
-    const updated = await this.update(row.id, {
-      status: "FAILED",
-      errorClass: err.errorClass,
-      errorCode: err.errorCode,
-      finalisedAt: new Date(this.now()),
-    });
-    await this.emit(row, { source: "SERVER", event: "STATE", statusBefore: row.status, statusAfter: "FAILED", errorClass: err.errorClass, errorCode: err.errorCode });
-    return updated;
+    return this.transition(row.id, guard, { status: "TIMEOUT", errorClass: err.errorClass, errorCode: err.errorCode });
   }
 
   // ── state machine: apply one provider answer ──────────────────────────────
 
-  /** Returns true when the answer moved the row (new provider version). */
-  private applyAnswer(id: string, ans: ProviderTxnAnswer, source: "SCI_POLL" | "SCI_CREATE" | "SCI_ACTION"): Promise<boolean> {
+  /**
+   * "applied" = the row moved; "stale" = nothing new; "late" = the row is
+   * overridden and the answer is only a LATE_RESULT event (the row is never
+   * touched, A-19); "ignored" = the row is final/failed or the ids disagree.
+   * `reassert`: a recovery GET may put a row we set PENDING locally back to the
+   * provider's AWAITING_POS at the same version (lost action, F-3).
+   */
+  private applyAnswer(
+    id: string,
+    ans: ProviderTxnAnswer,
+    source: "SCI_POLL" | "SCI_CREATE" | "SCI_ACTION",
+    opts: { reassert?: boolean } = {},
+  ): Promise<"applied" | "stale" | "late" | "ignored"> {
     return this.withLock(`txn:${id}`, async () => {
       const row = await this.store.getTxn(id);
-      if (!row) return false;
+      if (!row) return "ignored";
       if (row.providerTxnId && row.providerTxnId !== ans.providerTxnId) {
         await this.emit(row, { source: "SERVER", event: "ERROR", errorClass: "POS", errorCode: "PROVIDER_ID_MISMATCH" });
-        return false;
+        return "ignored";
       }
-      if (row.providerVersion != null && ans.providerVersion <= row.providerVersion) return false;
-
       if (OVERRIDDEN.includes(row.status)) {
-        // Override is final: record what the bank said, never change the sale.
-        await this.update(id, { providerVersion: ans.providerVersion }, false);
         if (ans.status === "FINALISED") {
           await this.emit(row, {
             source: "SCI",
             event: "LATE_RESULT",
             providerVersion: ans.providerVersion,
-            detail: { financialStatus: ans.financialStatus, overrideAnswer: row.overrideAnswer, message: ans.message },
+            detail: { financialStatus: ans.financialStatus, overrideAnswer: row.overrideAnswer, message: ans.message, via: source },
           });
         }
-        return true;
+        return "late";
       }
-      if (row.status === "FAILED" || (row.status === "FINALISED" && row.financialStatus !== "UNKNOWN")) return false;
+      if (row.status === "FAILED" || (row.status === "FINALISED" && row.financialStatus !== "UNKNOWN")) return "ignored";
+      const sameVersion = row.providerVersion != null && ans.providerVersion === row.providerVersion;
+      const reassert = opts.reassert && sameVersion && row.status === "PENDING" && ans.status === "AWAITING_POS";
+      if (row.providerVersion != null && ans.providerVersion <= row.providerVersion && !reassert) return "stale";
 
       const patch: TxnPatch = {
         providerTxnId: ans.providerTxnId,
@@ -341,19 +448,12 @@ export class EftEngine {
         patch.errorClass = null;
         patch.errorCode = null;
       }
-      const updated = await this.update(id, patch);
-      if (row.status !== updated.status) {
-        await this.emit(row, {
-          source: "SERVER",
-          event: "STATE",
-          providerVersion: ans.providerVersion,
-          statusBefore: row.status,
-          statusAfter: updated.status,
-          errorClass: updated.errorClass,
-          errorCode: updated.errorCode,
-          detail: { financialStatus: updated.financialStatus, message: ans.message, via: source },
-        });
-      }
+      const updated = await this.transitionLocked(id, () => true, patch, {
+        financialStatus: patch.financialStatus ?? null,
+        message: ans.message,
+        via: reassert ? "RECOVERY_REASSERT" : source,
+      });
+      if (!updated) return "ignored";
       const form = ans.posInstructions?.action_form;
       if (form) {
         const props = Object.entries(form.properties ?? {});
@@ -367,10 +467,12 @@ export class EftEngine {
           },
         });
       }
-      for (const action of ans.posInstructions?.auto_actions ?? []) {
-        await this.emit(row, { source: "SCI", event: "AUTO_ACTION", providerVersion: ans.providerVersion, detail: { action } });
+      if (!reassert) {
+        for (const action of ans.posInstructions?.auto_actions ?? []) {
+          await this.emit(row, { source: "SCI", event: "AUTO_ACTION", providerVersion: ans.providerVersion, detail: { action } });
+        }
       }
-      return true;
+      return "applied";
     });
   }
 
@@ -394,22 +496,21 @@ export class EftEngine {
       .catch(async (err) => {
         console.error(`[eft] txn=${id} loop crashed: ${err instanceof Error ? err.message : err}`);
         const row = await this.store.getTxn(id).catch(() => null);
+        // We cannot know what reached the provider: unresolved, never FAILED (F-1).
         if (row && OPEN_STATUSES.includes(row.status)) {
-          await this.failTxn(row, { errorClass: "POS", errorCode: "LOOP_CRASH", message: err instanceof Error ? err.message : String(err) }).catch(() => undefined);
+          await this.unresolved(row, { errorClass: "POS", errorCode: "LOOP_CRASH", message: err instanceof Error ? err.message : String(err) }, (cur) => OPEN_STATUSES.includes(cur.status)).catch(() => undefined);
         }
       })
-      .finally(async () => {
+      .finally(() => {
         this.loops.delete(id);
         this.loopDone.delete(id);
         if (handle.again && !handle.stop && !this.stopped) {
           this.startLoop(id, handle.again);
           return;
         }
-        await (this.eventQueue.get(id) ?? Promise.resolve());
-        if (!this.loops.has(id)) {
-          this.eventQueue.delete(id);
-          this.seqs.delete(id);
-        }
+        const tail = this.eventQueue.get(id);
+        if (tail) void tail.then(() => this.settleEvents(id, tail));
+        else this.seqs.delete(id);
       });
     this.loopDone.set(id, done);
   }
@@ -432,12 +533,17 @@ export class EftEngine {
     let row = await this.store.getTxn(id);
     if (!row) return;
     const pairing = await this.store.getPairing(row.eftPairingId);
-    if (!pairing) return void (await this.failTxn(row, { errorClass: "PAIR", errorCode: "PAIRING_MISSING" }));
+    const isCreating = (cur: TxnRow) => cur.status === "CREATING" && !cur.providerTxnId;
+    if (!pairing) {
+      if (opts.fresh) await this.failTxn(row, { errorClass: "PAIR", errorCode: "PAIRING_MISSING" }, null, isCreating);
+      return;
+    }
     let creds: PairingCredentials;
     try {
       creds = this.creds(pairing);
     } catch {
-      return void (await this.failTxn(row, { errorClass: "POS", errorCode: "SECRET_UNREADABLE", message: "part B could not be decrypted with EFT_SECRET_KEY" }));
+      if (opts.fresh) await this.failTxn(row, { errorClass: "POS", errorCode: "SECRET_UNREADABLE", message: "part B could not be decrypted with EFT_SECRET_KEY" }, null, isCreating);
+      return;
     }
     const provider = this.deps.providerFor(row.provider);
 
@@ -448,7 +554,12 @@ export class EftEngine {
       await this.notePairing(pairing, res.ok ? { ok: true } : { ok: false, error: res.error });
       if (!res.ok) {
         await this.emit(row, { source: "SCI", event: "SCI_CREATE_RES", ...this.httpFields(res.http), errorClass: res.error.errorClass, errorCode: res.error.errorCode, detail: res.error.detail });
-        await this.failTxn(row, res.error, res.http);
+        if (res.error.ambiguous) {
+          // F-1: may have been charged — the cashier checks the terminal and answers.
+          await this.unresolved(row, { errorClass: res.error.errorClass === "POS" ? "POS" : "NET", errorCode: "CREATE_UNKNOWN", cause: res.error.errorCode, message: res.error.message }, isCreating, res.http);
+        } else {
+          await this.failTxn(row, res.error, res.http, isCreating);
+        }
         return;
       }
       await this.emit(row, { source: "SCI", event: "SCI_CREATE_RES", ...this.httpFields(res.http), providerVersion: res.value.providerVersion, detail: { status: res.value.status, message: res.value.message } });
@@ -458,33 +569,43 @@ export class EftEngine {
     let lastProgress = this.now();
     let lateSince: number | null = null;
     let recoveryFirst = !!opts.recovery;
+    let seenVersion: number | null = null; // provider versions seen but not applied (overridden rows)
     while (!handle.stop && !this.stopped) {
       row = await this.store.getTxn(id);
       if (!row) return;
       if (row.status === "FINALISED" || row.status === "FAILED" || row.status === "CREATING") return;
       if (row.status === "AWAITING_POS" && !recoveryFirst) return; // paused until an action relay
+      if (!row.providerTxnId) return; // CREATE_UNKNOWN: nothing to poll, the override decides
       const late = row.status === "TIMEOUT" || OVERRIDDEN.includes(row.status);
+      let remaining: number;
       if (late) {
         lateSince ??= this.now();
-        if (this.now() - lateSince > this.cfg.lateWatchMs) return;
-      } else if (this.now() - lastProgress > this.cfg.pollDeadlineMs) {
-        await this.emit(row, { source: "SERVER", event: "DEADLINE", errorClass: "TIMEOUT", errorCode: "DEADLINE", detail: { deadlineMs: this.cfg.pollDeadlineMs } });
-        await this.withLock(`txn:${id}`, async () => {
-          const cur = await this.store.getTxn(id);
-          if (!cur || (cur.status !== "PENDING" && cur.status !== "CREATING")) return;
-          await this.update(id, { status: "TIMEOUT", errorClass: "TIMEOUT", errorCode: "DEADLINE" });
-          await this.emit(cur, { source: "SERVER", event: "STATE", statusBefore: cur.status, statusAfter: "TIMEOUT", errorClass: "TIMEOUT", errorCode: "DEADLINE" });
-        });
-        lateSince = this.now();
-        continue;
+        remaining = this.cfg.lateWatchMs - (this.now() - lateSince);
+        if (remaining <= 0) return;
+      } else {
+        remaining = this.cfg.pollDeadlineMs - (this.now() - lastProgress);
+        if (remaining <= 0) {
+          await this.emit(row, { source: "SERVER", event: "DEADLINE", errorClass: "TIMEOUT", errorCode: "DEADLINE", detail: { deadlineMs: this.cfg.pollDeadlineMs } });
+          await this.transition(id, (cur) => cur.status === "PENDING", { status: "TIMEOUT", errorClass: "TIMEOUT", errorCode: "DEADLINE" });
+          lateSince = this.now();
+          continue;
+        }
       }
-      if (!row.providerTxnId) return void (await this.failTxn(row, { errorClass: "POS", errorCode: "NO_PROVIDER_TXN_ID" }));
 
-      const minVersion = recoveryFirst ? undefined : (row.providerVersion ?? 0) + 1;
+      const known = Math.max(row.providerVersion ?? 0, seenVersion ?? 0);
+      const minVersion = recoveryFirst ? undefined : known + 1;
+      const reassert = recoveryFirst;
       recoveryFirst = false;
+      // F-5: the deadline runs independently of the in-flight long poll.
+      const ac = new AbortController();
+      const deadlineTimer = setTimeout(() => ac.abort(), remaining);
+      handle.abort = () => ac.abort();
       await this.emit(row, { source: "SERVER", event: "SCI_POLL_REQ", httpMethod: "GET", httpPath: "/v1/transactions/{id}", detail: { minVersion: minVersion ?? null } });
-      const res = await provider.pollTransaction(creds, row.providerTxnId, minVersion);
+      const res = await provider.pollTransaction(creds, row.providerTxnId, minVersion, ac.signal);
+      clearTimeout(deadlineTimer);
+      handle.abort = undefined;
       if (handle.stop || this.stopped) return;
+      if (ac.signal.aborted) continue; // deadline/late window reached mid-poll → re-evaluated at the top
       if (res.ok && res.value.kind === "not_yet") {
         await this.emit(row, { source: "SCI", event: "SCI_POLL_TIMEOUT_404", ...this.httpFields(res.http) });
         await this.notePairing(pairing, { ok: true });
@@ -494,9 +615,10 @@ export class EftEngine {
         const a = res.value.answer;
         await this.emit(row, { source: "SCI", event: "SCI_POLL_RES", ...this.httpFields(res.http), providerVersion: a.providerVersion, detail: { status: a.status, financialStatus: a.financialStatus, message: a.message } });
         await this.notePairing(pairing, { ok: true });
-        if (await this.applyAnswer(id, a, "SCI_POLL")) lastProgress = this.now();
-        const after = await this.store.getTxn(id);
-        if (after && OVERRIDDEN.includes(after.status) && a.status === "FINALISED") return;
+        const outcome = await this.applyAnswer(id, a, "SCI_POLL", { reassert });
+        if (outcome === "applied") lastProgress = this.now();
+        seenVersion = Math.max(seenVersion ?? 0, a.providerVersion);
+        if (outcome === "late" && a.status === "FINALISED") return;
         continue;
       }
       if (!res.ok) {
@@ -533,16 +655,26 @@ export class EftEngine {
 
     return this.withLock(`op:${operationId}:${kind}`, async () => {
       const existing = await this.store.findTxnByOperation(operationId, kind);
+      let retired: TxnRow | null = null;
       if (existing) {
         if (!isRetryable(existing)) {
+          // In flight, approved, or unresolved (TIMEOUT / UNKNOWN — answer the
+          // override first): the same row, never a second charge.
           if (existing.requestedCents !== amountCents || existing.surchargeCents !== surchargeCents)
             throw laneError(409, "This sale already has a card payment for a different amount", "POS", "AMOUNT_MISMATCH");
-          if (OPEN_STATUSES.includes(existing.status) && existing.status !== "CREATING" && existing.status !== "AWAITING_POS")
-            this.startLoop(existing.id); // no-op when already running
+          if (existing.status === "PENDING") this.startLoop(existing.id); // no-op when already running
           return { created: false, txn: laneView(existing) };
         }
-        // A new attempt after a decline / failure: retire the old row's key.
-        await this.update(existing.id, { operationId: `${operationId}#${existing.id}`, retiredAt: new Date(this.now()) }, false);
+        // A new attempt after a *certain* failure / decline / override NO: retire the old key.
+        retired = await this.withLock(`txn:${existing.id}`, async () => {
+          const cur = await this.store.getTxn(existing.id);
+          if (!cur || !isRetryable(cur) || cur.operationId !== operationId) return null;
+          return this.update(existing.id, { operationId: `${operationId}#${existing.id}`, retiredAt: new Date(this.now()) }, false);
+        });
+        if (!retired) {
+          const cur = await this.store.findTxnByOperation(operationId, kind);
+          if (cur) return { created: false, txn: laneView(cur) };
+        }
       }
       let row: TxnRow;
       try {
@@ -568,7 +700,7 @@ export class EftEngine {
       await this.emit(row, {
         source: "TILL",
         event: "TILL_CREATE",
-        detail: { kind, amountCents, surchargeCents, operationId, userId: lane.userId, retries: existing?.id ?? null },
+        detail: { kind, amountCents, surchargeCents, operationId, userId: lane.userId, retries: retired?.id ?? null },
       });
       this.startLoop(row.id, { fresh: true });
       return { created: true, txn: laneView(row) };
@@ -609,12 +741,35 @@ export class EftEngine {
       if (typeof v !== "string" || v.length > 512) throw new HttpException(400, `input ${k} must be a string`);
       inputs[k] = v;
     }
+    const expectVersion = b.version;
+    if (expectVersion != null && !Number.isInteger(expectVersion)) throw new HttpException(400, "version must be an integer");
 
     const row = await this.store.getTxn(id);
     if (!row) throw new HttpException(404, "EFT transaction not found");
     if (row.status !== "AWAITING_POS") throw laneError(409, "No action is waiting on this payment", "POS", "NOT_AWAITING_POS");
+    if (expectVersion != null && expectVersion !== row.version) throw laneError(409, "The payment changed — showing the latest state", "POS", "STALE_VERSION");
     const prop = posInstructionsOf(row)?.action_form?.properties?.[buttonKey];
     if (!prop || prop.type !== "button") throw new HttpException(400, `unknown button ${buttonKey}`);
+    if (this.actionsInFlight.has(id)) throw laneError(409, "An action is already being processed for this payment", "POS", "ACTION_IN_FLIGHT");
+    this.actionsInFlight.add(id);
+    try {
+      return await this.runAction(row, prop, buttonKey, inputs, userId);
+    } finally {
+      this.actionsInFlight.delete(id);
+    }
+  }
+
+  private async runAction(
+    row: TxnRow,
+    prop: NonNullable<ActionForm["properties"]>[string],
+    buttonKey: string,
+    inputs: Record<string, string>,
+    userId: number | null,
+  ): Promise<LaneTxnView> {
+    const id = row.id;
+    // Every transition below re-checks, under the lock, that the row is still the
+    // AWAITING_POS step this action was pressed on (A-19, F-2).
+    const stillThisStep = (cur: TxnRow) => cur.status === "AWAITING_POS" && cur.providerVersion === row.providerVersion;
     await this.emit(row, { source: "TILL", event: "TILL_ACTION", detail: { buttonKey, inputNames: Object.keys(inputs), action: prop.action ?? null, userId } });
 
     if (typeof prop.submit_url === "string" && prop.submit_url) {
@@ -627,64 +782,57 @@ export class EftEngine {
       if (!res.ok) {
         await this.emit(row, { source: "SCI", event: "SCI_ACTION_RES", ...this.httpFields(res.http), errorClass: res.error.errorClass, errorCode: res.error.errorCode });
         await this.emit(row, { source: "SERVER", event: "ERROR", errorClass: res.error.errorClass, errorCode: res.error.errorCode, ...this.httpFields(res.http), detail: res.error.detail ?? { message: res.error.message } });
-        throw laneError(502, "The action did not reach the payment service — try again", res.error.errorClass, res.error.errorCode);
+        // F-3: we cannot tell whether the action landed. Resume the poll loop with
+        // a recovery GET under the deadline: a landed action shows up as a new
+        // version; one that did not land re-shows the same form (AWAITING_POS).
+        const resumed = await this.transition(id, stillThisStep, { status: "PENDING", message: "Checking the terminal…" }, { via: "ACTION_UNCERTAIN" });
+        if (resumed) this.startLoop(id, { recovery: true });
+        throw laneError(502, "The action may not have reached the payment service — checking the terminal", res.error.errorClass, res.error.errorCode);
       }
       await this.emit(row, { source: "SCI", event: "SCI_ACTION_RES", ...this.httpFields(res.http), providerVersion: res.value?.providerVersion ?? null });
       if (res.value) await this.applyAnswer(id, res.value, "SCI_ACTION");
-      const after = await this.store.getTxn(id);
-      if (after && after.status === "AWAITING_POS" && (!res.value || res.value.providerVersion <= (row.providerVersion ?? 0))) {
-        // No new form came back: resume polling for the next version.
-        await this.withLock(`txn:${id}`, async () => {
-          await this.update(id, { status: "PENDING", message: "Processing…" });
-          await this.emit(row, { source: "SERVER", event: "STATE", statusBefore: "AWAITING_POS", statusAfter: "PENDING" });
-        });
-      }
+      // No new answer came back: resume polling for the next version.
+      await this.transition(id, stillThisStep, { status: "PENDING", message: "Processing…" }, { via: "ACTION_SENT" });
       const cur = await this.store.getTxn(id);
       if (cur && cur.status === "PENDING") this.startLoop(id);
       return laneView(cur ?? row);
     }
 
-    const action = prop.action;
-    let updated: TxnRow;
-    switch (action) {
-      case "PRINT_MERCHANT_RECEIPT":
-        updated = await this.update(id, { merchantPrintSeq: row.merchantPrintSeq + 1 });
-        break;
-      case "PRINT_CUSTOMER_RECEIPT":
-        updated = await this.update(id, { customerPrintSeq: row.customerPrintSeq + 1 });
-        break;
-      case "TRANSACTION_COMPLETE":
-        // The POS acknowledged; read the transaction's current state again.
-        updated = await this.update(id, { status: "PENDING" });
-        await this.emit(row, { source: "SERVER", event: "STATE", statusBefore: "AWAITING_POS", statusAfter: "PENDING" });
-        this.startLoop(id, { recovery: true });
-        break;
-      case "RETRY_TRANSACTION":
-        updated = await this.failTxn(row, { errorClass: "TERM", errorCode: "RETRY_REQUESTED", message: "terminal asked the POS to retry" });
-        break;
-      case "TEST_ACTION":
-        updated = await this.update(id, {});
-        break;
-      default:
-        throw new HttpException(400, `action ${String(action)} is not supported for a payment`);
-    }
+    const changed = (() => {
+      switch (prop.action) {
+        case "PRINT_MERCHANT_RECEIPT":
+          return this.transition(id, stillThisStep, (cur) => ({ merchantPrintSeq: cur.merchantPrintSeq + 1 }));
+        case "PRINT_CUSTOMER_RECEIPT":
+          return this.transition(id, stillThisStep, (cur) => ({ customerPrintSeq: cur.customerPrintSeq + 1 }));
+        case "TRANSACTION_COMPLETE":
+          // The POS acknowledged; read the transaction's current state again.
+          return this.transition(id, stillThisStep, { status: "PENDING" }, { via: "TRANSACTION_COMPLETE" });
+        case "RETRY_TRANSACTION":
+          return this.failTxn(row, { errorClass: "TERM", errorCode: "RETRY_REQUESTED", message: "terminal asked the POS to retry" }, null, stillThisStep);
+        case "TEST_ACTION":
+          return this.transition(id, stillThisStep, {});
+        default:
+          return null;
+      }
+    })();
+    if (changed === null) throw new HttpException(400, `action ${String(prop.action)} is not supported for a payment`);
+    const updated = await changed;
+    if (!updated) throw laneError(409, "The payment changed — showing the latest state", "POS", "STALE_STATE");
+    if (prop.action === "TRANSACTION_COMPLETE") this.startLoop(id, { recovery: true });
     return laneView(updated);
   }
 
   async override(id: string, body: unknown, userId: number | null): Promise<LaneTxnView> {
     const answer = (body as Record<string, unknown> | null)?.answer;
     if (answer !== "YES" && answer !== "NO") throw new HttpException(400, 'answer must be "YES" or "NO"');
-    return this.withLock(`txn:${id}`, async () => {
-      const row = await this.store.getTxn(id);
-      if (!row) throw new HttpException(404, "EFT transaction not found");
-      if (!overrideRequired(row)) throw laneError(409, "This payment does not need a manual answer", "POS", "OVERRIDE_NOT_ALLOWED");
-      const status = answer === "YES" ? "FINALISED_BY_OVERRIDE" : "CANCELLED_BY_OVERRIDE";
-      const at = new Date(this.now());
-      const updated = await this.update(id, { status, overrideAnswer: answer, overrideBy: userId, overrideAt: at, finalisedAt: at });
-      await this.emit(row, { source: "TERMINAL_OP", event: "OVERRIDE", detail: { answer, userId } });
-      await this.emit(row, { source: "SERVER", event: "STATE", statusBefore: row.status, statusAfter: status });
-      return laneView(updated);
-    });
+    const row = await this.store.getTxn(id);
+    if (!row) throw new HttpException(404, "EFT transaction not found");
+    const status = answer === "YES" ? "FINALISED_BY_OVERRIDE" : "CANCELLED_BY_OVERRIDE";
+    const at = new Date(this.now());
+    const updated = await this.transition(id, overrideRequired, { status, overrideAnswer: answer, overrideBy: userId, overrideAt: at, finalisedAt: at }, { answer, userId });
+    if (!updated) throw laneError(409, "This payment does not need a manual answer", "POS", "OVERRIDE_NOT_ALLOWED");
+    await this.emit(row, { source: "TERMINAL_OP", event: "OVERRIDE", detail: { answer, userId } });
+    return laneView(updated);
   }
 
   async cancel(id: string, userId: number | null): Promise<LaneTxnView> {
@@ -700,47 +848,61 @@ export class EftEngine {
     }
     // A-4: no upstream cancel call — the cashier cancels on the terminal and
     // the running poll carries the result.
-    const updated = await this.update(id, { cancelRequestedAt: new Date(this.now()) });
+    const updated = await this.transition(id, (cur) => OPEN_STATUSES.includes(cur.status), { cancelRequestedAt: new Date(this.now()) });
+    if (!updated) throw laneError(409, "This payment has already finished", "POS", "NOT_OPEN");
     return laneView(updated);
   }
 
-  // ── boot recovery (S-3 §4) ────────────────────────────────────────────────
+  // ── boot recovery (S-3 §4, amended A-5) ───────────────────────────────────
 
-  async recover(): Promise<{ resumed: number; failed: number }> {
-    const rows = await this.store.listTxnsByStatus(OPEN_STATUSES);
+  async recover(): Promise<{ resumed: number; unresolved: number }> {
+    const rows = await this.store.listTxnsByStatus([...OPEN_STATUSES, "TIMEOUT"]);
     let resumed = 0;
-    let failed = 0;
+    let unresolved = 0;
     for (const row of rows) {
       if (this.loops.has(row.id)) continue;
-      if (row.status === "CREATING" && !row.providerTxnId) {
-        // A-5: the create may or may not have reached the provider.
-        await this.emit(row, { source: "SERVER", event: "RECOVERY_RESUME", detail: { status: row.status, outcome: "create outcome unknown" } });
-        await this.failTxn(row, { errorClass: "POS", errorCode: "RECOVERY_CREATE_UNKNOWN", message: "server stopped while the create was in flight" });
-        failed++;
+      if (row.status === "TIMEOUT") {
+        // Unresolved before the restart: keep watching for a late answer (no
+        // upstream id → nothing to poll; the override decides).
+        if (row.providerTxnId && !row.overrideAnswer) {
+          await this.emit(row, { source: "SERVER", event: "RECOVERY_RESUME", detail: { status: row.status, providerVersion: row.providerVersion } });
+          this.startLoop(row.id, { recovery: true });
+          resumed++;
+        }
         continue;
       }
-      if (row.status === "CREATING") await this.update(row.id, { status: "PENDING" });
+      if (row.status === "CREATING" && !row.providerTxnId) {
+        // The create may or may not have reached the provider: unresolved, like TIMEOUT.
+        await this.emit(row, { source: "SERVER", event: "RECOVERY_RESUME", detail: { status: row.status, outcome: "create outcome unknown" } });
+        await this.unresolved(row, { errorClass: "POS", errorCode: "CREATE_UNKNOWN", cause: "SERVER_RESTART", message: "server stopped while the create was in flight" }, (cur) => cur.status === "CREATING" && !cur.providerTxnId);
+        unresolved++;
+        continue;
+      }
+      if (row.status === "CREATING") await this.transition(row.id, (cur) => cur.status === "CREATING", { status: "PENDING" });
       await this.emit(row, { source: "SERVER", event: "RECOVERY_RESUME", detail: { status: row.status, providerVersion: row.providerVersion } });
       this.startLoop(row.id, { recovery: true });
       resumed++;
     }
-    if (rows.length) this.log(`[eft] recovery: resumed=${resumed} failed=${failed}`);
-    return { resumed, failed };
+    if (rows.length) this.log(`[eft] recovery: resumed=${resumed} unresolved=${unresolved}`);
+    return { resumed, unresolved };
   }
 
-  /** Stop every loop (shutdown / tests) and wait for them to exit. */
+  /** Stop every loop (shutdown / tests), abort in-flight polls, wait for them to exit. */
   async stop(): Promise<void> {
     this.stopped = true;
     for (const h of this.loops.values()) {
       h.stop = true;
       h.wake?.();
+      h.abort?.();
     }
     await Promise.all([...this.loopDone.values()]);
+    await this.flushEvents();
   }
 
-  /** Wait until no loop is running (tests). */
+  /** Wait until no loop is running and every event is written (tests). */
   async idle(): Promise<void> {
     while (this.loopDone.size) await Promise.all([...this.loopDone.values()]);
+    await this.flushEvents();
   }
 
   // ── pairings ──────────────────────────────────────────────────────────────
