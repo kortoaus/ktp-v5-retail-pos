@@ -76,7 +76,10 @@ export const ModelName = {
   SyncCursor: 'SyncCursor',
   CloudSyncCursor: 'CloudSyncCursor',
   FreeTextTemplate: 'FreeTextTemplate',
-  CustomerVoucherOperation: 'CustomerVoucherOperation'
+  CustomerVoucherOperation: 'CustomerVoucherOperation',
+  EftPairing: 'EftPairing',
+  EftTransaction: 'EftTransaction',
+  EftEvent: 'EftEvent'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -240,6 +243,7 @@ export const TerminalScalarFieldEnum = {
   ipAddress: 'ipAddress',
   archived: 'archived',
   orderChimeEnabled: 'orderChimeEnabled',
+  eftPairingId: 'eftPairingId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -576,6 +580,94 @@ export const CustomerVoucherOperationScalarFieldEnum = {
 } as const
 
 export type CustomerVoucherOperationScalarFieldEnum = (typeof CustomerVoucherOperationScalarFieldEnum)[keyof typeof CustomerVoucherOperationScalarFieldEnum]
+
+
+export const EftPairingScalarFieldEnum = {
+  id: 'id',
+  provider: 'provider',
+  pairingId: 'pairingId',
+  keyId: 'keyId',
+  signingSecretPartBEnc: 'signingSecretPartBEnc',
+  baseUrl: 'baseUrl',
+  tid: 'tid',
+  pairingNickname: 'pairingNickname',
+  terminalNickname: 'terminalNickname',
+  active: 'active',
+  lastTestAt: 'lastTestAt',
+  lastTestOk: 'lastTestOk',
+  lastError: 'lastError',
+  lastSciOkAt: 'lastSciOkAt',
+  lastSciErrorAt: 'lastSciErrorAt',
+  lastSciErrorCode: 'lastSciErrorCode',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type EftPairingScalarFieldEnum = (typeof EftPairingScalarFieldEnum)[keyof typeof EftPairingScalarFieldEnum]
+
+
+export const EftTransactionScalarFieldEnum = {
+  id: 'id',
+  provider: 'provider',
+  eftPairingId: 'eftPairingId',
+  terminalId: 'terminalId',
+  providerTxnId: 'providerTxnId',
+  providerVersion: 'providerVersion',
+  version: 'version',
+  kind: 'kind',
+  requestedCents: 'requestedCents',
+  surchargeCents: 'surchargeCents',
+  operationId: 'operationId',
+  saleOperationId: 'saleOperationId',
+  invoiceId: 'invoiceId',
+  status: 'status',
+  message: 'message',
+  financialStatus: 'financialStatus',
+  resultAmounts: 'resultAmounts',
+  merchantReceipt: 'merchantReceipt',
+  customerReceipt: 'customerReceipt',
+  cardDetails: 'cardDetails',
+  posInstructions: 'posInstructions',
+  merchantPrintSeq: 'merchantPrintSeq',
+  customerPrintSeq: 'customerPrintSeq',
+  errorClass: 'errorClass',
+  errorCode: 'errorCode',
+  overrideAnswer: 'overrideAnswer',
+  overrideBy: 'overrideBy',
+  overrideAt: 'overrideAt',
+  cancelRequestedAt: 'cancelRequestedAt',
+  createdBy: 'createdBy',
+  retiredAt: 'retiredAt',
+  providerData: 'providerData',
+  startedAt: 'startedAt',
+  finalisedAt: 'finalisedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type EftTransactionScalarFieldEnum = (typeof EftTransactionScalarFieldEnum)[keyof typeof EftTransactionScalarFieldEnum]
+
+
+export const EftEventScalarFieldEnum = {
+  id: 'id',
+  transactionId: 'transactionId',
+  at: 'at',
+  seq: 'seq',
+  source: 'source',
+  event: 'event',
+  httpMethod: 'httpMethod',
+  httpPath: 'httpPath',
+  httpStatus: 'httpStatus',
+  durationMs: 'durationMs',
+  providerVersion: 'providerVersion',
+  statusBefore: 'statusBefore',
+  statusAfter: 'statusAfter',
+  errorClass: 'errorClass',
+  errorCode: 'errorCode',
+  detail: 'detail'
+} as const
+
+export type EftEventScalarFieldEnum = (typeof EftEventScalarFieldEnum)[keyof typeof EftEventScalarFieldEnum]
 
 
 export const SortOrder = {

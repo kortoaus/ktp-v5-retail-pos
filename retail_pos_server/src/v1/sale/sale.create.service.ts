@@ -45,6 +45,7 @@ import {
 } from "./sale.operation";
 import { nextDocCounter } from "./sale.doc-counter";
 import { assertShiftOpenInTx } from "../shift/shift.lock";
+import { linkEftTransactionsInTx } from "../eft/eft.link";
 import {
   redeemUserVoucherInTx,
   voucherIneligibility,
@@ -572,6 +573,8 @@ export const defaultSaleCreateDeps: SaleCreateDeps = {
         operationPayloadHash: args.payloadHash,
       });
       await linkOperationRowsInTx(tx, args.linkOperationRowIds, invoice.id);
+      // retail-eftpos A-2 — backfill EftTransaction.invoiceId by operation id.
+      await linkEftTransactionsInTx(tx, args.operationId, "PURCHASE", invoice.id);
       return invoice;
     }),
   afterCommit: async (invoice) => {

@@ -28,10 +28,12 @@ export type AggregateTerminal = {
 
 export type TerminalAvgAggregateOutputType = {
   id: number | null
+  eftPairingId: number | null
 }
 
 export type TerminalSumAggregateOutputType = {
   id: number | null
+  eftPairingId: number | null
 }
 
 export type TerminalMinAggregateOutputType = {
@@ -40,6 +42,7 @@ export type TerminalMinAggregateOutputType = {
   ipAddress: string | null
   archived: boolean | null
   orderChimeEnabled: boolean | null
+  eftPairingId: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -50,6 +53,7 @@ export type TerminalMaxAggregateOutputType = {
   ipAddress: string | null
   archived: boolean | null
   orderChimeEnabled: boolean | null
+  eftPairingId: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -60,6 +64,7 @@ export type TerminalCountAggregateOutputType = {
   ipAddress: number
   archived: number
   orderChimeEnabled: number
+  eftPairingId: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -68,10 +73,12 @@ export type TerminalCountAggregateOutputType = {
 
 export type TerminalAvgAggregateInputType = {
   id?: true
+  eftPairingId?: true
 }
 
 export type TerminalSumAggregateInputType = {
   id?: true
+  eftPairingId?: true
 }
 
 export type TerminalMinAggregateInputType = {
@@ -80,6 +87,7 @@ export type TerminalMinAggregateInputType = {
   ipAddress?: true
   archived?: true
   orderChimeEnabled?: true
+  eftPairingId?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -90,6 +98,7 @@ export type TerminalMaxAggregateInputType = {
   ipAddress?: true
   archived?: true
   orderChimeEnabled?: true
+  eftPairingId?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -100,6 +109,7 @@ export type TerminalCountAggregateInputType = {
   ipAddress?: true
   archived?: true
   orderChimeEnabled?: true
+  eftPairingId?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -197,6 +207,7 @@ export type TerminalGroupByOutputType = {
   ipAddress: string
   archived: boolean
   orderChimeEnabled: boolean
+  eftPairingId: number | null
   createdAt: Date
   updatedAt: Date
   _count: TerminalCountAggregateOutputType | null
@@ -230,11 +241,14 @@ export type TerminalWhereInput = {
   ipAddress?: Prisma.StringFilter<"Terminal"> | string
   archived?: Prisma.BoolFilter<"Terminal"> | boolean
   orderChimeEnabled?: Prisma.BoolFilter<"Terminal"> | boolean
+  eftPairingId?: Prisma.IntNullableFilter<"Terminal"> | number | null
   createdAt?: Prisma.DateTimeFilter<"Terminal"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Terminal"> | Date | string
+  eftPairing?: Prisma.XOR<Prisma.EftPairingNullableScalarRelationFilter, Prisma.EftPairingWhereInput> | null
   shifts?: Prisma.TerminalShiftListRelationFilter
   cashIos?: Prisma.CashInOutListRelationFilter
   invoices?: Prisma.SaleInvoiceListRelationFilter
+  eftTransactions?: Prisma.EftTransactionListRelationFilter
 }
 
 export type TerminalOrderByWithRelationInput = {
@@ -243,11 +257,14 @@ export type TerminalOrderByWithRelationInput = {
   ipAddress?: Prisma.SortOrder
   archived?: Prisma.SortOrder
   orderChimeEnabled?: Prisma.SortOrder
+  eftPairingId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  eftPairing?: Prisma.EftPairingOrderByWithRelationInput
   shifts?: Prisma.TerminalShiftOrderByRelationAggregateInput
   cashIos?: Prisma.CashInOutOrderByRelationAggregateInput
   invoices?: Prisma.SaleInvoiceOrderByRelationAggregateInput
+  eftTransactions?: Prisma.EftTransactionOrderByRelationAggregateInput
 }
 
 export type TerminalWhereUniqueInput = Prisma.AtLeast<{
@@ -259,11 +276,14 @@ export type TerminalWhereUniqueInput = Prisma.AtLeast<{
   ipAddress?: Prisma.StringFilter<"Terminal"> | string
   archived?: Prisma.BoolFilter<"Terminal"> | boolean
   orderChimeEnabled?: Prisma.BoolFilter<"Terminal"> | boolean
+  eftPairingId?: Prisma.IntNullableFilter<"Terminal"> | number | null
   createdAt?: Prisma.DateTimeFilter<"Terminal"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Terminal"> | Date | string
+  eftPairing?: Prisma.XOR<Prisma.EftPairingNullableScalarRelationFilter, Prisma.EftPairingWhereInput> | null
   shifts?: Prisma.TerminalShiftListRelationFilter
   cashIos?: Prisma.CashInOutListRelationFilter
   invoices?: Prisma.SaleInvoiceListRelationFilter
+  eftTransactions?: Prisma.EftTransactionListRelationFilter
 }, "id">
 
 export type TerminalOrderByWithAggregationInput = {
@@ -272,6 +292,7 @@ export type TerminalOrderByWithAggregationInput = {
   ipAddress?: Prisma.SortOrder
   archived?: Prisma.SortOrder
   orderChimeEnabled?: Prisma.SortOrder
+  eftPairingId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.TerminalCountOrderByAggregateInput
@@ -290,6 +311,7 @@ export type TerminalScalarWhereWithAggregatesInput = {
   ipAddress?: Prisma.StringWithAggregatesFilter<"Terminal"> | string
   archived?: Prisma.BoolWithAggregatesFilter<"Terminal"> | boolean
   orderChimeEnabled?: Prisma.BoolWithAggregatesFilter<"Terminal"> | boolean
+  eftPairingId?: Prisma.IntNullableWithAggregatesFilter<"Terminal"> | number | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Terminal"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Terminal"> | Date | string
 }
@@ -301,9 +323,11 @@ export type TerminalCreateInput = {
   orderChimeEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  eftPairing?: Prisma.EftPairingCreateNestedOneWithoutTerminalsInput
   shifts?: Prisma.TerminalShiftCreateNestedManyWithoutTerminalInput
   cashIos?: Prisma.CashInOutCreateNestedManyWithoutTerminalInput
   invoices?: Prisma.SaleInvoiceCreateNestedManyWithoutTerminalInput
+  eftTransactions?: Prisma.EftTransactionCreateNestedManyWithoutTerminalInput
 }
 
 export type TerminalUncheckedCreateInput = {
@@ -312,11 +336,13 @@ export type TerminalUncheckedCreateInput = {
   ipAddress: string
   archived?: boolean
   orderChimeEnabled?: boolean
+  eftPairingId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
   shifts?: Prisma.TerminalShiftUncheckedCreateNestedManyWithoutTerminalInput
   cashIos?: Prisma.CashInOutUncheckedCreateNestedManyWithoutTerminalInput
   invoices?: Prisma.SaleInvoiceUncheckedCreateNestedManyWithoutTerminalInput
+  eftTransactions?: Prisma.EftTransactionUncheckedCreateNestedManyWithoutTerminalInput
 }
 
 export type TerminalUpdateInput = {
@@ -326,9 +352,11 @@ export type TerminalUpdateInput = {
   orderChimeEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  eftPairing?: Prisma.EftPairingUpdateOneWithoutTerminalsNestedInput
   shifts?: Prisma.TerminalShiftUpdateManyWithoutTerminalNestedInput
   cashIos?: Prisma.CashInOutUpdateManyWithoutTerminalNestedInput
   invoices?: Prisma.SaleInvoiceUpdateManyWithoutTerminalNestedInput
+  eftTransactions?: Prisma.EftTransactionUpdateManyWithoutTerminalNestedInput
 }
 
 export type TerminalUncheckedUpdateInput = {
@@ -337,11 +365,13 @@ export type TerminalUncheckedUpdateInput = {
   ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
   archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
   orderChimeEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  eftPairingId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   shifts?: Prisma.TerminalShiftUncheckedUpdateManyWithoutTerminalNestedInput
   cashIos?: Prisma.CashInOutUncheckedUpdateManyWithoutTerminalNestedInput
   invoices?: Prisma.SaleInvoiceUncheckedUpdateManyWithoutTerminalNestedInput
+  eftTransactions?: Prisma.EftTransactionUncheckedUpdateManyWithoutTerminalNestedInput
 }
 
 export type TerminalCreateManyInput = {
@@ -350,6 +380,7 @@ export type TerminalCreateManyInput = {
   ipAddress: string
   archived?: boolean
   orderChimeEnabled?: boolean
+  eftPairingId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -369,6 +400,7 @@ export type TerminalUncheckedUpdateManyInput = {
   ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
   archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
   orderChimeEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  eftPairingId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -379,12 +411,14 @@ export type TerminalCountOrderByAggregateInput = {
   ipAddress?: Prisma.SortOrder
   archived?: Prisma.SortOrder
   orderChimeEnabled?: Prisma.SortOrder
+  eftPairingId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
 
 export type TerminalAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  eftPairingId?: Prisma.SortOrder
 }
 
 export type TerminalMaxOrderByAggregateInput = {
@@ -393,6 +427,7 @@ export type TerminalMaxOrderByAggregateInput = {
   ipAddress?: Prisma.SortOrder
   archived?: Prisma.SortOrder
   orderChimeEnabled?: Prisma.SortOrder
+  eftPairingId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -403,17 +438,29 @@ export type TerminalMinOrderByAggregateInput = {
   ipAddress?: Prisma.SortOrder
   archived?: Prisma.SortOrder
   orderChimeEnabled?: Prisma.SortOrder
+  eftPairingId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
 
 export type TerminalSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  eftPairingId?: Prisma.SortOrder
 }
 
 export type TerminalScalarRelationFilter = {
   is?: Prisma.TerminalWhereInput
   isNot?: Prisma.TerminalWhereInput
+}
+
+export type TerminalListRelationFilter = {
+  every?: Prisma.TerminalWhereInput
+  some?: Prisma.TerminalWhereInput
+  none?: Prisma.TerminalWhereInput
+}
+
+export type TerminalOrderByRelationAggregateInput = {
+  _count?: Prisma.SortOrder
 }
 
 export type TerminalCreateNestedOneWithoutShiftsInput = {
@@ -458,6 +505,62 @@ export type TerminalUpdateOneRequiredWithoutInvoicesNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.TerminalUpdateToOneWithWhereWithoutInvoicesInput, Prisma.TerminalUpdateWithoutInvoicesInput>, Prisma.TerminalUncheckedUpdateWithoutInvoicesInput>
 }
 
+export type TerminalCreateNestedManyWithoutEftPairingInput = {
+  create?: Prisma.XOR<Prisma.TerminalCreateWithoutEftPairingInput, Prisma.TerminalUncheckedCreateWithoutEftPairingInput> | Prisma.TerminalCreateWithoutEftPairingInput[] | Prisma.TerminalUncheckedCreateWithoutEftPairingInput[]
+  connectOrCreate?: Prisma.TerminalCreateOrConnectWithoutEftPairingInput | Prisma.TerminalCreateOrConnectWithoutEftPairingInput[]
+  createMany?: Prisma.TerminalCreateManyEftPairingInputEnvelope
+  connect?: Prisma.TerminalWhereUniqueInput | Prisma.TerminalWhereUniqueInput[]
+}
+
+export type TerminalUncheckedCreateNestedManyWithoutEftPairingInput = {
+  create?: Prisma.XOR<Prisma.TerminalCreateWithoutEftPairingInput, Prisma.TerminalUncheckedCreateWithoutEftPairingInput> | Prisma.TerminalCreateWithoutEftPairingInput[] | Prisma.TerminalUncheckedCreateWithoutEftPairingInput[]
+  connectOrCreate?: Prisma.TerminalCreateOrConnectWithoutEftPairingInput | Prisma.TerminalCreateOrConnectWithoutEftPairingInput[]
+  createMany?: Prisma.TerminalCreateManyEftPairingInputEnvelope
+  connect?: Prisma.TerminalWhereUniqueInput | Prisma.TerminalWhereUniqueInput[]
+}
+
+export type TerminalUpdateManyWithoutEftPairingNestedInput = {
+  create?: Prisma.XOR<Prisma.TerminalCreateWithoutEftPairingInput, Prisma.TerminalUncheckedCreateWithoutEftPairingInput> | Prisma.TerminalCreateWithoutEftPairingInput[] | Prisma.TerminalUncheckedCreateWithoutEftPairingInput[]
+  connectOrCreate?: Prisma.TerminalCreateOrConnectWithoutEftPairingInput | Prisma.TerminalCreateOrConnectWithoutEftPairingInput[]
+  upsert?: Prisma.TerminalUpsertWithWhereUniqueWithoutEftPairingInput | Prisma.TerminalUpsertWithWhereUniqueWithoutEftPairingInput[]
+  createMany?: Prisma.TerminalCreateManyEftPairingInputEnvelope
+  set?: Prisma.TerminalWhereUniqueInput | Prisma.TerminalWhereUniqueInput[]
+  disconnect?: Prisma.TerminalWhereUniqueInput | Prisma.TerminalWhereUniqueInput[]
+  delete?: Prisma.TerminalWhereUniqueInput | Prisma.TerminalWhereUniqueInput[]
+  connect?: Prisma.TerminalWhereUniqueInput | Prisma.TerminalWhereUniqueInput[]
+  update?: Prisma.TerminalUpdateWithWhereUniqueWithoutEftPairingInput | Prisma.TerminalUpdateWithWhereUniqueWithoutEftPairingInput[]
+  updateMany?: Prisma.TerminalUpdateManyWithWhereWithoutEftPairingInput | Prisma.TerminalUpdateManyWithWhereWithoutEftPairingInput[]
+  deleteMany?: Prisma.TerminalScalarWhereInput | Prisma.TerminalScalarWhereInput[]
+}
+
+export type TerminalUncheckedUpdateManyWithoutEftPairingNestedInput = {
+  create?: Prisma.XOR<Prisma.TerminalCreateWithoutEftPairingInput, Prisma.TerminalUncheckedCreateWithoutEftPairingInput> | Prisma.TerminalCreateWithoutEftPairingInput[] | Prisma.TerminalUncheckedCreateWithoutEftPairingInput[]
+  connectOrCreate?: Prisma.TerminalCreateOrConnectWithoutEftPairingInput | Prisma.TerminalCreateOrConnectWithoutEftPairingInput[]
+  upsert?: Prisma.TerminalUpsertWithWhereUniqueWithoutEftPairingInput | Prisma.TerminalUpsertWithWhereUniqueWithoutEftPairingInput[]
+  createMany?: Prisma.TerminalCreateManyEftPairingInputEnvelope
+  set?: Prisma.TerminalWhereUniqueInput | Prisma.TerminalWhereUniqueInput[]
+  disconnect?: Prisma.TerminalWhereUniqueInput | Prisma.TerminalWhereUniqueInput[]
+  delete?: Prisma.TerminalWhereUniqueInput | Prisma.TerminalWhereUniqueInput[]
+  connect?: Prisma.TerminalWhereUniqueInput | Prisma.TerminalWhereUniqueInput[]
+  update?: Prisma.TerminalUpdateWithWhereUniqueWithoutEftPairingInput | Prisma.TerminalUpdateWithWhereUniqueWithoutEftPairingInput[]
+  updateMany?: Prisma.TerminalUpdateManyWithWhereWithoutEftPairingInput | Prisma.TerminalUpdateManyWithWhereWithoutEftPairingInput[]
+  deleteMany?: Prisma.TerminalScalarWhereInput | Prisma.TerminalScalarWhereInput[]
+}
+
+export type TerminalCreateNestedOneWithoutEftTransactionsInput = {
+  create?: Prisma.XOR<Prisma.TerminalCreateWithoutEftTransactionsInput, Prisma.TerminalUncheckedCreateWithoutEftTransactionsInput>
+  connectOrCreate?: Prisma.TerminalCreateOrConnectWithoutEftTransactionsInput
+  connect?: Prisma.TerminalWhereUniqueInput
+}
+
+export type TerminalUpdateOneRequiredWithoutEftTransactionsNestedInput = {
+  create?: Prisma.XOR<Prisma.TerminalCreateWithoutEftTransactionsInput, Prisma.TerminalUncheckedCreateWithoutEftTransactionsInput>
+  connectOrCreate?: Prisma.TerminalCreateOrConnectWithoutEftTransactionsInput
+  upsert?: Prisma.TerminalUpsertWithoutEftTransactionsInput
+  connect?: Prisma.TerminalWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TerminalUpdateToOneWithWhereWithoutEftTransactionsInput, Prisma.TerminalUpdateWithoutEftTransactionsInput>, Prisma.TerminalUncheckedUpdateWithoutEftTransactionsInput>
+}
+
 export type TerminalCreateWithoutShiftsInput = {
   name: string
   ipAddress: string
@@ -465,8 +568,10 @@ export type TerminalCreateWithoutShiftsInput = {
   orderChimeEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  eftPairing?: Prisma.EftPairingCreateNestedOneWithoutTerminalsInput
   cashIos?: Prisma.CashInOutCreateNestedManyWithoutTerminalInput
   invoices?: Prisma.SaleInvoiceCreateNestedManyWithoutTerminalInput
+  eftTransactions?: Prisma.EftTransactionCreateNestedManyWithoutTerminalInput
 }
 
 export type TerminalUncheckedCreateWithoutShiftsInput = {
@@ -475,10 +580,12 @@ export type TerminalUncheckedCreateWithoutShiftsInput = {
   ipAddress: string
   archived?: boolean
   orderChimeEnabled?: boolean
+  eftPairingId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
   cashIos?: Prisma.CashInOutUncheckedCreateNestedManyWithoutTerminalInput
   invoices?: Prisma.SaleInvoiceUncheckedCreateNestedManyWithoutTerminalInput
+  eftTransactions?: Prisma.EftTransactionUncheckedCreateNestedManyWithoutTerminalInput
 }
 
 export type TerminalCreateOrConnectWithoutShiftsInput = {
@@ -504,8 +611,10 @@ export type TerminalUpdateWithoutShiftsInput = {
   orderChimeEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  eftPairing?: Prisma.EftPairingUpdateOneWithoutTerminalsNestedInput
   cashIos?: Prisma.CashInOutUpdateManyWithoutTerminalNestedInput
   invoices?: Prisma.SaleInvoiceUpdateManyWithoutTerminalNestedInput
+  eftTransactions?: Prisma.EftTransactionUpdateManyWithoutTerminalNestedInput
 }
 
 export type TerminalUncheckedUpdateWithoutShiftsInput = {
@@ -514,10 +623,12 @@ export type TerminalUncheckedUpdateWithoutShiftsInput = {
   ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
   archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
   orderChimeEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  eftPairingId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   cashIos?: Prisma.CashInOutUncheckedUpdateManyWithoutTerminalNestedInput
   invoices?: Prisma.SaleInvoiceUncheckedUpdateManyWithoutTerminalNestedInput
+  eftTransactions?: Prisma.EftTransactionUncheckedUpdateManyWithoutTerminalNestedInput
 }
 
 export type TerminalCreateWithoutCashIosInput = {
@@ -527,8 +638,10 @@ export type TerminalCreateWithoutCashIosInput = {
   orderChimeEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  eftPairing?: Prisma.EftPairingCreateNestedOneWithoutTerminalsInput
   shifts?: Prisma.TerminalShiftCreateNestedManyWithoutTerminalInput
   invoices?: Prisma.SaleInvoiceCreateNestedManyWithoutTerminalInput
+  eftTransactions?: Prisma.EftTransactionCreateNestedManyWithoutTerminalInput
 }
 
 export type TerminalUncheckedCreateWithoutCashIosInput = {
@@ -537,10 +650,12 @@ export type TerminalUncheckedCreateWithoutCashIosInput = {
   ipAddress: string
   archived?: boolean
   orderChimeEnabled?: boolean
+  eftPairingId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
   shifts?: Prisma.TerminalShiftUncheckedCreateNestedManyWithoutTerminalInput
   invoices?: Prisma.SaleInvoiceUncheckedCreateNestedManyWithoutTerminalInput
+  eftTransactions?: Prisma.EftTransactionUncheckedCreateNestedManyWithoutTerminalInput
 }
 
 export type TerminalCreateOrConnectWithoutCashIosInput = {
@@ -566,8 +681,10 @@ export type TerminalUpdateWithoutCashIosInput = {
   orderChimeEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  eftPairing?: Prisma.EftPairingUpdateOneWithoutTerminalsNestedInput
   shifts?: Prisma.TerminalShiftUpdateManyWithoutTerminalNestedInput
   invoices?: Prisma.SaleInvoiceUpdateManyWithoutTerminalNestedInput
+  eftTransactions?: Prisma.EftTransactionUpdateManyWithoutTerminalNestedInput
 }
 
 export type TerminalUncheckedUpdateWithoutCashIosInput = {
@@ -576,10 +693,12 @@ export type TerminalUncheckedUpdateWithoutCashIosInput = {
   ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
   archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
   orderChimeEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  eftPairingId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   shifts?: Prisma.TerminalShiftUncheckedUpdateManyWithoutTerminalNestedInput
   invoices?: Prisma.SaleInvoiceUncheckedUpdateManyWithoutTerminalNestedInput
+  eftTransactions?: Prisma.EftTransactionUncheckedUpdateManyWithoutTerminalNestedInput
 }
 
 export type TerminalCreateWithoutInvoicesInput = {
@@ -589,8 +708,10 @@ export type TerminalCreateWithoutInvoicesInput = {
   orderChimeEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  eftPairing?: Prisma.EftPairingCreateNestedOneWithoutTerminalsInput
   shifts?: Prisma.TerminalShiftCreateNestedManyWithoutTerminalInput
   cashIos?: Prisma.CashInOutCreateNestedManyWithoutTerminalInput
+  eftTransactions?: Prisma.EftTransactionCreateNestedManyWithoutTerminalInput
 }
 
 export type TerminalUncheckedCreateWithoutInvoicesInput = {
@@ -599,10 +720,12 @@ export type TerminalUncheckedCreateWithoutInvoicesInput = {
   ipAddress: string
   archived?: boolean
   orderChimeEnabled?: boolean
+  eftPairingId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
   shifts?: Prisma.TerminalShiftUncheckedCreateNestedManyWithoutTerminalInput
   cashIos?: Prisma.CashInOutUncheckedCreateNestedManyWithoutTerminalInput
+  eftTransactions?: Prisma.EftTransactionUncheckedCreateNestedManyWithoutTerminalInput
 }
 
 export type TerminalCreateOrConnectWithoutInvoicesInput = {
@@ -628,11 +751,187 @@ export type TerminalUpdateWithoutInvoicesInput = {
   orderChimeEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  eftPairing?: Prisma.EftPairingUpdateOneWithoutTerminalsNestedInput
   shifts?: Prisma.TerminalShiftUpdateManyWithoutTerminalNestedInput
   cashIos?: Prisma.CashInOutUpdateManyWithoutTerminalNestedInput
+  eftTransactions?: Prisma.EftTransactionUpdateManyWithoutTerminalNestedInput
 }
 
 export type TerminalUncheckedUpdateWithoutInvoicesInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
+  archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  orderChimeEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  eftPairingId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  shifts?: Prisma.TerminalShiftUncheckedUpdateManyWithoutTerminalNestedInput
+  cashIos?: Prisma.CashInOutUncheckedUpdateManyWithoutTerminalNestedInput
+  eftTransactions?: Prisma.EftTransactionUncheckedUpdateManyWithoutTerminalNestedInput
+}
+
+export type TerminalCreateWithoutEftPairingInput = {
+  name: string
+  ipAddress: string
+  archived?: boolean
+  orderChimeEnabled?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  shifts?: Prisma.TerminalShiftCreateNestedManyWithoutTerminalInput
+  cashIos?: Prisma.CashInOutCreateNestedManyWithoutTerminalInput
+  invoices?: Prisma.SaleInvoiceCreateNestedManyWithoutTerminalInput
+  eftTransactions?: Prisma.EftTransactionCreateNestedManyWithoutTerminalInput
+}
+
+export type TerminalUncheckedCreateWithoutEftPairingInput = {
+  id?: number
+  name: string
+  ipAddress: string
+  archived?: boolean
+  orderChimeEnabled?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  shifts?: Prisma.TerminalShiftUncheckedCreateNestedManyWithoutTerminalInput
+  cashIos?: Prisma.CashInOutUncheckedCreateNestedManyWithoutTerminalInput
+  invoices?: Prisma.SaleInvoiceUncheckedCreateNestedManyWithoutTerminalInput
+  eftTransactions?: Prisma.EftTransactionUncheckedCreateNestedManyWithoutTerminalInput
+}
+
+export type TerminalCreateOrConnectWithoutEftPairingInput = {
+  where: Prisma.TerminalWhereUniqueInput
+  create: Prisma.XOR<Prisma.TerminalCreateWithoutEftPairingInput, Prisma.TerminalUncheckedCreateWithoutEftPairingInput>
+}
+
+export type TerminalCreateManyEftPairingInputEnvelope = {
+  data: Prisma.TerminalCreateManyEftPairingInput | Prisma.TerminalCreateManyEftPairingInput[]
+  skipDuplicates?: boolean
+}
+
+export type TerminalUpsertWithWhereUniqueWithoutEftPairingInput = {
+  where: Prisma.TerminalWhereUniqueInput
+  update: Prisma.XOR<Prisma.TerminalUpdateWithoutEftPairingInput, Prisma.TerminalUncheckedUpdateWithoutEftPairingInput>
+  create: Prisma.XOR<Prisma.TerminalCreateWithoutEftPairingInput, Prisma.TerminalUncheckedCreateWithoutEftPairingInput>
+}
+
+export type TerminalUpdateWithWhereUniqueWithoutEftPairingInput = {
+  where: Prisma.TerminalWhereUniqueInput
+  data: Prisma.XOR<Prisma.TerminalUpdateWithoutEftPairingInput, Prisma.TerminalUncheckedUpdateWithoutEftPairingInput>
+}
+
+export type TerminalUpdateManyWithWhereWithoutEftPairingInput = {
+  where: Prisma.TerminalScalarWhereInput
+  data: Prisma.XOR<Prisma.TerminalUpdateManyMutationInput, Prisma.TerminalUncheckedUpdateManyWithoutEftPairingInput>
+}
+
+export type TerminalScalarWhereInput = {
+  AND?: Prisma.TerminalScalarWhereInput | Prisma.TerminalScalarWhereInput[]
+  OR?: Prisma.TerminalScalarWhereInput[]
+  NOT?: Prisma.TerminalScalarWhereInput | Prisma.TerminalScalarWhereInput[]
+  id?: Prisma.IntFilter<"Terminal"> | number
+  name?: Prisma.StringFilter<"Terminal"> | string
+  ipAddress?: Prisma.StringFilter<"Terminal"> | string
+  archived?: Prisma.BoolFilter<"Terminal"> | boolean
+  orderChimeEnabled?: Prisma.BoolFilter<"Terminal"> | boolean
+  eftPairingId?: Prisma.IntNullableFilter<"Terminal"> | number | null
+  createdAt?: Prisma.DateTimeFilter<"Terminal"> | Date | string
+  updatedAt?: Prisma.DateTimeFilter<"Terminal"> | Date | string
+}
+
+export type TerminalCreateWithoutEftTransactionsInput = {
+  name: string
+  ipAddress: string
+  archived?: boolean
+  orderChimeEnabled?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  eftPairing?: Prisma.EftPairingCreateNestedOneWithoutTerminalsInput
+  shifts?: Prisma.TerminalShiftCreateNestedManyWithoutTerminalInput
+  cashIos?: Prisma.CashInOutCreateNestedManyWithoutTerminalInput
+  invoices?: Prisma.SaleInvoiceCreateNestedManyWithoutTerminalInput
+}
+
+export type TerminalUncheckedCreateWithoutEftTransactionsInput = {
+  id?: number
+  name: string
+  ipAddress: string
+  archived?: boolean
+  orderChimeEnabled?: boolean
+  eftPairingId?: number | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  shifts?: Prisma.TerminalShiftUncheckedCreateNestedManyWithoutTerminalInput
+  cashIos?: Prisma.CashInOutUncheckedCreateNestedManyWithoutTerminalInput
+  invoices?: Prisma.SaleInvoiceUncheckedCreateNestedManyWithoutTerminalInput
+}
+
+export type TerminalCreateOrConnectWithoutEftTransactionsInput = {
+  where: Prisma.TerminalWhereUniqueInput
+  create: Prisma.XOR<Prisma.TerminalCreateWithoutEftTransactionsInput, Prisma.TerminalUncheckedCreateWithoutEftTransactionsInput>
+}
+
+export type TerminalUpsertWithoutEftTransactionsInput = {
+  update: Prisma.XOR<Prisma.TerminalUpdateWithoutEftTransactionsInput, Prisma.TerminalUncheckedUpdateWithoutEftTransactionsInput>
+  create: Prisma.XOR<Prisma.TerminalCreateWithoutEftTransactionsInput, Prisma.TerminalUncheckedCreateWithoutEftTransactionsInput>
+  where?: Prisma.TerminalWhereInput
+}
+
+export type TerminalUpdateToOneWithWhereWithoutEftTransactionsInput = {
+  where?: Prisma.TerminalWhereInput
+  data: Prisma.XOR<Prisma.TerminalUpdateWithoutEftTransactionsInput, Prisma.TerminalUncheckedUpdateWithoutEftTransactionsInput>
+}
+
+export type TerminalUpdateWithoutEftTransactionsInput = {
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
+  archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  orderChimeEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  eftPairing?: Prisma.EftPairingUpdateOneWithoutTerminalsNestedInput
+  shifts?: Prisma.TerminalShiftUpdateManyWithoutTerminalNestedInput
+  cashIos?: Prisma.CashInOutUpdateManyWithoutTerminalNestedInput
+  invoices?: Prisma.SaleInvoiceUpdateManyWithoutTerminalNestedInput
+}
+
+export type TerminalUncheckedUpdateWithoutEftTransactionsInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
+  archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  orderChimeEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  eftPairingId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  shifts?: Prisma.TerminalShiftUncheckedUpdateManyWithoutTerminalNestedInput
+  cashIos?: Prisma.CashInOutUncheckedUpdateManyWithoutTerminalNestedInput
+  invoices?: Prisma.SaleInvoiceUncheckedUpdateManyWithoutTerminalNestedInput
+}
+
+export type TerminalCreateManyEftPairingInput = {
+  id?: number
+  name: string
+  ipAddress: string
+  archived?: boolean
+  orderChimeEnabled?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type TerminalUpdateWithoutEftPairingInput = {
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
+  archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  orderChimeEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  shifts?: Prisma.TerminalShiftUpdateManyWithoutTerminalNestedInput
+  cashIos?: Prisma.CashInOutUpdateManyWithoutTerminalNestedInput
+  invoices?: Prisma.SaleInvoiceUpdateManyWithoutTerminalNestedInput
+  eftTransactions?: Prisma.EftTransactionUpdateManyWithoutTerminalNestedInput
+}
+
+export type TerminalUncheckedUpdateWithoutEftPairingInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   name?: Prisma.StringFieldUpdateOperationsInput | string
   ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
@@ -642,6 +941,18 @@ export type TerminalUncheckedUpdateWithoutInvoicesInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   shifts?: Prisma.TerminalShiftUncheckedUpdateManyWithoutTerminalNestedInput
   cashIos?: Prisma.CashInOutUncheckedUpdateManyWithoutTerminalNestedInput
+  invoices?: Prisma.SaleInvoiceUncheckedUpdateManyWithoutTerminalNestedInput
+  eftTransactions?: Prisma.EftTransactionUncheckedUpdateManyWithoutTerminalNestedInput
+}
+
+export type TerminalUncheckedUpdateManyWithoutEftPairingInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
+  archived?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  orderChimeEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 
@@ -653,12 +964,14 @@ export type TerminalCountOutputType = {
   shifts: number
   cashIos: number
   invoices: number
+  eftTransactions: number
 }
 
 export type TerminalCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   shifts?: boolean | TerminalCountOutputTypeCountShiftsArgs
   cashIos?: boolean | TerminalCountOutputTypeCountCashIosArgs
   invoices?: boolean | TerminalCountOutputTypeCountInvoicesArgs
+  eftTransactions?: boolean | TerminalCountOutputTypeCountEftTransactionsArgs
 }
 
 /**
@@ -692,6 +1005,13 @@ export type TerminalCountOutputTypeCountInvoicesArgs<ExtArgs extends runtime.Typ
   where?: Prisma.SaleInvoiceWhereInput
 }
 
+/**
+ * TerminalCountOutputType without action
+ */
+export type TerminalCountOutputTypeCountEftTransactionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.EftTransactionWhereInput
+}
+
 
 export type TerminalSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -699,11 +1019,14 @@ export type TerminalSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs
   ipAddress?: boolean
   archived?: boolean
   orderChimeEnabled?: boolean
+  eftPairingId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  eftPairing?: boolean | Prisma.Terminal$eftPairingArgs<ExtArgs>
   shifts?: boolean | Prisma.Terminal$shiftsArgs<ExtArgs>
   cashIos?: boolean | Prisma.Terminal$cashIosArgs<ExtArgs>
   invoices?: boolean | Prisma.Terminal$invoicesArgs<ExtArgs>
+  eftTransactions?: boolean | Prisma.Terminal$eftTransactionsArgs<ExtArgs>
   _count?: boolean | Prisma.TerminalCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["terminal"]>
 
@@ -713,8 +1036,10 @@ export type TerminalSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exte
   ipAddress?: boolean
   archived?: boolean
   orderChimeEnabled?: boolean
+  eftPairingId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  eftPairing?: boolean | Prisma.Terminal$eftPairingArgs<ExtArgs>
 }, ExtArgs["result"]["terminal"]>
 
 export type TerminalSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -723,8 +1048,10 @@ export type TerminalSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exte
   ipAddress?: boolean
   archived?: boolean
   orderChimeEnabled?: boolean
+  eftPairingId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  eftPairing?: boolean | Prisma.Terminal$eftPairingArgs<ExtArgs>
 }, ExtArgs["result"]["terminal"]>
 
 export type TerminalSelectScalar = {
@@ -733,26 +1060,35 @@ export type TerminalSelectScalar = {
   ipAddress?: boolean
   archived?: boolean
   orderChimeEnabled?: boolean
+  eftPairingId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type TerminalOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "ipAddress" | "archived" | "orderChimeEnabled" | "createdAt" | "updatedAt", ExtArgs["result"]["terminal"]>
+export type TerminalOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "ipAddress" | "archived" | "orderChimeEnabled" | "eftPairingId" | "createdAt" | "updatedAt", ExtArgs["result"]["terminal"]>
 export type TerminalInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  eftPairing?: boolean | Prisma.Terminal$eftPairingArgs<ExtArgs>
   shifts?: boolean | Prisma.Terminal$shiftsArgs<ExtArgs>
   cashIos?: boolean | Prisma.Terminal$cashIosArgs<ExtArgs>
   invoices?: boolean | Prisma.Terminal$invoicesArgs<ExtArgs>
+  eftTransactions?: boolean | Prisma.Terminal$eftTransactionsArgs<ExtArgs>
   _count?: boolean | Prisma.TerminalCountOutputTypeDefaultArgs<ExtArgs>
 }
-export type TerminalIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
-export type TerminalIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
+export type TerminalIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  eftPairing?: boolean | Prisma.Terminal$eftPairingArgs<ExtArgs>
+}
+export type TerminalIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  eftPairing?: boolean | Prisma.Terminal$eftPairingArgs<ExtArgs>
+}
 
 export type $TerminalPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Terminal"
   objects: {
+    eftPairing: Prisma.$EftPairingPayload<ExtArgs> | null
     shifts: Prisma.$TerminalShiftPayload<ExtArgs>[]
     cashIos: Prisma.$CashInOutPayload<ExtArgs>[]
     invoices: Prisma.$SaleInvoicePayload<ExtArgs>[]
+    eftTransactions: Prisma.$EftTransactionPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: number
@@ -760,6 +1096,7 @@ export type $TerminalPayload<ExtArgs extends runtime.Types.Extensions.InternalAr
     ipAddress: string
     archived: boolean
     orderChimeEnabled: boolean
+    eftPairingId: number | null
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["terminal"]>
@@ -1156,9 +1493,11 @@ readonly fields: TerminalFieldRefs;
  */
 export interface Prisma__TerminalClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
+  eftPairing<T extends Prisma.Terminal$eftPairingArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Terminal$eftPairingArgs<ExtArgs>>): Prisma.Prisma__EftPairingClient<runtime.Types.Result.GetResult<Prisma.$EftPairingPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   shifts<T extends Prisma.Terminal$shiftsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Terminal$shiftsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TerminalShiftPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   cashIos<T extends Prisma.Terminal$cashIosArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Terminal$cashIosArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$CashInOutPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   invoices<T extends Prisma.Terminal$invoicesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Terminal$invoicesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$SaleInvoicePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  eftTransactions<T extends Prisma.Terminal$eftTransactionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Terminal$eftTransactionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$EftTransactionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1193,6 +1532,7 @@ export interface TerminalFieldRefs {
   readonly ipAddress: Prisma.FieldRef<"Terminal", 'String'>
   readonly archived: Prisma.FieldRef<"Terminal", 'Boolean'>
   readonly orderChimeEnabled: Prisma.FieldRef<"Terminal", 'Boolean'>
+  readonly eftPairingId: Prisma.FieldRef<"Terminal", 'Int'>
   readonly createdAt: Prisma.FieldRef<"Terminal", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Terminal", 'DateTime'>
 }
@@ -1444,6 +1784,10 @@ export type TerminalCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extens
    */
   data: Prisma.TerminalCreateManyInput | Prisma.TerminalCreateManyInput[]
   skipDuplicates?: boolean
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TerminalIncludeCreateManyAndReturn<ExtArgs> | null
 }
 
 /**
@@ -1514,6 +1858,10 @@ export type TerminalUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extens
    * Limit how many Terminals to update.
    */
   limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TerminalIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**
@@ -1580,6 +1928,25 @@ export type TerminalDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.Inte
    * Limit how many Terminals to delete.
    */
   limit?: number
+}
+
+/**
+ * Terminal.eftPairing
+ */
+export type Terminal$eftPairingArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the EftPairing
+   */
+  select?: Prisma.EftPairingSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the EftPairing
+   */
+  omit?: Prisma.EftPairingOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.EftPairingInclude<ExtArgs> | null
+  where?: Prisma.EftPairingWhereInput
 }
 
 /**
@@ -1652,6 +2019,30 @@ export type Terminal$invoicesArgs<ExtArgs extends runtime.Types.Extensions.Inter
   take?: number
   skip?: number
   distinct?: Prisma.SaleInvoiceScalarFieldEnum | Prisma.SaleInvoiceScalarFieldEnum[]
+}
+
+/**
+ * Terminal.eftTransactions
+ */
+export type Terminal$eftTransactionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the EftTransaction
+   */
+  select?: Prisma.EftTransactionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the EftTransaction
+   */
+  omit?: Prisma.EftTransactionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.EftTransactionInclude<ExtArgs> | null
+  where?: Prisma.EftTransactionWhereInput
+  orderBy?: Prisma.EftTransactionOrderByWithRelationInput | Prisma.EftTransactionOrderByWithRelationInput[]
+  cursor?: Prisma.EftTransactionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.EftTransactionScalarFieldEnum | Prisma.EftTransactionScalarFieldEnum[]
 }
 
 /**

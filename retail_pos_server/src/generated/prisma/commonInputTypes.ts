@@ -467,6 +467,104 @@ export type EnumCustomerVoucherOperationStatusWithAggregatesFilter<$PrismaModel 
   _max?: Prisma.NestedEnumCustomerVoucherOperationStatusFilter<$PrismaModel>
 }
 
+export type BoolNullableFilter<$PrismaModel = never> = {
+  equals?: boolean | Prisma.BooleanFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedBoolNullableFilter<$PrismaModel> | boolean | null
+}
+
+export type BoolNullableWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: boolean | Prisma.BooleanFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedBoolNullableWithAggregatesFilter<$PrismaModel> | boolean | null
+  _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _min?: Prisma.NestedBoolNullableFilter<$PrismaModel>
+  _max?: Prisma.NestedBoolNullableFilter<$PrismaModel>
+}
+
+export type EnumEftTransactionKindFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftTransactionKind | Prisma.EnumEftTransactionKindFieldRefInput<$PrismaModel>
+  in?: $Enums.EftTransactionKind[] | Prisma.ListEnumEftTransactionKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EftTransactionKind[] | Prisma.ListEnumEftTransactionKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEftTransactionKindFilter<$PrismaModel> | $Enums.EftTransactionKind
+}
+
+export type EnumEftTransactionStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftTransactionStatus | Prisma.EnumEftTransactionStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.EftTransactionStatus[] | Prisma.ListEnumEftTransactionStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EftTransactionStatus[] | Prisma.ListEnumEftTransactionStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEftTransactionStatusFilter<$PrismaModel> | $Enums.EftTransactionStatus
+}
+
+export type EnumEftFinancialStatusNullableFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftFinancialStatus | Prisma.EnumEftFinancialStatusFieldRefInput<$PrismaModel> | null
+  in?: $Enums.EftFinancialStatus[] | Prisma.ListEnumEftFinancialStatusFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.EftFinancialStatus[] | Prisma.ListEnumEftFinancialStatusFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumEftFinancialStatusNullableFilter<$PrismaModel> | $Enums.EftFinancialStatus | null
+}
+
+export type EnumEftErrorClassNullableFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftErrorClass | Prisma.EnumEftErrorClassFieldRefInput<$PrismaModel> | null
+  in?: $Enums.EftErrorClass[] | Prisma.ListEnumEftErrorClassFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.EftErrorClass[] | Prisma.ListEnumEftErrorClassFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumEftErrorClassNullableFilter<$PrismaModel> | $Enums.EftErrorClass | null
+}
+
+export type EnumEftOverrideAnswerNullableFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftOverrideAnswer | Prisma.EnumEftOverrideAnswerFieldRefInput<$PrismaModel> | null
+  in?: $Enums.EftOverrideAnswer[] | Prisma.ListEnumEftOverrideAnswerFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.EftOverrideAnswer[] | Prisma.ListEnumEftOverrideAnswerFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumEftOverrideAnswerNullableFilter<$PrismaModel> | $Enums.EftOverrideAnswer | null
+}
+
+export type EnumEftTransactionKindWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftTransactionKind | Prisma.EnumEftTransactionKindFieldRefInput<$PrismaModel>
+  in?: $Enums.EftTransactionKind[] | Prisma.ListEnumEftTransactionKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EftTransactionKind[] | Prisma.ListEnumEftTransactionKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEftTransactionKindWithAggregatesFilter<$PrismaModel> | $Enums.EftTransactionKind
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumEftTransactionKindFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumEftTransactionKindFilter<$PrismaModel>
+}
+
+export type EnumEftTransactionStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftTransactionStatus | Prisma.EnumEftTransactionStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.EftTransactionStatus[] | Prisma.ListEnumEftTransactionStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EftTransactionStatus[] | Prisma.ListEnumEftTransactionStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEftTransactionStatusWithAggregatesFilter<$PrismaModel> | $Enums.EftTransactionStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumEftTransactionStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumEftTransactionStatusFilter<$PrismaModel>
+}
+
+export type EnumEftFinancialStatusNullableWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftFinancialStatus | Prisma.EnumEftFinancialStatusFieldRefInput<$PrismaModel> | null
+  in?: $Enums.EftFinancialStatus[] | Prisma.ListEnumEftFinancialStatusFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.EftFinancialStatus[] | Prisma.ListEnumEftFinancialStatusFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumEftFinancialStatusNullableWithAggregatesFilter<$PrismaModel> | $Enums.EftFinancialStatus | null
+  _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumEftFinancialStatusNullableFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumEftFinancialStatusNullableFilter<$PrismaModel>
+}
+
+export type EnumEftErrorClassNullableWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftErrorClass | Prisma.EnumEftErrorClassFieldRefInput<$PrismaModel> | null
+  in?: $Enums.EftErrorClass[] | Prisma.ListEnumEftErrorClassFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.EftErrorClass[] | Prisma.ListEnumEftErrorClassFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumEftErrorClassNullableWithAggregatesFilter<$PrismaModel> | $Enums.EftErrorClass | null
+  _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumEftErrorClassNullableFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumEftErrorClassNullableFilter<$PrismaModel>
+}
+
+export type EnumEftOverrideAnswerNullableWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftOverrideAnswer | Prisma.EnumEftOverrideAnswerFieldRefInput<$PrismaModel> | null
+  in?: $Enums.EftOverrideAnswer[] | Prisma.ListEnumEftOverrideAnswerFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.EftOverrideAnswer[] | Prisma.ListEnumEftOverrideAnswerFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumEftOverrideAnswerNullableWithAggregatesFilter<$PrismaModel> | $Enums.EftOverrideAnswer | null
+  _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumEftOverrideAnswerNullableFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumEftOverrideAnswerNullableFilter<$PrismaModel>
+}
+
 export type NestedIntFilter<$PrismaModel = never> = {
   equals?: number | Prisma.IntFieldRefInput<$PrismaModel>
   in?: number[] | Prisma.ListIntFieldRefInput<$PrismaModel>
@@ -866,6 +964,104 @@ export type NestedEnumCustomerVoucherOperationStatusWithAggregatesFilter<$Prisma
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumCustomerVoucherOperationStatusFilter<$PrismaModel>
   _max?: Prisma.NestedEnumCustomerVoucherOperationStatusFilter<$PrismaModel>
+}
+
+export type NestedBoolNullableFilter<$PrismaModel = never> = {
+  equals?: boolean | Prisma.BooleanFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedBoolNullableFilter<$PrismaModel> | boolean | null
+}
+
+export type NestedBoolNullableWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: boolean | Prisma.BooleanFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedBoolNullableWithAggregatesFilter<$PrismaModel> | boolean | null
+  _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _min?: Prisma.NestedBoolNullableFilter<$PrismaModel>
+  _max?: Prisma.NestedBoolNullableFilter<$PrismaModel>
+}
+
+export type NestedEnumEftTransactionKindFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftTransactionKind | Prisma.EnumEftTransactionKindFieldRefInput<$PrismaModel>
+  in?: $Enums.EftTransactionKind[] | Prisma.ListEnumEftTransactionKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EftTransactionKind[] | Prisma.ListEnumEftTransactionKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEftTransactionKindFilter<$PrismaModel> | $Enums.EftTransactionKind
+}
+
+export type NestedEnumEftTransactionStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftTransactionStatus | Prisma.EnumEftTransactionStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.EftTransactionStatus[] | Prisma.ListEnumEftTransactionStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EftTransactionStatus[] | Prisma.ListEnumEftTransactionStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEftTransactionStatusFilter<$PrismaModel> | $Enums.EftTransactionStatus
+}
+
+export type NestedEnumEftFinancialStatusNullableFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftFinancialStatus | Prisma.EnumEftFinancialStatusFieldRefInput<$PrismaModel> | null
+  in?: $Enums.EftFinancialStatus[] | Prisma.ListEnumEftFinancialStatusFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.EftFinancialStatus[] | Prisma.ListEnumEftFinancialStatusFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumEftFinancialStatusNullableFilter<$PrismaModel> | $Enums.EftFinancialStatus | null
+}
+
+export type NestedEnumEftErrorClassNullableFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftErrorClass | Prisma.EnumEftErrorClassFieldRefInput<$PrismaModel> | null
+  in?: $Enums.EftErrorClass[] | Prisma.ListEnumEftErrorClassFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.EftErrorClass[] | Prisma.ListEnumEftErrorClassFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumEftErrorClassNullableFilter<$PrismaModel> | $Enums.EftErrorClass | null
+}
+
+export type NestedEnumEftOverrideAnswerNullableFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftOverrideAnswer | Prisma.EnumEftOverrideAnswerFieldRefInput<$PrismaModel> | null
+  in?: $Enums.EftOverrideAnswer[] | Prisma.ListEnumEftOverrideAnswerFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.EftOverrideAnswer[] | Prisma.ListEnumEftOverrideAnswerFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumEftOverrideAnswerNullableFilter<$PrismaModel> | $Enums.EftOverrideAnswer | null
+}
+
+export type NestedEnumEftTransactionKindWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftTransactionKind | Prisma.EnumEftTransactionKindFieldRefInput<$PrismaModel>
+  in?: $Enums.EftTransactionKind[] | Prisma.ListEnumEftTransactionKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EftTransactionKind[] | Prisma.ListEnumEftTransactionKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEftTransactionKindWithAggregatesFilter<$PrismaModel> | $Enums.EftTransactionKind
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumEftTransactionKindFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumEftTransactionKindFilter<$PrismaModel>
+}
+
+export type NestedEnumEftTransactionStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftTransactionStatus | Prisma.EnumEftTransactionStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.EftTransactionStatus[] | Prisma.ListEnumEftTransactionStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EftTransactionStatus[] | Prisma.ListEnumEftTransactionStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEftTransactionStatusWithAggregatesFilter<$PrismaModel> | $Enums.EftTransactionStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumEftTransactionStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumEftTransactionStatusFilter<$PrismaModel>
+}
+
+export type NestedEnumEftFinancialStatusNullableWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftFinancialStatus | Prisma.EnumEftFinancialStatusFieldRefInput<$PrismaModel> | null
+  in?: $Enums.EftFinancialStatus[] | Prisma.ListEnumEftFinancialStatusFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.EftFinancialStatus[] | Prisma.ListEnumEftFinancialStatusFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumEftFinancialStatusNullableWithAggregatesFilter<$PrismaModel> | $Enums.EftFinancialStatus | null
+  _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumEftFinancialStatusNullableFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumEftFinancialStatusNullableFilter<$PrismaModel>
+}
+
+export type NestedEnumEftErrorClassNullableWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftErrorClass | Prisma.EnumEftErrorClassFieldRefInput<$PrismaModel> | null
+  in?: $Enums.EftErrorClass[] | Prisma.ListEnumEftErrorClassFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.EftErrorClass[] | Prisma.ListEnumEftErrorClassFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumEftErrorClassNullableWithAggregatesFilter<$PrismaModel> | $Enums.EftErrorClass | null
+  _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumEftErrorClassNullableFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumEftErrorClassNullableFilter<$PrismaModel>
+}
+
+export type NestedEnumEftOverrideAnswerNullableWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.EftOverrideAnswer | Prisma.EnumEftOverrideAnswerFieldRefInput<$PrismaModel> | null
+  in?: $Enums.EftOverrideAnswer[] | Prisma.ListEnumEftOverrideAnswerFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.EftOverrideAnswer[] | Prisma.ListEnumEftOverrideAnswerFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumEftOverrideAnswerNullableWithAggregatesFilter<$PrismaModel> | $Enums.EftOverrideAnswer | null
+  _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumEftOverrideAnswerNullableFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumEftOverrideAnswerNullableFilter<$PrismaModel>
 }
 
 

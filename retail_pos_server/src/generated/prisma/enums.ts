@@ -106,3 +106,55 @@ export const CustomerVoucherOperationStatus = {
 } as const
 
 export type CustomerVoucherOperationStatus = (typeof CustomerVoucherOperationStatus)[keyof typeof CustomerVoucherOperationStatus]
+
+
+export const EftTransactionKind = {
+  PURCHASE: 'PURCHASE',
+  REFUND: 'REFUND'
+} as const
+
+export type EftTransactionKind = (typeof EftTransactionKind)[keyof typeof EftTransactionKind]
+
+
+export const EftTransactionStatus = {
+  CREATING: 'CREATING',
+  PENDING: 'PENDING',
+  AWAITING_POS: 'AWAITING_POS',
+  FINALISED: 'FINALISED',
+  TIMEOUT: 'TIMEOUT',
+  FAILED: 'FAILED',
+  FINALISED_BY_OVERRIDE: 'FINALISED_BY_OVERRIDE',
+  CANCELLED_BY_OVERRIDE: 'CANCELLED_BY_OVERRIDE'
+} as const
+
+export type EftTransactionStatus = (typeof EftTransactionStatus)[keyof typeof EftTransactionStatus]
+
+
+export const EftFinancialStatus = {
+  APPROVED: 'APPROVED',
+  DECLINED: 'DECLINED',
+  CANCELLED: 'CANCELLED',
+  UNKNOWN: 'UNKNOWN'
+} as const
+
+export type EftFinancialStatus = (typeof EftFinancialStatus)[keyof typeof EftFinancialStatus]
+
+
+export const EftErrorClass = {
+  NET: 'NET',
+  PAIR: 'PAIR',
+  TERM: 'TERM',
+  BANK: 'BANK',
+  TIMEOUT: 'TIMEOUT',
+  POS: 'POS'
+} as const
+
+export type EftErrorClass = (typeof EftErrorClass)[keyof typeof EftErrorClass]
+
+
+export const EftOverrideAnswer = {
+  YES: 'YES',
+  NO: 'NO'
+} as const
+
+export type EftOverrideAnswer = (typeof EftOverrideAnswer)[keyof typeof EftOverrideAnswer]
