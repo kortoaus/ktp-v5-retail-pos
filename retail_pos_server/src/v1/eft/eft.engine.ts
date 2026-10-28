@@ -568,13 +568,15 @@ export class EftEngine {
 
     let lastProgress = this.now();
     let lateSince: number | null = null;
-    let recoveryFirst = !!opts.recovery;
+    // F-9: recovery mode (GET without min_version, may re-show an unchanged
+    // AWAITING_POS form) lasts until a valid answer arrives, not just one attempt.
+    let recovering = !!opts.recovery;
     let seenVersion: number | null = null; // provider versions seen but not applied (overridden rows)
     while (!handle.stop && !this.stopped) {
       row = await this.store.getTxn(id);
       if (!row) return;
       if (row.status === "FINALISED" || row.status === "FAILED" || row.status === "CREATING") return;
-      if (row.status === "AWAITING_POS" && !recoveryFirst) return; // paused until an action relay
+      if (row.status === "AWAITING_POS" && !recovering) return; // paused until an action relay
       if (!row.providerTxnId) return; // CREATE_UNKNOWN: nothing to poll, the override decides
       const late = row.status === "TIMEOUT" || OVERRIDDEN.includes(row.status);
       let remaining: number;
@@ -585,17 +587,24 @@ export class EftEngine {
       } else {
         remaining = this.cfg.pollDeadlineMs - (this.now() - lastProgress);
         if (remaining <= 0) {
+          // A recovering AWAITING_POS row (no answer since restart / lost action) times out too.
+          const wasRecovering = recovering;
+          const timedOut = await this.transition(
+            id,
+            (cur) => cur.status === "PENDING" || (wasRecovering && cur.status === "AWAITING_POS"),
+            { status: "TIMEOUT", errorClass: "TIMEOUT", errorCode: "DEADLINE" },
+          );
+          if (!timedOut) continue; // moved on meanwhile — re-evaluated at the top
           await this.emit(row, { source: "SERVER", event: "DEADLINE", errorClass: "TIMEOUT", errorCode: "DEADLINE", detail: { deadlineMs: this.cfg.pollDeadlineMs } });
-          await this.transition(id, (cur) => cur.status === "PENDING", { status: "TIMEOUT", errorClass: "TIMEOUT", errorCode: "DEADLINE" });
+          recovering = false;
           lateSince = this.now();
           continue;
         }
       }
 
       const known = Math.max(row.providerVersion ?? 0, seenVersion ?? 0);
-      const minVersion = recoveryFirst ? undefined : known + 1;
-      const reassert = recoveryFirst;
-      recoveryFirst = false;
+      const minVersion = recovering ? undefined : known + 1;
+      const reassert = recovering;
       // F-5: the deadline runs independently of the in-flight long poll.
       const ac = new AbortController();
       const deadlineTimer = setTimeout(() => ac.abort(), remaining);
@@ -616,6 +625,7 @@ export class EftEngine {
         await this.emit(row, { source: "SCI", event: "SCI_POLL_RES", ...this.httpFields(res.http), providerVersion: a.providerVersion, detail: { status: a.status, financialStatus: a.financialStatus, message: a.message } });
         await this.notePairing(pairing, { ok: true });
         const outcome = await this.applyAnswer(id, a, "SCI_POLL", { reassert });
+        recovering = false;
         if (outcome === "applied") lastProgress = this.now();
         seenVersion = Math.max(seenVersion ?? 0, a.providerVersion);
         if (outcome === "late" && a.status === "FINALISED") return;
