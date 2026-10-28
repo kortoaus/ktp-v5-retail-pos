@@ -12,6 +12,7 @@ import OpenShiftScreen from "./screens/OpenShiftScreen";
 import { ShiftProvider } from "./contexts/ShiftContext";
 import CashIOManageScreen from "./screens/CashIOManageScreen";
 import StoreSettingScreen from "./screens/StoreSettingScreen";
+import PaymentSettingsScreen from "./screens/PaymentSettingsScreen";
 import CloseShiftScreen from "./screens/CloseShiftScreen";
 import CustomerScreen from "./components/CustomerScreen";
 import { useCartBroadcast } from "./hooks/useCartBroadcast";
@@ -80,6 +81,7 @@ function MainApp() {
               />
               <Route path="cashio" element={<CashIOManageScreen />} />
               <Route path="store" element={<StoreSettingScreen />} />
+              <Route path="payments" element={<PaymentSettingsScreen />} />
             </Route>
 
             <Route path="/shift" element={<ManagerLayout />}>

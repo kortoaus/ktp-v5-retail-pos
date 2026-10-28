@@ -35,6 +35,8 @@ function isStaffSessionInvalid(status: number, result: unknown): boolean {
   );
 }
 
+export type RequestOptions = { signal?: AbortSignal };
+
 export type ApiSearchParams = {
   page?: string;
   keyword?: string;
@@ -134,10 +136,13 @@ class ApiService {
     for (const listener of this.sessionLostListeners) listener();
   }
 
+  // `options.signal` aborts the request (EFT long polls on panel close, T-7
+  // F-17); an aborted request resolves like a network error (status 0).
   private async request<T = unknown>(
     endpoint: string,
     method: "GET" | "POST" | "PATCH" | "DELETE" | "PUT",
     data?: unknown,
+    options?: RequestOptions,
   ): Promise<ApiResponse<T>> {
     const sentToken = this.accessToken;
     try {
@@ -146,6 +151,7 @@ class ApiService {
         method,
         data: method !== "GET" ? data : undefined,
         params: method === "GET" ? data : undefined,
+        signal: options?.signal,
       });
 
       const body = response.data;
@@ -200,12 +206,12 @@ class ApiService {
     }
   }
 
-  get<T = unknown>(endpoint: string, params?: Record<string, string>) {
-    return this.request<T>(endpoint, "GET", params);
+  get<T = unknown>(endpoint: string, params?: Record<string, string>, options?: RequestOptions) {
+    return this.request<T>(endpoint, "GET", params, options);
   }
 
-  post<T = unknown>(endpoint: string, data?: unknown) {
-    return this.request<T>(endpoint, "POST", data);
+  post<T = unknown>(endpoint: string, data?: unknown, options?: RequestOptions) {
+    return this.request<T>(endpoint, "POST", data, options);
   }
 
   patch<T = unknown>(endpoint: string, data?: unknown) {
