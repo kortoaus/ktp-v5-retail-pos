@@ -686,7 +686,7 @@ export class EftEngine {
           if (cur) return { created: false, txn: laneView(cur) };
         }
       }
-      let row: TxnRow;
+      let row: TxnRow | null;
       try {
         row = await this.store.insertTxn({
           provider: pairing.provider,
@@ -707,6 +707,9 @@ export class EftEngine {
         }
         throw e;
       }
+      // F-21: the pairing was unpaired / deleted after the check above — the insert
+      // re-checks it under the pairing row lock, so nothing was created.
+      if (!row) throw laneError(409, "Payment terminal is not paired — pair it in Settings", "PAIR", "PAIRING_INACTIVE");
       await this.emit(row, {
         source: "TILL",
         event: "TILL_CREATE",
@@ -1007,17 +1010,16 @@ export class EftEngine {
    * T-9 (F-19): delete an unpaired row from the list. Refused while it is active
    * (Unpair first) or while a transaction on it is not final; lanes that chose it
    * are cleared; past transactions keep their rows and EftEvents (eftPairingId → NULL).
+   * F-21: every check runs inside the store's delete, under the pairing row lock
+   * that a create's insert also takes.
    */
   async deletePairing(id: number) {
     const p = await this.pairingOr404(id);
-    if (p.active) throw laneError(409, "Unpair this terminal before deleting it", "PAIR", "PAIRING_ACTIVE");
-    const open = (await this.store.listNonFinalTxnsForPairing(p.id)).filter((t) => !isFinal(t));
-    if (open.length) throw laneError(409, "A payment on this terminal is not finished — finish it before deleting", "POS", "PAIRING_IN_USE");
-    const r = await this.store.deleteInactivePairing(p.id);
-    if (!r.deleted) {
-      await this.pairingOr404(p.id);
-      throw laneError(409, "Unpair this terminal before deleting it", "PAIR", "PAIRING_ACTIVE");
-    }
+    const r = await this.store.deleteIdlePairing(p.id);
+    if (r.outcome === "missing") throw new HttpException(404, "Pairing not found");
+    if (r.outcome === "active") throw laneError(409, "Unpair this terminal before deleting it", "PAIR", "PAIRING_ACTIVE");
+    if (r.outcome === "in_use")
+      throw laneError(409, "A payment on this terminal is not finished — finish it before deleting", "POS", "PAIRING_IN_USE");
     this.log(`[eft] pairing=${p.id} DELETED lanes_cleared=${r.terminalsCleared}`);
   }
 

@@ -18,7 +18,7 @@ bun run dev:fake-sci          # fake SCI payment terminal on :7400 (no DB) — s
 bun run eft:prune [--days N]  # delete EftEvent rows older than N days (default EFT_EVENT_RETENTION_DAYS) — writes the DATABASE_URL DB
 ```
 
-`npm test` runs every `src/**/*.test.ts` with node:test (ts-node transpile-only, `scripts/test-offline.cjs` preload points DB/cloud URLs at unroutable hosts); 369 pass on 2026-10-28 (T-6 + review rounds 1–2; T-9 +5). Keep tests offline.
+`npm test` runs every `src/**/*.test.ts` with node:test (ts-node transpile-only, `scripts/test-offline.cjs` preload points DB/cloud URLs at unroutable hosts); 370 pass on 2026-10-28 (T-6 + review rounds 1–2; T-9 +6). Keep tests offline.
 
 ## Layout
 
@@ -58,7 +58,8 @@ plugs in later behind `provider.ts`. Spec: `ktpv5-rooms/surveys/2026-10-28-retai
   server poll loop, override, boot recovery, pairings, `/lanes`) · `eft.store.ts` / `eft.store.prisma.ts` · `eft.router.ts`.
 - **Data.** `EftPairing`, `EftTransaction` (`@@unique([operationId, kind])`; `saleOperationId` = the till's sale
   operation id on every attempt; `eftPairingId` nullable, `onDelete: SetNull` since T-9 — a deleted pairing leaves its
-  transactions and their EftEvents in place; a retry after a decline, a *certain* failure or override NO rewrites the old row's
+  transactions and their EftEvents in place (migration `20261028034910_eft_pairing_delete` is reversible only while no
+  pairing has been deleted: once a row's `eftPairingId` is NULL, NOT NULL cannot be restored); a retry after a decline, a *certain* failure or override NO rewrites the old row's
   `operationId` to `<operationId>#<rowId>` — an unresolved row is never retired), `EftEvent` (append-only, `seq` per transaction), `Terminal.eftPairingId` (the lane's chosen
   pairing). The sale/refund write backfills `EftTransaction.invoiceId` by operation id inside the invoice transaction
   (`eft.link.ts`). No EFT column on `SaleInvoice` / `SaleInvoicePayment`; a card tender is still `{type: CREDIT}`.
@@ -81,7 +82,9 @@ plugs in later behind `provider.ts`. Spec: `ktpv5-rooms/surveys/2026-10-28-retai
   (`select` with `:id = none` clears), `DELETE /pairings/:id` (T-9, F-19: an **inactive** row only → 204; clears
   `Terminal.eftPairingId` that points to it, in one DB transaction; 409 `Unpair this terminal before deleting it [PAIR]`
   `PAIRING_ACTIVE` while active, 409 `… not finished … [POS]` `PAIRING_IN_USE` while a transaction on it is not final —
-  CREATING / PENDING / AWAITING_POS / TIMEOUT / FINALISED-UNKNOWN), `POST /transactions` (`{operationId, kind: PURCHASE|REFUND, amountCents,
+  CREATING / PENDING / AWAITING_POS / TIMEOUT / FINALISED-UNKNOWN; F-21: those checks and the delete run in one DB
+  transaction holding the `EftPairing` row `FOR UPDATE`, the same lock the create's insert takes to re-check `active`, so a
+  create racing Unpair + Delete answers 409 `PAIRING_INACTIVE` or the delete answers 409 `PAIRING_IN_USE`), `POST /transactions` (`{operationId, kind: PURCHASE|REFUND, amountCents,
   surchargeCents?}` → 201 new / 200 same attempt / 409 other amount), `GET /transactions/:id?min_version=N`,
   `POST /transactions/:id/actions` (`{buttonKey, inputs: {name: value}, version?}` — 409 `ACTION_IN_FLIGHT` /
   `STALE_VERSION` / `STALE_STATE`, 502 when the relay's answer was lost), `POST /transactions/:id/override`

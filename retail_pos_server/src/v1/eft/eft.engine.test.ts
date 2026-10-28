@@ -661,12 +661,13 @@ test("T-9 (F-19): delete pairing — active → 409 [PAIR]; open txn → 409 [PO
     });
     assert.equal(h.store.pairings.length, 1);
 
-    await h.engine.unpair(p.id);
-    // A transaction on it that is not final blocks the delete.
+    // A transaction on it that is not final blocks the delete (seeded while active; no loop runs for it).
     const open = await h.store.insertTxn({
       provider: "sci", eftPairingId: p.id, terminalId: 1, kind: "PURCHASE", requestedCents: 500, surchargeCents: 0,
       operationId: op(), saleOperationId: "op-open", createdBy: 7, message: null,
     });
+    assert.ok(open);
+    await h.engine.unpair(p.id);
     for (const status of ["CREATING", "TIMEOUT"] as const) {
       await h.store.updateTxn(open.id, { status });
       await assert.rejects(h.engine.deletePairing(p.id), (e: LaneErr) => {
@@ -697,5 +698,56 @@ test("T-9 (F-19): delete pairing — active → 409 [PAIR]; open txn → 409 [PO
     );
   } finally {
     await h.close();
+  }
+});
+
+test("F-21: create that read the active pairing, then Unpair + Delete, then insert → create 409 PAIRING_INACTIVE, nothing charged; insert first → delete 409 PAIRING_IN_USE", async () => {
+  // Ordering A (the reviewed interleaving): create has passed its pairing check; Unpair and
+  // Delete run before its insert. The insert re-checks under the pairing lock → no row.
+  const h = await harness();
+  try {
+    const p = await h.pairLane();
+    const insert = h.store.insertTxn.bind(h.store);
+    let deleted: Promise<void> | null = null;
+    h.store.insertTxn = async (data) => {
+      deleted ??= (async () => {
+        await h.engine.unpair(p.id);
+        await h.engine.deletePairing(p.id); // no unresolved row yet → deleted
+      })();
+      await deleted;
+      return insert(data);
+    };
+    await assert.rejects(
+      h.engine.createTransaction(h.lane(), { operationId: op(), kind: "PURCHASE", amountCents: 100 }),
+      (e: LaneErr) => e.statusCode === 409 && e.result?.errorCode === "PAIRING_INACTIVE",
+    );
+    assert.equal(h.store.pairings.length, 0);
+    assert.equal(h.store.txns.size, 0);
+    assert.equal(h.fakeLog.filter((l) => l.includes("/v1/transactions")).length, 0); // nothing sent upstream
+  } finally {
+    await h.close();
+  }
+
+  // Ordering B: the insert lands first; Unpair + Delete right after → 409 PAIRING_IN_USE and
+  // the payment keeps its pairing (recovery can still poll it).
+  const g = await harness();
+  try {
+    const p = await g.pairLane();
+    const insert = g.store.insertTxn.bind(g.store);
+    let refused: unknown = null;
+    g.store.insertTxn = async (data) => {
+      const row = await insert(data);
+      await g.engine.unpair(p.id);
+      refused = await g.engine.deletePairing(p.id).then(() => null, (e: unknown) => e);
+      return row;
+    };
+    const { txn } = await g.engine.createTransaction(g.lane(), { operationId: op(), kind: "PURCHASE", amountCents: 100 });
+    assert.equal((refused as LaneErr | null)?.statusCode, 409);
+    assert.equal((refused as LaneErr | null)?.result?.errorCode, "PAIRING_IN_USE");
+    assert.equal(g.store.pairings.length, 1);
+    assert.equal((await g.store.getTxn(txn.id))?.eftPairingId, p.id);
+    for (const t of g.store.txns.values()) assert.ok(t.eftPairingId != null || ["FAILED", "FINALISED"].includes(t.status), `${t.status} with null pairing`);
+  } finally {
+    await g.close();
   }
 });

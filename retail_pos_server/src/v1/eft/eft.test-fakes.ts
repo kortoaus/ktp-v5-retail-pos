@@ -1,6 +1,7 @@
 // In-memory EftStore for the eft tests (no test touches a database).
 import {
   EftDuplicateError,
+  UNRESOLVED_TXN_STATUSES,
   type EftStore,
   type EventRow,
   type LaneTerminal,
@@ -62,19 +63,18 @@ export class MemoryEftStore implements EftStore {
     const t = this.terminals.find((x) => x.id === terminalId);
     if (t) t.eftPairingId = eftPairingId;
   }
-  async listNonFinalTxnsForPairing(eftPairingId: number) {
-    return [...this.txns.values()]
-      .filter(
-        (t) =>
-          t.eftPairingId === eftPairingId &&
-          (["CREATING", "PENDING", "AWAITING_POS", "TIMEOUT"].includes(t.status) ||
-            (t.status === "FINALISED" && t.financialStatus === "UNKNOWN")),
-      )
-      .map((t) => ({ ...t }));
-  }
-  async deleteInactivePairing(id: number) {
-    const i = this.pairings.findIndex((x) => x.id === id && !x.active);
-    if (i < 0) return { deleted: false, terminalsCleared: 0 };
+  // F-21: every check-then-write below runs without an await in between — the
+  // memory store's equivalent of the Prisma store's pairing row lock.
+  async deleteIdlePairing(id: number) {
+    const i = this.pairings.findIndex((x) => x.id === id);
+    if (i < 0) return { outcome: "missing" as const, terminalsCleared: 0 };
+    if (this.pairings[i].active) return { outcome: "active" as const, terminalsCleared: 0 };
+    const unresolved = [...this.txns.values()].some(
+      (t) =>
+        t.eftPairingId === id &&
+        ((UNRESOLVED_TXN_STATUSES as readonly string[]).includes(t.status) || (t.status === "FINALISED" && t.financialStatus === "UNKNOWN")),
+    );
+    if (unresolved) return { outcome: "in_use" as const, terminalsCleared: 0 };
     this.pairings.splice(i, 1);
     let terminalsCleared = 0;
     for (const t of this.terminals)
@@ -83,7 +83,7 @@ export class MemoryEftStore implements EftStore {
         terminalsCleared++;
       }
     for (const t of this.txns.values()) if (t.eftPairingId === id) t.eftPairingId = null; // onDelete: SetNull
-    return { deleted: true, terminalsCleared };
+    return { outcome: "deleted" as const, terminalsCleared };
   }
   async listLaneTerminals() {
     return this.terminals.map((t) => ({ ...t }));
@@ -103,7 +103,9 @@ export class MemoryEftStore implements EftStore {
     return null;
   }
   async insertTxn(data: NewTxn) {
-    if (await this.findTxnByOperation(data.operationId, data.kind)) throw new EftDuplicateError("dup");
+    if (!this.pairings.some((p) => p.id === data.eftPairingId && p.active)) return null; // F-21
+    for (const t of this.txns.values())
+      if (t.operationId === data.operationId && t.kind === data.kind) throw new EftDuplicateError("dup");
     const now = new Date();
     const row: TxnRow = {
       id: `c${String(++cuidSeq).padStart(8, "0")}`,
