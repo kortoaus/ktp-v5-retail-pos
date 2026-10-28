@@ -512,3 +512,102 @@ test("F-5: the deadline aborts an in-flight long poll — TIMEOUT arrives on tim
     await h.close();
   }
 });
+
+// ── Codex D-14 review round 2 (F-7 … F-9) ───────────────────────────────────
+
+test("F-7: HTTP 500 carrying a known code on create is ambiguous → TIMEOUT CREATE_UNKNOWN; retry returns the same row, one upstream create", async () => {
+  let fail500 = 1;
+  const h = await harness({
+    fetchWrap: async (url, init, next) => {
+      if (isCreate(url, init) && fail500 > 0) {
+        fail500--;
+        await next(url, init); // landed upstream
+        return new Response(JSON.stringify({ error: { code: "device_not_connected" } }), { status: 500, headers: { "Content-Type": "application/json" } });
+      }
+      return next(url, init);
+    },
+  });
+  try {
+    await h.pairLane();
+    const operationId = op();
+    const first = await h.engine.createTransaction(h.lane(), { operationId, kind: "PURCHASE", amountCents: 100 });
+    const v = await h.until(first.txn.id, (x) => x.status !== "CREATING");
+    assert.equal(v.status, "TIMEOUT");
+    assert.equal(v.errorClass, "NET");
+    assert.equal(v.errorCode, "CREATE_UNKNOWN");
+    assert.equal(v.overrideRequired, true);
+    const retry = await h.engine.createTransaction(h.lane(), { operationId, kind: "PURCHASE", amountCents: 100 });
+    assert.equal(retry.created, false);
+    assert.equal(retry.txn.id, first.txn.id);
+    await h.engine.idle();
+    assert.equal(h.fake.transactions.size, 1);
+  } finally {
+    await h.close();
+  }
+});
+
+test("F-8: 401/400 bodies reflecting part B in `error` → errorCode HTTP_401 / HTTP_400; the secret appears in no lane answer, event or log line", async () => {
+  let partB = "";
+  const statuses = [401, 400];
+  const h = await harness({
+    fetchWrap: async (url, init, next) => {
+      if (!isCreate(url, init)) return next(url, init);
+      partB = decryptSecret(h.store.pairings[0].signingSecretPartBEnc, SECRET_KEY);
+      const status = statuses.shift() ?? 400;
+      return new Response(JSON.stringify({ error: partB }), { status, headers: { "Content-Type": "application/json" } });
+    },
+  });
+  try {
+    await h.pairLane();
+    const dumps: string[] = [];
+    for (const [expectClass, expectCode] of [["PAIR", "HTTP_401"], ["POS", "HTTP_400"]] as const) {
+      const created = await h.engine.createTransaction(h.lane(), { operationId: op(), kind: "PURCHASE", amountCents: 100 });
+      const failed = await h.until(created.txn.id, (v) => v.final);
+      assert.equal(failed.status, "FAILED");
+      assert.equal(failed.errorClass, expectClass);
+      assert.equal(failed.errorCode, expectCode);
+      dumps.push(JSON.stringify(created), JSON.stringify(failed), JSON.stringify(await h.engine.getTransaction(created.txn.id, null)), JSON.stringify(await h.engine.listEvents(created.txn.id)));
+    }
+    assert.ok(partB.length > 0);
+    const dump = [...dumps, JSON.stringify(await h.engine.lanes()), h.lines.join("\n")].join("\n");
+    assert.equal(dump.includes(partB), false, "part B leaked");
+  } finally {
+    await h.close();
+  }
+});
+
+test("F-9: lost action response, first recovery GET fails, second succeeds → the unchanged form is re-shown", async () => {
+  let dropAction = 1;
+  let failRecoveryGet = 0;
+  const h = await harness({
+    fetchWrap: async (url, init, next) => {
+      const u = new URL(url);
+      if (isAction(url, init) && dropAction > 0) {
+        dropAction--;
+        failRecoveryGet = 1;
+        throw lostResponse(); // never reached SCI
+      }
+      if (init.method === "GET" && u.pathname.startsWith("/v1/transactions/") && !u.searchParams.has("min_version") && failRecoveryGet > 0) {
+        failRecoveryGet--;
+        throw Object.assign(new Error("fetch failed"), { name: "TypeError" });
+      }
+      return next(url, init);
+    },
+  });
+  try {
+    await h.pairLane();
+    const { txn } = await h.engine.createTransaction(h.lane(), { operationId: op(), kind: "PURCHASE", amountCents: 177 });
+    const awaiting = await h.until(txn.id, (v) => v.status === "AWAITING_POS");
+    await assert.rejects(h.engine.submitAction(txn.id, { buttonKey: "approve", inputs: {} }, 7));
+    const reshown = await h.until(txn.id, (v) => v.status !== "PENDING");
+    assert.equal(reshown.status, "AWAITING_POS");
+    assert.ok(reshown.version > awaiting.version);
+    assert.equal(failRecoveryGet, 0); // the failing recovery GET did happen
+    const errors = (await h.engine.listEvents(txn.id)).filter((e) => e.event === "ERROR" && e.errorClass === "NET");
+    assert.ok(errors.length >= 2); // the lost action + the failed recovery GET
+    const done = await h.engine.submitAction(txn.id, { buttonKey: "approve", inputs: {}, version: reshown.version }, 7);
+    assert.equal(done.financialStatus, "APPROVED");
+  } finally {
+    await h.close();
+  }
+});

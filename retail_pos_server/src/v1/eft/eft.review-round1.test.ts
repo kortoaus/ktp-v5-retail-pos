@@ -37,7 +37,9 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function setup(polls: Array<ProviderTxnAnswer | "not_yet">, submit: () => Promise<ProviderResult<ProviderTxnAnswer | null>>, cfg: Partial<EftConfig> = {}) {
+type Poll = ProviderTxnAnswer | "not_yet" | "error";
+
+function setup(polls: Poll[], submit: () => Promise<ProviderResult<ProviderTxnAnswer | null>>, cfg: Partial<EftConfig> = {}, existing?: MemoryEftStore) {
   const queue = [...polls];
   const provider: EftProvider = {
     id: "sci",
@@ -48,18 +50,19 @@ function setup(polls: Array<ProviderTxnAnswer | "not_yet">, submit: () => Promis
     pollTransaction: async (): Promise<ProviderResult<PollOutcome>> => {
       await new Promise((r) => setTimeout(r, 5));
       const s = queue.shift() ?? "not_yet";
+      if (s === "error") return { ok: false, error: { errorClass: "NET", errorCode: "FETCH_FAILED", message: "down", retryable: true, ambiguous: true }, http: null };
       return ok(s === "not_yet" ? { kind: "not_yet" } : { kind: "answer", answer: s });
     },
     submitAction: submit,
     cancel: async () => ({ supported: false }),
   };
-  const store = new MemoryEftStore();
-  store.pairings.push({
+  const store = existing ?? new MemoryEftStore();
+  if (!existing) store.pairings.push({
     id: 1, provider: "sci", pairingId: "p", keyId: "k", signingSecretPartBEnc: encryptSecret("partB", KEY), baseUrl: "https://sci.test",
     tid: null, pairingNickname: null, terminalNickname: null, active: true, lastTestAt: null, lastTestOk: null, lastError: null,
     lastSciOkAt: null, lastSciErrorAt: null, lastSciErrorCode: null, createdAt: new Date(), updatedAt: new Date(),
   });
-  store.terminals[0].eftPairingId = 1;
+  if (!existing) store.terminals[0].eftPairingId = 1;
   const config: EftConfig = {
     pairingApiUrl: "https://pair.test", pairingApiKey: "k", signingSecretPartA: "a", secretKeyHex: KEY,
     pollDeadlineMs: 150, laneHoldMs: 200, eventRetentionDays: 180, lateWatchMs: 150, retryBackoffMs: 5, ...cfg,
@@ -101,8 +104,8 @@ test("F-2: an override YES made while an action relay is in flight is never over
   await engine.stop();
 });
 
-test("F-2: a stale version on an action is refused; overridden rows ignore late poll answers entirely", async () => {
-  const polls: Array<ProviderTxnAnswer | "not_yet"> = [];
+test("F-2: overridden rows ignore late poll answers entirely", async () => {
+  const polls: Poll[] = [];
   for (let i = 0; i < 40; i++) polls.push("not_yet");
   polls.push(answer(5, "PENDING", { message: "late progress" }), answer(6, "FINALISED", { financialStatus: "APPROVED" }));
   const { engine, store } = setup(polls, async () => ok(null), { lateWatchMs: 3000 });
@@ -157,4 +160,47 @@ test("F-4: excerpt redacts structured bodies before serialising and drops unstru
   assert.equal(err.ambiguous, true);
   assert.equal(classifySciError(null, null, "TimeoutError: aborted").ambiguous, true);
   assert.equal(classifySciError(424, { error: { code: "device_not_connected" } }).ambiguous, undefined);
+});
+
+// ── Codex D-14 review round 2 ───────────────────────────────────────────────
+
+test("F-9: boot recovery of AWAITING_POS with no answer from SCI → TIMEOUT within the deadline", async () => {
+  const s1 = setup([answer(2, "AWAITING_POS", { posInstructions: signatureForm })], async () => ok(null));
+  const { txn } = await s1.engine.createTransaction(lane, { operationId: "op-r2-boot-01", kind: "PURCHASE", amountCents: 500 });
+  await s1.engine.idle();
+  assert.equal(s1.store.txns.get(txn.id)!.status, "AWAITING_POS");
+  await s1.engine.stop();
+
+  const errors: Poll[] = Array.from({ length: 500 }, () => "error" as const);
+  const s2 = setup(errors, async () => ok(null), { pollDeadlineMs: 150, lateWatchMs: 100 }, s1.store);
+  const t0 = Date.now();
+  assert.deepEqual(await s2.engine.recover(), { resumed: 1, unresolved: 0 });
+  let v = await s2.engine.getTransaction(txn.id, null);
+  while (v.status !== "TIMEOUT" && Date.now() - t0 < 2000) v = await s2.engine.getTransaction(txn.id, v.version + 1, undefined, 200);
+  assert.equal(v.status, "TIMEOUT");
+  assert.equal(v.overrideRequired, true);
+  assert.ok(Date.now() - t0 < 1000, `TIMEOUT after ${Date.now() - t0} ms`);
+  await s2.engine.idle();
+  await s2.engine.stop();
+});
+
+test("F-10: an action with an outdated version is refused with 409 STALE_VERSION and never relayed", async () => {
+  let relayed = 0;
+  const { engine } = setup([answer(2, "AWAITING_POS", { posInstructions: signatureForm })], async () => {
+    relayed++;
+    return ok(answer(3, "FINALISED", { financialStatus: "APPROVED" }));
+  });
+  const { txn } = await engine.createTransaction(lane, { operationId: "op-r2-stale-1", kind: "PURCHASE", amountCents: 500 });
+  await engine.idle();
+  const shown = await engine.getTransaction(txn.id, null);
+  assert.equal(shown.status, "AWAITING_POS");
+  const printed = await engine.submitAction(txn.id, { buttonKey: "print", inputs: {}, version: shown.version }, 3);
+  assert.ok(printed.version > shown.version);
+  await assert.rejects(
+    engine.submitAction(txn.id, { buttonKey: "approve", inputs: {}, version: shown.version }, 3),
+    (e: HttpErr) => e.statusCode === 409 && e.result?.errorCode === "STALE_VERSION",
+  );
+  assert.equal(relayed, 0);
+  assert.equal((await engine.getTransaction(txn.id, null)).status, "AWAITING_POS");
+  await engine.stop();
 });
