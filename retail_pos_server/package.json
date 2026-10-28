@@ -7,7 +7,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon src/index.ts",
-    "test": "node --require ./scripts/test-offline.cjs --require ts-node/register --test \"src/**/*.test.ts\""
+    "test": "node --require ./scripts/test-offline.cjs --require ts-node/register --test \"src/**/*.test.ts\"",
+    "dev:fake-sci": "bun scripts/dev/fake-sci.ts",
+    "eft:prune": "bun scripts/eft-events-prune.ts"
   },
   "keywords": [],
   "author": "",
