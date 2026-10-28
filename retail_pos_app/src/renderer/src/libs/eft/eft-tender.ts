@@ -12,11 +12,30 @@ import {
   type TenderUserVoucher,
 } from "../sale/tender-queue";
 
-export type EftTenderAction = { type: "eft-approved"; key: string; amountCents: number };
+export type EftTenderAction =
+  | { type: "eft-approved"; key: string; amountCents: number }
+  // A-28 (F-12): an unsuccessful terminal outcome (declined, cancelled,
+  // override No, approved-but-different, not sent) drops the keyed CREDIT
+  // draft, so COMPLETE cannot record it; manual credit needs a fresh re-key.
+  | { type: "eft-clear-credit-draft" };
+
+export function applyEftTenderAction<UV extends TenderUserVoucher, CV extends TenderCustomerVoucher>(
+  state: TenderState<UV, CV>,
+  action: EftTenderAction,
+): TenderState<UV, CV> {
+  return action.type === "eft-approved" ? addApprovedCredit(state, action) : clearCreditDraft(state);
+}
+
+export function clearCreditDraft<UV extends TenderUserVoucher, CV extends TenderCustomerVoucher>(
+  state: TenderState<UV, CV>,
+): TenderState<UV, CV> {
+  if (state.staged.tender !== "CREDIT" || state.staged.amount === 0) return state;
+  return { ...state, staged: makeDefaultStage("CREDIT") };
+}
 
 export function addApprovedCredit<UV extends TenderUserVoucher, CV extends TenderCustomerVoucher>(
   state: TenderState<UV, CV>,
-  action: EftTenderAction,
+  action: Extract<EftTenderAction, { type: "eft-approved" }>,
 ): TenderState<UV, CV> {
   if (!Number.isInteger(action.amountCents) || action.amountCents <= 0) return state;
   if (state.payments.some((p) => p.key === action.key)) return state;

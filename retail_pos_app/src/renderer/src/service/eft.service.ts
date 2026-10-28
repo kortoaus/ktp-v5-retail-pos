@@ -42,42 +42,49 @@ export async function selectEftPairing(
   return apiService.post(`/api/eft/pairings/${id ?? "none"}/select`);
 }
 
-export async function createEftTransaction(body: {
-  operationId: string;
-  kind: "PURCHASE";
-  amountCents: number;
-  surchargeCents: number;
-}): Promise<ApiResponse<EftTxn>> {
-  return apiService.post<EftTxn>("/api/eft/transactions", body);
+export async function createEftTransaction(
+  body: {
+    operationId: string;
+    kind: "PURCHASE";
+    amountCents: number;
+    surchargeCents: number;
+  },
+  signal?: AbortSignal,
+): Promise<ApiResponse<EftTxn>> {
+  return apiService.post<EftTxn>("/api/eft/transactions", body, { signal });
 }
 
 /** Long poll: answers once version ≥ minVersion, or the current state after the hold. */
 export async function getEftTransaction(
   id: string,
   minVersion: number | null,
+  signal?: AbortSignal,
 ): Promise<ApiResponse<EftTxn>> {
   return apiService.get<EftTxn>(
     `/api/eft/transactions/${encodeURIComponent(id)}`,
     minVersion == null ? undefined : { min_version: String(minVersion) },
+    { signal },
   );
 }
 
 export async function submitEftAction(
   id: string,
   body: { buttonKey: string; inputs: Record<string, string>; version: number },
+  signal?: AbortSignal,
 ): Promise<ApiResponse<EftTxn>> {
-  return apiService.post<EftTxn>(`/api/eft/transactions/${encodeURIComponent(id)}/actions`, body);
+  return apiService.post<EftTxn>(`/api/eft/transactions/${encodeURIComponent(id)}/actions`, body, { signal });
 }
 
 export async function overrideEftTransaction(
   id: string,
   answer: "YES" | "NO",
+  signal?: AbortSignal,
 ): Promise<ApiResponse<EftTxn>> {
-  return apiService.post<EftTxn>(`/api/eft/transactions/${encodeURIComponent(id)}/override`, { answer });
+  return apiService.post<EftTxn>(`/api/eft/transactions/${encodeURIComponent(id)}/override`, { answer }, { signal });
 }
 
-export async function cancelEftTransaction(id: string): Promise<ApiResponse<EftTxn>> {
-  return apiService.post<EftTxn>(`/api/eft/transactions/${encodeURIComponent(id)}/cancel`);
+export async function cancelEftTransaction(id: string, signal?: AbortSignal): Promise<ApiResponse<EftTxn>> {
+  return apiService.post<EftTxn>(`/api/eft/transactions/${encodeURIComponent(id)}/cancel`, undefined, { signal });
 }
 
 export async function getEftLanes(): Promise<ApiResponse<EftLanes>> {

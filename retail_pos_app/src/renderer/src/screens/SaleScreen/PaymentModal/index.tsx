@@ -34,13 +34,21 @@ import {
   type EftOutcome,
 } from "../../../libs/eft/eft-flow";
 import {
-  addApprovedCredit,
   appliedTxnIds,
+  applyEftTenderAction,
   type EftTenderAction,
 } from "../../../libs/eft/eft-tender";
+import {
+  createEftStarter,
+  NOT_DURABLE_MESSAGE,
+} from "../../../libs/eft/eft-start";
 import type { EftPairing } from "../../../libs/eft/eft-types";
 import { listEftPairings } from "../../../service/eft.service";
-import { operationIdFor, saleAttemptKey } from "../../../libs/operation-id";
+import {
+  operationIdFor,
+  pendingOperation,
+  saleAttemptKey,
+} from "../../../libs/operation-id";
 import GiftCardInput from "./GiftCardInput";
 import UserVoucherInput from "./UserVoucherInput";
 import CustomerVoucherInput from "./CustomerVoucherInput";
@@ -87,8 +95,8 @@ const reducer = (
   state: TenderStateVM,
   action: TenderAction<Voucher, CustomerVoucher> | EftTenderAction,
 ): TenderStateVM =>
-  action.type === "eft-approved"
-    ? addApprovedCredit(state, action)
+  action.type === "eft-approved" || action.type === "eft-clear-credit-draft"
+    ? applyEftTenderAction(state, action)
     : tenderReducer(state, action);
 const initTenderState = (): TenderStateVM =>
   createTenderState<Voucher, CustomerVoucher>();
@@ -232,22 +240,48 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
       });
       return;
     }
+    // A-28 (F-12): declined / cancelled / override No / approved-but-different
+    // / not sent — the keyed CREDIT draft is dropped; COMPLETE cannot record
+    // it, a manual card payment needs a fresh re-key.
+    dispatch({ type: "eft-clear-credit-draft" });
     if (state.unavailable) setEftOff(true);
-    setEftResult({ tone: "error", text: outcome.message });
+    setEftResult({
+      tone: "error",
+      text:
+        outcome.kind === "review"
+          ? `${outcome.message}. Check the terminal receipt, then key the card payment manually.`
+          : outcome.message,
+    });
   }
   const eft = useEftTender(handleEftOutcome);
   const eftTerminalActive = !!lanePairing && !eftOff;
 
-  function startTerminalPayment() {
-    if (eft.running || stagedPayment.tender !== "CREDIT" || stagedPayment.amount <= 0) return;
+  // A-29 (F-14): the create goes out only with a durably stored sale attempt
+  // id; one start at a time; a start left behind by Cancel never sends.
+  const [eftStarter] = useState(() =>
+    createEftStarter({
+      mint: (key) => operationIdFor(key),
+      persist: async () => undefined, // localStorage writes are synchronous; the read-back proves them
+      stored: (key) => pendingOperation(key)?.operationId ?? null,
+    }),
+  );
+  useEffect(() => () => eftStarter.cancel(), [eftStarter]);
+
+  async function startTerminalPayment() {
+    if (eft.running || eftStarter.isStarting()) return;
+    if (stagedPayment.tender !== "CREDIT" || stagedPayment.amount <= 0) return;
     setEftResult(null);
-    eft.start({
-      // The sale attempt's id (kept across a restart until the sale is
-      // recorded): the same create answers the same row — no double charge.
-      operationId: operationIdFor(saleAttemptKey(activeCartIndex)),
-      amountCents: stagedPayment.amount,
-      appliedTxnIds: appliedTxnIds(payments, eftKeysRef.current),
-    });
+    const amountCents = stagedPayment.amount;
+    const cartIndex = activeCartIndex;
+    const applied = appliedTxnIds(payments, eftKeysRef.current);
+    // The sale attempt's id (kept across a restart until the sale is
+    // recorded): the same create answers the same row — no double charge.
+    const result = await eftStarter.start(
+      saleAttemptKey(cartIndex),
+      () => useSalesStore.getState().activeCartIndex === cartIndex,
+      (operationId) => eft.start({ operationId, amountCents, appliedTxnIds: applied }),
+    );
+    if (result === "not-durable") setEftResult({ tone: "error", text: NOT_DURABLE_MESSAGE });
   }
 
   function handleCancelModal() {
@@ -258,6 +292,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
       )
     )
       return;
+    eftStarter.cancel();
     onCancel();
   }
 
@@ -718,7 +753,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
                 onCommit={commitStaged}
                 terminal={
                   eftTerminalActive
-                    ? { label: terminalLabel, onPay: startTerminalPayment }
+                    ? { label: terminalLabel, onPay: () => void startTerminalPayment() }
                     : null
                 }
                 resultLine={
