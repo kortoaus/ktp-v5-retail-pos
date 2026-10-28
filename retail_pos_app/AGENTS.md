@@ -10,6 +10,7 @@ npm run dev                   # electron-vite dev (main reads ELECTRON_RENDERER_
 npm run build                 # electron-vite build → out/
 npx tsc --noEmit -p tsconfig.node.json --composite false --incremental false   # main + preload
 npx tsc --noEmit -p tsconfig.web.json  --composite false --incremental false   # renderer
+npm run typecheck             # both of the above (T-16)
 npm run test:zpl-font && npm run test:label-core && npm run test:scale-core && npm run test:orders
 npm run package:win           # local NSIS x64 installer (package:mac → dmg x64+arm64)
 ```
@@ -32,6 +33,21 @@ npm run package:win           # local NSIS x64 installer (package:mac → dmg x6
 - `store/SalesStore.helper.ts`, `libs/sale/*`, `libs/pp-barcode.ts`, `types/models.ts` and others are copied by the Android
   tablet and the runner (`sync-sale-core.mjs`). Changing them creates drift there. See root danger zones.
 - Member QR `member%%%<id>%%%<level>%%%<companyId>` (D-27): offline (status 0, or 503 `transport` = the store server cannot reach CRM, F-20) attaches the QR member unverified only when its companyId equals `company.cloudId`; no companyId → "needs the latest app", other company → "another store" alert (`libs/sale/scan-dispatch.ts` `memberLookupAction`).
+
+## Refund core (retail-runner T-16, 2026-10-28)
+
+The till's Refund logic is pure modules so the runner can copy it (S-4 §3, P-1 pattern: edit here, the runner syncs; never
+hand-patch the copies). Sale-core sync candidates (runner T-17 adds them to `sync-sale-core.mjs`): **`libs/sale/invoice.types.ts`**
+(invoice shapes; `service/sale.service.ts` re-exports them, and `libs/refund/*`, `libs/sale/can-repay.ts`,
+`invoice-row-to-line.ts` and `libs/printer/sale-invoice-escpos.ts` import from it, not from the axios service),
+**`libs/refund/detail-rules.ts`** (Refund detail screen rules: all-cash mode, paid / remaining / COMPLETE REFUND gate, row
+qty clamp, All / All Rows / Clear, tender clamp on Set, Fill with round-5 when cash-only, drawer-on-cash, Review / Confirm
+texts), **`libs/refund/submit-refund.ts`** (`refund:invoice:<id>` attempt → operationId → injected POST → settle;
+`createRefundInvoice` is the HTTP wrapper with `trackCheckout`), **`libs/sale/invoice-list-summary.ts`** (invoice list
+Cash / Credit / Others). Their dependencies `libs/refund/{compute,points,build-payload,payload.types}.ts` and
+`libs/invoice-search-scan.ts` are pure too. Tests `libs/refund/detail-rules.test.mjs`, `submit-refund.test.mjs`,
+`libs/sale/invoice-list-summary.test.mjs` run in `npm run test:sale-core`; the money-contract / weighed-row tests stay in
+`test:orders`. `libs/printer/sale-invoice-receipt.ts` still calls `getSaleInvoiceChildren` (reprint, HTTP) — not a sync candidate.
 
 ## Integrated EFTPOS (retail-eftpos T-7, 2026-10-28)
 

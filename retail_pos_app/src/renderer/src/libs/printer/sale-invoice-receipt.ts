@@ -1,9 +1,9 @@
 import QRCode from "qrcode";
-import {
-  getSaleInvoiceChildren,
+import { getSaleInvoiceChildren } from "../../service/sale.service";
+import type {
   SaleInvoiceDetail,
   SaleInvoicePaymentItem,
-} from "../../service/sale.service";
+} from "../sale/invoice.types";
 import { buildMultiReceiptBuffer, buildPrintBuffer } from "./escpos";
 import {
   buildSaleInvoiceEscposReceipt,

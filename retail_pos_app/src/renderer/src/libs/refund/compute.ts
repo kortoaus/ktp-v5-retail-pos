@@ -19,7 +19,7 @@ import type {
   SaleInvoicePaymentItem,
   SaleInvoiceRefundChild,
   SaleInvoiceRowItem,
-} from "../../service/sale.service";
+} from "../sale/invoice.types";
 
 // ── Selections ─────────────────────────────────────────────────
 // UI state: 각 원본 row 에 대한 선택된 refund qty (×1000 단위).

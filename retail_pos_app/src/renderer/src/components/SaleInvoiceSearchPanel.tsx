@@ -33,9 +33,9 @@ import { cn } from "../libs/cn";
 import {
   getDominantPaymentCategory,
   PAYMENT_CATEGORY_CLASSES,
-  type PaymentCategoryAmounts,
 } from "../libs/payment-colors";
 import { parseInvoiceSearchScan } from "../libs/invoice-search-scan";
+import { tenderSummary } from "../libs/sale/invoice-list-summary";
 
 type TypeFilter = "ALL" | InvoiceTypeWire;
 const ALL_TYPE_FILTERS: TypeFilter[] = ["ALL", "SALE", "REFUND", "SPEND"];
@@ -44,18 +44,6 @@ const PAGE_SIZE = 20;
 const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 const fmtTenderMoney = (cents: number) =>
   cents > 0 ? `$${fmtMoney(cents)}` : "—";
-
-function tenderSummary(inv: SaleInvoiceListItem): PaymentCategoryAmounts {
-  return inv.payments.reduce(
-    (summary, payment) => {
-      if (payment.type === "CASH") summary.cash += payment.amount;
-      else if (payment.type === "CREDIT") summary.credit += payment.amount;
-      else summary.others += payment.amount;
-      return summary;
-    },
-    { cash: 0, credit: 0, others: 0 },
-  );
-}
 
 interface Props {
   onSelect: (inv: SaleInvoiceListItem) => void;

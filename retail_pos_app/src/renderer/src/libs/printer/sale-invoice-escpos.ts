@@ -1,7 +1,7 @@
 import type {
   SaleInvoiceDetail,
   SaleInvoicePaymentItem,
-} from "../../service/sale.service";
+} from "../sale/invoice.types";
 import { MONEY_DP, MONEY_SCALE, QTY_DP, QTY_SCALE } from "../constants";
 import dayjsAU from "../dayjsAU";
 import {

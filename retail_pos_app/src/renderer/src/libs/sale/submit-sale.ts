@@ -1,6 +1,6 @@
 // Sale submission — payload, operation id, replay detection and the
 // completed-sale shape (retail-runner T-1, D-2). No DOM, no HTTP client: the
-// request function is injected (POS: service/sale.service postSale over
+// request function is injected (POS: the sale service's postSale over
 // axios; Runner: its own client). Runner copies this file verbatim.
 //
 // Operation identity (T-15, platform/D-10): one attempt per cart slot. The

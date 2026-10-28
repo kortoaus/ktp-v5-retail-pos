@@ -10,7 +10,7 @@
 //   4. now - invoice.createdAt < 10분
 //   5. 원본 payments 에 customer-voucher 없음 (D-21 확장 — CRM 연동 전까지 차단)
 
-import type { SaleInvoiceDetail } from "../../service/sale.service";
+import type { SaleInvoiceDetail } from "./invoice.types";
 
 export const REPAY_TIME_LIMIT_MS = 10 * 60 * 1000;
 

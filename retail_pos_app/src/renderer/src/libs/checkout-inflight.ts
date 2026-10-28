@@ -2,7 +2,7 @@
 //
 // A downloaded till update must not restart the app while the server has not
 // answered a sale, spend, refund or repay (the answer decides whether the
-// cart is cleared and the receipt printed). service/sale.service.ts wraps
+// cart is cleared and the receipt printed). The sale service (service/) wraps
 // those four calls with trackCheckout(); the update idle check reads
 // checkoutsInFlight().
 

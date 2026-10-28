@@ -1,7 +1,7 @@
 import type {
   SaleInvoiceDetail,
   SaleInvoiceRowItem,
-} from "../../service/sale.service";
+} from "../sale/invoice.types";
 import type { RefundSelection } from "./compute";
 import { refundRowComputed } from "./compute";
 

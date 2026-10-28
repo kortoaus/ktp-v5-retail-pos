@@ -5,7 +5,7 @@
 import type {
   SaleInvoiceDetail,
   SaleInvoicePaymentItem,
-} from "../../service/sale.service";
+} from "../sale/invoice.types";
 import type { FlatTenderKey, TenderCapEntry } from "./compute";
 import type {
   RefundCreatePayload,

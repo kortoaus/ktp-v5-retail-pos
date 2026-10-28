@@ -5,7 +5,7 @@
 // 그대로 재결제" 하므로, 훅이 실제 읽는 필드 (`total`, `tax_amount`) 만
 // 유효하면 되고, 나머지는 UI 렌더링과 타입 요구사항 충족용으로 채운다.
 
-import type { SaleInvoiceRowItem } from "../../service/sale.service";
+import type { SaleInvoiceRowItem } from "./invoice.types";
 import type { SaleLineType } from "../../types/sales";
 import type { ItemTypes } from "../item-utils";
 import type { RowTypeWire } from "./payload.types";

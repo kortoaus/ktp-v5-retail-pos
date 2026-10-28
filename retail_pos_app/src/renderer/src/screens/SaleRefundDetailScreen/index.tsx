@@ -29,6 +29,20 @@ import {
 } from "../../libs/refund/compute";
 import { buildRefundPayload } from "../../libs/refund/build-payload";
 import { calculateExpectedRefundPointsReversed } from "../../libs/refund/points";
+import {
+  canCompleteRefund,
+  clampTenderAmount,
+  clearedRefundInputs,
+  fillTenderAmount,
+  isAllCashMode,
+  refundAllRowsSelection,
+  refundOpensDrawer,
+  refundPaid,
+  refundRemaining,
+  REFUND_TEXTS,
+  withRowQty,
+  withRowRefundAll,
+} from "../../libs/refund/detail-rules";
 import { MONEY_DP, MONEY_SCALE, QTY_SCALE } from "../../libs/constants";
 import MoneyNumpad from "../../components/Numpads/MoneyNumpad";
 import Numpad from "../../components/Numpads/Numpad";
@@ -114,16 +128,10 @@ export default function SaleRefundDetailScreen({
   );
 
   // Cash-only mode — non-cash tender 입력이 전부 0 이고 cash 입력이 >0.
-  const allCashMode = useMemo(() => {
-    let cashSum = 0;
-    let nonCashSum = 0;
-    for (const c of caps) {
-      const amt = tenderAmounts[c.keyStr] ?? 0;
-      if (c.key.kind === "CASH") cashSum += amt;
-      else nonCashSum += amt;
-    }
-    return cashSum > 0 && nonCashSum === 0;
-  }, [caps, tenderAmounts]);
+  const allCashMode = useMemo(
+    () => isAllCashMode(caps, tenderAmounts),
+    [caps, tenderAmounts],
+  );
 
   const calc = useMemo(() => {
     if (!invoice)
@@ -145,40 +153,29 @@ export default function SaleRefundDetailScreen({
     return calculateExpectedRefundPointsReversed(invoice, selections);
   }, [invoice, selections]);
 
-  const paid = useMemo(
-    () => Object.values(tenderAmounts).reduce((s, n) => s + n, 0),
-    [tenderAmounts],
-  );
-  const remaining = calc.total - paid;
+  const paid = useMemo(() => refundPaid(tenderAmounts), [tenderAmounts]);
+  const remaining = refundRemaining(calc.total, paid);
 
-  const anyRowSelected = useMemo(
-    () => Object.values(selections).some((q) => q > 0),
-    [selections],
-  );
-
-  const canComplete = anyRowSelected && calc.total > 0 && remaining === 0;
+  const canComplete = canCompleteRefund(selections, calc.total, remaining);
 
   // ── Row qty handlers ─────────────────────────────────────
   function setRowQty(row: SaleInvoiceRowItem, qty: number) {
-    const cap = rowRefundable(row);
-    const clamped = Math.max(0, Math.min(cap, qty));
-    setSelections((prev) => ({ ...prev, [row.id]: clamped }));
+    setSelections((prev) => withRowQty(prev, row, qty));
   }
 
   function refundAllRow(row: SaleInvoiceRowItem) {
-    setRowQty(row, rowRefundable(row));
+    setSelections((prev) => withRowRefundAll(prev, row));
   }
 
   function refundAllRows() {
     if (!invoice) return;
-    const next: RefundSelection = {};
-    for (const r of invoice.rows) next[r.id] = rowRefundable(r);
-    setSelections(next);
+    setSelections(refundAllRowsSelection(invoice.rows));
   }
 
   function clearAll() {
-    setSelections({});
-    setTenderAmounts({});
+    const cleared = clearedRefundInputs();
+    setSelections(cleared.selections);
+    setTenderAmounts(cleared.tenderAmounts);
   }
 
   // ── Numpad handlers ──────────────────────────────────────
@@ -211,9 +208,8 @@ export default function SaleRefundDetailScreen({
     if (numpadTarget == null) return;
     if (numpadTarget.kind === "tender") {
       const cents = parseInt(numpadValue || "0", 10);
-      const cap = caps.find((c) => c.keyStr === numpadTarget.keyStr);
-      if (cap) {
-        const clamped = Math.max(0, Math.min(cap.remaining, cents));
+      const clamped = clampTenderAmount(caps, numpadTarget.keyStr, cents);
+      if (clamped != null) {
         setTenderAmounts((prev) => ({
           ...prev,
           [numpadTarget.keyStr]: clamped,
@@ -242,7 +238,7 @@ export default function SaleRefundDetailScreen({
       );
       const res = await createRefundInvoice(payload);
       if (!res.ok || !res.result) {
-        window.alert(res.msg ?? "Refund failed");
+        window.alert(res.msg ?? REFUND_TEXTS.failed);
         return;
       }
 
@@ -252,10 +248,7 @@ export default function SaleRefundDetailScreen({
       if (detailRes.ok && detailRes.result) detail = detailRes.result;
 
       // Drawer kick — cash refund > 0 이면 먼저 열림.
-      const cashRefund = payload.payments
-        .filter((p) => p.type === "CASH")
-        .reduce((s, p) => s + p.amount, 0);
-      if (cashRefund > 0) {
+      if (refundOpensDrawer(payload.payments)) {
         try {
           await kickDrawer();
         } catch (e) {
@@ -280,7 +273,7 @@ export default function SaleRefundDetailScreen({
       navigate("/manager/refund");
     } catch (e) {
       console.error("refund submit failed:", e);
-      window.alert("Refund failed — see console");
+      window.alert(REFUND_TEXTS.failedUnexpected);
     } finally {
       setSubmitting(false);
     }
@@ -290,24 +283,13 @@ export default function SaleRefundDetailScreen({
   // 가 없으면 round5 (PaymentModal CashInput EXACT 와 동일 원리 — D-30). 그 외
   // tender 는 정확 금액. Cap 으로 최종 clamp.
   function fillRemainingForTender(keyStr: string) {
-    const cap = caps.find((c) => c.keyStr === keyStr);
-    if (!cap) return;
-
-    let otherCash = 0;
-    let otherNonCash = 0;
-    for (const c of caps) {
-      if (c.keyStr === keyStr) continue;
-      const a = tenderAmounts[c.keyStr] ?? 0;
-      if (c.key.kind === "CASH") otherCash += a;
-      else otherNonCash += a;
-    }
-    const thisIsCash = cap.key.kind === "CASH";
-    const willBeCashOnly = thisIsCash && otherNonCash === 0;
-    const hypothetical = willBeCashOnly
-      ? Math.round(calc.subtotalBeforeRounding / 5) * 5
-      : calc.subtotalBeforeRounding;
-    const left = hypothetical - otherCash - otherNonCash;
-    const target = Math.max(0, Math.min(cap.remaining, left));
+    const target = fillTenderAmount(
+      caps,
+      tenderAmounts,
+      keyStr,
+      calc.subtotalBeforeRounding,
+    );
+    if (target == null) return;
     setTenderAmounts((prev) => ({ ...prev, [keyStr]: target }));
   }
 
@@ -436,7 +418,7 @@ export default function SaleRefundDetailScreen({
                     : "bg-gray-200 text-gray-400",
                 )}
               >
-                {submitting ? "Processing..." : "COMPLETE REFUND"}
+                {submitting ? REFUND_TEXTS.processing : REFUND_TEXTS.completeButton}
               </button>
             </div>
           </div>
@@ -851,7 +833,7 @@ function ReviewConfirmModal({
         className="bg-white rounded-2xl shadow-2xl p-6 w-[440px] max-h-[85vh] overflow-auto"
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-bold mb-1">Review Refund</h2>
+        <h2 className="text-lg font-bold mb-1">{REFUND_TEXTS.reviewTitle}</h2>
         <div className="text-xs text-gray-500 mb-4">
           Original: {invoice.serial ?? `#${invoice.id}`}
         </div>
@@ -913,14 +895,14 @@ function ReviewConfirmModal({
             onPointerDown={onCancel}
             className="flex-1 h-11 rounded-lg bg-gray-200 text-sm font-bold active:bg-gray-300"
           >
-            Cancel
+            {REFUND_TEXTS.reviewCancel}
           </button>
           <button
             type="button"
             onPointerDown={onNext}
             className="flex-1 h-11 rounded-lg bg-blue-600 text-white text-sm font-bold active:bg-blue-700"
           >
-            Looks Good →
+            {REFUND_TEXTS.reviewNext}
           </button>
         </div>
       </div>
@@ -951,15 +933,15 @@ function FinalConfirmModal({
         onPointerDown={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold mb-2 text-rose-700">
-          ⚠ Confirm Refund
+          {REFUND_TEXTS.confirmTitle}
         </h2>
         <p className="text-sm text-gray-700 mb-2">
-          <span className="font-bold">{fmt(total)}</span> will be refunded from
-          invoice <span className="font-mono">{serial}</span>.
+          <span className="font-bold">{fmt(total)}</span>
+          {REFUND_TEXTS.confirmWillBeRefunded}
+          <span className="font-mono">{serial}</span>.
         </p>
         <p className="text-xs text-gray-500 mb-5">
-          This creates a REFUND invoice and cannot be undone from the POS.
-          EFTPOS / gift card entries must be keyed in manually on the terminal.
+          {REFUND_TEXTS.confirmWarning}
         </p>
 
         <div className="flex gap-2">
@@ -968,14 +950,14 @@ function FinalConfirmModal({
             onPointerDown={onCancel}
             className="flex-1 h-11 rounded-lg bg-gray-200 text-sm font-bold active:bg-gray-300"
           >
-            ← Back
+            {REFUND_TEXTS.confirmBack}
           </button>
           <button
             type="button"
             onPointerDown={onConfirm}
             className="flex-1 h-11 rounded-lg bg-rose-600 text-white text-sm font-bold active:bg-rose-700"
           >
-            REFUND NOW
+            {REFUND_TEXTS.confirmSubmit}
           </button>
         </div>
       </div>
