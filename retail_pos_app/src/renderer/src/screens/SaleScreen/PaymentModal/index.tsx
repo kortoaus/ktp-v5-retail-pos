@@ -27,6 +27,20 @@ import {
 } from "../../../libs/sale/tender-queue";
 import CashInput from "./CashInput";
 import CreditInput from "./CreditInput";
+import EftPanel from "./EftPanel";
+import { useEftTender, type EftResultLine } from "./useEftTender";
+import {
+  activeLanePairing,
+  type EftOutcome,
+} from "../../../libs/eft/eft-flow";
+import {
+  addApprovedCredit,
+  appliedTxnIds,
+  type EftTenderAction,
+} from "../../../libs/eft/eft-tender";
+import type { EftPairing } from "../../../libs/eft/eft-types";
+import { listEftPairings } from "../../../service/eft.service";
+import { operationIdFor, saleAttemptKey } from "../../../libs/operation-id";
 import GiftCardInput from "./GiftCardInput";
 import UserVoucherInput from "./UserVoucherInput";
 import CustomerVoucherInput from "./CustomerVoucherInput";
@@ -65,12 +79,17 @@ import {
 } from "../../../libs/payment-colors";
 
 // Tender slots, labels, default drafts and the reducer live in
-// libs/sale/tender-queue.ts (pure, shared with Runner — T-1).
+// libs/sale/tender-queue.ts (pure, shared with Runner — T-1). An approved
+// integrated card payment joins the queue through libs/eft/eft-tender.ts
+// (retail-eftpos T-7) — a wrapper, so the shared reducer is untouched.
 type TenderStateVM = TenderState<Voucher, CustomerVoucher>;
 const reducer = (
   state: TenderStateVM,
-  action: TenderAction<Voucher, CustomerVoucher>,
-): TenderStateVM => tenderReducer(state, action);
+  action: TenderAction<Voucher, CustomerVoucher> | EftTenderAction,
+): TenderStateVM =>
+  action.type === "eft-approved"
+    ? addApprovedCredit(state, action)
+    : tenderReducer(state, action);
 const initTenderState = (): TenderStateVM =>
   createTenderState<Voucher, CustomerVoucher>();
 
@@ -175,6 +194,73 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
     [stagedPayment, payments, lines, rates, hasMember],
   );
 
+  // ── Integrated EFTPOS (retail-eftpos T-7, D-2..D-5) ──────────────────────
+  // CREDIT is integrated only when this lane has a selected, active pairing
+  // (S-3 A-1); otherwise — no pairing, an older store server, 503 "EFT is not
+  // configured" — it stays the keyed external-EFTPOS tender, unchanged.
+  const [lanePairing, setLanePairing] = useState<EftPairing | null>(null);
+  const [eftOff, setEftOff] = useState(false);
+  const [eftResult, setEftResult] = useState<EftResultLine>(null);
+  // payment key → EFT transaction id: one approved row is applied once.
+  const eftKeysRef = useRef(new Map<string, string>());
+  useEffect(() => {
+    let ignore = false;
+    listEftPairings()
+      .then((res) => {
+        if (!ignore && res.ok) setLanePairing(activeLanePairing(res.result));
+      })
+      .catch(() => undefined);
+    return () => {
+      ignore = true;
+    };
+  }, []);
+  const terminalLabel = lanePairing
+    ? `SCI · ${lanePairing.nickname || lanePairing.terminalNickname || lanePairing.tid || lanePairing.pairingId}`
+    : "";
+
+  function handleEftOutcome(outcome: EftOutcome, state: { unavailable: boolean }) {
+    eft.close();
+    if (outcome.kind === "paid") {
+      const key = crypto.randomUUID();
+      eftKeysRef.current.set(key, outcome.txnId);
+      dispatch({ type: "eft-approved", key, amountCents: outcome.amountCents });
+      setEftResult({
+        tone: "ok",
+        text: outcome.viaOverride
+          ? `Recorded as paid (manual confirmation) $${fmtMoney(outcome.amountCents)}`
+          : `Card approved $${fmtMoney(outcome.amountCents)}`,
+      });
+      return;
+    }
+    if (state.unavailable) setEftOff(true);
+    setEftResult({ tone: "error", text: outcome.message });
+  }
+  const eft = useEftTender(handleEftOutcome);
+  const eftTerminalActive = !!lanePairing && !eftOff;
+
+  function startTerminalPayment() {
+    if (eft.running || stagedPayment.tender !== "CREDIT" || stagedPayment.amount <= 0) return;
+    setEftResult(null);
+    eft.start({
+      // The sale attempt's id (kept across a restart until the sale is
+      // recorded): the same create answers the same row — no double charge.
+      operationId: operationIdFor(saleAttemptKey(activeCartIndex)),
+      amountCents: stagedPayment.amount,
+      appliedTxnIds: appliedTxnIds(payments, eftKeysRef.current),
+    });
+  }
+
+  function handleCancelModal() {
+    if (
+      eft.running &&
+      !window.confirm(
+        "A card payment is still running on the terminal. Close the payment screen anyway?",
+      )
+    )
+      return;
+    onCancel();
+  }
+
   // CREDIT staged needs clamping when `left` shrinks (e.g. another committed
   // payment grows the non-cash bill, or cash absorbs more).
   useEffect(() => {
@@ -213,6 +299,15 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
 
   async function handleCompleteSale() {
     if (completeDisabled || processing) return;
+    // Manual escape hatch (T-7): COMPLETE stays available while a terminal
+    // payment runs — the keyed CREDIT draft is recorded as today.
+    if (
+      eft.running &&
+      !window.confirm(
+        "A card payment is still running on the terminal. Complete the sale with the keyed amount as a manual card payment?",
+      )
+    )
+      return;
     const cart = carts[activeCartIndex];
     if (!cart) return;
 
@@ -360,6 +455,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
   // first if there's a non-empty draft so the cashier doesn't lose an entry
   // by mis-tapping a tender button. Locks: changeSlotDecision.
   function changeSlot(slot: TenderSlot) {
+    if (eft.running) return;
     const decision = changeSlotDecision(tender, slot);
     if (decision.kind === "ignore") return;
     if (decision.kind === "confirm" && !window.confirm(decision.message)) {
@@ -490,7 +586,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
             )}
           </div>
           <TapTarget
-            onClick={() => onCancel()}
+            onClick={handleCancelModal}
             className="px-4 h-9 rounded-md bg-red-500 text-white font-semibold text-sm active:bg-red-600 flex items-center justify-center"
           >
             Cancel
@@ -557,6 +653,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
               const isActived = !spendMode && slotOf(stagedPayment) === pt;
               const isDisabled =
                 spendMode ||
+                eft.running ||
                 (isVoucherSlot(pt) && voucherLocked) ||
                 (pt === "CASH" && cashLocked);
               const strs = pt.split("_");
@@ -583,6 +680,7 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
             {/* SPEND toggle — 다른 tender 와 달리 mode 전환 (내부 소비 D-14~16) */}
             <TapTarget
               onClick={toggleSpendMode}
+              disabled={eft.running}
               className={cn(
                 "border h-16 rounded-md text-sm font-bold flex items-center justify-center",
                 spendMode
@@ -605,7 +703,10 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
                 onCommit={commitStaged}
               />
             )}
-            {stagedPayment.tender === "CREDIT" && (
+            {eft.state.phase !== "idle" && (
+              <EftPanel eft={eft} terminalLabel={terminalLabel} />
+            )}
+            {eft.state.phase === "idle" && stagedPayment.tender === "CREDIT" && (
               <CreditInput
                 billPortion={billPortionOf(
                   stagedPayment,
@@ -615,6 +716,15 @@ export default function PaymentModal({ onCancel }: { onCancel: () => void }) {
                 left={left}
                 surchargeRate={credit_surcharge_rate}
                 onCommit={commitStaged}
+                terminal={
+                  eftTerminalActive
+                    ? { label: terminalLabel, onPay: startTerminalPayment }
+                    : null
+                }
+                resultLine={
+                  eftResult ??
+                  (eft.printNotice ? { tone: "error", text: eft.printNotice } : null)
+                }
               />
             )}
             {stagedPayment.tender === "GIFTCARD" && (

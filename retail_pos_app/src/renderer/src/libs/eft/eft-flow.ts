@@ -78,9 +78,11 @@ export function outcomeOf(txn: EftTxn): EftOutcome | null {
   return null;
 }
 
-function errorText(res: EftAnswer<unknown>): string {
+/** A lane API error as the cashier sees it: the server's text verbatim (it carries the [CLASS]). */
+export function eftErrorText(res: EftAnswer<unknown>): string {
   return res.status === 0 ? STORE_UNREACHABLE : res.msg || `Request failed (${res.status})`;
 }
+const errorText = eftErrorText;
 
 /** A newer (or the first) view of the row replaces the shown one; an older one is ignored. */
 function applyTxn(state: EftFlowState, txn: EftTxn): EftFlowState {
@@ -345,4 +347,23 @@ export function hasActionForm(form: EftActionForm | null): form is EftActionForm
  */
 export function activeLanePairing(pairings: readonly EftPairing[] | null | undefined): EftPairing | null {
   return pairings?.find((p) => p.selectedForThisTerminal && p.active) ?? null;
+}
+
+/**
+ * A pairing's state line on the pairing screen. `lastError` is what the store
+ * server recorded: "unpaired" (Unpair here) or `no_active_pairings_found`
+ * (unpaired on the terminal / by the payment service — externally unpaired).
+ */
+export function pairingStateText(p: Pick<EftPairing, "active" | "lastError" | "lastTestOk">): {
+  tone: "ok" | "warn" | "off";
+  text: string;
+} {
+  if (p.active) {
+    if (p.lastTestOk === false && p.lastError) return { tone: "warn", text: `Paired — last test failed (${p.lastError})` };
+    return { tone: "ok", text: "Paired" };
+  }
+  if (p.lastError === "unpaired") return { tone: "off", text: "Unpaired" };
+  if (p.lastError === "no_active_pairings_found")
+    return { tone: "warn", text: "Not paired — unpaired on the terminal; pair again [PAIR]" };
+  return { tone: "warn", text: p.lastError ? `Not paired (${p.lastError}) [PAIR]` : "Not paired [PAIR]" };
 }

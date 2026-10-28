@@ -20,6 +20,7 @@ import {
   IoNotificationsOutline,
   IoScaleOutline,
   IoRefreshOutline,
+  IoCardOutline,
 } from "react-icons/io5";
 
 const btn =
@@ -197,6 +198,13 @@ export default function HomeScreen() {
           className="bg-gray-100 text-gray-700 hover:bg-gray-200"
         >
           Store Settings
+        </NavBtn>
+        <NavBtn
+          to="/manager/payments"
+          icon={<IoCardOutline size={24} />}
+          className="bg-gray-100 text-gray-700 hover:bg-gray-200"
+        >
+          Payments
         </NavBtn>
         <NavBtn
           to="/server-setup"

@@ -10,6 +10,8 @@ import {
   STORE_UNREACHABLE,
   activeLanePairing,
   approvedAmountOf,
+  eftErrorText,
+  pairingStateText,
   createEftSession,
   eftFlowReducer,
   eftPanelView,
@@ -296,4 +298,58 @@ test("session: stop() leaves the payment without further requests", async () => 
   await run;
   assert.equal(calls.filter((c) => c[0] === "get").length, 1);
   assert.equal(s.getState().phase, "live", "a late answer after stop is not applied");
+});
+
+// ── the approved amount in the tender queue ───────────────────────────────
+import { addApprovedCredit, appliedTxnIds } from "./eft-tender.ts";
+import { createTenderState, selectTender, tenderReducer } from "../sale/tender-queue.ts";
+import { buildNewLine } from "../../store/SalesStore.helper.ts";
+
+function saleLine(cents) {
+  return buildNewLine(
+    {
+      type: "normal",
+      itemId: 1,
+      name_en: "Item",
+      name_ko: "",
+      price: { prices: [cents] },
+      promoPrice: null,
+      taxable: true,
+      isPointExcluded: false,
+      uom: "ea",
+      barcode: "1",
+    },
+    0,
+    0,
+  );
+}
+
+test("APPROVED replaces the keyed draft: the payment is the approved amount, remaining 0", () => {
+  const rates = { creditSurchargeRate: 0, cashPointRate: 10, otherPointRate: 10 };
+  const lines = [saleLine(1000)];
+  let s = createTenderState();
+  s = tenderReducer(s, { type: "change-slot", slot: "CREDIT" });
+  s = tenderReducer(s, { type: "set-credit-bill", billPortion: 1000, left: 1000, surchargeRate: 0 });
+  assert.equal(s.staged.amount, 1000, "keyed request");
+  const outcome = outcomeOf(approved({ resultAmounts: { purchase: 1000, surcharge: 0, tip: 0 } }));
+  s = addApprovedCredit(s, { type: "eft-approved", key: "k1", amountCents: outcome.amountCents });
+  assert.deepEqual(s.payments, [{ key: "k1", tender: "CREDIT", amount: 1000 }]);
+  assert.equal(s.staged.tender, "CREDIT");
+  assert.equal(s.staged.amount, 0, "the draft is not counted twice");
+  const view = selectTender(s, { lines, rates, hasMember: false });
+  assert.equal(view.cal.linesTotal, 1000);
+  assert.equal(view.cal.remaining, 0);
+  assert.equal(view.completeDisabled, false);
+  assert.equal(addApprovedCredit(s, { type: "eft-approved", key: "k1", amountCents: 1000 }), s, "same key twice is a no-op");
+  assert.equal(addApprovedCredit(s, { type: "eft-approved", key: "k2", amountCents: 0 }), s);
+  assert.deepEqual(appliedTxnIds(s.payments, new Map([["k1", "t1"], ["gone", "t9"]])), ["t1"]);
+});
+
+test("pairing screen texts: server text verbatim, externally unpaired is visible", () => {
+  assert.equal(eftErrorText({ ok: false, status: 400, msg: "Pairing was not accepted — check the code on the terminal [PAIR]", result: null }), "Pairing was not accepted — check the code on the terminal [PAIR]");
+  assert.equal(eftErrorText({ ok: false, status: 0, msg: "Network Error", result: null }), STORE_UNREACHABLE);
+  assert.deepEqual(pairingStateText({ active: true, lastError: null, lastTestOk: true }), { tone: "ok", text: "Paired" });
+  assert.equal(pairingStateText({ active: false, lastError: "no_active_pairings_found", lastTestOk: false }).tone, "warn");
+  assert.match(pairingStateText({ active: false, lastError: "no_active_pairings_found", lastTestOk: false }).text, /\[PAIR\]$/);
+  assert.equal(pairingStateText({ active: false, lastError: "unpaired", lastTestOk: null }).text, "Unpaired");
 });

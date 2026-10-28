@@ -13,18 +13,32 @@ const fmtMoney = (cents: number) => (cents / MONEY_SCALE).toFixed(MONEY_DP);
 //                 = stored as payment.amount (D-10).
 // Parent owns staged.amount (= EFTPOS) and derives billPortion via inverse for
 // this prop. Numpad edits billPortion; surcharge derivation is local.
+// Integrated EFTPOS (retail-eftpos T-7): with a paired terminal selected for
+// this lane, PAY ON TERMINAL sends the EFTPOS amount below to the store server
+// (surcharge 0 on the terminal request) and the approved amount becomes the
+// payment. ADD CREDIT stays the keyed external-EFTPOS path (manual fallback);
+// without a terminal the input is exactly the keyed one.
+export interface CreditTerminal {
+  label: string;
+  onPay: () => void;
+}
+
 export default function CreditInput({
   billPortion,
   setBillPortion,
   left,
   surchargeRate, // raw int per StoreSetting comment: 15 = 1.5%
   onCommit,
+  terminal = null,
+  resultLine = null,
 }: {
   billPortion: number;
   setBillPortion: (next: number) => void;
   left: number;
   surchargeRate: number;
   onCommit: () => void;
+  terminal?: CreditTerminal | null;
+  resultLine?: { tone: "ok" | "error"; text: string } | null;
 }) {
   // Use shared helpers so the displayed EFTPOS exactly matches what parent stores.
   const surcharge = surchargeOf(billPortion, surchargeRate);
@@ -51,6 +65,18 @@ export default function CreditInput({
 
   return (
     <div className="h-full flex flex-col gap-3">
+      {resultLine && (
+        <div
+          className={cn(
+            "rounded-md px-3 py-2 text-sm font-semibold border",
+            resultLine.tone === "ok"
+              ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+              : "bg-red-50 text-red-700 border-red-300",
+          )}
+        >
+          {resultLine.text}
+        </div>
+      )}
       {/* Display — big BILL only. EFTPOS shows on Add button + below as hint */}
       <div className="bg-zinc-900 text-white rounded-md p-3">
         <Row label="BILL PORTION" valueClass="text-2xl text-sky-300">
@@ -99,6 +125,24 @@ export default function CreditInput({
         />
       </div>
 
+      {terminal && (
+        <TapTarget
+          onClick={terminal.onPay}
+          disabled={!canCommit}
+          className={cn(
+            "h-14 rounded-md font-bold text-white text-sm tracking-wide flex flex-col items-center justify-center",
+            canCommit ? "bg-emerald-600 active:bg-emerald-700" : "bg-gray-300 cursor-not-allowed",
+          )}
+        >
+          <span>
+            PAY ON TERMINAL{canCommit && ` · $${fmtMoney(eftposAmount)}`}
+          </span>
+          <span className="text-[10px] font-normal opacity-80 truncate max-w-full px-2">
+            {terminal.label}
+          </span>
+        </TapTarget>
+      )}
+
       {/* Commit — dual notation: ADD CREDIT · $bill ($eftpos) */}
       <TapTarget
         onClick={onCommit}
@@ -110,7 +154,7 @@ export default function CreditInput({
             : "bg-gray-300 cursor-not-allowed",
         )}
       >
-        ADD CREDIT
+        {terminal ? "ADD MANUAL CREDIT" : "ADD CREDIT"}
         {canCommit &&
           ` · $${fmtMoney(billPortion)} ($${fmtMoney(eftposAmount)})`}
       </TapTarget>
