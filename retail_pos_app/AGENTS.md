@@ -40,18 +40,25 @@ payment service; the store server drives the terminal.
 
 - **Pure core** `libs/eft/`: `eft-types.ts` (lane shapes), `eft-flow.ts` (reducer + `createEftSession` long-poll loop, receipt jobs,
   `activeLanePairing`, `eftErrorText`, `pairingStateText`), `action-form.ts` (Action Framework layout walker), `eft-tender.ts`
-  (`eft-approved` wrapper action — the copied `tender-queue.ts` is untouched), `eft-receipt.ts` (plain-text ESC/POS). Tests
+  (`eft-approved` / `eft-clear-credit-draft` wrapper actions — the copied `tender-queue.ts` is untouched), `eft-start.ts`
+  (start guard, A-29), `eft-receipt.ts` (plain-text ESC/POS). Tests
   `libs/eft/*.test.mjs` run in `npm run test:sale-core`. API boundary: `service/eft.service.ts`.
 - **Pay panel** (`PaymentModal/index.tsx`, `CreditInput.tsx`, `EftPanel.tsx`, `useEftTender.ts`): CREDIT is integrated only when
   `GET /api/eft/pairings` shows this lane's selected, active pairing; otherwise (none, older server, 503 `EFT is not configured`)
   it is the keyed tender exactly as before. PAY ON TERMINAL sends the staged EFTPOS amount with `surchargeCents: 0` and the sale's
-  attempt `operationId` (`operationIdFor(saleAttemptKey(cart))` — same row after a restart). D-4: long polling only
-  (`?min_version=version+1` after every answer, also after a 502 / 409 on an action, which is followed by an immediate read).
+  attempt `operationId` (`operationIdFor(saleAttemptKey(cart))` — same row after a restart). A-29: the id must read back from
+  storage before the create goes out (a storage failure blocks the payment with an error); one start at a time; a start left
+  behind by Cancel never sends. D-4: long polling only (`?min_version=version+1` after every answer, also after a 502 / 409 on
+  an action, which is followed by an immediate read); closing the panel aborts the in-flight request and the retry pause.
   AWAITING_POS renders `actionForm` generically (`components/eft/ActionFormView.tsx`); `overrideRequired` → "Was the
-  transaction successful?" Yes / No; APPROVED → a CREDIT payment of `resultAmounts` purchase + surcharge + tip (never the keyed
-  amount), FINALISED_BY_OVERRIDE → the keyed amount, anything else final → back to the pay panel with `displayMessage`. One
-  approved row is applied once per payment list. Receipts (merchant + customer on FINALISED, declined too; the merchant copy on
-  `PRINT_MERCHANT_RECEIPT` / a grown print seq) go through `printESCPOSResult`; a failed print never blocks. ADD MANUAL CREDIT and
+  transaction successful?" Yes / No. A-27: APPROVED commits a CREDIT payment of `resultAmounts.purchase` only when it equals the
+  requested amount and surcharge / tip / cashout are 0; otherwise (or with no valid purchase) nothing is committed and the
+  breakdown is shown ("Approved $12.15 — purchase $10.00, surcharge $2.15; differs from the sale") for manual handling.
+  FINALISED_BY_OVERRIDE → the keyed amount; anything else final → back to the pay panel with `displayMessage`. A-28: every
+  unsuccessful outcome (declined, cancelled, override No, approved-but-different, not sent) clears the keyed CREDIT draft. One
+  approved row is applied once per payment list. Receipts (merchant + customer once on FINALISED, declined too; the merchant copy
+  on `PRINT_MERCHANT_RECEIPT` once per distinct slip, or on a grown print seq — never because only the version moved) go through
+  `printESCPOSResult`; a failed print never blocks. ADD MANUAL CREDIT and
   COMPLETE (with the keyed draft, confirmed while a terminal payment runs) stay the manual fallback.
 - **Settings → Payments** (`/manager/payments`, `screens/PaymentSettingsScreen/`): Card terminal tab — "Simple Cloud Integration" +
   `components/eft/SciLogo.tsx` (**placeholder wordmark until the logo file arrives, A-21**), Pairing Code / Nickname on the
