@@ -161,6 +161,9 @@ test("reducer: the till cannot reach the store server → Store server unreachab
   const poll = eftFlowReducer(live, { type: "poll-answer", res: fail(0, "Network Error") });
   assert.equal(poll.phase, "live");
   assert.equal(poll.notice, STORE_UNREACHABLE);
+  const gone = eftFlowReducer(live, { type: "poll-answer", res: fail(404, "EFT transaction not found") });
+  assert.equal(gone.phase, "done");
+  assert.equal(gone.outcome.message, "EFT transaction not found [POS]");
 });
 
 test("reducer: declined / failed / 409 are not paid with the server text; 503 not configured → keyed", () => {

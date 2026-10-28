@@ -143,6 +143,9 @@ export function eftFlowReducer(state: EftFlowState, ev: EftFlowEvent): EftFlowSt
     case "poll-answer": {
       if (state.phase !== "live") return state;
       if (ev.res.ok && ev.res.result) return applyTxn(state, ev.res.result);
+      // 404: the row is gone (never on a hold expiry) — stop instead of re-polling forever.
+      if (ev.res.status === 404)
+        return { ...state, phase: "done", outcome: { kind: "not-paid", txnId: state.txn?.id ?? null, message: errorText(ev.res) } };
       return { ...state, notice: errorText(ev.res) };
     }
     case "request-sent":
