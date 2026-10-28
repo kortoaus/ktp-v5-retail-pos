@@ -409,7 +409,10 @@ export const ModelName = {
   SyncCursor: 'SyncCursor',
   CloudSyncCursor: 'CloudSyncCursor',
   FreeTextTemplate: 'FreeTextTemplate',
-  CustomerVoucherOperation: 'CustomerVoucherOperation'
+  CustomerVoucherOperation: 'CustomerVoucherOperation',
+  EftPairing: 'EftPairing',
+  EftTransaction: 'EftTransaction',
+  EftEvent: 'EftEvent'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -425,7 +428,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "company" | "brand" | "item" | "itemScaleData" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter" | "syncCursor" | "cloudSyncCursor" | "freeTextTemplate" | "customerVoucherOperation"
+    modelProps: "company" | "brand" | "item" | "itemScaleData" | "price" | "promoPrice" | "cloudHotkey" | "cloudHotkeyItem" | "terminal" | "hotkey" | "hotkeyItem" | "storeSetting" | "printedItemSheet" | "user" | "terminalShift" | "cashInOut" | "saleInvoice" | "saleInvoicePayment" | "saleInvoiceRow" | "voucher" | "voucherEvent" | "docCounter" | "syncCursor" | "cloudSyncCursor" | "freeTextTemplate" | "customerVoucherOperation" | "eftPairing" | "eftTransaction" | "eftEvent"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2353,6 +2356,228 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    EftPairing: {
+      payload: Prisma.$EftPairingPayload<ExtArgs>
+      fields: Prisma.EftPairingFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.EftPairingFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftPairingPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.EftPairingFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftPairingPayload>
+        }
+        findFirst: {
+          args: Prisma.EftPairingFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftPairingPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.EftPairingFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftPairingPayload>
+        }
+        findMany: {
+          args: Prisma.EftPairingFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftPairingPayload>[]
+        }
+        create: {
+          args: Prisma.EftPairingCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftPairingPayload>
+        }
+        createMany: {
+          args: Prisma.EftPairingCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.EftPairingCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftPairingPayload>[]
+        }
+        delete: {
+          args: Prisma.EftPairingDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftPairingPayload>
+        }
+        update: {
+          args: Prisma.EftPairingUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftPairingPayload>
+        }
+        deleteMany: {
+          args: Prisma.EftPairingDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.EftPairingUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.EftPairingUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftPairingPayload>[]
+        }
+        upsert: {
+          args: Prisma.EftPairingUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftPairingPayload>
+        }
+        aggregate: {
+          args: Prisma.EftPairingAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateEftPairing>
+        }
+        groupBy: {
+          args: Prisma.EftPairingGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.EftPairingGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.EftPairingCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.EftPairingCountAggregateOutputType> | number
+        }
+      }
+    }
+    EftTransaction: {
+      payload: Prisma.$EftTransactionPayload<ExtArgs>
+      fields: Prisma.EftTransactionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.EftTransactionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftTransactionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.EftTransactionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftTransactionPayload>
+        }
+        findFirst: {
+          args: Prisma.EftTransactionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftTransactionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.EftTransactionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftTransactionPayload>
+        }
+        findMany: {
+          args: Prisma.EftTransactionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftTransactionPayload>[]
+        }
+        create: {
+          args: Prisma.EftTransactionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftTransactionPayload>
+        }
+        createMany: {
+          args: Prisma.EftTransactionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.EftTransactionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftTransactionPayload>[]
+        }
+        delete: {
+          args: Prisma.EftTransactionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftTransactionPayload>
+        }
+        update: {
+          args: Prisma.EftTransactionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftTransactionPayload>
+        }
+        deleteMany: {
+          args: Prisma.EftTransactionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.EftTransactionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.EftTransactionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftTransactionPayload>[]
+        }
+        upsert: {
+          args: Prisma.EftTransactionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftTransactionPayload>
+        }
+        aggregate: {
+          args: Prisma.EftTransactionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateEftTransaction>
+        }
+        groupBy: {
+          args: Prisma.EftTransactionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.EftTransactionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.EftTransactionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.EftTransactionCountAggregateOutputType> | number
+        }
+      }
+    }
+    EftEvent: {
+      payload: Prisma.$EftEventPayload<ExtArgs>
+      fields: Prisma.EftEventFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.EftEventFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftEventPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.EftEventFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftEventPayload>
+        }
+        findFirst: {
+          args: Prisma.EftEventFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftEventPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.EftEventFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftEventPayload>
+        }
+        findMany: {
+          args: Prisma.EftEventFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftEventPayload>[]
+        }
+        create: {
+          args: Prisma.EftEventCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftEventPayload>
+        }
+        createMany: {
+          args: Prisma.EftEventCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.EftEventCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftEventPayload>[]
+        }
+        delete: {
+          args: Prisma.EftEventDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftEventPayload>
+        }
+        update: {
+          args: Prisma.EftEventUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftEventPayload>
+        }
+        deleteMany: {
+          args: Prisma.EftEventDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.EftEventUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.EftEventUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftEventPayload>[]
+        }
+        upsert: {
+          args: Prisma.EftEventUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$EftEventPayload>
+        }
+        aggregate: {
+          args: Prisma.EftEventAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateEftEvent>
+        }
+        groupBy: {
+          args: Prisma.EftEventGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.EftEventGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.EftEventCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.EftEventCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -2537,6 +2762,7 @@ export const TerminalScalarFieldEnum = {
   ipAddress: 'ipAddress',
   archived: 'archived',
   orderChimeEnabled: 'orderChimeEnabled',
+  eftPairingId: 'eftPairingId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -2875,6 +3101,94 @@ export const CustomerVoucherOperationScalarFieldEnum = {
 export type CustomerVoucherOperationScalarFieldEnum = (typeof CustomerVoucherOperationScalarFieldEnum)[keyof typeof CustomerVoucherOperationScalarFieldEnum]
 
 
+export const EftPairingScalarFieldEnum = {
+  id: 'id',
+  provider: 'provider',
+  pairingId: 'pairingId',
+  keyId: 'keyId',
+  signingSecretPartBEnc: 'signingSecretPartBEnc',
+  baseUrl: 'baseUrl',
+  tid: 'tid',
+  pairingNickname: 'pairingNickname',
+  terminalNickname: 'terminalNickname',
+  active: 'active',
+  lastTestAt: 'lastTestAt',
+  lastTestOk: 'lastTestOk',
+  lastError: 'lastError',
+  lastSciOkAt: 'lastSciOkAt',
+  lastSciErrorAt: 'lastSciErrorAt',
+  lastSciErrorCode: 'lastSciErrorCode',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type EftPairingScalarFieldEnum = (typeof EftPairingScalarFieldEnum)[keyof typeof EftPairingScalarFieldEnum]
+
+
+export const EftTransactionScalarFieldEnum = {
+  id: 'id',
+  provider: 'provider',
+  eftPairingId: 'eftPairingId',
+  terminalId: 'terminalId',
+  providerTxnId: 'providerTxnId',
+  providerVersion: 'providerVersion',
+  version: 'version',
+  kind: 'kind',
+  requestedCents: 'requestedCents',
+  surchargeCents: 'surchargeCents',
+  operationId: 'operationId',
+  saleOperationId: 'saleOperationId',
+  invoiceId: 'invoiceId',
+  status: 'status',
+  message: 'message',
+  financialStatus: 'financialStatus',
+  resultAmounts: 'resultAmounts',
+  merchantReceipt: 'merchantReceipt',
+  customerReceipt: 'customerReceipt',
+  cardDetails: 'cardDetails',
+  posInstructions: 'posInstructions',
+  merchantPrintSeq: 'merchantPrintSeq',
+  customerPrintSeq: 'customerPrintSeq',
+  errorClass: 'errorClass',
+  errorCode: 'errorCode',
+  overrideAnswer: 'overrideAnswer',
+  overrideBy: 'overrideBy',
+  overrideAt: 'overrideAt',
+  cancelRequestedAt: 'cancelRequestedAt',
+  createdBy: 'createdBy',
+  retiredAt: 'retiredAt',
+  providerData: 'providerData',
+  startedAt: 'startedAt',
+  finalisedAt: 'finalisedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type EftTransactionScalarFieldEnum = (typeof EftTransactionScalarFieldEnum)[keyof typeof EftTransactionScalarFieldEnum]
+
+
+export const EftEventScalarFieldEnum = {
+  id: 'id',
+  transactionId: 'transactionId',
+  at: 'at',
+  seq: 'seq',
+  source: 'source',
+  event: 'event',
+  httpMethod: 'httpMethod',
+  httpPath: 'httpPath',
+  httpStatus: 'httpStatus',
+  durationMs: 'durationMs',
+  providerVersion: 'providerVersion',
+  statusBefore: 'statusBefore',
+  statusAfter: 'statusAfter',
+  errorClass: 'errorClass',
+  errorCode: 'errorCode',
+  detail: 'detail'
+} as const
+
+export type EftEventScalarFieldEnum = (typeof EftEventScalarFieldEnum)[keyof typeof EftEventScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -3131,6 +3445,76 @@ export type EnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel> = Fiel
 export type ListEnumCustomerVoucherOperationStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'CustomerVoucherOperationStatus[]'>
     
 
+
+/**
+ * Reference to a field of type 'EftTransactionKind'
+ */
+export type EnumEftTransactionKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EftTransactionKind'>
+    
+
+
+/**
+ * Reference to a field of type 'EftTransactionKind[]'
+ */
+export type ListEnumEftTransactionKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EftTransactionKind[]'>
+    
+
+
+/**
+ * Reference to a field of type 'EftTransactionStatus'
+ */
+export type EnumEftTransactionStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EftTransactionStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'EftTransactionStatus[]'
+ */
+export type ListEnumEftTransactionStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EftTransactionStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'EftFinancialStatus'
+ */
+export type EnumEftFinancialStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EftFinancialStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'EftFinancialStatus[]'
+ */
+export type ListEnumEftFinancialStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EftFinancialStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'EftErrorClass'
+ */
+export type EnumEftErrorClassFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EftErrorClass'>
+    
+
+
+/**
+ * Reference to a field of type 'EftErrorClass[]'
+ */
+export type ListEnumEftErrorClassFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EftErrorClass[]'>
+    
+
+
+/**
+ * Reference to a field of type 'EftOverrideAnswer'
+ */
+export type EnumEftOverrideAnswerFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EftOverrideAnswer'>
+    
+
+
+/**
+ * Reference to a field of type 'EftOverrideAnswer[]'
+ */
+export type ListEnumEftOverrideAnswerFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EftOverrideAnswer[]'>
+    
+
 /**
  * Batch Payload for updateMany & deleteMany & createMany
  */
@@ -3252,6 +3636,9 @@ export type GlobalOmitConfig = {
   cloudSyncCursor?: Prisma.CloudSyncCursorOmit
   freeTextTemplate?: Prisma.FreeTextTemplateOmit
   customerVoucherOperation?: Prisma.CustomerVoucherOperationOmit
+  eftPairing?: Prisma.EftPairingOmit
+  eftTransaction?: Prisma.EftTransactionOmit
+  eftEvent?: Prisma.EftEventOmit
 }
 
 /* Types for Logging */

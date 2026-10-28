@@ -182,18 +182,23 @@ model CloudHotkeyItem {
 // Local Data Start
 
 model Terminal {
-  id        Int             @id @default(autoincrement())
-  name      String
-  ipAddress String
-  archived  Boolean         @default(false)
+  id                Int              @id @default(autoincrement())
+  name              String
+  ipAddress         String
+  archived          Boolean          @default(false)
   // 주문 수신함 차임: true 인 터미널에서만 신규 주문 차임이 울린다.
   // (배지/배너/목록은 전 터미널 동작 — 차임만 게이트. 스펙 2026-08-10)
-  orderChimeEnabled Boolean @default(false)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  shifts    TerminalShift[]
-  cashIos   CashInOut[]
-  invoices  SaleInvoice[] // Applied backref
+  orderChimeEnabled Boolean          @default(false)
+  // Integrated EFTPOS (retail-eftpos D-2/S-3, A-1): the pairing the operator
+  // picked for this lane. Null → the till falls back to keyed CREDIT.
+  eftPairingId      Int?
+  eftPairing        EftPairing?      @relation(fields: [eftPairingId], references: [id])
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  shifts            TerminalShift[]
+  cashIos           CashInOut[]
+  invoices          SaleInvoice[] // Applied backref
+  eftTransactions   EftTransaction[]
 }
 
 model Hotkey {
@@ -552,6 +557,10 @@ model SaleInvoice {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // EFT attempts for this invoice (EftTransaction.invoiceId, backfilled by the
+  // sale write on the shared operation id). Back-relation only — no column.
+  eftTransactions EftTransaction[]
+
   @@index([shiftId])
   @@index([terminalId])
   @@index([userId])
@@ -806,14 +815,14 @@ model Voucher {
   updatedAt DateTime @updatedAt
 
   events VoucherEvent[]
-
-  @@index([userId])
-  @@index([status])
   // R-2: raw-SQL partial unique index "Voucher_staff_daily_user_day_key"
   // ("userId", "validTo") WHERE kind = 'staff-daily' AND "validTo" >= '2026-10-09'
   // (migration 20261008051333_staff_daily_voucher_unique). Prisma 7.3 cannot
   // express partial indexes (its diff ignores this one) — if a generated
   // migration ever tries to DROP it, trim that line.
+
+  @@index([userId])
+  @@index([status])
 }
 
 // Applied — append-only event log. Balance 는 이 로그의 합과 항상 일치.
@@ -922,23 +931,171 @@ enum CustomerVoucherOperationStatus {
 }
 
 model CustomerVoucherOperation {
-  id           Int                            @id @default(autoincrement())
-  operationId  String
-  kind         CustomerVoucherOperationKind
-  voucherId    Int? // CRM voucher redeemed; for REFUND_ISSUE the issued voucher once known
-  memberId     String?
-  amount       Int // cents, positive
-  crmRequestId String                         @unique // redeem requestId / refund-issue entityId / void requestId
-  status       CustomerVoucherOperationStatus @default(INTENT)
-  invoiceId    Int? // FK-by-convention to SaleInvoice.id (set with LINKED)
-  crmEventId   Int?
-  crmVoucherId Int?
-  attempts     Int                            @default(0) // CRM answers that left the row unsettled (UNRESOLVED_MANUAL budget)
-  transientFailures Int                       @default(0) // timeouts / transport failures — visibility only, never terminal (F-12)
-  lastError    String?
-  createdAt    DateTime                       @default(now())
-  updatedAt    DateTime                       @updatedAt
+  id                Int                            @id @default(autoincrement())
+  operationId       String
+  kind              CustomerVoucherOperationKind
+  voucherId         Int? // CRM voucher redeemed; for REFUND_ISSUE the issued voucher once known
+  memberId          String?
+  amount            Int // cents, positive
+  crmRequestId      String                         @unique // redeem requestId / refund-issue entityId / void requestId
+  status            CustomerVoucherOperationStatus @default(INTENT)
+  invoiceId         Int? // FK-by-convention to SaleInvoice.id (set with LINKED)
+  crmEventId        Int?
+  crmVoucherId      Int?
+  attempts          Int                            @default(0) // CRM answers that left the row unsettled (UNRESOLVED_MANUAL budget)
+  transientFailures Int                            @default(0) // timeouts / transport failures — visibility only, never terminal (F-12)
+  lastError         String?
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
 
   @@index([operationId])
   @@index([status, updatedAt])
+}
+
+// ── Integrated EFTPOS (retail-eftpos D-2..D-5, spec S-3) ─────────────────────
+// Provider-neutral: `provider` = "sci" today, "linkly" later (provider-specific
+// fields go in `providerData`). The store server is the only holder of the
+// pairing secrets; tills and Runner see only /api/eft/*.
+
+enum EftTransactionKind {
+  PURCHASE
+  REFUND
+}
+
+enum EftTransactionStatus {
+  CREATING
+  PENDING
+  AWAITING_POS
+  FINALISED
+  TIMEOUT
+  FAILED
+  FINALISED_BY_OVERRIDE
+  CANCELLED_BY_OVERRIDE
+}
+
+enum EftFinancialStatus {
+  APPROVED
+  DECLINED
+  CANCELLED
+  UNKNOWN
+}
+
+enum EftErrorClass {
+  NET
+  PAIR
+  TERM
+  BANK
+  TIMEOUT
+  POS
+}
+
+enum EftOverrideAnswer {
+  YES
+  NO
+}
+
+model EftPairing {
+  id                    Int       @id @default(autoincrement())
+  provider              String // "sci" | "linkly"
+  pairingId             String // provider's pairing id
+  keyId                 String
+  // Signing secret part B, AES-256-GCM with EFT_SECRET_KEY: "v1.<iv>.<tag>.<ciphertext>" (base64)
+  signingSecretPartBEnc String
+  baseUrl               String
+  tid                   String?
+  pairingNickname       String?
+  terminalNickname      String?
+  active                Boolean   @default(true)
+  lastTestAt            DateTime?
+  lastTestOk            Boolean?
+  lastError             String?
+  // Diagnostics (D-5): last provider call outcome on this pairing
+  lastSciOkAt           DateTime?
+  lastSciErrorAt        DateTime?
+  lastSciErrorCode      String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  terminals    Terminal[]
+  transactions EftTransaction[]
+
+  @@unique([provider, pairingId])
+}
+
+model EftTransaction {
+  id                String               @id @default(cuid())
+  provider          String
+  eftPairingId      Int
+  pairing           EftPairing           @relation(fields: [eftPairingId], references: [id])
+  terminalId        Int
+  terminal          Terminal             @relation(fields: [terminalId], references: [id])
+  providerTxnId     String? // SCI transaction id, null until created upstream
+  providerVersion   Int? // last SCI version seen
+  version           Int                  @default(1) // our lane counter (min_version on /api/eft)
+  kind              EftTransactionKind
+  requestedCents    Int
+  surchargeCents    Int                  @default(0)
+  // Idempotency key (with kind) = the till's sale/refund operation id for the
+  // live attempt. A retried attempt (after decline/failure) retires the old
+  // row by rewriting this to "<operationId>#<n>"; saleOperationId keeps the
+  // till's id on every attempt and is what the sale write backfills by.
+  operationId       String
+  saleOperationId   String
+  invoiceId         Int?
+  invoice           SaleInvoice?         @relation(fields: [invoiceId], references: [id])
+  status            EftTransactionStatus @default(CREATING)
+  message           String?
+  financialStatus   EftFinancialStatus?
+  resultAmounts     Json?
+  merchantReceipt   String?
+  customerReceipt   String?
+  cardDetails       Json? // masked only: entry_mode, pan_first_6, pan_last_4, scheme_name
+  posInstructions   Json? // last pos_instructions, so a reconnecting till re-renders
+  merchantPrintSeq  Int                  @default(0) // bumped by PRINT_MERCHANT_RECEIPT actions
+  customerPrintSeq  Int                  @default(0)
+  errorClass        EftErrorClass?
+  errorCode         String?
+  overrideAnswer    EftOverrideAnswer?
+  overrideBy        Int?
+  overrideAt        DateTime?
+  cancelRequestedAt DateTime?
+  createdBy         Int?
+  retiredAt         DateTime?
+  providerData      Json?
+  startedAt         DateTime             @default(now())
+  finalisedAt       DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  events EftEvent[]
+
+  @@unique([operationId, kind])
+  @@index([terminalId, createdAt])
+  @@index([status])
+  @@index([providerTxnId])
+  @@index([saleOperationId])
+}
+
+// Append-only (D-5). Never headers, keys, secrets or full PANs; detail ≤ 4 KB.
+model EftEvent {
+  id              Int            @id @default(autoincrement())
+  transactionId   String
+  transaction     EftTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  at              DateTime       @default(now())
+  seq             Int
+  source          String // TILL | SERVER | SCI | TERMINAL_OP
+  event           String
+  httpMethod      String?
+  httpPath        String?
+  httpStatus      Int?
+  durationMs      Int?
+  providerVersion Int?
+  statusBefore    String?
+  statusAfter     String?
+  errorClass      EftErrorClass?
+  errorCode       String?
+  detail          Json?
+
+  @@unique([transactionId, seq])
+  @@index([at])
 }

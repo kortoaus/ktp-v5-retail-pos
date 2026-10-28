@@ -147,3 +147,18 @@ export type FreeTextTemplate = Prisma.FreeTextTemplateModel
  * 
  */
 export type CustomerVoucherOperation = Prisma.CustomerVoucherOperationModel
+/**
+ * Model EftPairing
+ * 
+ */
+export type EftPairing = Prisma.EftPairingModel
+/**
+ * Model EftTransaction
+ * 
+ */
+export type EftTransaction = Prisma.EftTransactionModel
+/**
+ * Model EftEvent
+ * 
+ */
+export type EftEvent = Prisma.EftEventModel
