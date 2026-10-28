@@ -111,8 +111,9 @@ export function eftFlowReducer(state: EftFlowState, ev: EftFlowEvent): EftFlowSt
       if (res.ok && res.result) {
         // The same sale attempt answers the same row (no double charge). A row
         // already applied to this payment list is never applied twice.
+        // (txn left null: its receipts already printed when it was applied.)
         if (ev.appliedTxnIds?.includes(res.result.id))
-          return { ...state, phase: "done", txn: res.result, outcome: { kind: "not-paid", txnId: res.result.id, message: ALREADY_APPLIED } };
+          return { ...state, phase: "done", outcome: { kind: "not-paid", txnId: res.result.id, message: ALREADY_APPLIED } };
         return applyTxn(state, res.result);
       }
       const unavailable = res.status === 503 && res.msg === EFT_NOT_CONFIGURED;
