@@ -78,9 +78,25 @@ export function outcomeOf(txn: EftTxn): EftOutcome | null {
   return null;
 }
 
-/** A lane API error as the cashier sees it: the server's text verbatim (it carries the [CLASS]). */
+/**
+ * A lane API error as the cashier sees it: the server's text verbatim — lane
+ * errors already end in their `[CLASS]`. A message without one gets the
+ * class the server put in `result.errorClass`, else [PAIR] for 503 (EFT not
+ * configured on the store server) and [POS] for anything else, so every
+ * error line carries a short code (D-5).
+ */
 export function eftErrorText(res: EftAnswer<unknown>): string {
-  return res.status === 0 ? STORE_UNREACHABLE : res.msg || `Request failed (${res.status})`;
+  if (res.status === 0) return STORE_UNREACHABLE;
+  const msg = res.msg || `Request failed (${res.status})`;
+  if (/\[[A-Z]+\]$/.test(msg)) return msg;
+  const r = res.result;
+  const cls =
+    r && typeof r === "object" && typeof (r as { errorClass?: unknown }).errorClass === "string"
+      ? (r as { errorClass: string }).errorClass
+      : res.status === 503
+        ? "PAIR"
+        : "POS";
+  return `${msg} [${cls}]`;
 }
 const errorText = eftErrorText;
 

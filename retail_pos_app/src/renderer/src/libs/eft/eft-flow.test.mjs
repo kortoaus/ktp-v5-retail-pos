@@ -174,6 +174,9 @@ test("reducer: declined / failed / 409 are not paid with the server text; 503 no
   assert.equal(mismatch.unavailable, false);
   const off = eftFlowReducer(started(), { type: "create-answer", res: fail(503, "EFT is not configured") });
   assert.equal(off.unavailable, true);
+  assert.equal(off.outcome.message, "EFT is not configured [PAIR]");
+  assert.equal(eftErrorText({ ok: false, status: 400, msg: "amountCents must be a positive integer (cents)", result: null }), "amountCents must be a positive integer (cents) [POS]");
+  assert.equal(eftErrorText({ ok: false, status: 409, msg: "No payment terminal selected", result: { errorClass: "PAIR", errorCode: "NO_PAIRING_SELECTED" } }), "No payment terminal selected [PAIR]");
 });
 
 test("reducer: the same approved row is never applied twice to one payment list", () => {
