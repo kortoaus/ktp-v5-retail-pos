@@ -545,12 +545,12 @@ export default function PaymentModalForRepay({
         </div>
         <div className="flex-1 grid grid-cols-12 divide-x divide-gray-300 min-h-0">
           {/* Lines (read-only) */}
-          <div className="col-span-3">
+          <div className="col-span-3 min-h-0 flex flex-col">
             <RepayLineViewer rows={invoice.rows} />
           </div>
 
           {/* Payment Type */}
-          <div className="flex flex-col gap-2 p-2">
+          <div className="flex flex-col gap-2 p-2 min-h-0 overflow-y-auto">
             {PAYMENT_TYPE.map((pt, idx) => {
               const isActived = slotOf(stagedPayment) === pt;
               const isDisabled = pt === "CASH" && cashLocked;
@@ -579,7 +579,7 @@ export default function PaymentModalForRepay({
           </div>
 
           {/* Keypad / inputs */}
-          <div className="col-span-3 p-3 flex flex-col gap-2 relative">
+          <div className="col-span-3 p-3 flex flex-col gap-2 relative min-h-0">
             {stagedPayment.tender === "CASH" && (
               <CashInput
                 cashReceived={stagedPayment.cashReceived}
@@ -651,8 +651,9 @@ export default function PaymentModalForRepay({
           </div>
 
           {/* Summary */}
-          <div className="col-span-3 p-3 flex flex-col gap-3 bg-gray-50 overflow-y-auto">
-            <RepayOriginalPayments invoice={invoice} />
+          <div className="col-span-3 p-3 flex flex-col gap-3 bg-gray-50 min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3">
+              <RepayOriginalPayments invoice={invoice} />
 
             <section className="bg-white border border-gray-200 rounded-md p-3 space-y-1 font-mono text-sm">
               <SummaryRow label="SUBTOTAL" value={cal.net} />
@@ -702,13 +703,14 @@ export default function PaymentModalForRepay({
                 <SummaryRow label="CHANGE" value={cal.change} highlight="ok" />
               )}
             </section>
+            </div>
 
             <button
               type="button"
               onClick={handleRepay}
               disabled={repayDisabled}
               className={cn(
-                "mt-auto h-16 rounded-lg font-bold text-lg tracking-wide transition",
+                "shrink-0 h-16 rounded-lg font-bold text-lg tracking-wide transition",
                 repayDisabled
                   ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                   : "bg-emerald-600 text-white active:bg-emerald-700",

@@ -17,8 +17,8 @@ export default function RepayLineViewer({
   rows: SaleInvoiceRowItem[];
 }) {
   return (
-    <div className="flex flex-col divide-y divide-gray-300 min-h-0">
-      <div className="h-14 px-3 flex items-center font-medium">
+    <div className="flex-1 flex flex-col divide-y divide-gray-300 min-h-0">
+      <div className="h-14 shrink-0 px-3 flex items-center font-medium">
         Lines ({rows.length})
       </div>
       <div className="flex-1 overflow-y-auto">
