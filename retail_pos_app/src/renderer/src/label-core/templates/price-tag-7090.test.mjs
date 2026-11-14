@@ -260,55 +260,305 @@ test("the non-member cases are untouched by the member rhythm", () => {
 // ---------------------------------------------------------------------------
 // Names
 // ---------------------------------------------------------------------------
+//
+// Since v1.8.9 (platform F-37) the template breaks the names itself: one
+// single-line element per row, each row as wide as the tag allows at its own
+// height. These tests pin the rows the printer is given.
 
-/** Two full Korean rows at 40 in a 430-dot block. */
+/** Two Korean rows at 40: `혼다시보틀 (테스트)` / `가다랑어 국물용 조미료`. */
 const LONG_KO = "혼다시보틀 (테스트) 가다랑어 국물용 조미료";
 const LONG_EN = "Hondashi Bonito Soup Stock Bottle Katsuo Dashi";
+/** Two English rows' worth at 27, more than one row holds at 20. */
+const LONGER_EN = "Hondashi Bonito Soup Stock Bottle Katsuo Dashi Large Catering Pack";
 
-/** Top of the bottom digit line — the floor the name block may not reach. */
+const ABSURD_KO = "넓은상품명".repeat(20);
+const ABSURD_EN = "WIDE PRODUCT NAME ".repeat(10);
+
+/** Top of the bottom digit line — the floor the name rows may not reach. */
 const DIGIT_LINE_Y = 638;
+const MATRIX_Y = 608;
+/** The air the template keeps between two name cells (42 pitch − 40 size). */
+const ROW_GAP = 2;
+const FULL_W = 512;
+const BESIDE_MATRIX_W = 430;
 
-/** A clipped name no longer equals what went in, so names are found by their head. */
-const nameOf = (label, text) =>
-  label.elements.find((el) => el.kind === "text" && el.text.startsWith(text.slice(0, 8)));
+/** The owner's tag, 2026-11-15 (photo; finding platform F-37). */
+const OWNER = {
+  nameKo: "[쭈꾸뿅] 쭈꾸뿅 양념쭈꾸미 순한맛 300g",
+  nameEn: "[Jjukkubbong] Jjukkubbong Seasoned Webfoot Octopus Mild 300g",
+  uom: "EA",
+  priceCents: 1790,
+  barcode: "08809521730180",
+  storeName: "Dream Market",
+};
 
-test("two Korean rows plus one English row still clear the digit line", () => {
-  // The busiest case (member stack *and* promo footer) and the plainest one:
-  // if the tall tag fits, the short one has room to spare.
-  for (const name of ["promo-member", "normal-guest"]) {
-    const label = buildPriceTag7090({ ...CASES[name], nameKo: LONG_KO, nameEn: LONG_EN });
-    const ko = nameOf(label, LONG_KO);
-    const en = nameOf(label, LONG_EN);
+const NAME_SETS = {
+  short: { nameKo: BASE.nameKo, nameEn: BASE.nameEn },
+  "two-row": { nameKo: LONG_KO, nameEn: LONGER_EN },
+  "over-long": { nameKo: ABSURD_KO, nameEn: ABSURD_EN },
+  "over-long, spaced": {
+    nameKo: "아주 긴 한글 상품명 테스트 모듬사시미 특선 플래터 대용량 업소용 냉동",
+    nameEn: "A Very Long English Product Name That Has To Wrap Twice And Then Some More",
+  },
+  "korean only": { nameKo: LONG_KO, nameEn: "" },
+  "english only": { nameKo: "", nameEn: LONGER_EN },
+  owner: { nameKo: OWNER.nameKo, nameEn: OWNER.nameEn },
+};
 
-    assert.equal(ko.text, LONG_KO, `${name}: two rows hold the whole name, uncut`);
-    assert.equal(ko.lines, 2, `${name}: the Korean name takes both rows`);
-    assert.equal(ko.size, 40, `${name}: at full size — the Korean name does not shrink`);
-    assert.equal(en.lines, 1, `${name}: English never takes a second row`);
+/**
+ * The tag split into its name rows and everything else. The name rows are
+ * what appears only when there is a name, between the fixed elements above
+ * and the Data Matrix + bottom digits below.
+ */
+function split(input) {
+  const label = buildPriceTag7090(input);
+  const bare = buildPriceTag7090({ ...input, nameKo: "", nameEn: "" }).elements.length;
+  const els = label.elements;
+  const names = els.slice(bare - 2, els.length - 2);
+  const fixed = [...els.slice(0, bare - 2), ...els.slice(els.length - 2)];
+  const ko = names.filter((el) => el.size === 40);
+  const en = names.filter((el) => el.size !== 40);
+  return { label, names, fixed, ko, en };
+}
 
-    const koBox = elementBounds(ko);
-    const enBox = elementBounds(en);
-    assert.ok(enBox.y >= koBox.y + koBox.h, `${name}: English under the Korean block`);
-    assert.ok(
-      enBox.y + enBox.h <= DIGIT_LINE_Y,
-      `${name}: English bottom ${enBox.y + enBox.h} > ${DIGIT_LINE_Y}`,
-    );
+const rowsOf = (els) => els.map((el) => [el.x, el.y, el.size, el.width, el.text]);
+const bottom = (el) => elementBounds(el).y + elementBounds(el).h;
+const overlaps = (a, b) =>
+  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
-    const digits = label.elements.find(
-      (el) => el.kind === "text" && el.text === BASE.barcode && el.y === DIGIT_LINE_Y,
-    );
-    assert.ok(digits, `${name}: the digit line is where it always was`);
+test("the owner's tag prints both names in full, on two rows each", () => {
+  // v1.8.8 gave, for the same input: `[쭈꾸뿅] 쭈꾸뿅 양념쭈꾸미 순한맛 30…`
+  // (one 430 × 2 `^FB` block, cut on the estimator's wrap — the printer then
+  // left line 2 half empty) and `[Jjukkubbong] Jjukkubbong Seasoned We…` (one
+  // row, shrunk to 20, cut).
+  assert.equal(getPriceTag7090Model(OWNER).caseName, "normal-guest");
+  const { ko, en } = split(OWNER);
+
+  assert.deepEqual(rowsOf(ko), [
+    [24, 408, 40, 512, "[쭈꾸뿅] 쭈꾸뿅 양념쭈꾸미"],
+    [24, 450, 40, 512, "순한맛 300g"],
+  ]);
+  assert.deepEqual(rowsOf(en), [
+    [24, 502, 27, 512, "[Jjukkubbong] Jjukkubbong"],
+    [24, 531, 27, 512, "Seasoned Webfoot Octopus Mild 300g"],
+  ]);
+  assert.equal(ko.map((el) => el.text).join(" "), OWNER.nameKo);
+  assert.equal(en.map((el) => el.text).join(" "), OWNER.nameEn);
+  for (const el of [...ko, ...en]) assert.ok(!el.text.includes(ELLIPSIS), el.text);
+});
+
+test("every name row is one single-line element that measures inside its row", () => {
+  for (const [name, base] of Object.entries(CASES)) {
+    for (const [set, names] of Object.entries(NAME_SETS)) {
+      const { ko, en } = split({ ...base, ...names });
+      assert.ok(ko.length <= 2, `${name}/${set}: Korean on ${ko.length} rows`);
+      assert.ok(en.length <= 2, `${name}/${set}: English on ${en.length} rows`);
+      for (const el of [...ko, ...en]) {
+        const what = `${name}/${set}: "${el.text}"`;
+        assert.equal(el.lines, 1, `${what} is a multi-line block`);
+        assert.ok(!el.shrink, `${what} leaves its size to the printer`);
+        assert.equal(resolveTextSize(el), el.size);
+        assert.ok(
+          textWidth(el.text, el.size) <= el.width,
+          `${what} measures ${textWidth(el.text, el.size)} > ${el.width}`,
+        );
+      }
+      for (const el of ko) assert.equal(el.size, 40, `${name}/${set}: Korean at 40`);
+      for (const el of en) {
+        assert.ok(el.size <= 27 && el.size >= 20, `${name}/${set}: English at ${el.size}`);
+        assert.equal(el.size, en[0].size, `${name}/${set}: one size per name`);
+      }
+    }
   }
 });
 
-test("a long English name shrinks toward 20 instead of wrapping", () => {
-  const label = buildPriceTag7090({ ...CASES["promo-member"], nameEn: LONG_EN });
-  const en = nameOf(label, LONG_EN);
-  assert.equal(en.lines, 1);
-  assert.ok(resolveTextSize(en) < 27, `still at ${resolveTextSize(en)}`);
-  assert.equal(resolveTextSize(en), 20, "and stops at the 20-dot floor");
-  // Still too wide at the floor, so it is cut rather than printed over itself.
-  assert.ok(en.text.endsWith(ELLIPSIS), `"${en.text}" was not clipped`);
-  assert.ok(textWidth(en.text, resolveTextSize(en)) <= en.width);
+test("each row is as wide as its height allows, and no name cell touches anything", () => {
+  for (const [name, base] of Object.entries(CASES)) {
+    for (const [set, names] of Object.entries(NAME_SETS)) {
+      const { names: rows, fixed } = split({ ...base, ...names });
+      rows.forEach((el, i) => {
+        const what = `${name}/${set} row ${i + 1} "${el.text}"`;
+        const box = elementBounds(el);
+        assert.equal(el.x, 24, what);
+        // Full width only when the cell ends, with the row gap, above the
+        // Data Matrix; otherwise the 430 that stops at x454, short of x475.
+        const expected = box.y + box.h + ROW_GAP <= MATRIX_Y ? FULL_W : BESIDE_MATRIX_W;
+        assert.equal(el.width, expected, `${what}: width`);
+        assert.ok(bottom(el) <= DIGIT_LINE_Y, `${what}: bottom ${bottom(el)} > ${DIGIT_LINE_Y}`);
+        for (const other of fixed) {
+          assert.ok(
+            !overlaps(box, elementBounds(other)),
+            `${what} overlaps ${other.kind} ${JSON.stringify(elementBounds(other))}`,
+          );
+        }
+        if (i > 0) {
+          const prev = elementBounds(rows[i - 1]);
+          assert.ok(box.y >= prev.y + prev.h + ROW_GAP, `${what}: ${ROW_GAP} dots under the row above`);
+        }
+      });
+    }
+  }
+});
+
+test("English takes a second row only where that row still ends above the digit line", () => {
+  // normal-guest has the room after two Korean rows; every layout has it after one.
+  const roomy = [
+    ["normal-guest", LONG_KO],
+    ["normal-guest", BASE.nameKo],
+    ["normal-member", BASE.nameKo],
+    ["promo-guest", BASE.nameKo],
+    ["promo-member", BASE.nameKo],
+  ];
+  for (const [name, nameKo] of roomy) {
+    const { en } = split({ ...CASES[name], nameKo, nameEn: LONGER_EN });
+    assert.equal(en.length, 2, `${name}: English on two rows`);
+    assert.equal(en.map((el) => el.text).join(" "), LONGER_EN, `${name}: in full`);
+  }
+  // Two Korean rows on the three tall layouts: one English row, as before.
+  for (const name of ["normal-member", "promo-guest", "promo-member"]) {
+    const { ko, en } = split({ ...CASES[name], nameKo: LONG_KO, nameEn: LONGER_EN });
+    assert.equal(ko.length, 2, `${name}: two Korean rows`);
+    assert.equal(en.length, 1, `${name}: English stays one row`);
+    assert.equal(en[0].size, 20, `${name}: shrunk to the 20-dot floor`);
+    assert.ok(en[0].text.endsWith(ELLIPSIS), `${name}: and cut, "${en[0].text}"`);
+  }
+});
+
+test("promo-member with two Korean rows: the rows beside the Data Matrix stay 430", () => {
+  const { ko, en, fixed } = split({ ...CASES["promo-member"], nameKo: LONG_KO, nameEn: LONGER_EN });
+  assert.deepEqual(rowsOf(ko), [
+    [24, 516, 40, 512, "혼다시보틀 (테스트)"],
+    [24, 558, 40, 512, "가다랑어 국물용 조미료"],
+  ]);
+  // Same place and size as v1.8.8's English field (top y610, shrunk to 20).
+  assert.deepEqual(rowsOf(en), [[24, 610, 20, 430, "Hondashi Bonito Soup Stock Bottle Kats…"]]);
+
+  const matrix = elementBounds(fixed.find((el) => el.kind === "datamatrix"));
+  const digits = elementBounds(fixed.find((el) => el.kind === "text" && el.y === DIGIT_LINE_Y));
+  assert.deepEqual(matrix, { x: 475, y: 608, w: 80, h: 80 });
+  assert.deepEqual(digits, { x: 24, y: 638, w: 390, h: 20 });
+  assert.equal(bottom(ko[1]), 598, "the lowest Korean cell ends 10 dots above the matrix");
+  assert.equal(24 + en[0].width, 454, "the English row stops 21 dots short of it");
+  assert.equal(bottom(en[0]), 630, "and 8 dots above the digit line");
+});
+
+test("a name is cut only on its last row, and only when its rows are full", () => {
+  for (const [name, base] of Object.entries(CASES)) {
+    for (const [set, names] of Object.entries(NAME_SETS)) {
+      const { ko, en } = split({ ...base, ...names });
+      for (const [rows, text] of [
+        [ko, names.nameKo],
+        [en, names.nameEn],
+      ]) {
+        rows.slice(0, -1).forEach((el) => {
+          assert.ok(!el.text.includes(ELLIPSIS), `${name}/${set}: cut before the last row`);
+        });
+        const last = rows.at(-1);
+        if (last && !last.text.endsWith(ELLIPSIS) && text.includes(" ")) {
+          assert.equal(rows.map((el) => el.text).join(" "), text, `${name}/${set}: in full`);
+        }
+      }
+    }
+  }
+  // The over-long names are cut, on their last row.
+  for (const name of Object.keys(CASES)) {
+    const { ko, en } = split({ ...CASES[name], ...NAME_SETS["over-long"] });
+    assert.equal(ko.length, 2, name);
+    assert.ok(ko[1].text.endsWith(ELLIPSIS), `${name}: "${ko[1].text}"`);
+    assert.ok(en.at(-1).text.endsWith(ELLIPSIS), `${name}: "${en.at(-1).text}"`);
+  }
+});
+
+test("a word wider than a row is broken between characters, not cut", () => {
+  const word = "초특대왕크기모듬사시미세트구성"; // 15 × 40 = 600 dots, a row is 512
+  const { ko } = split({ ...CASES["normal-member"], nameKo: `특선 ${word}`, nameEn: "" });
+  assert.equal(ko.length, 2);
+  // `특선 ` + 10 of the 15 characters = 12.3 em = 492 dots; the 11th would be 532.
+  assert.equal(ko[0].text, "특선 초특대왕크기모듬사시");
+  assert.equal(ko[0].text + ko[1].text, `특선 ${word}`);
+  assert.ok(!ko[1].text.includes(ELLIPSIS));
+
+  const code = "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMN"; // 40 capitals, 680 dots at 27
+  const { en } = split({ ...CASES["normal-guest"], nameEn: code });
+  assert.equal(en.length, 2);
+  assert.equal(en[0].size, 27, "no shrink needed once the word may break");
+  assert.equal(en.map((el) => el.text).join(""), code);
+  assert.ok(!en[1].text.includes(ELLIPSIS));
+});
+
+test("a name that fits one 430-dot row prints where v1.8.8 put it", () => {
+  // Element values of v1.8.8 (top y; x 24; Korean 40, English 27):
+  // [Korean, English after one Korean row, English alone].
+  const V188 = {
+    "normal-guest": [408, 460, 418],
+    "normal-member": [516, 568, 526],
+    "promo-guest": [494, 546, 504],
+    "promo-member": [516, 568, 526],
+  };
+  const pairs = [
+    [BASE.nameKo, BASE.nameEn],
+    // 424 of 430 dots: the widest Korean name that was one row.
+    ["가다랑어 국물용 조미료", "Bonito Soup Stock Bottle"],
+  ];
+  for (const [name, [koY, enY, enAloneY]] of Object.entries(V188)) {
+    for (const [nameKo, nameEn] of pairs) {
+      const both = split({ ...CASES[name], nameKo, nameEn });
+      assert.deepEqual(
+        both.names.map((el) => [el.x, el.y, el.size, el.text]),
+        [
+          [24, koY, 40, nameKo],
+          [24, enY, 27, nameEn],
+        ],
+        name,
+      );
+      const alone = split({ ...CASES[name], nameKo: "", nameEn });
+      assert.deepEqual(alone.names.map((el) => [el.x, el.y, el.size]), [[24, enAloneY, 27]], name);
+    }
+  }
+});
+
+test("every element but the names is where v1.8.8 put it", () => {
+  // Fixed elements of v1.8.8 for the four CASES: [kind, x, y, size|w, text].
+  const V188 = {
+    "normal-guest": [
+      ["text", 24, 30, 22, "9300001028165"], ["text", 30, 78, 62, "DREAM MARKET"],
+      ["line", 24, 176, 512], ["text", 92, 210, 156, "$62"], ["text", 369, 241, 86, "00"],
+      ["text", 200, 360, 28, "/kg"], ["datamatrix", 475, 608, 5], ["text", 24, 638, 20, "9300001028165"],
+    ],
+    "normal-member": [
+      ["text", 24, 30, 22, "9300001028165"], ["text", 30, 78, 62, "Member Price"],
+      ["line", 24, 176, 512], ["text", 30, 188, 34, "GUEST $62.00 /kg"], ["text", 130, 238, 32, "MEMBER"],
+      ["text", 133, 290, 120, "$59"], ["text", 349, 313, 68, "00"], ["text", 200, 414, 26, "/kg"],
+      ["text", 330, 450, 30, "SAVE $3.00"], ["line", 24, 504, 512],
+      ["datamatrix", 475, 608, 5], ["text", 24, 638, 20, "9300001028165"],
+    ],
+    "promo-guest": [
+      ["text", 24, 30, 22, "9300001028165"], ["text", 30, 68, 52, "Special"],
+      ["line", 24, 176, 512], ["text", 102, 217, 146, "$55"], ["text", 362, 245, 82, "00"],
+      ["text", 200, 359, 26, "/kg"], ["text", 24, 398, 28, "Was $62.00"], ["text", 330, 396, 30, "SAVE $7.00"],
+      ["text", 24, 436, 23, "26/08 - 27/08"], ["line", 24, 472, 512],
+      ["datamatrix", 475, 608, 5], ["text", 24, 638, 20, "9300001028165"],
+    ],
+    "promo-member": [
+      ["text", 24, 30, 22, "9300001028165"], ["text", 30, 68, 52, "Special"],
+      ["line", 24, 176, 512], ["text", 30, 188, 34, "GUEST $55.00 /kg"], ["text", 130, 238, 32, "MEMBER"],
+      ["text", 133, 290, 120, "$52"], ["text", 349, 313, 68, "00"], ["text", 200, 406, 22, "/kg"],
+      ["text", 24, 437, 26, "Was $62.00"], ["text", 330, 436, 28, "SAVE $10.00"],
+      ["text", 24, 473, 21, "26/08 - 27/08"], ["line", 24, 504, 512],
+      ["datamatrix", 475, 608, 5], ["text", 24, 638, 20, "9300001028165"],
+    ],
+  };
+  const shape = (el) =>
+    el.kind === "text"
+      ? ["text", el.x, el.y, resolveTextSize(el), el.text]
+      : el.kind === "line"
+        ? ["line", el.x, el.y, el.w]
+        : [el.kind, el.x, el.y, el.size];
+  for (const [name, expected] of Object.entries(V188)) {
+    for (const names of Object.values(NAME_SETS)) {
+      assert.deepEqual(split({ ...CASES[name], ...names }).fixed.map(shape), expected, name);
+    }
+  }
 });
 
 test("nothing lands outside 560 × 720, in any of the four cases", () => {
@@ -347,9 +597,6 @@ test("dbg rides through", () => {
 // The clip guard
 // ---------------------------------------------------------------------------
 
-const ABSURD_KO = "넓은상품명".repeat(20);
-const ABSURD_EN = "WIDE PRODUCT NAME ".repeat(10);
-
 function assertFits(el, what, cut = true) {
   assert.ok(el, `${what}: element built`);
   if (cut) assert.ok(el.text.endsWith(ELLIPSIS), `${what}: "${el.text}" was not cut`);
@@ -365,7 +612,7 @@ const head = (label, prefix) =>
 test("caller text is cut to fit rather than printed over itself", () => {
   // `^FB` prints what does not fit on top of what does — the 2026-08-28 photos
   // show a promo headline and an English name both folded onto themselves.
-  const label = buildPriceTag7090({
+  const { label, ko, en } = split({
     ...CASES["promo-member"],
     promoName: "Manager's Weekend Special Extravaganza Sale Event 123456789",
     nameKo: ABSURD_KO,
@@ -376,8 +623,9 @@ test("caller text is cut to fit rather than printed over itself", () => {
   });
 
   assertFits(head(label, "Manager's"), "promo headline");
-  assertFits(head(label, "넓은"), "Korean name");
-  assertFits(head(label, "WIDE"), "English name");
+  // Names are cut on their last row (the rows above are full, not cut).
+  assertFits(ko.at(-1), "Korean name");
+  assertFits(en.at(-1), "English name");
   assertFits(head(label, "the whole"), "promotion dates");
   assertFits(head(label, "/100g"), "the unit line");
   // Shrinking was enough for this one — the cut is the last resort, not the
@@ -389,8 +637,8 @@ test("caller text is cut to fit rather than printed over itself", () => {
 
 test("a cut name still clears the digit line", () => {
   for (const name of ["promo-member", "normal-guest"]) {
-    const label = buildPriceTag7090({ ...CASES[name], nameKo: ABSURD_KO, nameEn: ABSURD_EN });
-    const en = elementBounds(head(label, "WIDE"));
+    const { en: rows } = split({ ...CASES[name], nameKo: ABSURD_KO, nameEn: ABSURD_EN });
+    const en = elementBounds(rows.at(-1));
     assert.ok(
       en.y + en.h <= DIGIT_LINE_Y,
       `${name}: English bottom ${en.y + en.h} > ${DIGIT_LINE_Y}`,
