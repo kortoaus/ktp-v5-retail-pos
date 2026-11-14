@@ -24,7 +24,7 @@
  * and the promotion dates.
  */
 
-import { ASCENT, estimateLines, textWidth } from "../measure";
+import { ASCENT, FIT_SAFETY, textEm, textWidth } from "../measure";
 import { type Element, type Label, type Text } from "../model";
 import { clippedTextEl, textEl, type TemplateOptions } from "./scale-6040";
 import { formatMoney, type PriceTagInput } from "./price-tag-7030";
@@ -328,12 +328,45 @@ function divider(y: number): Element {
 // Names
 // ---------------------------------------------------------------------------
 //
-// The name zone runs from the first Korean cell top (y516 on the two tallest
-// cases) down to the bottom digit line at y638 — 122 dots. The owner's rule
-// (2026-08-28) caps it at **Korean up to 2 lines plus English 1**: a Korean
-// name that needs more is the one that gets clipped, and an English name that
-// needs more shrinks toward 20 rather than taking a second row. That makes
-// KO2 + EN2 unreachable, which is what the 122 dots can actually hold.
+// ## Rows, placed by the template (hotfix v1.8.9, platform F-37)
+//
+// The names are set **one single-line element per row**, broken here, not
+// handed to the printer as one multi-line `^FB` block. Until v1.8.8 the Korean
+// name was one 430 × 2 block cut by `clipToBlock` on the estimator's own wrap —
+// but `measure.ts` counts hangul at a full em and the printer sets it about
+// 15 % narrower, so the printer filled line 1 further than the estimate, and a
+// cut made for the estimated second line left the printed one half empty
+// (`[쭈꾸뿅] 쭈꾸뿅 양념쭈꾸미` / `순한맛 30…`, owner photo 2026-11-15). With one
+// element per row the printed rows are the rows the cut was computed on: an
+// early break only moves a word down a row, it never loses text.
+//
+// The rule, derived from the geometry rather than tabled per case:
+//
+//   - **Korean**: up to 2 rows at 40, baseline pitch 42.
+//   - **English**: after the Korean, at 27 shrinking toward 20, on 1 row — or
+//     on 2 when the second row's cell (at 27) still ends at or above the top of
+//     the bottom digit line, y638. As before, a shrunk row keeps the top of the
+//     27-dot cell, so shrinking only lifts the rows. That gives a second row on
+//     `normal-guest` always and on the other three only after a one-row Korean
+//     name; after two
+//     Korean rows on `promo-*` / `*-member` English stays one row, as the
+//     owner's rule of 2026-08-28 had it ("Korean up to 2 lines plus English 1",
+//     set for the 122-dot zone of the tallest layouts; the second English row
+//     where there is room is the owner's 2026-11-15 amendment).
+//   - **Width per row**: the full content width (512, x24…536) when the row's
+//     cell ends `NAME_ROW_GAP` above the Data Matrix (y608); 430 — clear of the
+//     Data Matrix at x475 — for a row that reaches lower. Only English rows
+//     ever do (the lowest Korean cell ends at y598).
+//   - **Cut**: only the last allowed row, only when the text does not fit the
+//     rows it has, with `…`. A word wider than a whole row is broken between
+//     characters rather than cut while a row is still free.
+//
+// English fits its rows with `FIT_SAFETY`, as its one-row shrink always did —
+// the Latin ratios run slightly narrow (hardware, 2026-08-28) and a single-line
+// `^FB` prints an overrun on top of itself. Korean breaks on the plain measure,
+// as `estimateLines` did: hangul is measured wide, not narrow.
+//
+// ## Hardware history kept from the `^FB` block
 //
 // `NAME_KO_LH` is 42, down from the 46 the first cut used, and that four dots
 // is exactly what the busiest case needed: at 46 a two-line Korean name put the
@@ -342,14 +375,113 @@ function divider(y: number): Element {
 // both cells are emitted at absolute coordinates. 43 does not fit; this is the
 // smallest tightening that works. Asserted in `price-tag-7090.test.mjs`.
 
+/** Content width: a name row with nothing beside it. */
+const NAME_FULL_W = CONTENT_W;
+/** A name row level with the Data Matrix: x24 + 430 = 454, clear of x475. */
 const NAME_W = 430;
 const NAME_KO_SIZE = 40;
-/** Baseline pitch of the Korean block. See the note above before raising it. */
+/** Baseline pitch of the Korean rows. See the note above before raising it. */
 const NAME_KO_LH = 42;
+const NAME_KO_ROWS = 2;
 const NAME_EN_SIZE = 27;
-/** English shrinks to this rather than wrapping — there is no second row for it. */
+/** English shrinks no further than this; past it the last row is cut. */
 const NAME_EN_MIN = 20;
-const NAME_MAX_LINES = 2;
+const NAME_EN_ROWS = 2;
+/** Air between two name cells — the Korean pitch less its size. */
+const NAME_ROW_GAP = NAME_KO_LH - NAME_KO_SIZE;
+
+const DATAMATRIX_X = 475;
+const DATAMATRIX_Y = 608;
+const DATAMATRIX_SIZE = 5;
+const DIGITS_BASELINE = 654;
+const DIGITS_SIZE = 20;
+/** Top of the bottom digit line's cell (y638) — no name cell goes below it. */
+const DIGITS_TOP = topOf(DIGITS_BASELINE, DIGITS_SIZE);
+
+interface NameRow {
+  /** `^FO` top of the row's cell. */
+  top: number;
+  width: number;
+}
+
+/** How wide a row may run at its own height — see the rule above. */
+function nameRow(top: number, size: number): NameRow {
+  const clearOfMatrix = top + size + NAME_ROW_GAP <= DATAMATRIX_Y;
+  return { top, width: clearOfMatrix ? NAME_FULL_W : NAME_W };
+}
+
+/**
+ * `text` broken onto rows whose budgets (in dots) are `budgets`.
+ *
+ * The `wrapToWidths` model (`../measure`): break on spaces where the string has
+ * any and between characters otherwise, and keep whatever is left over on the
+ * last row so the caller can cut it visibly. One addition: a token wider than a
+ * whole row is broken between characters, starting on the row it reaches,
+ * instead of being left to overrun a row and be cut while rows remain.
+ */
+function wrapRows(text: string, size: number, budgets: number[]): string[] {
+  const bySpace = text.includes(" ");
+  const tokens = bySpace ? text.split(/\s+/).filter(Boolean) : Array.from(text);
+  const glue = bySpace ? " " : "";
+  const fits = (candidate: string, row: number): boolean =>
+    textEm(candidate) * size <= budgets[row];
+
+  const rows: string[] = [];
+  let row = "";
+
+  for (const token of tokens) {
+    let rest = token;
+    while (rest) {
+      const i = rows.length;
+      const next = row ? row + glue + rest : rest;
+      if (i === budgets.length - 1 || fits(next, i)) {
+        row = next;
+        break;
+      }
+      if (row && fits(rest, i + 1)) {
+        // An ordinary word wrap: the token starts the next row.
+        rows.push(row);
+        row = "";
+        continue;
+      }
+      // Wider than a whole row: fill this row with as much of it as fits.
+      const chars = Array.from(rest);
+      const head = row ? row + glue : "";
+      let keep = 0;
+      while (keep < chars.length && fits(head + chars.slice(0, keep + 1).join(""), i)) {
+        keep += 1;
+      }
+      if (keep === 0 && !row) keep = 1;
+      rows.push(keep > 0 ? head + chars.slice(0, keep).join("") : row);
+      row = "";
+      rest = chars.slice(keep).join("");
+    }
+  }
+  if (row) rows.push(row);
+  return rows;
+}
+
+/** One single-line element per row; `clippedTextEl` cuts the last one if it overruns. */
+function rowElements(lines: string[], rows: NameRow[], size: number): Element[] {
+  return lines.map((line, i) =>
+    clippedTextEl(MARGIN_X, rows[i].top, line, size, "B", {
+      width: rows[i].width,
+      lines: 1,
+      align: "L",
+    }),
+  );
+}
+
+/**
+ * The English rows at `size`. Row 1 keeps the top of the 27-dot cell whatever
+ * the size (as the one shrinking field of v1.8.8 did); the next row follows one
+ * cell plus `NAME_ROW_GAP` below.
+ */
+function englishRows(top: number, size: number, count: number): NameRow[] {
+  return Array.from({ length: count }, (_, i) =>
+    nameRow(top + i * (size + NAME_ROW_GAP), size),
+  );
+}
 
 function names(input: PriceTag7090Input, baseline: number): Element[] {
   const out: Element[] = [];
@@ -358,27 +490,42 @@ function names(input: PriceTag7090Input, baseline: number): Element[] {
   let cursor = baseline;
 
   if (ko) {
-    const lines = estimateLines(ko, NAME_KO_SIZE, NAME_W, NAME_MAX_LINES);
-    out.push(
-      clippedTextEl(MARGIN_X, topOf(cursor, NAME_KO_SIZE), ko, NAME_KO_SIZE, "B", {
-        width: NAME_W,
-        lines,
-        align: "L",
-      }),
+    const rows = Array.from({ length: NAME_KO_ROWS }, (_, i) =>
+      nameRow(topOf(cursor + i * NAME_KO_LH, NAME_KO_SIZE), NAME_KO_SIZE),
     );
-    cursor += lines * NAME_KO_LH;
+    const lines = wrapRows(
+      ko,
+      NAME_KO_SIZE,
+      rows.map((row) => row.width),
+    );
+    out.push(...rowElements(lines, rows, NAME_KO_SIZE));
+    cursor += lines.length * NAME_KO_LH;
   }
 
   if (en) {
-    out.push(
-      clippedTextEl(MARGIN_X, topOf(cursor, NAME_EN_SIZE), en, NAME_EN_SIZE, "B", {
-        width: NAME_W,
-        lines: 1,
-        align: "L",
-        shrink: true,
-        minSize: NAME_EN_MIN,
-      }),
-    );
+    const top = topOf(cursor, NAME_EN_SIZE);
+    // How many rows the layout has for English is decided at full size; a
+    // smaller size only pulls the second row up, never down past y638.
+    let count = 1;
+    while (
+      count < NAME_EN_ROWS &&
+      englishRows(top, NAME_EN_SIZE, count + 1).every(
+        (row) => row.top + NAME_EN_SIZE <= DIGITS_TOP,
+      )
+    ) {
+      count += 1;
+    }
+
+    for (let size = NAME_EN_SIZE; size >= NAME_EN_MIN; size -= 1) {
+      const rows = englishRows(top, size, count);
+      const budgets = rows.map((row) => row.width * FIT_SAFETY);
+      const lines = wrapRows(en, size, budgets);
+      const last = lines.length - 1;
+      if (size === NAME_EN_MIN || textEm(lines[last]) * size <= budgets[last]) {
+        out.push(...rowElements(lines, rows, size));
+        break;
+      }
+    }
   }
 
   return out;
@@ -481,8 +628,14 @@ export function buildPriceTag7090(
 
   elements.push(
     ...names(input, nameBaseline),
-    { kind: "datamatrix", x: 475, y: 608, size: 5, data: barcodeText },
-    left(MARGIN_X, 654, barcodeText, 20, "M", 390),
+    {
+      kind: "datamatrix",
+      x: DATAMATRIX_X,
+      y: DATAMATRIX_Y,
+      size: DATAMATRIX_SIZE,
+      data: barcodeText,
+    },
+    left(MARGIN_X, DIGITS_BASELINE, barcodeText, DIGITS_SIZE, "M", 390),
   );
 
   return {
